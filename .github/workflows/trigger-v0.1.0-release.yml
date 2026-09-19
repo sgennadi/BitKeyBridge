@@ -1,0 +1,21 @@
+name: trigger-v0.1.0-release
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/trigger-v0.1.0-release.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch release build on v0.1.0
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --repo ${{ github.repository }} --ref v0.1.0
