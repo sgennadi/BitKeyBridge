@@ -1,0 +1,54 @@
+name: bootstrap-source
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".bootstrap/**"
+      - ".github/workflows/bootstrap-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore-large-sources:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore exact source files
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ".bootstrap/EntraSetupService.cs.gz.b64")) {
+            Write-Host "Bootstrap payload is already removed."
+            exit 0
+          }
+
+          python -c "import pathlib,base64,gzip; p=pathlib.Path(r'.bootstrap/EntraSetupService.cs.gz.b64'); o=pathlib.Path(r'src/BitKeyBridge/Services/EntraSetupService.cs'); o.parent.mkdir(parents=True,exist_ok=True); o.write_bytes(gzip.decompress(base64.b64decode(p.read_text().strip())))"
+          python -c "import pathlib,base64,gzip; p=pathlib.Path(r'.bootstrap/ExportService.cs.gz.b64'); o=pathlib.Path(r'src/BitKeyBridge/Services/ExportService.cs'); o.parent.mkdir(parents=True,exist_ok=True); o.write_bytes(gzip.decompress(base64.b64decode(p.read_text().strip())))"
+          python -c "import pathlib,base64,gzip; p=pathlib.Path(r'.bootstrap/MainForm.cs.gz.b64'); o=pathlib.Path(r'src/BitKeyBridge/UI/MainForm.cs'); o.parent.mkdir(parents=True,exist_ok=True); o.write_bytes(gzip.decompress(base64.b64decode(p.read_text().strip())))"
+
+          Remove-Item -Recurse -Force ".bootstrap"
+
+      - name: Commit restored source
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "src/BitKeyBridge/Services/EntraSetupService.cs")) {
+            Write-Host "Nothing to commit."
+            exit 0
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Restore large C# sources"
+            git push
+          } else {
+            Write-Host "No changes."
+          }
