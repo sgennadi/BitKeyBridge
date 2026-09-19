@@ -88,4 +88,4 @@ jobs:
         shell: cmd
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create %GITHUB_REF_NAME% release\BitKeyBridge-win-x64.zip release\BitKeyBridge-win-x86.zip release\BitKeyBridge-win-arm64.zip release\SHA256SUMS.txt --generate-notes --title %GITHUB_REF_NAME%
+        run: gh release create "%GITHUB_REF_NAME%" release\BitKeyBridge-win-x64.zip release\BitKeyBridge-win-x86.zip release\BitKeyBridge-win-arm64.zip release\SHA256SUMS.txt --repo "%GITHUB_REPOSITORY%" --generate-notes --title "%GITHUB_REF_NAME%"
