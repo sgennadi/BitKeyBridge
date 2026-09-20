@@ -21,7 +21,7 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - Microsoft Graph BitLocker metadata search.
 - Recovery password requested from Entra only on explicit **Get Key** action.
 - Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
-- Native Entra App Registration setup using Graph REST + OAuth device code; no Graph SDK is required at runtime.
+- Zero-registration first-run Entra setup using Microsoft's first-party Device Code bootstrap; no pre-created App Registration, PowerShell, or Graph SDK is required.
 - Unified device search across on-prem AD, Entra BitLocker metadata, and Intune managed devices.
 - Intune BitLocker recovery-key rotation with explicit confirmation.
 - Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
@@ -110,15 +110,27 @@ The **Entra / Intune Cloud** tab supports:
 
 The actual 48-digit recovery password is not downloaded during search. It is requested only after selecting a result and clicking **Get Key from Entra**.
 
-### Native Auto Setup
+### First-Run / Repair Entra Setup
 
-Creating an App Registration from a completely clean machine still needs one OAuth public-client application to obtain the initial management token. Supply a **Bootstrap Client ID** whose delegated permissions have already been granted for:
+A pre-created App Registration is **not required**.
 
-- `Application.ReadWrite.All`
-- `AppRoleAssignment.ReadWrite.All`
-- `DelegatedPermissionGrant.ReadWrite.All`
+On a completely clean tenant-side setup:
 
-The native setup then creates or updates the dedicated BitLocker app, enterprise application, Graph permissions, admin-consent grants, and local certificate without invoking PowerShell.
+1. Open **Entra / Intune Cloud**.
+2. Leave **Client ID** empty.
+3. Click **First-Run / Repair Setup**.
+4. BitKeyBridge uses Microsoft's first-party **Microsoft Graph Command Line Tools** public client only for the temporary Device Code bootstrap.
+5. Sign in with an Entra administrator account and approve the requested management permissions.
+6. BitKeyBridge creates or repairs its own dedicated **BitKeyBridge** App Registration, Enterprise Application, Graph permissions, delegated admin-consent grant, and local certificate.
+7. The generated Client ID, tenant ID, and certificate thumbprint are saved automatically. Administrator passwords and access tokens are not stored.
+
+The temporary bootstrap requests `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All`, and `DelegatedPermissionGrant.ReadWrite.All` only for the interactive setup session. These management permissions are **not** granted to the BitKeyBridge application itself.
+
+The runtime BitKeyBridge application receives only the Graph permissions required by the tool: `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All`.
+
+If Conditional Access blocks Microsoft's first-party bootstrap in a specific tenant, use the advanced **Bootstrap...** button to specify a tenant-approved public-client Application ID. The normal case requires no manual Application ID.
+
+Graph permission identifiers are resolved dynamically from the tenant's Microsoft Graph service principal rather than being hard-coded. The setup also retries transient Graph throttling/service errors and allows for new service-principal propagation.
 
 Use a dedicated application for this tool. The setup merges API permissions instead of replacing unrelated permissions. Certificate rotation uses Graph key-rolling semantics when an existing managed valid certificate is present.
 
