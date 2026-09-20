@@ -88,3 +88,16 @@ public sealed class AuditIntegrityResult
     public string LastHash { get; set; } = string.Empty;
     public string FirstError { get; set; } = string.Empty;
 }
+
+
+public sealed class AuditIntegrityStatus
+{
+    public DateTime VerifiedAtUtc { get; set; } = DateTime.UtcNow;
+    public bool Valid { get; set; } = true;
+    public int FilesChecked { get; set; }
+    public int TotalEntries { get; set; }
+    public int LegacyEntries { get; set; }
+    public int ChainedEntries { get; set; }
+    public string LastHash { get; set; } = string.Empty;
+    public string FirstError { get; set; } = string.Empty;
+}
