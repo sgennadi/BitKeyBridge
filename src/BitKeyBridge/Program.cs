@@ -342,6 +342,30 @@ internal static class Program
 
             try
             {
+                if (!string.Equals(
+                        UpdateService.NormalizeRepository("sgennadi/BitKeyBridge"),
+                        "sgennadi/BitKeyBridge",
+                        StringComparison.Ordinal))
+                    failures.Add("Updater repository normalization failed.");
+
+                var expectedHash = new string('a', 64);
+                var sums = expectedHash + "  BitKeyBridge-win-x64.zip" + Environment.NewLine;
+                var parsedHash = UpdateService.ParseChecksum(sums, "BitKeyBridge-win-x64.zip");
+                if (!string.Equals(parsedHash, expectedHash, StringComparison.Ordinal))
+                    failures.Add("Updater SHA256SUMS parsing failed.");
+
+                var parsedVersion = UpdateService.ParseVersion("v0.4.0-beta.1");
+                if (parsedVersion.Major != 0 || parsedVersion.Minor != 4 || parsedVersion.Build != 0)
+                    failures.Add("Updater version normalization failed.");
+
+                var rid = UpdateService.GetRid();
+                if (rid is not "win-x64" and not "win-x86" and not "win-arm64")
+                    failures.Add("Updater architecture RID detection returned an unexpected value.");
+            }
+            catch (Exception ex) { failures.Add("Updater pure helpers: " + ex.Message); }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
