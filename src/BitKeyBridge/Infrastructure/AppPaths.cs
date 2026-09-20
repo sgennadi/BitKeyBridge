@@ -23,6 +23,8 @@ public static class AppPaths
     }
 
     public static string CloudConfigFile => Path.Combine(LocalConfigDirectory, "cloud_auth_config.json");
+    public static string MachineCloudConfigFile => Path.Combine(MachineConfigDirectory, "cloud_auth_machine.json");
+    public static string CoverageStatusFile => Path.Combine(MachineConfigDirectory, "coverage_status.json");
     public static string AuditLogFile => Path.Combine(MachineConfigDirectory, "audit.jsonl");
     public static string ServiceLogFile => Path.Combine(MachineConfigDirectory, "service.log");
     public static string UpdateStatusFile => Path.Combine(MachineConfigDirectory, "update_status.json");
