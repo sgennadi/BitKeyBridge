@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+- Added verified GitHub Release self-update for x64, x86, and ARM64.
+- Added SHA256SUMS verification and GitHub asset-digest cross-checking.
+- Added staged executable version validation and mandatory offline `--self-test` before update application.
+- Added elevated temporary update helper with GUI/service replacement and rollback.
+- Added `--check-update` and `--update` CLI commands.
+- Added Windows Event Log integration with recovery-password sanitization.
+- Added opt-in TLS Remote API with one-time bearer token provisioning.
+- Added Windows Firewall Domain/Private inbound rule management through the Windows Firewall COM API.
+- Added read-only remote health/service/version endpoints and separately gated remote export management.
+- Added native Windows Service failure-recovery configuration.
+- Kept updater cleanup shell-free through Win32 `MoveFileEx`.
+- Added Operations UI for update, Remote API, token rotation, and Event Log access.
+
+
 ## 0.3.0
 
 - Added a Health & Service Dashboard.
