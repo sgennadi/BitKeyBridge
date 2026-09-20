@@ -39,7 +39,7 @@ public sealed class CertificateService
         var pfx = generated.Export(X509ContentType.Pfx, password);
         try
         {
-            var persisted = new X509Certificate2(
+            var persisted = X509CertificateLoader.LoadPkcs12(
                 pfx,
                 password,
                 X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
@@ -99,7 +99,7 @@ public sealed class CertificateService
         var pfx = generated.Export(X509ContentType.Pfx, password);
         try
         {
-            var persisted = new X509Certificate2(
+            var persisted = X509CertificateLoader.LoadPkcs12(
                 pfx,
                 password,
                 X509KeyStorageFlags.MachineKeySet |
