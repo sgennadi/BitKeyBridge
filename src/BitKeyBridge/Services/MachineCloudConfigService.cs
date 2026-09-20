@@ -34,6 +34,28 @@ public static class MachineCloudConfigService
                 var cert = new CertificateService()
                     .FindLocalMachineByThumbprint(config.CertificateThumbprint);
                 Console.WriteLine($"Certificate expires: {cert.NotAfter:yyyy-MM-dd HH:mm:ss}");
+
+                var service = WindowsServiceHost.GetInfo();
+                if (service.Installed &&
+                    !string.IsNullOrWhiteSpace(service.Identity))
+                {
+                    var access = new CertificatePrivateKeyAccessService()
+                        .GetStatus(
+                            config.CertificateThumbprint,
+                            service.Identity);
+
+                    Console.WriteLine($"Service identity: {service.Identity}");
+                    Console.WriteLine(
+                        $"Private-key access: {access.Status}; Provider={access.Provider}; SID={access.Sid}");
+
+                    if (access.AccessRequired &&
+                        (!access.ExplicitReadAllowed ||
+                         access.ExplicitReadDenied))
+                    {
+                        return 4;
+                    }
+                }
+
                 return 0;
             }
             catch (Exception ex)
@@ -89,12 +111,30 @@ public static class MachineCloudConfigService
 
             ConfigService.SaveMachineCloudConfig(machine);
 
+            CertificateKeyAccessInfo? keyAccess = null;
+            var service = WindowsServiceHost.GetInfo();
+            if (service.Installed &&
+                !string.IsNullOrWhiteSpace(service.Identity))
+            {
+                var appConfig = ConfigService.LoadAppConfig();
+                keyAccess =
+                    WindowsServiceHost.EnsureConfiguredCloudCertificateAccess(
+                        service.Identity,
+                        required: appConfig.ServiceCoverageEnabled);
+            }
+
             Console.WriteLine("Machine cloud configuration saved.");
             Console.WriteLine($"Path: {AppPaths.MachineCloudConfigFile}");
             Console.WriteLine($"Tenant ID: {machine.TenantId}");
             Console.WriteLine($"Client ID: {machine.ClientId}");
             Console.WriteLine($"Certificate thumbprint: {machine.CertificateThumbprint}");
             Console.WriteLine($"Certificate expires: {cert.NotAfter:yyyy-MM-dd HH:mm:ss}");
+            if (keyAccess is not null)
+            {
+                Console.WriteLine(
+                    $"Service private-key access: {keyAccess.Status}; " +
+                    $"Account={keyAccess.Account}; Provider={keyAccess.Provider}");
+            }
             Console.WriteLine(
                 "No password, access token, or certificate private key was written to the config file.");
             return 0;
