@@ -44,6 +44,7 @@ public sealed class RemoteApiSetupService
             config.RemoteApiCertificateThumbprint = certificate.Thumbprint;
             config.RemoteApiTokenSha256 = Convert.ToHexString(tokenHash).ToLowerInvariant();
             ConfigService.SaveAppConfig(config);
+            WindowsFirewallService.EnsureRemoteApiRule(port);
 
             WindowsEventLogService.TryWrite(
                 $"Remote API enabled on TCP {port}. Management={allowManagement}.",
@@ -74,6 +75,7 @@ public sealed class RemoteApiSetupService
         config.RemoteApiAllowManagement = false;
         config.RemoteApiTokenSha256 = string.Empty;
         ConfigService.SaveAppConfig(config);
+        WindowsFirewallService.RemoveRemoteApiRule();
 
         WindowsEventLogService.TryWrite(
             "Remote API disabled.",
