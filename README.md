@@ -1145,6 +1145,8 @@ Verify the current audit plus its rotated `.old` file from the **Verify Chain** 
 BitKeyBridge.exe --audit-verify
 ```
 
+The native Windows Service verifies the audit chain when it starts and every 24 hours. The latest verification is cached in `%ProgramData%\BitKeyBridge\audit_integrity_status.json`; the health endpoint reports `Valid`, `Invalid`, `Stale`, or `NeverVerified`, and a failed verification is also written to Windows Event Log.
+
 The hash chain is tamper-evident, not a replacement for an external immutable/SIEM archive: a sufficiently privileged attacker who can rewrite the whole local audit can also recompute an unkeyed hash chain. Forwarding BitKeyBridge events/audit to protected central storage is recommended for high-assurance environments.
 
 ## Build
