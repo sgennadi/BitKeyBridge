@@ -577,6 +577,36 @@ Tagged releases are built with additional supply-chain artifacts and GitHub-nati
 
 The Actions used by these workflows are Node 24 generations.
 
+## BitLocker Coverage Dashboard
+
+The **Coverage** tab correlates Active Directory, Microsoft Entra ID, and Intune metadata to identify BitLocker coverage gaps without reading recovery passwords.
+
+The coverage engine intentionally uses:
+
+- AD computer attributes plus `msFVE-RecoveryGuid` and `whenCreated`;
+- Entra BitLocker recovery-key metadata such as recovery ID, device ID, volume type, and creation time;
+- Intune managed-device inventory including encryption state, compliance, last sync, user, serial number, manufacturer, model, and OS.
+
+It does **not** request `msFVE-RecoveryPassword` for the report and does not call the Microsoft Graph recovery-key value endpoint.
+
+Coverage states:
+
+- **AD + Entra**
+- **AD only**
+- **Entra only**
+- **No recovery key**
+
+Additional flags include:
+
+- multiple recovery objects;
+- Intune-managed but not encrypted;
+- stale Intune sync;
+- old Entra recovery-key metadata.
+
+The thresholds are configurable through `CoverageStaleIntuneDays` and `CoverageOldCloudKeyDays`.
+
+The GUI can filter results and export the currently visible rows to CSV. Coverage CSV files contain metadata only and never contain the 48-digit BitLocker recovery password.
+
 ## Unified Devices and key rotation
 
 The **Unified Devices** tab can search by device name, serial number, user/UPN, Entra device ID, or Intune managed-device ID. Results merge AD computer data, Intune inventory, and Entra BitLocker metadata. If the device is Intune-managed, an administrator can submit a BitLocker recovery-key rotation request after explicit confirmation.
