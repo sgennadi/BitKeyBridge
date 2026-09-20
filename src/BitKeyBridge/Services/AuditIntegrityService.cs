@@ -74,6 +74,14 @@ public static class AuditIntegrityService
 
     public static AuditIntegrityResult Verify(string path)
     {
+        using var processLock = AcquireInterprocessLock(path);
+        if (processLock is null)
+        {
+            return Fail(
+                new AuditIntegrityResult(),
+                "Could not acquire the audit interprocess lock for verification.");
+        }
+
         var result = new AuditIntegrityResult();
 
         var paths = new[]
@@ -264,6 +272,34 @@ public static class AuditIntegrityService
             // Verification result should still be returned even if the
             // current identity cannot persist the machine-level cache.
         }
+    }
+
+    private static FileStream? AcquireInterprocessLock(
+        string path)
+    {
+        var lockPath = path + ".lock";
+
+        for (var attempt = 0; attempt < 250; attempt++)
+        {
+            try
+            {
+                return new FileStream(
+                    lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None);
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(20);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     private static AuditIntegrityResult Fail(
