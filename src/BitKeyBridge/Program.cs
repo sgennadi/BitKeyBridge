@@ -882,7 +882,7 @@ internal static class Program
                     [
                         new CoverageDeviceRow
                         {
-                            ComputerName = "PC-01",
+                            ComputerName = "=HYPERLINK(\"https://example.invalid\",\"PC-01\")",
                             CoverageStatus = "AD + Entra",
                             FoundInAd = true,
                             FoundInIntune = true,
@@ -898,6 +898,20 @@ internal static class Program
                     coverageText.Contains("KeyValue", StringComparison.OrdinalIgnoreCase))
                 {
                     failures.Add("Coverage CSV contains a recovery-secret column.");
+                }
+
+                if (coverageText.Contains(
+                        "\"=HYPERLINK(",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add("Coverage CSV did not neutralize a formula-like value.");
+                }
+
+                if (!coverageText.Contains(
+                        "\"'=HYPERLINK(",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add("Coverage CSV formula-neutralization marker is missing.");
                 }
             }
             catch (Exception ex) { failures.Add("Coverage metadata-only CSV: " + ex.Message); }
