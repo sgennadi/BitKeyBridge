@@ -33,6 +33,9 @@ public sealed class AppConfig
     public string RemoteApiCertificateThumbprint { get; set; } = string.Empty;
     public string RemoteApiTokenSha256 { get; set; } = string.Empty;
 
+    public bool RequireRecoveryAccessReference { get; set; } = false;
+    public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = true;
+
     public List<BitLockerScope> DefaultScopes { get; set; } = [];
 
     public string OutputDirectory => Path.Combine(SysvolScriptsRoot, OutputSubdirectory);

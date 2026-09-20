@@ -51,6 +51,14 @@ public sealed class UnifiedDeviceInfo
     public int RecoveryKeyCount => RecoveryIds.Count;
 }
 
+public sealed class RecoveryAccessContext
+{
+    public string Reference { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public bool RemindRotation { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class AuditEntry
 {
     public DateTime TimestampUtc { get; set; }
@@ -62,5 +70,7 @@ public sealed class AuditEntry
     public string RecoveryId { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public string AuthMode { get; set; } = string.Empty;
+    public string Reference { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
 }

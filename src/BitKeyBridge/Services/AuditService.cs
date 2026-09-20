@@ -23,7 +23,9 @@ public sealed class AuditService
         string? recoveryId = null,
         string? source = null,
         string? authMode = null,
-        string? details = null)
+        string? details = null,
+        string? reference = null,
+        string? reason = null)
     {
         var entry = new AuditEntry
         {
@@ -36,6 +38,8 @@ public sealed class AuditService
             RecoveryId = recoveryId ?? string.Empty,
             Source = source ?? string.Empty,
             AuthMode = authMode ?? string.Empty,
+            Reference = Sanitize(reference),
+            Reason = Sanitize(reason),
             Details = Sanitize(details)
         };
 
