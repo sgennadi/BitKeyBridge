@@ -52,7 +52,7 @@ public sealed class MainForm : Form
     {
         _config = config;
         _cloudConfig = ConfigService.LoadCloudConfig();
-        Text = "BitKeyBridge 0.2 (.NET)";
+        Text = "BitKeyBridge 0.2.1 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
@@ -299,11 +299,12 @@ public sealed class MainForm : Form
 
         var save = new Button { Text = "Save Config", Left = 585, Top = 103, Width = 115, Height = 32 };
         var connect = new Button { Text = "Connect / Test", Left = 710, Top = 103, Width = 120, Height = 32 };
-        var autoSetup = new Button { Text = "Native Auto Setup", Left = 840, Top = 103, Width = 140, Height = 32 };
-        authGroup.Controls.AddRange([save, connect, autoSetup]);
+        var autoSetup = new Button { Text = "First-Run / Repair Setup", Left = 840, Top = 103, Width = 165, Height = 32 };
+        var bootstrap = new Button { Text = "Bootstrap...", Left = 1015, Top = 103, Width = 115, Height = 32 };
+        authGroup.Controls.AddRange([save, connect, autoSetup, bootstrap]);
         var ropcNote = new Label
         {
-            Text = "Device Code is the recommended interactive mode and supports MFA/Conditional Access. ROPC is legacy only. Password is never saved.",
+            Text = "No pre-created App Registration is required. First-Run Setup uses a Microsoft first-party bootstrap, then creates BitKeyBridge's dedicated Entra app. Device Code supports MFA/Conditional Access.",
             Left = 585,
             Top = 148,
             Width = 545,
@@ -360,6 +361,7 @@ public sealed class MainForm : Form
         };
         rotate.Click += async (_, _) => await RotateSelectedCloudKeyAsync();
         autoSetup.Click += async (_, _) => await RunNativeAutoSetupAsync();
+        bootstrap.Click += (_, _) => ConfigureCustomBootstrap();
         _cloudAuthMode.SelectedIndexChanged += (_, _) => UpdateCloudAuthUi();
         return tab;
     }
@@ -609,6 +611,11 @@ public sealed class MainForm : Form
                 ? 1
                 : 0;
         UpdateCloudAuthUi();
+        if (string.IsNullOrWhiteSpace(_cloudConfig.ClientId))
+        {
+            _cloudStatus.Text =
+                "No BitKeyBridge App Registration is configured yet. Click First-Run / Repair Setup; no pre-created App Registration is required.";
+        }
     }
 
     private void SaveCloudFields()
@@ -732,35 +739,112 @@ public sealed class MainForm : Form
     private async Task RunNativeAutoSetupAsync()
     {
         SaveCloudFields();
-        using var input = new InputDialog(
-            "Native Entra Auto Setup",
-            "Bootstrap public-client Application (Client) ID. It must already be allowed to request Application.ReadWrite.All, AppRoleAssignment.ReadWrite.All and DelegatedPermissionGrant.ReadWrite.All:",
-            _cloudConfig.BootstrapClientId);
-        if (input.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(input.Value)) return;
-        _cloudConfig.BootstrapClientId = input.Value;
-        ConfigService.SaveCloudConfig(_cloudConfig);
+
+        var usingDefaultBootstrap = string.IsNullOrWhiteSpace(_cloudConfig.BootstrapClientId) ||
+            string.Equals(
+                _cloudConfig.BootstrapClientId,
+                EntraSetupService.DefaultBootstrapClientId,
+                StringComparison.OrdinalIgnoreCase);
+
+        var bootstrapDescription = usingDefaultBootstrap
+            ? $"Microsoft first-party '{EntraSetupService.DefaultBootstrapDisplayName}'"
+            : $"custom bootstrap Client ID {_cloudConfig.BootstrapClientId}";
+
+        var answer = MessageBox.Show(
+            this,
+            "BitKeyBridge will create or repair its dedicated Microsoft Entra App Registration automatically." +
+            Environment.NewLine + Environment.NewLine +
+            $"Bootstrap: {bootstrapDescription}" + Environment.NewLine +
+            "You will be asked to sign in with an Entra administrator account using Device Code and approve the requested management permissions." +
+            Environment.NewLine + Environment.NewLine +
+            "BitKeyBridge will then create/update the application, Enterprise Application, Graph permissions, admin-consent grants and local certificate. No administrator password is stored." +
+            Environment.NewLine + Environment.NewLine +
+            "Continue?",
+            "First-Run / Repair Entra Setup",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Information,
+            MessageBoxDefaultButton.Button1);
+        if (answer != DialogResult.Yes) return;
 
         try
         {
             Enabled = false;
+            _cloudStatus.Text = "Starting first-run Entra setup...";
             using var setup = new EntraSetupService();
             var progress = new Progress<string>(m => _cloudStatus.Text = m);
             var result = await setup.RunAsync(
                 _cloudTenant.Text,
-                input.Value,
+                _cloudConfig.BootstrapClientId,
                 "BitKeyBridge",
                 _cloudConfig,
                 ShowDeviceCodeAsync,
                 progress);
             LoadCloudFields();
-            _cloudStatus.Text = $"Auto Setup complete. Client ID: {result.ClientId}; certificate: {result.CertificateThumbprint}";
+            _cloudAuthMode.SelectedIndex = 0;
+            SaveCloudFields();
+            _audit.Write(
+                "EntraAutoSetup",
+                computerName: Environment.MachineName,
+                source: "Entra",
+                authMode: "DeviceCode",
+                details: $"ApplicationId={result.ClientId}; ServicePrincipalId={result.ServicePrincipalId}");
+            _cloudStatus.Text =
+                $"First-run setup complete. BitKeyBridge App Client ID: {result.ClientId}; certificate: {result.CertificateThumbprint}";
+            MessageBox.Show(
+                this,
+                "Microsoft Entra setup completed successfully." + Environment.NewLine + Environment.NewLine +
+                $"BitKeyBridge Client ID: {result.ClientId}" + Environment.NewLine +
+                $"Certificate: {result.CertificateThumbprint}" + Environment.NewLine +
+                $"Certificate expires: {result.CertificateNotAfter:yyyy-MM-dd}" + Environment.NewLine + Environment.NewLine +
+                "Authentication was switched to Device Code. You can now use Connect / Test, Cloud Search and Unified Devices.",
+                "BitKeyBridge Entra Setup",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
+            _audit.Write(
+                "EntraAutoSetup",
+                "Failed",
+                source: "Entra",
+                authMode: "DeviceCode",
+                details: ex.Message);
             _cloudStatus.Text = "Auto Setup failed: " + ex.Message;
-            MessageBox.Show(this, ex.Message, "Native Entra Auto Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(
+                this,
+                ex.Message + Environment.NewLine + Environment.NewLine +
+                "If your tenant blocks the Microsoft first-party bootstrap through Conditional Access, use Bootstrap... to configure a tenant-approved public-client Application ID and run setup again.",
+                "First-Run / Repair Entra Setup",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
         finally { Enabled = true; }
+    }
+
+    private void ConfigureCustomBootstrap()
+    {
+        var current = string.IsNullOrWhiteSpace(_cloudConfig.BootstrapClientId)
+            ? EntraSetupService.DefaultBootstrapClientId
+            : _cloudConfig.BootstrapClientId;
+
+        using var input = new InputDialog(
+            "Advanced Bootstrap Client",
+            "Optional advanced override. Leave the Microsoft default Client ID below, or enter a tenant-approved public-client Application ID. Clear the field to restore the Microsoft default bootstrap:",
+            current);
+
+        if (input.ShowDialog(this) != DialogResult.OK) return;
+
+        var value = input.Value.Trim();
+        _cloudConfig.BootstrapClientId =
+            string.IsNullOrWhiteSpace(value) ||
+            string.Equals(value, EntraSetupService.DefaultBootstrapClientId, StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : value;
+        ConfigService.SaveCloudConfig(_cloudConfig);
+
+        _cloudStatus.Text = string.IsNullOrWhiteSpace(_cloudConfig.BootstrapClientId)
+            ? $"Bootstrap reset to Microsoft first-party '{EntraSetupService.DefaultBootstrapDisplayName}'."
+            : $"Custom bootstrap saved: {_cloudConfig.BootstrapClientId}";
     }
 
     private async Task ShowDeviceCodeAsync(DeviceCodeInfo info)
