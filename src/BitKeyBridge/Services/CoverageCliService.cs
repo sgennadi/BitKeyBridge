@@ -8,6 +8,7 @@ public static class CoverageCliService
     public const int ExitNoRecoveryKey = 20;
     public const int ExitIntuneNotEncrypted = 21;
     public const int ExitIntuneStale = 22;
+    public const int ExitPolicyViolation = 23;
 
     public static async Task<int> RunAsync(
         AppConfig config,
@@ -80,7 +81,12 @@ public static class CoverageCliService
                 result,
                 csvPath,
                 jsonPath,
-                startedUtc);
+                startedUtc,
+                config);
+
+            var policy =
+                new CoveragePolicyService(config)
+                    .Evaluate(result.Summary);
 
             Console.WriteLine();
             Console.WriteLine(
@@ -93,6 +99,16 @@ public static class CoverageCliService
                 $"IntuneNotEncrypted={result.Summary.IntuneNotEncrypted}; " +
                 $"IntuneStale={result.Summary.IntuneStale}; " +
                 $"OldCloudKey={result.Summary.OldCloudKey}");
+            Console.WriteLine(
+                $"Coverage policy: Enabled={policy.Enabled}; Compliant={policy.Compliant}; " +
+                $"Errors={policy.ErrorCount}; Warnings={policy.WarningCount}");
+            foreach (var violation in policy.Violations)
+            {
+                Console.WriteLine(
+                    $"  [{violation.Severity}] {violation.Code}: " +
+                    $"{violation.Actual} > {violation.Maximum} - {violation.Message}");
+            }
+
             Console.WriteLine("Coverage CSV: " + csvPath);
             Console.WriteLine("Coverage JSON: " + jsonPath);
             Console.WriteLine(
@@ -109,7 +125,10 @@ public static class CoverageCliService
                     }));
             }
 
-            return EvaluateExitCode(result.Summary, args);
+            return EvaluateExitCode(
+                result.Summary,
+                policy,
+                args);
         }
         catch (ArgumentException ex)
         {
@@ -139,8 +158,28 @@ public static class CoverageCliService
 
     public static int EvaluateExitCode(
         CoverageSummary summary,
+        IReadOnlyCollection<string> args) =>
+        EvaluateExitCode(
+            summary,
+            new CoveragePolicyResult
+            {
+                Enabled = false,
+                Compliant = true
+            },
+            args);
+
+    public static int EvaluateExitCode(
+        CoverageSummary summary,
+        CoveragePolicyResult policy,
         IReadOnlyCollection<string> args)
     {
+        if (HasFlag(args, "--coverage-fail-policy") &&
+            policy.Enabled &&
+            !policy.Compliant)
+        {
+            return ExitPolicyViolation;
+        }
+
         if (HasFlag(args, "--coverage-fail-no-key") &&
             summary.NoRecoveryKey > 0)
         {
