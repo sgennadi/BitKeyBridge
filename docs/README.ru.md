@@ -167,3 +167,21 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - После получения Entra recovery password BitKeyBridge может напомнить выполнить **Rotate Key in Intune** после завершения восстановления.
 - Автоматической ротации нет — действие всегда требует отдельного подтверждения.
 - Добавлены CodeQL, Dependabot, CycloneDX SBOM и GitHub provenance/SBOM attestations для релизов.
+
+
+## Новое в 0.6.0
+
+- BitKeyBridge теперь может запускаться не только на DC, но и на обычной domain workstation или standalone/workgroup Windows-машине.
+- Вкладка **Directory Connection** позволяет выбрать:
+  - **Auto** — автообнаружение домена/DC и текущие Windows credentials;
+  - **Explicit DC** — ручной DC/FQDN для standalone/workstation.
+- Для Explicit DC можно задать AD domain, user и пароль только на текущую сессию. Пароль не сохраняется в JSON, audit или Event Log.
+- Поддерживаются:
+  - LDAP 389 с signing/sealing;
+  - LDAPS/TLS, обычно порт 636.
+- Добавлена кнопка **Test DC Connection**.
+- Export больше не требует, чтобы сама программа работала на DC: output root может быть локальной папкой или UNC path.
+- Если новый `OutputRoot` пустой, сохраняется старое поведение с `SysvolScriptsRoot`, поэтому WinPE/NETLOGON-сценарий не ломается.
+- CLI получил `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, `--ad-ldaps`, `--ad-ldap` и `--ad-test`.
+- Microsoft 365 / Entra / Intune по-прежнему работает независимо от членства Windows-компьютера в домене.
+- CI теперь проверяет, что каждая версия из `.csproj` обязательно имеет секцию в `CHANGELOG.md`.
