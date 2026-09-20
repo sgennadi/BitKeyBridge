@@ -77,6 +77,7 @@ internal static class Program
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
