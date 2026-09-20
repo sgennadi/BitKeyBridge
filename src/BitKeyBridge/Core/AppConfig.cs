@@ -24,6 +24,7 @@ public sealed class AppConfig
     public string AdDomain { get; set; } = string.Empty;
     public string AdUsername { get; set; } = string.Empty;
     public bool AdUseExplicitCredentials { get; set; } = false;
+    public bool AdUseLdaps { get; set; } = false;
     public int AdPort { get; set; } = 389;
 
     public bool HealthEndpointEnabled { get; set; } = true;
