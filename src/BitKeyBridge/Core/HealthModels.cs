@@ -56,6 +56,7 @@ public sealed class ServiceInfo
     public bool Installed { get; set; }
     public string State { get; set; } = "NotInstalled";
     public string BinaryPath { get; set; } = string.Empty;
+    public string Identity { get; set; } = string.Empty;
 }
 
 public sealed class SecureOutputResult
