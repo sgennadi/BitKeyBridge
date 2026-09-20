@@ -362,8 +362,7 @@ public static class WindowsServiceHost
     private static void ThrowLastWin32(string message) =>
         throw new Win32Exception(Marshal.GetLastWin32Error(), message);
 
-    private static string Quote(string value) => """ + value.Replace(""", "\"") + """;
-
+    private static string Quote(string value) => "\\"" + value.Replace("\\"", "\\\\"") + "\\"";\n
     private sealed class SafeServiceHandle : SafeHandle
     {
         public SafeServiceHandle() : base(IntPtr.Zero, true) { }
