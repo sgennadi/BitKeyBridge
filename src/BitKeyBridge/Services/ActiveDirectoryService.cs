@@ -269,6 +269,82 @@ public sealed class ActiveDirectoryService
             .ToList();
     }
 
+    public List<AdComputerInfo> GetComputersInScope(
+        string server,
+        BitLockerScope scope,
+        int maximumItems = 50000)
+    {
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            scope.SearchBase,
+            "(objectCategory=computer)",
+            SearchScope.Subtree,
+            "name",
+            "distinguishedName",
+            "dNSHostName",
+            "operatingSystem",
+            "operatingSystemVersion",
+            "lastLogonTimestamp");
+
+        var rows = new List<AdComputerInfo>();
+        foreach (var entry in SendPaged(connection, request))
+        {
+            rows.Add(new AdComputerInfo
+            {
+                ComputerName = GetString(entry, "name") ?? string.Empty,
+                DistinguishedName = entry.DistinguishedName,
+                DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
+                OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
+                LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
+            });
+
+            if (rows.Count >= Math.Clamp(maximumItems, 1, 100000))
+                break;
+        }
+
+        return rows;
+    }
+
+    public List<AdRecoveryMetadata> GetRecoveryMetadata(
+        string server,
+        BitLockerScope scope,
+        int maximumItems = 100000)
+    {
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            scope.SearchBase,
+            "(objectClass=msFVE-RecoveryInformation)",
+            SearchScope.Subtree,
+            "msFVE-RecoveryGuid",
+            "whenCreated");
+
+        var rows = new List<AdRecoveryMetadata>();
+        foreach (var entry in SendPaged(connection, request))
+        {
+            var guidBytes =
+                entry.Attributes["msFVE-RecoveryGuid"] is { Count: > 0 } guidAttr
+                    ? guidAttr[0] as byte[]
+                    : null;
+
+            if (guidBytes is not { Length: 16 })
+                continue;
+
+            rows.Add(new AdRecoveryMetadata
+            {
+                ComputerName = GetParentComputerName(entry.DistinguishedName),
+                RecoveryId = new Guid(guidBytes).ToString("D"),
+                CreatedDateTime = ParseLdapDateTime(
+                    GetString(entry, "whenCreated"))
+            });
+
+            if (rows.Count >= Math.Clamp(maximumItems, 1, 200000))
+                break;
+        }
+
+        return rows;
+    }
+
     public AdComputerInfo? FindComputerByName(string server, string computerName)
     {
         if (string.IsNullOrWhiteSpace(computerName)) return null;
@@ -394,6 +470,40 @@ public sealed class ActiveDirectoryService
             page.Cookie = paging.Cookie;
         }
         return results;
+    }
+
+    private static DateTime? ParseLdapDateTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var formats = new[]
+        {
+            "yyyyMMddHHmmss.0'Z'",
+            "yyyyMMddHHmmss'Z'",
+            "yyyyMMddHHmmss.f'Z'",
+            "yyyyMMddHHmmss.ff'Z'",
+            "yyyyMMddHHmmss.fff'Z'"
+        };
+
+        if (DateTime.TryParseExact(
+                value,
+                formats,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal |
+                System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var exact))
+        {
+            return exact.ToLocalTime();
+        }
+
+        return DateTime.TryParse(
+            value,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed.ToLocalTime()
+            : null;
     }
 
     private static DateTime? GetFileTime(SearchResultEntry entry, string attributeName)

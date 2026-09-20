@@ -250,7 +250,48 @@ public sealed class CloudGraphService : IDisposable
 
         return rows
             .OrderBy(x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
-            .Take(Math.Clamp(maximumItems, 1, 5000))
+            .Take(Math.Clamp(maximumItems, 1, 50000))
+            .ToList();
+    }
+
+    public async Task<List<CloudRecoveryMetadata>> GetAllRecoveryMetadataAsync(
+        string accessToken,
+        int maximumItems = 100000,
+        CancellationToken ct = default)
+    {
+        maximumItems = Math.Clamp(maximumItems, 1, 200000);
+
+        var keysTask = GetCollectionAsync(
+            accessToken,
+            "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys?$select=id,createdDateTime,deviceId,volumeType&$top=999",
+            maximumItems,
+            ct);
+
+        var devicesTask = GetCollectionAsync(
+            accessToken,
+            "https://graph.microsoft.com/v1.0/devices?$select=deviceId,displayName&$top=999",
+            100000,
+            ct);
+
+        await Task.WhenAll(keysTask, devicesTask);
+
+        var names = (await devicesTask)
+            .Where(x => !string.IsNullOrWhiteSpace(GetString(x, "deviceId")))
+            .GroupBy(
+                x => GetString(x, "deviceId"),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => GetString(g.First(), "displayName"),
+                StringComparer.OrdinalIgnoreCase);
+
+        return (await keysTask)
+            .Select(key =>
+            {
+                var deviceId = GetString(key, "deviceId");
+                names.TryGetValue(deviceId, out var displayName);
+                return ConvertMetadata(key, displayName ?? string.Empty);
+            })
             .ToList();
     }
 

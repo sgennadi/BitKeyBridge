@@ -49,6 +49,9 @@ public sealed class AppConfig
     public bool RequireRecoveryAccessReference { get; set; } = false;
     public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = true;
 
+    public int CoverageStaleIntuneDays { get; set; } = 30;
+    public int CoverageOldCloudKeyDays { get; set; } = 365;
+
     public List<BitLockerScope> DefaultScopes { get; set; } = [];
 
     public string EffectiveOutputRoot =>
