@@ -76,6 +76,75 @@ public sealed class HealthService
 
         try
         {
+            var auditStatus =
+                AuditIntegrityService.ReadLastStatus();
+            var lastAuditWrite =
+                AuditIntegrityService.GetLastAuditWriteUtc(
+                    AppPaths.AuditLogFile);
+
+            snapshot.AuditLastWriteUtc = lastAuditWrite;
+
+            if (auditStatus is null)
+            {
+                snapshot.AuditIntegrityStatus =
+                    File.Exists(AppPaths.AuditLogFile)
+                        ? "NeverVerified"
+                        : "NoAuditFile";
+
+                if (File.Exists(AppPaths.AuditLogFile))
+                {
+                    snapshot.Warnings.Add(
+                        "Audit integrity has not been verified yet.");
+                }
+            }
+            else
+            {
+                snapshot.AuditIntegrityVerifiedAtUtc =
+                    auditStatus.VerifiedAtUtc;
+                snapshot.AuditIntegrityFilesChecked =
+                    auditStatus.FilesChecked;
+                snapshot.AuditIntegrityEntries =
+                    auditStatus.TotalEntries;
+                snapshot.AuditIntegrityLegacyEntries =
+                    auditStatus.LegacyEntries;
+                snapshot.AuditIntegrityChainedEntries =
+                    auditStatus.ChainedEntries;
+                snapshot.AuditIntegrityError =
+                    auditStatus.FirstError;
+
+                if (!auditStatus.Valid)
+                {
+                    snapshot.AuditIntegrityStatus = "Invalid";
+                    snapshot.Errors.Add(
+                        "Audit integrity verification failed: " +
+                        (string.IsNullOrWhiteSpace(
+                            auditStatus.FirstError)
+                            ? "unknown integrity error"
+                            : auditStatus.FirstError));
+                }
+                else if (lastAuditWrite is not null &&
+                         lastAuditWrite.Value >
+                         auditStatus.VerifiedAtUtc)
+                {
+                    snapshot.AuditIntegrityStatus = "Stale";
+                    snapshot.Warnings.Add(
+                        "Audit integrity verification is stale because the audit log changed after the last verification.");
+                }
+                else
+                {
+                    snapshot.AuditIntegrityStatus = "Valid";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.AuditIntegrityStatus = "Error";
+            snapshot.Warnings.Add(
+                "Audit integrity status: " + ex.Message);
+        }
+
+        try
+        {
             var status = JsonStore.Read<ExportResult>(_config.StatusFile);
             if (status is not null)
             {
