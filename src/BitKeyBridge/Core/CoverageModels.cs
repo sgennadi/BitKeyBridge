@@ -77,4 +77,26 @@ public sealed class CoverageRunStatus
     public string CsvPath { get; set; } = string.Empty;
     public string JsonPath { get; set; } = string.Empty;
     public CoverageSummary Summary { get; set; } = new();
+    public CoveragePolicyResult Policy { get; set; } = new();
+}
+
+
+public sealed class CoveragePolicyViolation
+{
+    public string Code { get; set; } = string.Empty;
+    public string Severity { get; set; } = "Warning";
+    public string Metric { get; set; } = string.Empty;
+    public int Actual { get; set; }
+    public int Maximum { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public sealed class CoveragePolicyResult
+{
+    public bool Enabled { get; set; }
+    public bool Compliant { get; set; } = true;
+    public DateTime EvaluatedAtUtc { get; set; } = DateTime.UtcNow;
+    public int ErrorCount { get; set; }
+    public int WarningCount { get; set; }
+    public List<CoveragePolicyViolation> Violations { get; set; } = [];
 }
