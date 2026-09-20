@@ -182,6 +182,83 @@ public sealed class ActiveDirectoryService
         return rows;
     }
 
+    public List<AdComputerInfo> SearchComputers(string server, string query, int maximumItems = 500)
+    {
+        var root = GetRootDse(server);
+        var baseDn = root["defaultNamingContext"];
+        query = query?.Trim() ?? string.Empty;
+
+        var filter = "(objectCategory=computer)";
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var escaped = EscapeLdapFilter(query);
+            filter = $"(&(objectCategory=computer)(|(name=*{escaped}*)(dNSHostName=*{escaped}*)))";
+        }
+
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            baseDn,
+            filter,
+            SearchScope.Subtree,
+            "name",
+            "distinguishedName",
+            "dNSHostName",
+            "operatingSystem",
+            "operatingSystemVersion",
+            "lastLogonTimestamp");
+
+        var result = new List<AdComputerInfo>();
+        foreach (var entry in SendPaged(connection, request))
+        {
+            result.Add(new AdComputerInfo
+            {
+                ComputerName = GetString(entry, "name") ?? string.Empty,
+                DistinguishedName = entry.DistinguishedName,
+                DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
+                OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
+                LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
+            });
+            if (result.Count >= Math.Clamp(maximumItems, 1, 5000)) break;
+        }
+
+        return result
+            .OrderBy(x => x.ComputerName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public AdComputerInfo? FindComputerByName(string server, string computerName)
+    {
+        if (string.IsNullOrWhiteSpace(computerName)) return null;
+        var root = GetRootDse(server);
+        var baseDn = root["defaultNamingContext"];
+        var escaped = EscapeLdapFilter(computerName.Trim());
+
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            baseDn,
+            $"(&(objectCategory=computer)(name={escaped}))",
+            SearchScope.Subtree,
+            "name",
+            "distinguishedName",
+            "dNSHostName",
+            "operatingSystem",
+            "operatingSystemVersion",
+            "lastLogonTimestamp");
+        var response = (SearchResponse)connection.SendRequest(request, _timeout);
+        if (response.Entries.Count == 0) return null;
+        var entry = response.Entries[0];
+        return new AdComputerInfo
+        {
+            ComputerName = GetString(entry, "name") ?? string.Empty,
+            DistinguishedName = entry.DistinguishedName,
+            DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+            OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
+            OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
+            LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
+        };
+    }
+
     public int CountRecoveryObjects(string server, BitLockerScope scope)
     {
         using var connection = CreateConnection(server);
@@ -220,6 +297,32 @@ public sealed class ActiveDirectoryService
             page.Cookie = paging.Cookie;
         }
         return results;
+    }
+
+    private static DateTime? GetFileTime(SearchResultEntry entry, string attributeName)
+    {
+        var text = GetString(entry, attributeName);
+        if (!long.TryParse(text, out var value) || value <= 0) return null;
+        try { return DateTime.FromFileTimeUtc(value).ToLocalTime(); }
+        catch { return null; }
+    }
+
+    private static string EscapeLdapFilter(string value)
+    {
+        var sb = new StringBuilder(value.Length + 8);
+        foreach (var ch in value)
+        {
+            sb.Append(ch switch
+            {
+                '\\' => @"\5c",
+                '*' => @"\2a",
+                '(' => @"\28",
+                ')' => @"\29",
+                '\0' => @"\00",
+                _ => ch.ToString()
+            });
+        }
+        return sb.ToString();
     }
 
     private static string? GetString(SearchResultEntry entry, string attributeName)
