@@ -499,7 +499,8 @@ public static class WindowsServiceHost
 
             var workers = new List<Task>
             {
-                RunExportWorkerAsync(config, ct)
+                RunExportWorkerAsync(config, ct),
+                RunAuditIntegrityWorkerAsync(ct)
             };
 
             if (config.ServiceCoverageEnabled)
@@ -576,6 +577,70 @@ public static class WindowsServiceHost
                 1,
                 10080);
             await Task.Delay(TimeSpan.FromMinutes(minutes), ct);
+        }
+    }
+
+    private static async Task RunAuditIntegrityWorkerAsync(
+        CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (File.Exists(AppPaths.AuditLogFile))
+                {
+                    var status =
+                        AuditIntegrityService.VerifyAndPersist(
+                            AppPaths.AuditLogFile);
+
+                    if (status.Valid)
+                    {
+                        _serviceLog?.Info(
+                            $"Audit integrity verified. Entries={status.TotalEntries}; " +
+                            $"Chained={status.ChainedEntries}; Legacy={status.LegacyEntries}.");
+
+                        WindowsEventLogService.TryWrite(
+                            $"Audit integrity verified. Entries={status.TotalEntries}; " +
+                            $"Chained={status.ChainedEntries}; Legacy={status.LegacyEntries}.",
+                            EventLogSeverity.Information,
+                            4510,
+                            "AuditIntegrity");
+                    }
+                    else
+                    {
+                        _serviceLog?.Error(
+                            "Audit integrity verification failed: " +
+                            status.FirstError);
+
+                        WindowsEventLogService.TryWrite(
+                            "Audit integrity verification failed: " +
+                            status.FirstError,
+                            EventLogSeverity.Error,
+                            4519,
+                            "AuditIntegrity");
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _serviceLog?.Error(
+                    "Audit integrity verification exception: " + ex);
+
+                WindowsEventLogService.TryWrite(
+                    "Audit integrity verification exception: " +
+                    ex.Message,
+                    EventLogSeverity.Error,
+                    4518,
+                    "AuditIntegrity");
+            }
+
+            await Task.Delay(
+                TimeSpan.FromHours(24),
+                ct);
         }
     }
 
