@@ -62,7 +62,18 @@ internal static class Program
             x.Equals("--service-coverage-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-coverage-interval", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-coverage-run-on-start", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--service-coverage-no-run-on-start", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--service-coverage-no-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-max-no-key", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-max-unencrypted", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-max-stale", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-max-old-key", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-severity-no-key", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-severity-unencrypted", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-severity-stale", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-severity-old-key", StringComparison.OrdinalIgnoreCase));
         var needsConsole = isCli || args.Any(x =>
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (needsConsole) ConsoleHelper.EnsureConsole();
@@ -91,6 +102,7 @@ internal static class Program
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -269,6 +281,24 @@ internal static class Program
                 x.Equals("--service-coverage-no-run-on-start", StringComparison.OrdinalIgnoreCase)))
         {
             return ConfigureServiceCoverageCli(config, args);
+        }
+
+        if (args.Any(x => x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase)))
+            return CoveragePolicyCliService.ShowStatus(config);
+
+        if (args.Any(x =>
+                x.Equals("--coverage-policy-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-max-no-key", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-max-unencrypted", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-max-stale", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-max-old-key", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-severity-no-key", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-severity-unencrypted", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-severity-stale", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--coverage-policy-severity-old-key", StringComparison.OrdinalIgnoreCase)))
+        {
+            return CoveragePolicyCliService.Configure(config, args);
         }
 
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
@@ -958,6 +988,39 @@ internal static class Program
 
             try
             {
+                var policyConfig = new AppConfig
+                {
+                    CoveragePolicyEnabled = true,
+                    CoveragePolicyMaxNoRecoveryKey = 0,
+                    CoveragePolicyNoRecoveryKeySeverity = "Error"
+                };
+                var policy = new CoveragePolicyService(policyConfig)
+                    .Evaluate(new CoverageSummary
+                    {
+                        NoRecoveryKey = 1
+                    });
+
+                if (policy.Compliant ||
+                    policy.ErrorCount != 1 ||
+                    policy.Violations.Count != 1 ||
+                    policy.Violations[0].Code != "NO_RECOVERY_KEY")
+                {
+                    failures.Add("Coverage policy evaluation failed.");
+                }
+
+                if (CoveragePolicyService.NormalizeSeverity("critical") !=
+                    "Error")
+                {
+                    failures.Add("Coverage policy severity normalization failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Coverage policy pure helpers: " + ex.Message);
+            }
+
+            try
+            {
                 var summary = new CoverageSummary
                 {
                     NoRecoveryKey = 1,
@@ -1039,6 +1102,17 @@ internal static class Program
         Console.WriteLine("  --coverage-fail-no-key  Exit 20 when any device has no recovery metadata");
         Console.WriteLine("  --coverage-fail-unencrypted  Exit 21 when Intune reports unencrypted devices");
         Console.WriteLine("  --coverage-fail-stale   Exit 22 when stale Intune devices are found");
+        Console.WriteLine("  --coverage-fail-policy  Exit 23 when configured Coverage policy is violated");
+        Console.WriteLine("  --coverage-policy-status  Show configured policy and last evaluated result");
+        Console.WriteLine("  --coverage-policy-enable|--coverage-policy-disable");
+        Console.WriteLine("  --coverage-policy-max-no-key <n>");
+        Console.WriteLine("  --coverage-policy-max-unencrypted <n>");
+        Console.WriteLine("  --coverage-policy-max-stale <n>");
+        Console.WriteLine("  --coverage-policy-max-old-key <n>");
+        Console.WriteLine("  --coverage-policy-severity-no-key <Error|Warning|Info>");
+        Console.WriteLine("  --coverage-policy-severity-unencrypted <Error|Warning|Info>");
+        Console.WriteLine("  --coverage-policy-severity-stale <Error|Warning|Info>");
+        Console.WriteLine("  --coverage-policy-severity-old-key <Error|Warning|Info>");
         Console.WriteLine("  --cloud-auth <mode>   DeviceCode, Certificate, or Password for --coverage");
         Console.WriteLine("  --tenant-id <id>      Override saved Entra tenant ID for this run");
         Console.WriteLine("  --client-id <id>      Override saved BitKeyBridge client ID for this run");
