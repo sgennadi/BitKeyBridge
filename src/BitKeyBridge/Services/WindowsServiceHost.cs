@@ -424,59 +424,199 @@ public static class WindowsServiceHost
                     "RemoteAPI");
             }
 
-            var first = true;
-            while (!ct.IsCancellationRequested)
+            var workers = new List<Task>
             {
-                if (!first || config.ServiceRunExportOnStart)
-                {
-                    try
-                    {
-                        _serviceLog?.Info("Scheduled BitLocker export started.");
-                        var export = new ExportService(config);
-                        var result = await export.RunAsync(false, false, null, null, ct);
-                        if (result.Success)
-                        {
-                            _serviceLog?.Info($"Scheduled export completed. Rows={result.ValidRows}; DC={result.AdServer}.");
-                            WindowsEventLogService.TryWrite(
-                                $"Scheduled BitLocker export completed. Rows={result.ValidRows}; DC={result.AdServer}; Published={result.Published}.",
-                                EventLogSeverity.Information,
-                                4200,
-                                "Export");
-                        }
-                        else
-                        {
-                            _serviceLog?.Error("Scheduled export failed: " + result.ErrorMessage);
-                            WindowsEventLogService.TryWrite(
-                                "Scheduled BitLocker export failed: " + result.ErrorMessage,
-                                EventLogSeverity.Error,
-                                4299,
-                                "Export");
-                        }
-                    }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        _serviceLog?.Error("Scheduled export exception: " + ex);
-                        WindowsEventLogService.TryWrite(
-                            "Scheduled BitLocker export exception: " + ex.Message,
-                            EventLogSeverity.Error,
-                            4298,
-                            "Export");
-                    }
-                }
+                RunExportWorkerAsync(config, ct)
+            };
 
-                first = false;
-                var minutes = Math.Clamp(config.ServiceIntervalMinutes, 1, 10080);
-                await Task.Delay(TimeSpan.FromMinutes(minutes), ct);
-            }
+            if (config.ServiceCoverageEnabled)
+                workers.Add(RunCoverageWorkerAsync(config, ct));
+
+            await Task.WhenAll(workers);
         }
         finally
         {
             remoteApi?.Dispose();
             health?.Dispose();
+        }
+    }
+
+    private static async Task RunExportWorkerAsync(
+        AppConfig config,
+        CancellationToken ct)
+    {
+        var first = true;
+        while (!ct.IsCancellationRequested)
+        {
+            if (!first || config.ServiceRunExportOnStart)
+            {
+                try
+                {
+                    _serviceLog?.Info("Scheduled BitLocker export started.");
+                    var export = new ExportService(config);
+                    var result = await export.RunAsync(
+                        false,
+                        false,
+                        null,
+                        null,
+                        ct);
+
+                    if (result.Success)
+                    {
+                        _serviceLog?.Info(
+                            $"Scheduled export completed. Rows={result.ValidRows}; DC={result.AdServer}.");
+                        WindowsEventLogService.TryWrite(
+                            $"Scheduled BitLocker export completed. Rows={result.ValidRows}; DC={result.AdServer}; Published={result.Published}.",
+                            EventLogSeverity.Information,
+                            4200,
+                            "Export");
+                    }
+                    else
+                    {
+                        _serviceLog?.Error(
+                            "Scheduled export failed: " + result.ErrorMessage);
+                        WindowsEventLogService.TryWrite(
+                            "Scheduled BitLocker export failed: " + result.ErrorMessage,
+                            EventLogSeverity.Error,
+                            4299,
+                            "Export");
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _serviceLog?.Error("Scheduled export exception: " + ex);
+                    WindowsEventLogService.TryWrite(
+                        "Scheduled BitLocker export exception: " + ex.Message,
+                        EventLogSeverity.Error,
+                        4298,
+                        "Export");
+                }
+            }
+
+            first = false;
+            var minutes = Math.Clamp(
+                config.ServiceIntervalMinutes,
+                1,
+                10080);
+            await Task.Delay(TimeSpan.FromMinutes(minutes), ct);
+        }
+    }
+
+    private static async Task RunCoverageWorkerAsync(
+        AppConfig config,
+        CancellationToken ct)
+    {
+        var first = true;
+        while (!ct.IsCancellationRequested)
+        {
+            if (!first || config.ServiceRunCoverageOnStart)
+            {
+                await RunScheduledCoverageAsync(config, ct);
+            }
+
+            first = false;
+            var minutes = Math.Clamp(
+                config.ServiceCoverageIntervalMinutes,
+                15,
+                10080);
+            await Task.Delay(TimeSpan.FromMinutes(minutes), ct);
+        }
+    }
+
+    private static async Task RunScheduledCoverageAsync(
+        AppConfig config,
+        CancellationToken ct)
+    {
+        var startedUtc = DateTime.UtcNow;
+
+        try
+        {
+            if (!File.Exists(AppPaths.MachineCloudConfigFile))
+            {
+                throw new InvalidOperationException(
+                    "Scheduled Coverage is enabled, but machine cloud configuration is missing. " +
+                    "Run BitKeyBridge.exe --cloud-machine-save first.");
+            }
+
+            var cloud = ConfigService.LoadMachineCloudConfig();
+            if (!string.Equals(
+                    cloud.AuthMode,
+                    "Certificate",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Scheduled Coverage requires Certificate authentication in machine cloud configuration.");
+            }
+
+            if (string.IsNullOrWhiteSpace(cloud.TenantId) ||
+                string.IsNullOrWhiteSpace(cloud.ClientId) ||
+                string.IsNullOrWhiteSpace(cloud.CertificateThumbprint))
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration is incomplete. Tenant ID, Client ID, and certificate thumbprint are required.");
+            }
+
+            new CertificateService()
+                .FindLocalMachineByThumbprint(cloud.CertificateThumbprint);
+
+            _serviceLog?.Info("Scheduled BitLocker coverage started.");
+
+            using var graph = new CloudGraphService();
+            var token = await graph.AcquireCertificateTokenAsync(
+                cloud.TenantId,
+                cloud.ClientId,
+                cloud.CertificateThumbprint,
+                ct);
+
+            var coverage = new CoverageService(config);
+            var result = await coverage.RunAsync(
+                token.AccessToken,
+                null,
+                null,
+                ct);
+
+            CoverageReportService.WriteResult(
+                result,
+                config.CoverageCsv,
+                config.CoverageJson,
+                startedUtc);
+
+            _serviceLog?.Info(
+                $"Scheduled coverage completed. Devices={result.Summary.TotalDevices}; " +
+                $"NoKey={result.Summary.NoRecoveryKey}; " +
+                $"Unencrypted={result.Summary.IntuneNotEncrypted}; " +
+                $"Stale={result.Summary.IntuneStale}; DC={result.DomainController}.");
+
+            WindowsEventLogService.TryWrite(
+                $"Scheduled BitLocker coverage completed. Devices={result.Summary.TotalDevices}; " +
+                $"NoKey={result.Summary.NoRecoveryKey}; Unencrypted={result.Summary.IntuneNotEncrypted}; " +
+                $"Stale={result.Summary.IntuneStale}; DC={result.DomainController}.",
+                EventLogSeverity.Information,
+                4250,
+                "Coverage");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            CoverageReportService.TryWriteFailure(
+                startedUtc,
+                ex,
+                config.CoverageCsv,
+                config.CoverageJson);
+
+            _serviceLog?.Error("Scheduled coverage exception: " + ex);
+            WindowsEventLogService.TryWrite(
+                "Scheduled BitLocker coverage exception: " + ex.Message,
+                EventLogSeverity.Error,
+                4259,
+                "Coverage");
         }
     }
 
