@@ -3992,7 +3992,8 @@ public sealed class MainForm : Form
     {
         try
         {
-            var result = AuditIntegrityService.Verify(_audit.Path);
+            var result =
+                AuditIntegrityService.VerifyAndPersist(_audit.Path);
             var icon = result.Valid
                 ? MessageBoxIcon.Information
                 : MessageBoxIcon.Error;
