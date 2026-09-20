@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0
+
+- Added three AD credential modes: Session only, Current User Credential Manager, and Machine / Service DPAPI vault.
+- Added Windows Credential Manager storage for interactive per-user AD credentials.
+- Added machine-bound DPAPI LocalMachine storage at `%ProgramData%\BitKeyBridge\Secrets\ad-machine.cred`.
+- Added protected NTFS ACLs for the machine credential vault (SYSTEM and local Administrators only).
+- Added explicit elevation requirement for machine-vault create/delete operations.
+- Added GUI controls to save, delete, inspect metadata, and select the AD credential storage mode.
+- Added CLI vault operations: `--vault-status`, `--vault-save-user`, `--vault-save-machine`, `--vault-delete-user`, and `--vault-delete-machine`.
+- Added native Windows Service identity management for LocalSystem, gMSA/managed service accounts, and regular domain accounts.
+- gMSA configuration never accepts or stores a password; Active Directory manages the managed-account password.
+- Regular Windows Service account passwords are passed directly to SCM when the identity is changed and are never stored by BitKeyBridge.
+- Added service identity to service-status and health output.
+- Added a guard preventing unattended Windows Service use with the interactive Current User credential vault.
+- Added offline DPAPI LocalMachine protect/unprotect self-test coverage.
+- No AD or Windows Service password is added to `appsettings.json`, audit JSONL, Event Log, or release artifacts.
+
 ## 0.6.0
 
 - Added Active Directory connection modes for domain-joined workstations/DCs and standalone/workgroup computers.
