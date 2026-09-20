@@ -41,8 +41,9 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 
 - Primary Windows Server / domain-controller build: **win-x64**. Additional **win-x86** and **win-arm64** packages are produced for Windows devices that need those architectures.
 - .NET is not required on the destination machine when using the self-contained release build.
-- AD features require the machine to be domain joined and the running account to have permission to read the selected OUs.
-- The default output root is `C:\Windows\SYSVOL\domain\scripts`, so the default configuration is intended for a domain controller. It can be changed in `%ProgramData%\BitKeyBridge\appsettings.json`.
+- AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
+- Microsoft 365 / Entra / Intune features do not require Windows domain membership.
+- The legacy output root is `C:\Windows\SYSVOL\domain\scripts`, but `OutputRoot` can point to any writable local or UNC directory.
 
 ## First run
 
@@ -137,6 +138,35 @@ Override the saved scopes for one run (repeat the option for multiple OUs):
 ```text
 BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
 ```
+
+## Workstation and standalone operation
+
+BitKeyBridge separates the **computer that runs the application** from the **domain controller and output location**.
+
+In **Directory Connection**:
+
+- **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
+- **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
+- Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
+- The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
+- **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
+- The output root can be a local folder or UNC path. Leaving the new `OutputRoot` setting empty preserves the legacy `SysvolScriptsRoot` behavior.
+
+Standalone CLI example:
+
+```text
+BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt
+```
+
+Standalone export example:
+
+```text
+BitKeyBridge.exe --cli --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --output-root "\\fileserver\secure\BitLocker"
+```
+
+There is intentionally no plaintext `--ad-password` option because command-line arguments can be exposed through process inspection and logs.
+
+The native Windows Service does not persist a session-only AD password. For unattended service operation, use a Windows service identity that already has the required AD permissions; the default installer currently registers the service as LocalSystem.
 
 ## Microsoft Entra / Intune
 
