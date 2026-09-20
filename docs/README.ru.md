@@ -185,3 +185,23 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - CLI получил `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, `--ad-ldaps`, `--ad-ldap` и `--ad-test`.
 - Microsoft 365 / Entra / Intune по-прежнему работает независимо от членства Windows-компьютера в домене.
 - CI теперь проверяет, что каждая версия из `.csproj` обязательно имеет секцию в `CHANGELOG.md`.
+
+
+## Новое в 0.7.0
+
+- Добавлены три режима AD credentials:
+  - **Session only** — пароль только в памяти текущего процесса;
+  - **Current User / Credential Manager** — Windows Credential Manager текущего пользователя;
+  - **Machine / Service / DPAPI** — машинный encrypted vault для unattended сценария.
+- Machine Vault хранится в `%ProgramData%\BitKeyBridge\Secrets\ad-machine.cred`, шифруется Windows DPAPI LocalMachine и закрывается ACL только для SYSTEM/Administrators.
+- Пароли AD не попадают в `appsettings.json`, audit, Event Log и command line.
+- В GUI добавлены Save Credential / Delete Stored и отображение только metadata.
+- Windows Service теперь можно переключать между:
+  - LocalSystem;
+  - gMSA / managed service account;
+  - обычным domain service account.
+- Для gMSA пароль не нужен и BitKeyBridge его никогда не получает — пароль управляется Active Directory.
+- Для обычного service account пароль передается напрямую Windows SCM только при смене identity и BitKeyBridge его не сохраняет.
+- Current User vault заблокирован для unattended Windows Service: для службы используй Machine Vault либо integrated credentials + gMSA/domain account.
+- CLI: `--vault-status`, `--vault-save-user`, `--vault-save-machine`, `--vault-delete-user`, `--vault-delete-machine`, `--service-identity-local-system`, `--service-identity-gmsa`, `--service-identity-user`.
+- Self-test проверяет DPAPI LocalMachine protect/unprotect round-trip.
