@@ -628,8 +628,10 @@ public static class WindowsServiceHost
                 $"PolicyErrors={status.Policy.ErrorCount}; PolicyWarnings={status.Policy.WarningCount}; " +
                 $"DC={status.DomainController}.",
                 status.Policy.ErrorCount > 0
-                    ? EventLogSeverity.Warning
-                    : EventLogSeverity.Information,
+                    ? EventLogSeverity.Error
+                    : status.Policy.WarningCount > 0
+                        ? EventLogSeverity.Warning
+                        : EventLogSeverity.Information,
                 4250,
                 "Coverage");
         }
