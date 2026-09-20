@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.11.0
+
+- Added optional Windows user/group RBAC for privileged recovery workflows while preserving backward-compatible behavior when RBAC is disabled.
+- Added separate `RecoveryRead` and `Rotate` permissions so helpdesk recovery access and Intune rotation can be delegated independently.
+- RBAC principals accept Windows users, groups, and SIDs; local Administrators bypass is configurable.
+- Enforced RBAC before local recovery CSV search, AD recovery reveal/copy, Entra recovery retrieval/reveal/copy, and Intune BitLocker key rotation.
+- RBAC denials are written to the BitKeyBridge security audit and Windows Application Event Log without recording recovery passwords.
+- Added RBAC GUI configuration with principal validation and effective-permission preview for the current Windows identity.
+- Added RBAC CLI commands: `--rbac-status`, `--rbac-enable`, `--rbac-disable`, `--rbac-admin-bypass`, reader add/remove, and rotator add/remove.
+- Added RBAC configuration health fields and unresolved-principal validation without exposing configured group names through the health endpoint.
+- Added SHA-256 tamper-evident hash chaining to new audit JSONL entries while keeping existing legacy audit lines readable.
+- Added cross-process audit serialization so GUI and Windows Service writes cannot race the hash chain.
+- Added `--audit-verify` and **Verify Chain** in the Audit tab to validate `audit.jsonl` and its rotated `.old` file.
+- Added offline self-tests for RBAC backward compatibility, audit hash-chain verification, and deliberate tamper detection.
+- Updated the public appsettings example with scheduled Coverage, Coverage Policy, and RBAC settings.
+
 ## 0.10.0
 
 - Added automatic LocalMachine certificate private-key ACL management for Windows Service identities.
