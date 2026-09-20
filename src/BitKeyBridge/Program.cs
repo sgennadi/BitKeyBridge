@@ -139,6 +139,20 @@ internal static class Program
                     failures.Add("Scope fingerprint changes when scope order changes.");
             }
             catch (Exception ex) { failures.Add("Scope fingerprint: " + ex.Message); }
+
+            try
+            {
+                var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
+                var audit = new AuditService(auditPath, 1);
+                var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
+                audit.Write("SelfTest", details: "Sensitive=" + fakeKey);
+                var entries = audit.ReadRecent(10);
+                if (entries.Count != 1 ||
+                    entries[0].Details.Contains(fakeKey, StringComparison.Ordinal) ||
+                    !entries[0].Details.Contains("[REDACTED-BITLOCKER-KEY]", StringComparison.Ordinal))
+                    failures.Add("Audit redaction failed.");
+            }
+            catch (Exception ex) { failures.Add("Audit redaction: " + ex.Message); }
         }
         finally
         {
