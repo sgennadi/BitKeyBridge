@@ -35,6 +35,11 @@ public static class WindowsServiceHost
     private const int ErrorServiceAlreadyRunning = 1056;
     private const int ErrorServiceNotActive = 1062;
 
+    private const uint ServiceConfigDescription = 1;
+    private const uint ServiceConfigFailureActions = 2;
+    private const int ScActionNone = 0;
+    private const int ScActionRestart = 1;
+
     private static ServiceMainDelegate? _serviceMain;
     private static HandlerExDelegate? _handler;
     private static IntPtr _statusHandle;
@@ -86,6 +91,7 @@ public static class WindowsServiceHost
                     null,
                     DisplayName))
                 ThrowLastWin32("Failed to update the BitKeyBridge Windows Service configuration.");
+            ConfigureServiceHardening(existing.DangerousGetHandle());
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge Windows Service configuration updated.",
                 EventLogSeverity.Information,
@@ -112,6 +118,7 @@ public static class WindowsServiceHost
         if (service == IntPtr.Zero)
             ThrowLastWin32("Failed to create the BitKeyBridge Windows Service.");
 
+        ConfigureServiceHardening(service);
         CloseServiceHandle(service);
         WindowsEventLogService.TryWrite(
             "BitKeyBridge Windows Service installed.",
@@ -353,6 +360,58 @@ public static class WindowsServiceHost
         }
     }
 
+    private static void ConfigureServiceHardening(IntPtr service)
+    {
+        var description = new SERVICE_DESCRIPTION
+        {
+            lpDescription =
+                "BitKeyBridge exports BitLocker recovery metadata from Active Directory, " +
+                "hosts optional monitoring endpoints, and performs scheduled health checks."
+        };
+        if (!ChangeServiceConfig2Description(
+                service,
+                ServiceConfigDescription,
+                ref description))
+            ThrowLastWin32("Failed to configure the BitKeyBridge service description.");
+
+        var actionSize = Marshal.SizeOf<SC_ACTION>();
+        var actionsPointer = Marshal.AllocHGlobal(actionSize * 3);
+        try
+        {
+            Marshal.StructureToPtr(
+                new SC_ACTION { Type = ScActionRestart, Delay = 5000 },
+                actionsPointer,
+                false);
+            Marshal.StructureToPtr(
+                new SC_ACTION { Type = ScActionRestart, Delay = 30000 },
+                IntPtr.Add(actionsPointer, actionSize),
+                false);
+            Marshal.StructureToPtr(
+                new SC_ACTION { Type = ScActionNone, Delay = 0 },
+                IntPtr.Add(actionsPointer, actionSize * 2),
+                false);
+
+            var failureActions = new SERVICE_FAILURE_ACTIONS
+            {
+                dwResetPeriod = 86400,
+                lpRebootMsg = null,
+                lpCommand = null,
+                cActions = 3,
+                lpsaActions = actionsPointer
+            };
+
+            if (!ChangeServiceConfig2FailureActions(
+                    service,
+                    ServiceConfigFailureActions,
+                    ref failureActions))
+                ThrowLastWin32("Failed to configure BitKeyBridge service failure recovery.");
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(actionsPointer);
+        }
+    }
+
     private static void WaitForState(uint expected, TimeSpan timeout)
     {
         var stopAt = DateTime.UtcNow + timeout;
@@ -442,6 +501,30 @@ public static class WindowsServiceHost
         protected override bool ReleaseHandle() => CloseServiceHandle(handle);
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SERVICE_DESCRIPTION
+    {
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string? lpDescription;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SC_ACTION
+    {
+        public int Type;
+        public uint Delay;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SERVICE_FAILURE_ACTIONS
+    {
+        public uint dwResetPeriod;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpRebootMsg;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpCommand;
+        public uint cActions;
+        public IntPtr lpsaActions;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct SERVICE_STATUS
     {
@@ -519,6 +602,20 @@ public static class WindowsServiceHost
         string? serviceStartName,
         string? password,
         string? displayName);
+
+    [DllImport("advapi32.dll", EntryPoint = "ChangeServiceConfig2W", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ChangeServiceConfig2Description(
+        IntPtr service,
+        uint infoLevel,
+        ref SERVICE_DESCRIPTION info);
+
+    [DllImport("advapi32.dll", EntryPoint = "ChangeServiceConfig2W", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ChangeServiceConfig2FailureActions(
+        IntPtr service,
+        uint infoLevel,
+        ref SERVICE_FAILURE_ACTIONS info);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
