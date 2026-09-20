@@ -117,3 +117,17 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - Graph permission IDs больше не зашиты жёстко — они определяются по именам из Microsoft Graph service principal.
 - Добавлены retry/backoff для Graph throttling/5xx и задержка после создания Enterprise Application.
 - После setup приложение автоматически переключается на Device Code и сохраняет созданный Client ID/certificate.
+
+
+## Новое в 0.3.0
+
+- Добавлена вкладка **Dashboard** с общим состоянием export/service/replication/certificate.
+- Добавлен настоящий **Windows Service** без PowerShell и без `sc.exe`.
+- Сервис устанавливается в `%ProgramFiles%\BitKeyBridge\BitKeyBridge.exe`, работает как LocalSystem и запускает export по заданному интервалу.
+- Добавлен localhost-only health endpoint:
+  - `http://127.0.0.1:8750/health`
+  - `http://127.0.0.1:8750/health/live`
+- Endpoint не содержит recovery keys, паролей, access tokens или private-key данных.
+- Добавлены CLI-команды `--health`, `--install-service`, `--uninstall-service`, `--start-service`, `--stop-service`, `--service-status`.
+- Добавлен **Secure Output Wizard**: отключает NTFS inheritance, оставляет Full Control SYSTEM/Administrators/current admin, выдаёт указанным группам только Read & Execute и при желании создаёт ограниченный SMB share через Win32 API.
+- При закрытии GUI recovery key/password/token очищаются из состояния приложения; clipboard очищается, если в нём всё ещё находится показанный recovery key.
