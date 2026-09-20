@@ -472,7 +472,17 @@ public sealed class MainForm : Form
         };
         serviceGroup.Controls.AddRange([saveMachineCloud, deleteMachineCloud]);
 
-        _machineCloudStatus.SetBounds(16, 155, 1095, 30);
+        var repairMachineKey = new Button
+        {
+            Text = "Repair Cert Access",
+            Left = 945,
+            Top = 153,
+            Width = 170,
+            Height = 30
+        };
+        serviceGroup.Controls.Add(repairMachineKey);
+
+        _machineCloudStatus.SetBounds(16, 155, 915, 30);
         _machineCloudStatus.Text = "Machine cloud config has not been checked.";
         serviceGroup.Controls.Add(_machineCloudStatus);
 
@@ -546,6 +556,7 @@ public sealed class MainForm : Form
         saveSettings.Click += (_, _) => SaveDashboardSettings(restartRunningService: true);
         saveMachineCloud.Click += (_, _) => SaveMachineCloudFromGui();
         deleteMachineCloud.Click += (_, _) => DeleteMachineCloudFromGui();
+        repairMachineKey.Click += (_, _) => RepairMachineCertificateAccessFromGui();
         applyIdentity.Click += (_, _) => ApplyServiceIdentityFromGui();
         _serviceIdentityMode.SelectedIndexChanged += (_, _) => UpdateServiceIdentityUi();
 
@@ -3003,9 +3014,23 @@ public sealed class MainForm : Form
             var cert = new CertificateService()
                 .FindLocalMachineByThumbprint(cloud.CertificateThumbprint);
 
+            var suffix = string.Empty;
+            var service = WindowsServiceHost.GetInfo();
+            if (service.Installed &&
+                !string.IsNullOrWhiteSpace(service.Identity))
+            {
+                var access = new CertificatePrivateKeyAccessService()
+                    .GetStatus(
+                        cloud.CertificateThumbprint,
+                        service.Identity);
+                suffix =
+                    $"; KeyAccess={access.Status}; Account={access.Account}; Provider={access.Provider}";
+            }
+
             _machineCloudStatus.Text =
                 $"Machine cloud: Tenant={cloud.TenantId}; Client={cloud.ClientId}; " +
-                $"Certificate={cloud.CertificateThumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}";
+                $"Certificate={cloud.CertificateThumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}" +
+                suffix;
         }
         catch (Exception ex)
         {
@@ -3047,11 +3072,22 @@ public sealed class MainForm : Form
                 AuthMode = "Certificate"
             });
 
+            CertificateKeyAccessInfo? access = null;
+            var service = WindowsServiceHost.GetInfo();
+            if (service.Installed &&
+                !string.IsNullOrWhiteSpace(service.Identity))
+            {
+                access =
+                    WindowsServiceHost.EnsureConfiguredCloudCertificateAccess(
+                        service.Identity,
+                        required: _config.ServiceCoverageEnabled);
+            }
+
             _audit.Write(
                 "SaveMachineCloudConfig",
                 source: "Local",
                 details:
-                    $"Tenant={tenant}; Client={client}; Certificate={thumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}");
+                    $"Tenant={tenant}; Client={client}; Certificate={thumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}; KeyAccess={access?.Status ?? "NotApplicable"}; KeyAccount={access?.Account ?? string.Empty}");
 
             RefreshMachineCloudStatus();
             MessageBox.Show(
@@ -3075,6 +3111,70 @@ public sealed class MainForm : Form
                 this,
                 ex.Message,
                 "Machine Cloud Configuration",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshMachineCloudStatus();
+        }
+    }
+
+    private void RepairMachineCertificateAccessFromGui()
+    {
+        try
+        {
+            if (!SecurityContext.IsAdministrator())
+                throw new InvalidOperationException(
+                    "Administrator rights are required to repair certificate private-key access.");
+
+            if (!File.Exists(AppPaths.MachineCloudConfigFile))
+                throw new InvalidOperationException(
+                    "Machine cloud configuration is not configured.");
+
+            var service = WindowsServiceHost.GetInfo();
+            if (!service.Installed ||
+                string.IsNullOrWhiteSpace(service.Identity))
+            {
+                throw new InvalidOperationException(
+                    "Install the BitKeyBridge Windows Service before repairing certificate access.");
+            }
+
+            var access =
+                WindowsServiceHost.EnsureConfiguredCloudCertificateAccess(
+                    service.Identity,
+                    required: true)
+                ?? throw new InvalidOperationException(
+                    "Certificate private-key access could not be prepared.");
+
+            _audit.Write(
+                "RepairCertificatePrivateKeyAccess",
+                source: "WindowsService",
+                details:
+                    $"Account={access.Account}; SID={access.Sid}; Provider={access.Provider}; Status={access.Status}; Certificate={access.Thumbprint}");
+
+            RefreshMachineCloudStatus();
+            RefreshDashboard();
+
+            MessageBox.Show(
+                this,
+                $"Certificate private-key access: {access.Status}" +
+                Environment.NewLine +
+                $"Account: {access.Account}" +
+                Environment.NewLine +
+                $"Provider: {access.Provider}",
+                "Certificate Access",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write(
+                "RepairCertificatePrivateKeyAccess",
+                "Failed",
+                source: "WindowsService",
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Certificate Access",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             RefreshMachineCloudStatus();
@@ -3202,6 +3302,7 @@ public sealed class MainForm : Form
 
             _serviceIdentityPassword.Clear();
             RefreshServiceIdentityStatus();
+            RefreshMachineCloudStatus();
             RefreshDashboard();
 
             MessageBox.Show(
