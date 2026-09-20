@@ -75,3 +75,15 @@ Native Auto Setup работает без PowerShell и без Microsoft Graph S
 Recovery CSV содержит секреты. Не клади его в GitHub. Проверь NTFS/share ACL. Если recovery passwords лежат в SYSVOL/NETLOGON, доступ к каталогу должен быть жёстко ограничен; лучше отдельный защищённый share.
 
 Файл с реальными внутренними OU тоже не надо коммитить в публичный репозиторий.
+
+
+## Новое в 0.2.0
+
+- **Device Code** — основной интерактивный вход в Microsoft Entra; поддерживает MFA и Conditional Access.
+- ROPC оставлен как legacy-режим.
+- **Unified Devices** объединяет данные компьютера из локального AD, Entra BitLocker metadata и Intune managedDevice.
+- Поиск работает по имени ПК, serial number, UPN/пользователю и device ID.
+- **Rotate BitLocker Key** отправляет подтверждённый запрос ротации ключа через Intune.
+- Вкладка **Audit** пишет локальный JSONL-журнал действий в `%ProgramData%\BitKeyBridge\audit.jsonl`.
+- Recovery password никогда не записывается в audit; строки формата 48-digit BitLocker key автоматически заменяются на `[REDACTED-BITLOCKER-KEY]`.
+- Native Auto Setup теперь добавляет `DeviceManagementManagedDevices.ReadWrite.All` для delegated и application mode.
