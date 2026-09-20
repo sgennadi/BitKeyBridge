@@ -604,89 +604,42 @@ public static class WindowsServiceHost
         AppConfig config,
         CancellationToken ct)
     {
-        var startedUtc = DateTime.UtcNow;
+        _serviceLog?.Info("Scheduled BitLocker coverage started.");
 
-        try
+        var status = await new CoverageAutomationService(config)
+            .RunOnceAsync(ct);
+
+        if (status.Success)
         {
-            if (!File.Exists(AppPaths.MachineCloudConfigFile))
-            {
-                throw new InvalidOperationException(
-                    "Scheduled Coverage is enabled, but machine cloud configuration is missing. " +
-                    "Run BitKeyBridge.exe --cloud-machine-save first.");
-            }
-
-            var cloud = ConfigService.LoadMachineCloudConfig();
-            if (!string.Equals(
-                    cloud.AuthMode,
-                    "Certificate",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Scheduled Coverage requires Certificate authentication in machine cloud configuration.");
-            }
-
-            if (string.IsNullOrWhiteSpace(cloud.TenantId) ||
-                string.IsNullOrWhiteSpace(cloud.ClientId) ||
-                string.IsNullOrWhiteSpace(cloud.CertificateThumbprint))
-            {
-                throw new InvalidOperationException(
-                    "Machine cloud configuration is incomplete. Tenant ID, Client ID, and certificate thumbprint are required.");
-            }
-
-            new CertificateService()
-                .FindLocalMachineByThumbprint(cloud.CertificateThumbprint);
-
-            _serviceLog?.Info("Scheduled BitLocker coverage started.");
-
-            using var graph = new CloudGraphService();
-            var token = await graph.AcquireCertificateTokenAsync(
-                cloud.TenantId,
-                cloud.ClientId,
-                cloud.CertificateThumbprint,
-                ct);
-
-            var coverage = new CoverageService(config);
-            var result = await coverage.RunAsync(
-                token.AccessToken,
-                null,
-                null,
-                ct);
-
-            CoverageReportService.WriteResult(
-                result,
-                config.CoverageCsv,
-                config.CoverageJson,
-                startedUtc);
-
             _serviceLog?.Info(
-                $"Scheduled coverage completed. Devices={result.Summary.TotalDevices}; " +
-                $"NoKey={result.Summary.NoRecoveryKey}; " +
-                $"Unencrypted={result.Summary.IntuneNotEncrypted}; " +
-                $"Stale={result.Summary.IntuneStale}; DC={result.DomainController}.");
+                $"Scheduled coverage completed. Devices={status.Summary.TotalDevices}; " +
+                $"NoKey={status.Summary.NoRecoveryKey}; " +
+                $"Unencrypted={status.Summary.IntuneNotEncrypted}; " +
+                $"Stale={status.Summary.IntuneStale}; " +
+                $"PolicyCompliant={status.Policy.Compliant}; " +
+                $"PolicyErrors={status.Policy.ErrorCount}; " +
+                $"PolicyWarnings={status.Policy.WarningCount}; " +
+                $"DC={status.DomainController}.");
 
             WindowsEventLogService.TryWrite(
-                $"Scheduled BitLocker coverage completed. Devices={result.Summary.TotalDevices}; " +
-                $"NoKey={result.Summary.NoRecoveryKey}; Unencrypted={result.Summary.IntuneNotEncrypted}; " +
-                $"Stale={result.Summary.IntuneStale}; DC={result.DomainController}.",
-                EventLogSeverity.Information,
+                $"Scheduled BitLocker coverage completed. Devices={status.Summary.TotalDevices}; " +
+                $"NoKey={status.Summary.NoRecoveryKey}; Unencrypted={status.Summary.IntuneNotEncrypted}; " +
+                $"Stale={status.Summary.IntuneStale}; PolicyCompliant={status.Policy.Compliant}; " +
+                $"PolicyErrors={status.Policy.ErrorCount}; PolicyWarnings={status.Policy.WarningCount}; " +
+                $"DC={status.DomainController}.",
+                status.Policy.ErrorCount > 0
+                    ? EventLogSeverity.Warning
+                    : EventLogSeverity.Information,
                 4250,
                 "Coverage");
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        else
         {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            CoverageReportService.TryWriteFailure(
-                startedUtc,
-                ex,
-                config.CoverageCsv,
-                config.CoverageJson);
-
-            _serviceLog?.Error("Scheduled coverage exception: " + ex);
+            _serviceLog?.Error(
+                "Scheduled coverage failed: " + status.ErrorMessage);
             WindowsEventLogService.TryWrite(
-                "Scheduled BitLocker coverage exception: " + ex.Message,
+                "Scheduled BitLocker coverage failed: " +
+                status.ErrorMessage,
                 EventLogSeverity.Error,
                 4259,
                 "Coverage");
