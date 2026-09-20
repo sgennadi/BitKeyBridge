@@ -42,12 +42,12 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase));
+        var needsConsole = isCli || args.Any(x =>
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
-        if (isCli) ConsoleHelper.EnsureConsole();
+        if (needsConsole) ConsoleHelper.EnsureConsole();
 
         var config = ConfigService.LoadAppConfig();
-        ApplySessionCommandLine(config, args);
 
         var applyPlanIndex = Array.FindIndex(args, x =>
             x.Equals("--apply-update-plan", StringComparison.OrdinalIgnoreCase));
@@ -83,6 +83,8 @@ internal static class Program
                 return 5;
             }
         }
+
+        ApplySessionCommandLine(config, args);
 
         if (args.Any(x => x.Equals("--install-service", StringComparison.OrdinalIgnoreCase)))
         {
