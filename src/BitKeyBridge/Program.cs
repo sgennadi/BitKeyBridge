@@ -50,6 +50,14 @@ internal static class Program
             x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cert-key-grant", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cert-key-revoke", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-admin-bypass", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-reader-add", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -223,6 +231,21 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--cert-key-revoke", StringComparison.OrdinalIgnoreCase)))
             return CertificateKeyCliService.Revoke(args);
+
+        if (args.Any(x => x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase)))
+            return RbacCliService.ShowStatus(config);
+
+        if (args.Any(x =>
+                x.Equals("--rbac-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-admin-bypass", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-reader-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase)))
+        {
+            return RbacCliService.Apply(config, args);
+        }
 
         if (args.Any(x => x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase)))
             return ShowVaultStatus(config);
@@ -961,6 +984,36 @@ internal static class Program
 
             try
             {
+                var rbacConfig = new AppConfig
+                {
+                    RbacEnabled = false
+                };
+                var auth = new AuthorizationService(rbacConfig);
+
+                if (!auth.Check(BitKeyBridgePermission.RecoveryRead).Allowed ||
+                    !auth.Check(BitKeyBridgePermission.Rotate).Allowed)
+                {
+                    failures.Add(
+                        "RBAC backward-compatible disabled mode failed.");
+                }
+
+                if (!string.Equals(
+                        CoveragePolicyService.NormalizeSeverity("Critical"),
+                        "Error",
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "Coverage policy severity normalization failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "RBAC/policy pure helpers: " + ex.Message);
+            }
+
+            try
+            {
                 var normalizedSystem =
                     CertificatePrivateKeyAccessService.NormalizeServiceIdentity(
                         "LocalSystem");
@@ -1125,6 +1178,14 @@ internal static class Program
         Console.WriteLine("  --cert-key-grant      Grant private-key Read to service/account");
         Console.WriteLine("  --cert-key-revoke     Remove BitKeyBridge-style private-key Read ACE");
         Console.WriteLine("  --cert-account <acct> Override service identity for certificate ACL commands");
+        Console.WriteLine("  --rbac-status         Show current RBAC config and effective permissions");
+        Console.WriteLine("  --rbac-enable         Enable Windows user/group authorization");
+        Console.WriteLine("  --rbac-disable        Disable RBAC (backward-compatible mode)");
+        Console.WriteLine("  --rbac-admin-bypass <on|off>  Allow local Administrators privileged actions");
+        Console.WriteLine("  --rbac-reader-add <principal>  Add DOMAIN\\group/user or SID to RecoveryRead");
+        Console.WriteLine("  --rbac-reader-remove <principal>  Remove RecoveryRead principal");
+        Console.WriteLine("  --rbac-rotator-add <principal> Add DOMAIN\\group/user or SID to Rotate");
+        Console.WriteLine("  --rbac-rotator-remove <principal> Remove Rotate principal");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
