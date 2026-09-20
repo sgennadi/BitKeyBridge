@@ -5,7 +5,7 @@ namespace BitKeyBridge;
 public sealed class MainForm : Form
 {
     private readonly AppConfig _config;
-    private readonly ActiveDirectoryService _ad = new();
+    private readonly ActiveDirectoryService _ad;
     private readonly AuditService _audit = new();
     private readonly CheckedListBox _scopes = new();
     private readonly RichTextBox _exportLog = new();
@@ -73,6 +73,7 @@ public sealed class MainForm : Form
     public MainForm(AppConfig config)
     {
         _config = config;
+        _ad = new ActiveDirectoryService(config);
         _cloudConfig = ConfigService.LoadCloudConfig();
         try
         {
@@ -2143,6 +2144,7 @@ public sealed class MainForm : Form
         _localCurrentKey = null;
         _cloudCurrentKey = null;
         _cloudToken = null;
+        AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
         _localKey.Clear();
         _cloudKey.Clear();

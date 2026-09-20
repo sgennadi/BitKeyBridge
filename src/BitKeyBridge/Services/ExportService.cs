@@ -14,7 +14,7 @@ public sealed class ExportService
     public ExportService(AppConfig config)
     {
         _config = config;
-        _ad = new ActiveDirectoryService();
+        _ad = new ActiveDirectoryService(config);
         _replication = new ReplicationService(config);
         _acl = new AclService();
         _log = new AppLogger(config.ErrorLog, config.MaxLogSizeMb);

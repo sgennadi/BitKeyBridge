@@ -2,7 +2,12 @@ namespace BitKeyBridge;
 
 public sealed class UnifiedDeviceService
 {
-    private readonly ActiveDirectoryService _ad = new();
+    private readonly ActiveDirectoryService _ad;
+
+    public UnifiedDeviceService(AppConfig? config = null)
+    {
+        _ad = new ActiveDirectoryService(config);
+    }
 
     public async Task<List<UnifiedDeviceInfo>> SearchAsync(
         string accessToken,

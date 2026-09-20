@@ -9,7 +9,7 @@ public sealed class DomainControllerComparisonService
     public DomainControllerComparisonService(AppConfig config)
     {
         _config = config;
-        _ad = new ActiveDirectoryService();
+        _ad = new ActiveDirectoryService(config);
         _replication = new ReplicationService(config);
     }
 

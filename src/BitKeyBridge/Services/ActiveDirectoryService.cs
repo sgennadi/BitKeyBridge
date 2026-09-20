@@ -10,15 +10,53 @@ namespace BitKeyBridge;
 public sealed class ActiveDirectoryService
 {
     private readonly TimeSpan _timeout = TimeSpan.FromSeconds(30);
+    private readonly AppConfig _config;
+
+    public ActiveDirectoryService(AppConfig? config = null)
+    {
+        _config = config ?? ConfigService.LoadAppConfig();
+    }
 
     public string GetCurrentDomainName()
     {
-        using var domain = Domain.GetComputerDomain();
-        return domain.Name;
+        if (!string.IsNullOrWhiteSpace(_config.AdDomain))
+            return _config.AdDomain.Trim();
+
+        try
+        {
+            using var domain = Domain.GetComputerDomain();
+            return domain.Name;
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(_config.AdServer))
+            {
+                var root = GetRootDse(_config.AdServer.Trim());
+                if (root.TryGetValue("defaultNamingContext", out var dn) &&
+                    !string.IsNullOrWhiteSpace(dn))
+                    return DistinguishedNameToDnsName(dn);
+            }
+
+            throw new InvalidOperationException(
+                "This computer is not joined to an Active Directory domain. " +
+                "Configure an explicit DC and domain in Directory Connection.");
+        }
     }
 
     public string GetPreferredWritableDc()
     {
+        if (UseExplicitServer())
+        {
+            var server = _config.AdServer.Trim();
+            var root = GetRootDse(server);
+            if (root.TryGetValue("isRODC", out var rodcText) &&
+                string.Equals(rodcText, "TRUE", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Configured domain controller '{server}' is read-only. " +
+                    "Choose a writable DC for BitLocker recovery operations.");
+            return server;
+        }
+
         var domainName = GetCurrentDomainName();
         var inventory = DiscoverDomainControllers(domainName);
         var local = inventory.FirstOrDefault(x =>
@@ -36,8 +74,12 @@ public sealed class ActiveDirectoryService
     public List<DomainControllerInfo> DiscoverDomainControllers(string? domainName = null)
     {
         domainName ??= GetCurrentDomainName();
+
+        if (UseExplicitServer() && string.IsNullOrWhiteSpace(domainName))
+            domainName = GetCurrentDomainName();
+
         var result = new List<DomainControllerInfo>();
-        var context = new DirectoryContext(DirectoryContextType.Domain, domainName);
+        var context = CreateDirectoryContext(DirectoryContextType.Domain, domainName);
         var collection = DomainController.FindAll(context);
 
         foreach (DomainController dc in collection)
@@ -266,14 +308,59 @@ public sealed class ActiveDirectoryService
         return SendPaged(connection, request).Count;
     }
 
+    public Dictionary<string, string> TestConnection(string? server = null)
+    {
+        var target = string.IsNullOrWhiteSpace(server)
+            ? GetPreferredWritableDc()
+            : server.Trim();
+        return GetRootDse(target);
+    }
+
+    private bool UseExplicitServer() =>
+        string.Equals(_config.AdConnectionMode, "Explicit", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(_config.AdServer);
+
+    public DirectoryContext CreateDirectoryContext(
+        DirectoryContextType type,
+        string name)
+    {
+        var credential = AdSessionCredentials.CreateNetworkCredential(_config);
+        return credential is null
+            ? new DirectoryContext(type, name)
+            : new DirectoryContext(
+                type,
+                name,
+                FormatDirectoryContextUsername(credential),
+                credential.Password);
+    }
+
+    private static string FormatDirectoryContextUsername(NetworkCredential credential)
+    {
+        if (!string.IsNullOrWhiteSpace(credential.Domain))
+            return credential.Domain + "\\" + credential.UserName;
+        return credential.UserName;
+    }
+
+    private static string DistinguishedNameToDnsName(string distinguishedName)
+    {
+        return string.Join(
+            ".",
+            distinguishedName
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => x.StartsWith("DC=", StringComparison.OrdinalIgnoreCase))
+                .Select(x => x[3..]));
+    }
+
     private LdapConnection CreateConnection(string server)
     {
-        var identifier = new LdapDirectoryIdentifier(server, 389, true, false);
-        var connection = new LdapConnection(identifier)
-        {
-            AuthType = AuthType.Negotiate,
-            Timeout = _timeout
-        };
+        var port = Math.Clamp(_config.AdPort, 1, 65535);
+        var identifier = new LdapDirectoryIdentifier(server, port, true, false);
+        var credential = AdSessionCredentials.CreateNetworkCredential(_config);
+        var connection = credential is null
+            ? new LdapConnection(identifier)
+            : new LdapConnection(identifier, credential, AuthType.Negotiate);
+        connection.AuthType = AuthType.Negotiate;
+        connection.Timeout = _timeout;
         connection.SessionOptions.ProtocolVersion = 3;
         connection.SessionOptions.Signing = true;
         connection.SessionOptions.Sealing = true;

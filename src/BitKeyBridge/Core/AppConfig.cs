@@ -18,6 +18,13 @@ public sealed class AppConfig
     public bool TestBitLockerCountsOnReadOnlyDcs { get; set; } = false;
     public int MaxLogSizeMb { get; set; } = 10;
 
+    public string AdConnectionMode { get; set; } = "Auto";
+    public string AdServer { get; set; } = string.Empty;
+    public string AdDomain { get; set; } = string.Empty;
+    public string AdUsername { get; set; } = string.Empty;
+    public bool AdUseExplicitCredentials { get; set; } = false;
+    public int AdPort { get; set; } = 389;
+
     public bool HealthEndpointEnabled { get; set; } = true;
     public int HealthEndpointPort { get; set; } = 8750;
     public int ServiceIntervalMinutes { get; set; } = 60;

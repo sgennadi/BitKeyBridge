@@ -19,7 +19,8 @@ public sealed class ReplicationService
 
         try
         {
-            var context = new DirectoryContext(DirectoryContextType.DirectoryServer, server);
+            var context = new ActiveDirectoryService(_config)
+                .CreateDirectoryContext(DirectoryContextType.DirectoryServer, server);
             using var dc = DomainController.GetDomainController(context);
             var neighbors = dc.GetAllReplicationNeighbors();
             if (neighbors.Count == 0)
