@@ -33,6 +33,9 @@ public sealed class AppConfig
     public int HealthEndpointPort { get; set; } = 8750;
     public int ServiceIntervalMinutes { get; set; } = 60;
     public bool ServiceRunExportOnStart { get; set; } = true;
+    public bool ServiceCoverageEnabled { get; set; } = false;
+    public int ServiceCoverageIntervalMinutes { get; set; } = 1440;
+    public bool ServiceRunCoverageOnStart { get; set; } = true;
     public string ServiceIdentityMode { get; set; } = "LocalSystem";
     public string ServiceIdentityAccount { get; set; } = string.Empty;
 
@@ -67,4 +70,7 @@ public sealed class AppConfig
     public string StatusFile => Path.Combine(OutputDirectory, "bitlocker_status.json");
     public string LastSuccessFile => Path.Combine(OutputDirectory, "bitlocker_last_success.json");
     public string DcTestStatusFile => Path.Combine(OutputDirectory, "bitlocker_dc_test_status.json");
+    public string CoverageOutputDirectory => Path.Combine(OutputDirectory, "Coverage");
+    public string CoverageCsv => Path.Combine(CoverageOutputDirectory, "bitlocker_coverage.csv");
+    public string CoverageJson => Path.Combine(CoverageOutputDirectory, "bitlocker_coverage.json");
 }
