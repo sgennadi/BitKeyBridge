@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+- Added a Health & Service Dashboard.
+- Added native Windows Service installation/runtime through Service Control Manager APIs.
+- Added scheduled service exports with configurable interval and run-on-start behavior.
+- Added a loopback-only JSON health endpoint on 127.0.0.1 with HTTP 503 on error health states.
+- Added `--health`, `--install-service`, `--uninstall-service`, `--start-service`, `--stop-service`, and `--service-status` CLI commands.
+- Added certificate-expiry and export/replication health reporting.
+- Added Secure Output Wizard with protected NTFS ACLs and optional restricted SMB share creation through `NetShareAdd`.
+- Added GUI sensitive-state cleanup on close.
+- Kept runtime operation free of PowerShell and `sc.exe`.
+
+
 ## 0.2.1
 
 - Removed the requirement to pre-create an App Registration for first-run Entra setup.
