@@ -18,6 +18,11 @@ public sealed class AppConfig
     public bool TestBitLockerCountsOnReadOnlyDcs { get; set; } = false;
     public int MaxLogSizeMb { get; set; } = 10;
 
+    public bool HealthEndpointEnabled { get; set; } = true;
+    public int HealthEndpointPort { get; set; } = 8750;
+    public int ServiceIntervalMinutes { get; set; } = 60;
+    public bool ServiceRunExportOnStart { get; set; } = true;
+
     public List<BitLockerScope> DefaultScopes { get; set; } = [];
 
     public string OutputDirectory => Path.Combine(SysvolScriptsRoot, OutputSubdirectory);
