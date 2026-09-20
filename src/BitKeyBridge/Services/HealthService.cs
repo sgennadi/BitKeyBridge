@@ -106,6 +106,10 @@ public sealed class HealthService
                     coverage.Summary.IntuneNotEncrypted;
                 snapshot.CoverageIntuneStale = coverage.Summary.IntuneStale;
                 snapshot.CoverageOldCloudKey = coverage.Summary.OldCloudKey;
+                snapshot.CoveragePolicyEnabled = coverage.Policy.Enabled;
+                snapshot.CoveragePolicyCompliant = coverage.Policy.Compliant;
+                snapshot.CoveragePolicyErrors = coverage.Policy.ErrorCount;
+                snapshot.CoveragePolicyWarnings = coverage.Policy.WarningCount;
 
                 if (snapshot.LastCoverageFinishedUtc is not null)
                 {
@@ -126,15 +130,38 @@ public sealed class HealthService
 
                 if (coverage.Success)
                 {
-                    if (coverage.Summary.NoRecoveryKey > 0)
-                        snapshot.Warnings.Add(
-                            $"Coverage: {coverage.Summary.NoRecoveryKey} device(s) have no recovery metadata.");
-                    if (coverage.Summary.IntuneNotEncrypted > 0)
-                        snapshot.Warnings.Add(
-                            $"Coverage: {coverage.Summary.IntuneNotEncrypted} Intune device(s) are reported not encrypted.");
-                    if (coverage.Summary.IntuneStale > 0)
-                        snapshot.Warnings.Add(
-                            $"Coverage: {coverage.Summary.IntuneStale} Intune device(s) are stale.");
+                    if (coverage.Policy.Enabled)
+                    {
+                        foreach (var violation in coverage.Policy.Violations)
+                        {
+                            var message =
+                                $"Coverage policy {violation.Code}: {violation.Message}";
+                            if (violation.Severity.Equals(
+                                    "Error",
+                                    StringComparison.OrdinalIgnoreCase))
+                            {
+                                snapshot.Errors.Add(message);
+                            }
+                            else if (violation.Severity.Equals(
+                                         "Warning",
+                                         StringComparison.OrdinalIgnoreCase))
+                            {
+                                snapshot.Warnings.Add(message);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (coverage.Summary.NoRecoveryKey > 0)
+                            snapshot.Warnings.Add(
+                                $"Coverage: {coverage.Summary.NoRecoveryKey} device(s) have no recovery metadata.");
+                        if (coverage.Summary.IntuneNotEncrypted > 0)
+                            snapshot.Warnings.Add(
+                                $"Coverage: {coverage.Summary.IntuneNotEncrypted} Intune device(s) are reported not encrypted.");
+                        if (coverage.Summary.IntuneStale > 0)
+                            snapshot.Warnings.Add(
+                                $"Coverage: {coverage.Summary.IntuneStale} Intune device(s) are stale.");
+                    }
                 }
 
                 if (_config.ServiceCoverageEnabled &&
