@@ -21,6 +21,14 @@ public sealed class HealthSnapshot
     public int RbacRecoveryReaderPrincipals { get; set; }
     public int RbacRotationOperatorPrincipals { get; set; }
     public int RbacValidationErrors { get; set; }
+    public string AuditIntegrityStatus { get; set; } = "NeverVerified";
+    public DateTime? AuditIntegrityVerifiedAtUtc { get; set; }
+    public DateTime? AuditLastWriteUtc { get; set; }
+    public int AuditIntegrityFilesChecked { get; set; }
+    public int AuditIntegrityEntries { get; set; }
+    public int AuditIntegrityLegacyEntries { get; set; }
+    public int AuditIntegrityChainedEntries { get; set; }
+    public string AuditIntegrityError { get; set; } = string.Empty;
     public string HealthEndpoint { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
