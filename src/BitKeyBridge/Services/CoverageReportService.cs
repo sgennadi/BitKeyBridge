@@ -7,10 +7,15 @@ public static class CoverageReportService
         string csvPath,
         string jsonPath,
         DateTime startedUtc,
+        AppConfig? config = null,
         bool tryWriteMachineStatus = true)
     {
         WriteCsvAtomic(csvPath, result.Rows);
         JsonStore.WriteAtomic(jsonPath, result);
+
+        var policy = new CoveragePolicyService(
+            config ?? ConfigService.LoadAppConfig())
+            .Evaluate(result.Summary);
 
         if (tryWriteMachineStatus)
         {
@@ -22,7 +27,8 @@ public static class CoverageReportService
                 DomainController = result.DomainController,
                 CsvPath = csvPath,
                 JsonPath = jsonPath,
-                Summary = result.Summary
+                Summary = result.Summary,
+                Policy = policy
             });
         }
     }
