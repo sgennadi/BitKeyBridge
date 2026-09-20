@@ -55,11 +55,21 @@ public sealed class MainForm : Form
     private readonly CheckBox _healthEnabled = new();
     private readonly CheckBox _serviceRunOnStart = new();
 
+    private readonly Label _updateStatus = new();
+    private readonly TextBox _updateRepository = new();
+    private readonly CheckBox _checkUpdatesOnStart = new();
+    private readonly CheckBox _allowPrereleaseUpdates = new();
+    private UpdateInfo? _lastUpdateInfo;
+
+    private readonly Label _remoteApiStatus = new();
+    private readonly NumericUpDown _remoteApiPort = new();
+    private readonly CheckBox _remoteApiManagement = new();
+
     public MainForm(AppConfig config)
     {
         _config = config;
         _cloudConfig = ConfigService.LoadCloudConfig();
-        Text = "BitKeyBridge 0.3.0 (.NET)";
+        Text = "BitKeyBridge 0.4.0 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
@@ -67,6 +77,7 @@ public sealed class MainForm : Form
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
         tabs.TabPages.Add(BuildDashboardTab());
+        tabs.TabPages.Add(BuildOperationsTab());
         tabs.TabPages.Add(BuildExportTab());
         tabs.TabPages.Add(BuildDcTab());
         tabs.TabPages.Add(BuildLocalSearchTab());
@@ -79,8 +90,14 @@ public sealed class MainForm : Form
         RefreshLastSuccess();
         LoadCloudFields();
         LoadDashboardSettings();
+        LoadOperationsSettings();
         RefreshDashboard();
         FormClosing += (_, _) => ClearSensitiveState();
+        Shown += async (_, _) =>
+        {
+            if (_config.CheckForUpdatesOnStart)
+                await CheckForUpdatesGuiAsync(silentWhenCurrent: true);
+        };
     }
 
     private TabPage BuildDashboardTab()
@@ -159,6 +176,121 @@ public sealed class MainForm : Form
         openHealth.Click += (_, _) => OpenHealthEndpoint();
         secureOutput.Click += (_, _) => RunSecureOutputWizard();
         saveSettings.Click += (_, _) => SaveDashboardSettings(restartRunningService: true);
+
+        return tab;
+    }
+
+    private TabPage BuildOperationsTab()
+    {
+        var tab = new TabPage("Operations");
+
+        var updateGroup = new GroupBox
+        {
+            Text = "Verified Updates",
+            Left = 20,
+            Top = 20,
+            Width = 1145,
+            Height = 250,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(updateGroup);
+
+        updateGroup.Controls.Add(new Label
+        {
+            Text = "GitHub repository:",
+            Left = 16,
+            Top = 34,
+            Width = 115,
+            Height = 24
+        });
+        _updateRepository.SetBounds(135, 30, 350, 27);
+        updateGroup.Controls.Add(_updateRepository);
+
+        _checkUpdatesOnStart.Text = "Check for updates when GUI starts";
+        _checkUpdatesOnStart.SetBounds(510, 31, 230, 25);
+        updateGroup.Controls.Add(_checkUpdatesOnStart);
+
+        _allowPrereleaseUpdates.Text = "Allow prerelease versions";
+        _allowPrereleaseUpdates.SetBounds(760, 31, 190, 25);
+        updateGroup.Controls.Add(_allowPrereleaseUpdates);
+
+        var saveUpdateSettings = new Button
+        {
+            Text = "Save Settings",
+            Left = 965,
+            Top = 27,
+            Width = 150,
+            Height = 32
+        };
+        updateGroup.Controls.Add(saveUpdateSettings);
+
+        var check = new Button { Text = "Check Now", Left = 16, Top = 78, Width = 110, Height = 34 };
+        var install = new Button { Text = "Install Verified Update", Left = 136, Top = 78, Width = 170, Height = 34 };
+        var openRelease = new Button { Text = "Open Release", Left = 316, Top = 78, Width = 120, Height = 34 };
+        updateGroup.Controls.AddRange([check, install, openRelease]);
+
+        _updateStatus.SetBounds(16, 128, 1095, 95);
+        _updateStatus.Text = "Update status has not been checked in this GUI session.";
+        updateGroup.Controls.Add(_updateStatus);
+
+        saveUpdateSettings.Click += (_, _) => SaveOperationsSettings();
+        check.Click += async (_, _) => await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
+        install.Click += async (_, _) => await InstallLatestUpdateGuiAsync();
+        openRelease.Click += (_, _) => OpenLatestRelease();
+
+        var remoteGroup = new GroupBox
+        {
+            Text = "Remote Monitoring / Management API (opt-in, TLS + bearer token)",
+            Left = 20,
+            Top = 290,
+            Width = 1145,
+            Height = 220,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(remoteGroup);
+
+        remoteGroup.Controls.Add(new Label
+        {
+            Text = "TCP port:",
+            Left = 16,
+            Top = 34,
+            Width = 70,
+            Height = 24
+        });
+        _remoteApiPort.SetBounds(90, 30, 100, 27);
+        _remoteApiPort.Minimum = 1024;
+        _remoteApiPort.Maximum = 65535;
+        remoteGroup.Controls.Add(_remoteApiPort);
+
+        _remoteApiManagement.Text = "Allow remote POST /api/v1/export";
+        _remoteApiManagement.SetBounds(220, 31, 255, 25);
+        remoteGroup.Controls.Add(_remoteApiManagement);
+
+        var enableRemote = new Button { Text = "Enable / Reconfigure", Left = 500, Top = 27, Width = 150, Height = 32 };
+        var rotateToken = new Button { Text = "Rotate Token", Left = 660, Top = 27, Width = 120, Height = 32 };
+        var disableRemote = new Button { Text = "Disable", Left = 790, Top = 27, Width = 100, Height = 32 };
+        var openEvents = new Button { Text = "Open Event Log", Left = 900, Top = 27, Width = 130, Height = 32 };
+        remoteGroup.Controls.AddRange([enableRemote, rotateToken, disableRemote, openEvents]);
+
+        _remoteApiStatus.SetBounds(16, 78, 1095, 118);
+        _remoteApiStatus.Text =
+            "Remote API is disabled by default. When enabled it requires TLS and bearer-token authentication.";
+        remoteGroup.Controls.Add(_remoteApiStatus);
+
+        enableRemote.Click += (_, _) => EnableOrReconfigureRemoteApi();
+        rotateToken.Click += (_, _) => RotateRemoteApiToken();
+        disableRemote.Click += (_, _) => DisableRemoteApi();
+        openEvents.Click += (_, _) => OpenWindowsEventLog();
+
+        var note = new Label
+        {
+            Text = "Remote API never exposes BitLocker recovery passwords. Management mode only adds POST /api/v1/export; it does not expose key retrieval.",
+            Left = 20,
+            Top = 535,
+            Width = 1145,
+            Height = 44
+        };
+        tab.Controls.Add(note);
 
         return tab;
     }
@@ -1085,6 +1217,337 @@ public sealed class MainForm : Form
         {
             _audit.Write("RotateBitLockerKey", "Failed", computerName, recoveryId, "Intune", _cloudToken?.AuthMode, ex.Message);
             throw;
+        }
+    }
+
+    private void LoadOperationsSettings()
+    {
+        _updateRepository.Text = _config.UpdateRepository;
+        _checkUpdatesOnStart.Checked = _config.CheckForUpdatesOnStart;
+        _allowPrereleaseUpdates.Checked = _config.AllowPrereleaseUpdates;
+        _remoteApiPort.Value = Math.Clamp(_config.RemoteApiPort, 1024, 65535);
+        _remoteApiManagement.Checked = _config.RemoteApiAllowManagement;
+        RefreshRemoteApiStatus();
+
+        try
+        {
+            _lastUpdateInfo = JsonStore.Read<UpdateInfo>(AppPaths.UpdateStatusFile);
+            if (_lastUpdateInfo is not null)
+                DisplayUpdateInfo(_lastUpdateInfo);
+        }
+        catch { }
+    }
+
+    private void SaveOperationsSettings()
+    {
+        var repository = _updateRepository.Text.Trim();
+        if (string.IsNullOrWhiteSpace(repository) || repository.Split('/').Length != 2)
+        {
+            MessageBox.Show(
+                this,
+                "Update repository must use owner/repository format.",
+                "Update Settings",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        _config.UpdateRepository = repository;
+        _config.CheckForUpdatesOnStart = _checkUpdatesOnStart.Checked;
+        _config.AllowPrereleaseUpdates = _allowPrereleaseUpdates.Checked;
+        _config.RemoteApiPort = (int)_remoteApiPort.Value;
+        _config.RemoteApiAllowManagement = _remoteApiManagement.Checked;
+        ConfigService.SaveAppConfig(_config);
+        _audit.Write(
+            "SaveOperationsSettings",
+            source: "Local",
+            details:
+                $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RemotePort={_config.RemoteApiPort}; RemoteManagement={_config.RemoteApiAllowManagement}");
+        RefreshRemoteApiStatus();
+    }
+
+    private async Task CheckForUpdatesGuiAsync(bool silentWhenCurrent)
+    {
+        SaveOperationsSettings();
+        try
+        {
+            _updateStatus.Text = "Checking GitHub Releases...";
+            using var updater = new UpdateService(_config);
+            _lastUpdateInfo = await updater.CheckAsync();
+            DisplayUpdateInfo(_lastUpdateInfo);
+
+            if (!string.IsNullOrWhiteSpace(_lastUpdateInfo.Error))
+            {
+                if (!silentWhenCurrent)
+                    MessageBox.Show(
+                        this,
+                        _lastUpdateInfo.Error,
+                        "BitKeyBridge Update",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
+            {
+                MessageBox.Show(
+                    this,
+                    $"BitKeyBridge {_lastUpdateInfo.CurrentVersion} is current.",
+                    "BitKeyBridge Update",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+
+            if (_lastUpdateInfo.UpdateAvailable)
+            {
+                WindowsEventLogService.TryWrite(
+                    $"BitKeyBridge update {_lastUpdateInfo.LatestVersion} is available.",
+                    EventLogSeverity.Information,
+                    4101,
+                    "Update");
+            }
+            RefreshDashboard();
+        }
+        catch (Exception ex)
+        {
+            _updateStatus.Text = "Update check failed: " + ex.Message;
+        }
+    }
+
+    private void DisplayUpdateInfo(UpdateInfo info)
+    {
+        if (!string.IsNullOrWhiteSpace(info.Error))
+        {
+            _updateStatus.Text =
+                $"Current: {info.CurrentVersion}{Environment.NewLine}" +
+                $"Update check failed: {info.Error}";
+            return;
+        }
+
+        _updateStatus.Text =
+            $"Current: {info.CurrentVersion}    Latest: {info.LatestVersion}    Architecture: {info.Architecture}{Environment.NewLine}" +
+            (info.UpdateAvailable
+                ? $"UPDATE AVAILABLE: {info.LatestVersion}    Asset: {info.AssetName}"
+                : "No newer release is available.") +
+            Environment.NewLine +
+            $"Checked: {info.CheckedAtUtc:u}";
+    }
+
+    private async Task InstallLatestUpdateGuiAsync()
+    {
+        if (_lastUpdateInfo is null ||
+            !string.IsNullOrWhiteSpace(_lastUpdateInfo.Error) ||
+            !_lastUpdateInfo.UpdateAvailable)
+        {
+            await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
+        }
+
+        var info = _lastUpdateInfo;
+        if (info is null ||
+            !string.IsNullOrWhiteSpace(info.Error) ||
+            !info.UpdateAvailable)
+            return;
+
+        var answer = MessageBox.Show(
+            this,
+            $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
+            "The ZIP SHA-256 will be verified against SHA256SUMS.txt and GitHub's asset digest when available. " +
+            "The downloaded EXE must also pass --self-test before installation. " +
+            "The GUI will close during replacement and reopen automatically.",
+            "Install Verified Update",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Information,
+            MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+
+        try
+        {
+            Enabled = false;
+            _updateStatus.Text = $"Downloading and verifying BitKeyBridge {info.LatestVersion}...";
+            using var updater = new UpdateService(_config);
+            var prepared = await updater.PrepareAsync(info);
+            _audit.Write(
+                "PrepareVerifiedUpdate",
+                source: "GitHub",
+                details: $"Version={info.LatestVersion}; Asset={info.AssetName}; SHA256={info.ExpectedSha256}");
+            updater.LaunchApplyHelper(prepared, restartGui: true);
+            _audit.Write(
+                "LaunchUpdateHelper",
+                source: "Local",
+                details: $"Version={info.LatestVersion}");
+            Close();
+        }
+        catch (Exception ex)
+        {
+            Enabled = true;
+            _updateStatus.Text = "Update preparation failed: " + ex.Message;
+            _audit.Write(
+                "PrepareVerifiedUpdate",
+                "Failed",
+                source: "GitHub",
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Install Verified Update",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void OpenLatestRelease()
+    {
+        var url = _lastUpdateInfo?.ReleaseUrl;
+        if (string.IsNullOrWhiteSpace(url))
+            url = $"https://github.com/{_config.UpdateRepository}/releases";
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "GitHub Release", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void EnableOrReconfigureRemoteApi()
+    {
+        SaveOperationsSettings();
+
+        var answer = MessageBox.Show(
+            this,
+            $"Enable the TLS Remote API on TCP {_config.RemoteApiPort}?{Environment.NewLine}{Environment.NewLine}" +
+            $"Remote export management: {_config.RemoteApiAllowManagement}{Environment.NewLine}" +
+            "A self-signed server certificate will be created in LocalMachine\\My if needed. " +
+            "A new random bearer token will be generated and shown once.",
+            "Enable Remote API",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+
+        try
+        {
+            var setup = new RemoteApiSetupService();
+            var result = setup.Enable(
+                _config,
+                (int)_remoteApiPort.Value,
+                _remoteApiManagement.Checked);
+            RestartServiceIfRunning();
+            _audit.Write(
+                "EnableRemoteApi",
+                source: "RemoteAPI",
+                details: $"Port={result.Port}; Management={_config.RemoteApiAllowManagement}; Certificate={result.CertificateThumbprint}");
+            RefreshRemoteApiStatus();
+
+            using var secret = new SecretDisplayDialog(
+                "BitKeyBridge Remote API Token",
+                "Save this bearer token in your monitoring/management system now. BitKeyBridge stores only its SHA-256 hash and cannot display the token again.",
+                result.Token,
+                $"TLS certificate thumbprint: {result.CertificateThumbprint}{Environment.NewLine}" +
+                $"Certificate expires: {result.CertificateExpires:yyyy-MM-dd}{Environment.NewLine}" +
+                $"API base URL: https://{Environment.MachineName}:{result.Port}/api/v1/");
+            secret.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("EnableRemoteApi", "Failed", source: "RemoteAPI", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RotateRemoteApiToken()
+    {
+        if (!_config.RemoteApiEnabled)
+        {
+            MessageBox.Show(this, "Remote API is not enabled.", "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            var setup = new RemoteApiSetupService();
+            var result = setup.RegenerateToken(_config);
+            RestartServiceIfRunning();
+            _audit.Write(
+                "RotateRemoteApiToken",
+                source: "RemoteAPI",
+                details: $"Port={result.Port}; Certificate={result.CertificateThumbprint}");
+            RefreshRemoteApiStatus();
+
+            using var secret = new SecretDisplayDialog(
+                "New BitKeyBridge Remote API Token",
+                "The previous bearer token is now invalid. Save this new token now.",
+                result.Token,
+                $"API base URL: https://{Environment.MachineName}:{result.Port}/api/v1/");
+            secret.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("RotateRemoteApiToken", "Failed", source: "RemoteAPI", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void DisableRemoteApi()
+    {
+        if (!_config.RemoteApiEnabled) return;
+
+        var answer = MessageBox.Show(
+            this,
+            "Disable the Remote API and invalidate the current bearer token?",
+            "Disable Remote API",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+
+        try
+        {
+            new RemoteApiSetupService().Disable(_config);
+            RestartServiceIfRunning();
+            _audit.Write("DisableRemoteApi", source: "RemoteAPI");
+            RefreshRemoteApiStatus();
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("DisableRemoteApi", "Failed", source: "RemoteAPI", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RefreshRemoteApiStatus()
+    {
+        _remoteApiStatus.Text = _config.RemoteApiEnabled
+            ? $"ENABLED: https://{Environment.MachineName}:{_config.RemoteApiPort}/api/v1/{Environment.NewLine}" +
+              $"Management: {_config.RemoteApiAllowManagement}    Certificate: {_config.RemoteApiCertificateThumbprint}{Environment.NewLine}" +
+              "Bearer token is stored only as SHA-256. Use Rotate Token if the original token is no longer available."
+            : "DISABLED. Remote API does not listen on the network until explicitly enabled.";
+    }
+
+    private void RestartServiceIfRunning()
+    {
+        var service = WindowsServiceHost.GetInfo();
+        if (!service.Installed ||
+            !string.Equals(service.State, "Running", StringComparison.OrdinalIgnoreCase))
+            return;
+        WindowsServiceHost.Stop();
+        WindowsServiceHost.Start();
+    }
+
+    private void OpenWindowsEventLog()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "eventvwr.msc",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Windows Event Log", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
