@@ -113,6 +113,35 @@ BitKeyBridge.exe --coverage --cloud-auth Certificate --coverage-fail-no-key --co
 
 Exit code 20 means at least one device has no recovery metadata, 21 means Intune reports at least one managed device as not encrypted, and 22 means at least one Intune device is stale. General execution/configuration failures continue to use exit code 1 or 2. These reports contain metadata only and never request the 48-digit recovery password.
 
+For Windows Service / LocalSystem / gMSA scenarios, copy only the non-secret Entra identifiers into the machine configuration after the LocalMachine certificate exists:
+
+```text
+BitKeyBridge.exe --cloud-machine-save --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
+BitKeyBridge.exe --cloud-machine-status
+```
+
+This creates:
+
+```text
+%ProgramData%\BitKeyBridge\cloud_auth_machine.json
+```
+
+The machine cloud file contains Tenant ID, Client ID, certificate thumbprint, and `Certificate` auth mode only. It does not contain a password, access token, refresh token, or certificate private key. The referenced certificate must exist with a private key in `LocalMachine\My`.
+
+Use it explicitly from CLI:
+
+```text
+BitKeyBridge.exe --coverage --coverage-machine-config
+```
+
+Enable native Windows Service coverage scheduling after the machine cloud config is ready:
+
+```text
+BitKeyBridge.exe --service-coverage-enable --service-coverage-interval 1440 --service-coverage-run-on-start
+```
+
+Scheduled Coverage has its own interval and does not change the normal AD recovery export interval. It writes metadata-only reports under the configured output directory's `Coverage` subdirectory and publishes its latest machine-readable status to `%ProgramData%\BitKeyBridge\coverage_status.json`.
+
 Run offline smoke tests (no AD/Graph access):
 
 ```text
@@ -836,8 +865,10 @@ The Dashboard can:
 
 - install/update, start, stop, and uninstall the service;
 - change the export interval;
+- enable optional scheduled metadata-only Coverage with its own interval and run-on-start setting;
+- save/delete the machine cloud certificate configuration used by the service;
 - enable/disable the health endpoint and select its port;
-- show last export status, row count, DC, replication health, output state, and certificate expiry;
+- show last export status, row count, DC, replication health, Coverage status, output state, and certificate expiry;
 - open the local monitoring endpoint;
 - launch Secure Output Wizard.
 
