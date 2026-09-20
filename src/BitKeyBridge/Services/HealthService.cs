@@ -168,17 +168,50 @@ public sealed class HealthService
                 snapshot.MachineCloudCertificateThumbprint =
                     machineCloud.CertificateThumbprint;
 
-                if (_config.ServiceCoverageEnabled)
+                try
                 {
-                    try
+                    new CertificateService().FindLocalMachineByThumbprint(
+                        machineCloud.CertificateThumbprint);
+
+                    if (snapshot.ServiceInstalled &&
+                        !string.IsNullOrWhiteSpace(snapshot.ServiceIdentity))
                     {
-                        new CertificateService().FindLocalMachineByThumbprint(
-                            machineCloud.CertificateThumbprint);
+                        var access =
+                            new CertificatePrivateKeyAccessService()
+                                .GetStatus(
+                                    machineCloud.CertificateThumbprint,
+                                    snapshot.ServiceIdentity);
+
+                        snapshot.MachineCloudKeyAccessStatus =
+                            access.Status;
+                        snapshot.MachineCloudKeyAccessAccount =
+                            access.Account;
+                        snapshot.MachineCloudKeyProvider =
+                            access.Provider;
+
+                        if (_config.ServiceCoverageEnabled &&
+                            access.AccessRequired &&
+                            (!access.ExplicitReadAllowed ||
+                             access.ExplicitReadDenied))
+                        {
+                            snapshot.Errors.Add(
+                                $"Machine cloud private-key access for {access.Account}: {access.Status}.");
+                        }
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    if (_config.ServiceCoverageEnabled)
                     {
                         snapshot.Errors.Add(
-                            "Machine cloud certificate: " + ex.Message);
+                            "Machine cloud certificate/private-key access: " +
+                            ex.Message);
+                    }
+                    else
+                    {
+                        snapshot.Warnings.Add(
+                            "Machine cloud certificate/private-key access: " +
+                            ex.Message);
                     }
                 }
             }
