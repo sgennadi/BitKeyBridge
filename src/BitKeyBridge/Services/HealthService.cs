@@ -22,6 +22,13 @@ public sealed class HealthService
             ServiceCoverageEnabled = _config.ServiceCoverageEnabled,
             ServiceCoverageIntervalMinutes = _config.ServiceCoverageIntervalMinutes,
             MachineCloudConfigured = File.Exists(AppPaths.MachineCloudConfigFile),
+            RbacEnabled = _config.RbacEnabled,
+            RbacAllowLocalAdministrators =
+                _config.RbacAllowLocalAdministrators,
+            RbacRecoveryReaderPrincipals =
+                _config.RbacRecoveryReaders.Count,
+            RbacRotationOperatorPrincipals =
+                _config.RbacRotationOperators.Count,
             HealthEndpoint = _config.HealthEndpointEnabled
                 ? $"http://127.0.0.1:{Math.Clamp(_config.HealthEndpointPort, 1024, 65535)}/health"
                 : "Disabled"
@@ -37,6 +44,34 @@ public sealed class HealthService
         catch (Exception ex)
         {
             snapshot.Warnings.Add("Service status: " + ex.Message);
+        }
+
+        try
+        {
+            var rbacErrors =
+                new AuthorizationService(_config)
+                    .ValidateConfiguredPrincipals();
+            snapshot.RbacValidationErrors = rbacErrors.Count;
+
+            if (_config.RbacEnabled && rbacErrors.Count > 0)
+            {
+                snapshot.Errors.Add(
+                    $"RBAC has {rbacErrors.Count} unresolved principal(s).");
+            }
+
+            if (_config.RbacEnabled &&
+                !_config.RbacAllowLocalAdministrators &&
+                _config.RbacRecoveryReaders.Count == 0 &&
+                _config.RbacRotationOperators.Count == 0)
+            {
+                snapshot.Errors.Add(
+                    "RBAC is enabled with no configured privileged principals and no local Administrators bypass.");
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Warnings.Add(
+                "RBAC validation: " + ex.Message);
         }
 
         try
