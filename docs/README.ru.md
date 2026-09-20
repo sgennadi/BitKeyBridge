@@ -245,3 +245,36 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 BitKeyBridge.exe --coverage --cloud-auth Certificate --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint> --coverage-fail-no-key
 ```
 
+### Scheduled Coverage / Windows Service
+
+Для unattended режима используется отдельный machine-level cloud config:
+
+```text
+BitKeyBridge.exe --cloud-machine-save --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
+BitKeyBridge.exe --cloud-machine-status
+```
+
+Файл:
+
+```text
+%ProgramData%\BitKeyBridge\cloud_auth_machine.json
+```
+
+содержит только Tenant ID, Client ID, thumbprint и режим `Certificate`. Пароль, access/refresh token и private key туда не записываются; certificate с private key должен находиться в `LocalMachine\My`.
+
+Coverage можно запускать с этим конфигом:
+
+```text
+BitKeyBridge.exe --coverage --coverage-machine-config
+```
+
+Или включить его прямо в native Windows Service:
+
+```text
+BitKeyBridge.exe --service-coverage-enable --service-coverage-interval 1440 --service-coverage-run-on-start
+```
+
+У Coverage отдельный interval, поэтому частота обычного AD recovery export не меняется. В Dashboard добавлены соответствующие переключатели и кнопки **Save Cloud for Service / Delete Machine Cloud**. Последний результат Coverage попадает в health snapshot и в `%ProgramData%\BitKeyBridge\coverage_status.json`.
+
+Coverage CSV теперь использует UTC timestamps и нейтрализует значения, похожие на Excel/CSV formula injection.
+
