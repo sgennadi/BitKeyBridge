@@ -34,6 +34,17 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Verify CHANGELOG entry
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
+          $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+          if (-not $version) { throw "Project version was not found." }
+          $heading = "## $version"
+          if (-not (Select-String -Path CHANGELOG.md -SimpleMatch $heading -Quiet)) {
+            throw "CHANGELOG.md is missing required section: $heading"
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
