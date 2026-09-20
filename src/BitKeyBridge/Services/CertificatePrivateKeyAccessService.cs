@@ -13,16 +13,19 @@ public sealed class CertificateKeyAccessInfo
     public string Provider { get; set; } = string.Empty;
     public string KeyPath { get; set; } = string.Empty;
     public bool KeyFileExists { get; set; }
+    public bool AccessRequired { get; set; } = true;
     public bool ExplicitReadAllowed { get; set; }
     public bool ExplicitReadDenied { get; set; }
     public string Status =>
         !KeyFileExists
             ? "KeyFileMissing"
-            : ExplicitReadDenied
-                ? "Denied"
-                : ExplicitReadAllowed
-                    ? "Allowed"
-                    : "NotGranted";
+            : !AccessRequired
+                ? "NotRequired"
+                : ExplicitReadDenied
+                    ? "Denied"
+                    : ExplicitReadAllowed
+                        ? "Allowed"
+                        : "NotGranted";
 }
 
 public sealed class CertificatePrivateKeyAccessService
@@ -47,10 +50,11 @@ public sealed class CertificatePrivateKeyAccessService
             Sid = target.Sid.Value,
             Provider = key.Provider,
             KeyPath = key.Path,
-            KeyFileExists = File.Exists(key.Path)
+            KeyFileExists = File.Exists(key.Path),
+            AccessRequired = !IsLocalSystem(target.Account)
         };
 
-        if (!result.KeyFileExists)
+        if (!result.KeyFileExists || !result.AccessRequired)
             return result;
 
         var security = new FileInfo(key.Path)
@@ -89,6 +93,13 @@ public sealed class CertificatePrivateKeyAccessService
         string account)
     {
         RequireAdministrator();
+
+        var current = GetStatus(thumbprint, account);
+        if (!current.AccessRequired ||
+            (current.ExplicitReadAllowed && !current.ExplicitReadDenied))
+        {
+            return current;
+        }
 
         var cert = new CertificateService()
             .FindLocalMachineByThumbprint(thumbprint);
