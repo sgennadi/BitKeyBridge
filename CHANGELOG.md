@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+- Added Active Directory connection modes for domain-joined workstations/DCs and standalone/workgroup computers.
+- Added explicit DC, AD domain, LDAP port and AD username configuration.
+- Added session-only explicit AD password handling; passwords are never written to appsettings or logs.
+- Added current-Windows-credentials mode for domain workstations and DCs.
+- Added a Directory Connection GUI tab with DC connection test and session-password clearing.
+- Added CLI connection overrides: `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, and `--ad-test`.
+- Added configurable local/UNC export root so BitLocker recovery export no longer requires BitKeyBridge itself to run on a domain controller.
+- Kept the legacy SYSVOL root as a backward-compatible fallback when `OutputRoot` is empty.
+- Microsoft 365 / Entra / Intune workflows remain independent of Windows domain membership.
+- Added a CI gate requiring every project version to have a matching CHANGELOG section.
+
 ## 0.5.0
 
 - Added optional ticket/reference requirement before recovery-key access.
