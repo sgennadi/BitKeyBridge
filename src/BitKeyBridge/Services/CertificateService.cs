@@ -23,6 +23,28 @@ public sealed class CertificateService
         throw new InvalidOperationException($"Certificate {normalized} was not found in CurrentUser\\My or LocalMachine\\My.");
     }
 
+    public X509Certificate2 FindLocalMachineByThumbprint(string thumbprint)
+    {
+        var normalized = Normalize(thumbprint);
+        using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
+        store.Open(OpenFlags.ReadOnly);
+        var cert = store.Certificates
+            .OfType<X509Certificate2>()
+            .FirstOrDefault(x => Normalize(x.Thumbprint) == normalized);
+
+        if (cert is null)
+            throw new InvalidOperationException(
+                $"Certificate {normalized} was not found in LocalMachine\\My.");
+        if (!cert.HasPrivateKey)
+            throw new InvalidOperationException(
+                $"Certificate {normalized} in LocalMachine\\My has no private key.");
+        if (cert.NotAfter <= DateTime.Now)
+            throw new InvalidOperationException(
+                $"Certificate {normalized} expired on {cert.NotAfter}.");
+
+        return cert;
+    }
+
     public X509Certificate2 CreateLocalMachineCertificate(string subjectName, int years = 3)
     {
         using var rsa = RSA.Create(2048);
