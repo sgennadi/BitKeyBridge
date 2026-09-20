@@ -76,6 +76,10 @@ public sealed class MainForm : Form
     private readonly NumericUpDown _healthPort = new();
     private readonly CheckBox _healthEnabled = new();
     private readonly CheckBox _serviceRunOnStart = new();
+    private readonly CheckBox _serviceCoverageEnabled = new();
+    private readonly NumericUpDown _serviceCoverageInterval = new();
+    private readonly CheckBox _serviceCoverageRunOnStart = new();
+    private readonly Label _machineCloudStatus = new();
     private readonly ComboBox _serviceIdentityMode = new();
     private readonly TextBox _serviceIdentityAccount = new();
     private readonly TextBox _serviceIdentityPassword = new();
@@ -392,7 +396,7 @@ public sealed class MainForm : Form
             Left = 20,
             Top = 90,
             Width = 1145,
-            Height = 225,
+            Height = 300,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         tab.Controls.Add(serviceGroup);
@@ -429,15 +433,58 @@ public sealed class MainForm : Form
         var saveSettings = new Button { Text = "Save Service Settings", Left = 925, Top = 79, Width = 190, Height = 32 };
         serviceGroup.Controls.Add(saveSettings);
 
+        _serviceCoverageEnabled.Text = "Enable scheduled Coverage";
+        _serviceCoverageEnabled.SetBounds(16, 124, 220, 25);
+        serviceGroup.Controls.Add(_serviceCoverageEnabled);
+
+        serviceGroup.Controls.Add(new Label
+        {
+            Text = "Coverage interval (min):",
+            Left = 255,
+            Top = 126,
+            Width = 140,
+            Height = 24
+        });
+        _serviceCoverageInterval.SetBounds(400, 122, 90, 27);
+        _serviceCoverageInterval.Minimum = 15;
+        _serviceCoverageInterval.Maximum = 10080;
+        serviceGroup.Controls.Add(_serviceCoverageInterval);
+
+        _serviceCoverageRunOnStart.Text = "Run Coverage when service starts";
+        _serviceCoverageRunOnStart.SetBounds(515, 124, 240, 25);
+        serviceGroup.Controls.Add(_serviceCoverageRunOnStart);
+
+        var saveMachineCloud = new Button
+        {
+            Text = "Save Cloud for Service",
+            Left = 775,
+            Top = 117,
+            Width = 160,
+            Height = 32
+        };
+        var deleteMachineCloud = new Button
+        {
+            Text = "Delete Machine Cloud",
+            Left = 945,
+            Top = 117,
+            Width = 170,
+            Height = 32
+        };
+        serviceGroup.Controls.AddRange([saveMachineCloud, deleteMachineCloud]);
+
+        _machineCloudStatus.SetBounds(16, 155, 1095, 30);
+        _machineCloudStatus.Text = "Machine cloud config has not been checked.";
+        serviceGroup.Controls.Add(_machineCloudStatus);
+
         serviceGroup.Controls.Add(new Label
         {
             Text = "Service identity:",
             Left = 16,
-            Top = 137,
+            Top = 204,
             Width = 95,
             Height = 24
         });
-        _serviceIdentityMode.SetBounds(115, 132, 215, 27);
+        _serviceIdentityMode.SetBounds(115, 199, 215, 27);
         _serviceIdentityMode.DropDownStyle = ComboBoxStyle.DropDownList;
         _serviceIdentityMode.Items.AddRange([
             "LocalSystem",
@@ -450,22 +497,22 @@ public sealed class MainForm : Form
         {
             Text = "Account:",
             Left = 350,
-            Top = 137,
+            Top = 204,
             Width = 60,
             Height = 24
         });
-        _serviceIdentityAccount.SetBounds(412, 132, 255, 27);
+        _serviceIdentityAccount.SetBounds(412, 199, 255, 27);
         serviceGroup.Controls.Add(_serviceIdentityAccount);
 
         serviceGroup.Controls.Add(new Label
         {
             Text = "Password:",
             Left = 682,
-            Top = 137,
+            Top = 204,
             Width = 65,
             Height = 24
         });
-        _serviceIdentityPassword.SetBounds(750, 132, 205, 27);
+        _serviceIdentityPassword.SetBounds(750, 199, 205, 27);
         _serviceIdentityPassword.UseSystemPasswordChar = true;
         serviceGroup.Controls.Add(_serviceIdentityPassword);
 
@@ -473,19 +520,19 @@ public sealed class MainForm : Form
         {
             Text = "Apply Identity",
             Left = 970,
-            Top = 129,
+            Top = 196,
             Width = 145,
             Height = 34
         };
         serviceGroup.Controls.Add(applyIdentity);
 
-        _serviceIdentityStatus.SetBounds(16, 172, 1095, 42);
+        _serviceIdentityStatus.SetBounds(16, 236, 1095, 42);
         _serviceIdentityStatus.Text = "Service identity has not been queried.";
         serviceGroup.Controls.Add(_serviceIdentityStatus);
 
         _dashboardDetails.ReadOnly = true;
         _dashboardDetails.Font = new Font("Consolas", 9.5F);
-        _dashboardDetails.SetBounds(20, 330, 1145, 410);
+        _dashboardDetails.SetBounds(20, 405, 1145, 335);
         _dashboardDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         tab.Controls.Add(_dashboardDetails);
 
@@ -497,6 +544,8 @@ public sealed class MainForm : Form
         openHealth.Click += (_, _) => OpenHealthEndpoint();
         secureOutput.Click += (_, _) => RunSecureOutputWizard();
         saveSettings.Click += (_, _) => SaveDashboardSettings(restartRunningService: true);
+        saveMachineCloud.Click += (_, _) => SaveMachineCloudFromGui();
+        deleteMachineCloud.Click += (_, _) => DeleteMachineCloudFromGui();
         applyIdentity.Click += (_, _) => ApplyServiceIdentityFromGui();
         _serviceIdentityMode.SelectedIndexChanged += (_, _) => UpdateServiceIdentityUi();
 
@@ -2834,6 +2883,10 @@ public sealed class MainForm : Form
         _healthPort.Value = Math.Clamp(_config.HealthEndpointPort, 1024, 65535);
         _healthEnabled.Checked = _config.HealthEndpointEnabled;
         _serviceRunOnStart.Checked = _config.ServiceRunExportOnStart;
+        _serviceCoverageEnabled.Checked = _config.ServiceCoverageEnabled;
+        _serviceCoverageInterval.Value =
+            Math.Clamp(_config.ServiceCoverageIntervalMinutes, 15, 10080);
+        _serviceCoverageRunOnStart.Checked = _config.ServiceRunCoverageOnStart;
         _serviceIdentityMode.SelectedIndex =
             _config.ServiceIdentityMode.Equals("gMSA", StringComparison.OrdinalIgnoreCase)
                 ? 1
@@ -2844,6 +2897,7 @@ public sealed class MainForm : Form
         _serviceIdentityPassword.Clear();
         UpdateServiceIdentityUi();
         RefreshServiceIdentityStatus();
+        RefreshMachineCloudStatus();
     }
 
     private void SaveDashboardSettings(bool restartRunningService)
@@ -2855,13 +2909,27 @@ public sealed class MainForm : Form
             _config.HealthEndpointPort = (int)_healthPort.Value;
             _config.HealthEndpointEnabled = _healthEnabled.Checked;
             _config.ServiceRunExportOnStart = _serviceRunOnStart.Checked;
+            _config.ServiceCoverageEnabled = _serviceCoverageEnabled.Checked;
+            _config.ServiceCoverageIntervalMinutes =
+                (int)_serviceCoverageInterval.Value;
+            _config.ServiceRunCoverageOnStart =
+                _serviceCoverageRunOnStart.Checked;
+
+            if (_config.ServiceCoverageEnabled &&
+                !File.Exists(AppPaths.MachineCloudConfigFile))
+            {
+                throw new InvalidOperationException(
+                    "Scheduled Coverage requires machine cloud configuration. " +
+                    "Click 'Save Cloud for Service' after configuring Tenant ID, Client ID, and certificate.");
+            }
+
             _config.ServiceIdentityMode = GetSelectedServiceIdentityMode();
             _config.ServiceIdentityAccount = _serviceIdentityAccount.Text.Trim();
             ConfigService.SaveAppConfig(_config);
             _audit.Write(
                 "SaveServiceSettings",
                 source: "Local",
-                details: $"Interval={_config.ServiceIntervalMinutes}; HealthEnabled={_config.HealthEndpointEnabled}; Port={_config.HealthEndpointPort}; RunOnStart={_config.ServiceRunExportOnStart}; IdentityMode={_config.ServiceIdentityMode}; IdentityAccount={_config.ServiceIdentityAccount}");
+                details: $"Interval={_config.ServiceIntervalMinutes}; HealthEnabled={_config.HealthEndpointEnabled}; Port={_config.HealthEndpointPort}; RunOnStart={_config.ServiceRunExportOnStart}; CoverageEnabled={_config.ServiceCoverageEnabled}; CoverageInterval={_config.ServiceCoverageIntervalMinutes}; CoverageRunOnStart={_config.ServiceRunCoverageOnStart}; IdentityMode={_config.ServiceIdentityMode}; IdentityAccount={_config.ServiceIdentityAccount}");
 
             if (restartRunningService && serviceBefore.Installed &&
                 string.Equals(serviceBefore.State, "Running", StringComparison.OrdinalIgnoreCase))
@@ -2917,6 +2985,131 @@ public sealed class MainForm : Form
             _audit.Write("InstallOrUpdateService", "Failed", source: "WindowsService", details: ex.Message);
             MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
             RefreshDashboard();
+        }
+    }
+
+    private void RefreshMachineCloudStatus()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.MachineCloudConfigFile))
+            {
+                _machineCloudStatus.Text =
+                    "Machine cloud config: not configured. Scheduled Coverage requires certificate mode.";
+                return;
+            }
+
+            var cloud = ConfigService.LoadMachineCloudConfig();
+            var cert = new CertificateService()
+                .FindLocalMachineByThumbprint(cloud.CertificateThumbprint);
+
+            _machineCloudStatus.Text =
+                $"Machine cloud: Tenant={cloud.TenantId}; Client={cloud.ClientId}; " +
+                $"Certificate={cloud.CertificateThumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}";
+        }
+        catch (Exception ex)
+        {
+            _machineCloudStatus.Text =
+                "Machine cloud config error: " + ex.Message;
+        }
+    }
+
+    private void SaveMachineCloudFromGui()
+    {
+        try
+        {
+            if (!SecurityContext.IsAdministrator())
+                throw new InvalidOperationException(
+                    "Administrator rights are required to save machine cloud configuration.");
+
+            var tenant = _cloudTenant.Text.Trim();
+            var client = _cloudClient.Text.Trim();
+            var thumbprint = _cloudThumbprint.Text
+                .Replace(" ", string.Empty)
+                .Trim();
+
+            if (string.IsNullOrWhiteSpace(tenant) ||
+                string.IsNullOrWhiteSpace(client) ||
+                string.IsNullOrWhiteSpace(thumbprint))
+            {
+                throw new InvalidOperationException(
+                    "Configure Tenant ID, Client ID, and certificate in the Entra / Intune Cloud tab first.");
+            }
+
+            var cert = new CertificateService()
+                .FindLocalMachineByThumbprint(thumbprint);
+
+            ConfigService.SaveMachineCloudConfig(new CloudAuthConfig
+            {
+                TenantId = tenant,
+                ClientId = client,
+                CertificateThumbprint = thumbprint,
+                AuthMode = "Certificate"
+            });
+
+            _audit.Write(
+                "SaveMachineCloudConfig",
+                source: "Local",
+                details:
+                    $"Tenant={tenant}; Client={client}; Certificate={thumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}");
+
+            RefreshMachineCloudStatus();
+            MessageBox.Show(
+                this,
+                "Machine cloud configuration saved for Windows Service / Task Scheduler." +
+                Environment.NewLine + Environment.NewLine +
+                "Only Tenant ID, Client ID, certificate thumbprint, and Certificate auth mode were stored. " +
+                "No password, access token, or private key was written to the config file.",
+                "Machine Cloud Configuration",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write(
+                "SaveMachineCloudConfig",
+                "Failed",
+                source: "Local",
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Machine Cloud Configuration",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshMachineCloudStatus();
+        }
+    }
+
+    private void DeleteMachineCloudFromGui()
+    {
+        try
+        {
+            if (!SecurityContext.IsAdministrator())
+                throw new InvalidOperationException(
+                    "Administrator rights are required to delete machine cloud configuration.");
+
+            if (_config.ServiceCoverageEnabled)
+            {
+                throw new InvalidOperationException(
+                    "Disable scheduled Coverage and save service settings before deleting machine cloud configuration.");
+            }
+
+            ConfigService.DeleteMachineCloudConfig();
+            _audit.Write(
+                "DeleteMachineCloudConfig",
+                source: "Local");
+            RefreshMachineCloudStatus();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Machine Cloud Configuration",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshMachineCloudStatus();
         }
     }
 
