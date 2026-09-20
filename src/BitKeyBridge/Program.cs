@@ -44,6 +44,9 @@ internal static class Program
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cloud-machine-save", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cloud-machine-delete", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -78,6 +81,7 @@ internal static class Program
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -180,6 +184,15 @@ internal static class Program
                 return 1;
             }
         }
+
+        if (args.Any(x => x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase)))
+            return MachineCloudConfigService.ShowStatus();
+
+        if (args.Any(x => x.Equals("--cloud-machine-save", StringComparison.OrdinalIgnoreCase)))
+            return MachineCloudConfigService.Save(args);
+
+        if (args.Any(x => x.Equals("--cloud-machine-delete", StringComparison.OrdinalIgnoreCase)))
+            return MachineCloudConfigService.Delete();
 
         if (args.Any(x => x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase)))
             return ShowVaultStatus(config);
@@ -869,6 +882,7 @@ internal static class Program
         Console.WriteLine("  --coverage-csv <path>   Coverage CSV path (metadata only)");
         Console.WriteLine("  --coverage-json <path>  Coverage JSON path (metadata only)");
         Console.WriteLine("  --coverage-json-stdout  Also print full coverage JSON to stdout");
+        Console.WriteLine("  --coverage-machine-config  Use ProgramData machine cloud certificate config");
         Console.WriteLine("  --coverage-fail-no-key  Exit 20 when any device has no recovery metadata");
         Console.WriteLine("  --coverage-fail-unencrypted  Exit 21 when Intune reports unencrypted devices");
         Console.WriteLine("  --coverage-fail-stale   Exit 22 when stale Intune devices are found");
@@ -877,6 +891,9 @@ internal static class Program
         Console.WriteLine("  --client-id <id>      Override saved BitKeyBridge client ID for this run");
         Console.WriteLine("  --cert-thumbprint <t> Override saved certificate thumbprint for this run");
         Console.WriteLine("  --cloud-user <upn>    Override saved cloud username for Password mode");
+        Console.WriteLine("  --cloud-machine-status Show ProgramData cloud certificate config metadata");
+        Console.WriteLine("  --cloud-machine-save   Save certificate cloud config for LocalSystem/gMSA");
+        Console.WriteLine("  --cloud-machine-delete Delete ProgramData machine cloud config");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
