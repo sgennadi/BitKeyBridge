@@ -751,6 +751,42 @@ internal static class Program
 
             try
             {
+                var coverageType = typeof(CoverageDeviceRow);
+                if (coverageType.GetProperties().Any(p =>
+                        p.Name.Contains("Password", StringComparison.OrdinalIgnoreCase) ||
+                        p.Name.Equals("KeyValue", StringComparison.OrdinalIgnoreCase)))
+                {
+                    failures.Add("Coverage model contains a recovery-secret field.");
+                }
+
+                var coverageCsv = Path.Combine(tempDirectory, "coverage.csv");
+                CoverageService.ExportCsv(
+                    coverageCsv,
+                    [
+                        new CoverageDeviceRow
+                        {
+                            ComputerName = "PC-01",
+                            CoverageStatus = "AD + Entra",
+                            FoundInAd = true,
+                            FoundInIntune = true,
+                            AdRecoveryKeyCount = 1,
+                            EntraRecoveryKeyCount = 1,
+                            IsEncrypted = true,
+                            ComplianceState = "compliant"
+                        }
+                    ]);
+
+                var coverageText = File.ReadAllText(coverageCsv);
+                if (coverageText.Contains("RecoveryPassword", StringComparison.OrdinalIgnoreCase) ||
+                    coverageText.Contains("KeyValue", StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add("Coverage CSV contains a recovery-secret column.");
+                }
+            }
+            catch (Exception ex) { failures.Add("Coverage metadata-only CSV: " + ex.Message); }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
