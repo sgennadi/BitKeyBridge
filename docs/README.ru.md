@@ -308,10 +308,6 @@ Coverage CSV теперь использует UTC timestamps и нейтрал�
 Пример строгой policy:
 
 ```text
-BitKeyBridge.exe --coverage-policy-enable ^
-  --coverage-policy-max-no-key 0 ^
-  --coverage-policy-severity-no-key Error
+BitKeyBridge.exe --coverage-policy-enable --coverage-policy-max-no-key 0 --coverage-policy-severity-no-key Error
 ```
-
-Для обычного CMD можно передать параметры одной строкой; символ `^` выше используется только для наглядности примера.
 
