@@ -327,6 +327,22 @@ internal static class Program
                 continue;
             }
 
+            if (arg.Equals("--ad-ldaps", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdUseLdaps = true;
+                if (config.AdPort == 389)
+                    config.AdPort = 636;
+                continue;
+            }
+
+            if (arg.Equals("--ad-ldap", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdUseLdaps = false;
+                if (config.AdPort == 636)
+                    config.AdPort = 389;
+                continue;
+            }
+
             if (arg.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase))
             {
                 config.AdUseExplicitCredentials = true;
@@ -546,7 +562,9 @@ internal static class Program
         Console.WriteLine("  --ad-user <user>      AD user (DOMAIN\\user or user@domain)");
         Console.WriteLine("  --ad-password-prompt  Prompt securely for AD password; never saved");
         Console.WriteLine("  --ad-integrated       Use current Windows credentials");
-        Console.WriteLine("  --ad-port <port>      LDAP port (default 389)");
+        Console.WriteLine("  --ad-port <port>      LDAP/LDAPS port (default 389)");
+        Console.WriteLine("  --ad-ldaps            Enable LDAPS/TLS (normally port 636)");
+        Console.WriteLine("  --ad-ldap             Use LDAP with signing/sealing (normally port 389)");
         Console.WriteLine("  --output-root <path>  Local/UNC export root for this run");
         Console.WriteLine("  --output-subdirectory <name>  Export subdirectory for this run");
         Console.WriteLine("  --health              Print the local health snapshot as JSON");
