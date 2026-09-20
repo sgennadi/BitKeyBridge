@@ -332,6 +332,8 @@ BitKeyBridge.exe --coverage-policy-enable --coverage-policy-max-no-key 0 --cover
 BitKeyBridge.exe --audit-verify
 ```
 
+- Native Windows Service автоматически проверяет audit chain при старте и затем каждые 24 часа. Результат кэшируется в `%ProgramData%\BitKeyBridge\audit_integrity_status.json`, `/health` показывает `Valid / Invalid / Stale / NeverVerified`, а ошибка integrity попадает в Windows Event Log.
+
 - Self-test теперь проверяет RBAC backward compatibility, валидную audit chain и специально изменённую запись, которая обязана определиться как tampered.
 - Hash chain является tamper-evident, но не заменяет внешний immutable/SIEM archive; для высокой гарантии audit лучше пересылать на центральное защищённое хранилище.
 
