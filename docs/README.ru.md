@@ -225,3 +225,23 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - Есть фильтры и экспорт видимых строк в CSV.
 - CSV Coverage содержит только metadata — 48-значного recovery password в нём нет.
 - Порог stale Intune и старого cloud key настраивается через `CoverageStaleIntuneDays` и `CoverageOldCloudKeyDays`.
+
+## Новое в 0.9.0
+
+- Добавлен CLI-режим `--coverage` для автоматического metadata-only отчёта AD + Entra + Intune.
+- За один запуск создаются CSV и JSON; recovery password не запрашивается ни из AD, ни через Graph key-value endpoint.
+- Для интерактивного запуска можно использовать Device Code, для unattended/Task Scheduler — certificate authentication.
+- Добавлены overrides: `--tenant-id`, `--client-id`, `--cert-thumbprint`, `--cloud-user`, `--cloud-auth`.
+- Пути отчётов задаются через `--coverage-output`, `--coverage-csv`, `--coverage-json`; `--coverage-json-stdout` печатает JSON в stdout.
+- Для мониторинга добавлены exit codes:
+  - 20 — есть устройства без recovery metadata;
+  - 21 — Intune сообщает хотя бы одно managed device как not encrypted;
+  - 22 — есть stale Intune devices.
+- Для этих проверок добавлен offline self-test.
+
+Пример unattended запуска:
+
+```text
+BitKeyBridge.exe --coverage --cloud-auth Certificate --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint> --coverage-fail-no-key
+```
+
