@@ -52,6 +52,11 @@ public sealed class AppConfig
     public bool RequireRecoveryAccessReference { get; set; } = false;
     public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = true;
 
+    public bool RbacEnabled { get; set; } = false;
+    public bool RbacAllowLocalAdministrators { get; set; } = true;
+    public List<string> RbacRecoveryReaders { get; set; } = [];
+    public List<string> RbacRotationOperators { get; set; } = [];
+
     public int CoverageStaleIntuneDays { get; set; } = 30;
     public int CoverageOldCloudKeyDays { get; set; } = 365;
 
