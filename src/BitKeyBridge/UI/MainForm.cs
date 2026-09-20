@@ -65,6 +65,11 @@ public sealed class MainForm : Form
     private readonly NumericUpDown _remoteApiPort = new();
     private readonly CheckBox _remoteApiManagement = new();
 
+    private readonly CheckBox _requireRecoveryReference = new();
+    private readonly CheckBox _suggestRotationAfterRecovery = new();
+    private readonly Dictionary<string, RecoveryAccessContext> _recoveryAccessContexts =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public MainForm(AppConfig config)
     {
         _config = config;
@@ -75,7 +80,7 @@ public sealed class MainForm : Form
                 WindowsEventLogService.EnsureSource();
         }
         catch { }
-        Text = "BitKeyBridge 0.4.0 (.NET)";
+        Text = "BitKeyBridge 0.5.0 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
@@ -288,11 +293,43 @@ public sealed class MainForm : Form
         disableRemote.Click += (_, _) => DisableRemoteApi();
         openEvents.Click += (_, _) => OpenWindowsEventLog();
 
+        var helpdeskGroup = new GroupBox
+        {
+            Text = "Helpdesk Recovery Workflow",
+            Left = 20,
+            Top = 530,
+            Width = 1145,
+            Height = 135,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(helpdeskGroup);
+
+        _requireRecoveryReference.Text =
+            "Require a ticket/reference before recovery-key access";
+        _requireRecoveryReference.SetBounds(16, 30, 390, 26);
+        helpdeskGroup.Controls.Add(_requireRecoveryReference);
+
+        _suggestRotationAfterRecovery.Text =
+            "Suggest Intune key rotation after a cloud recovery password is retrieved";
+        _suggestRotationAfterRecovery.SetBounds(16, 64, 510, 26);
+        helpdeskGroup.Controls.Add(_suggestRotationAfterRecovery);
+
+        var saveHelpdesk = new Button
+        {
+            Text = "Save Helpdesk Settings",
+            Left = 905,
+            Top = 43,
+            Width = 205,
+            Height = 34
+        };
+        helpdeskGroup.Controls.Add(saveHelpdesk);
+        saveHelpdesk.Click += (_, _) => SaveOperationsSettings();
+
         var note = new Label
         {
-            Text = "Remote API never exposes BitLocker recovery passwords. Management mode only adds POST /api/v1/export; it does not expose key retrieval.",
+            Text = "Remote API never exposes BitLocker recovery passwords. Helpdesk ticket/reference and reason are audited; the recovery password is never written to the audit.",
             Left = 20,
-            Top = 535,
+            Top = 680,
             Width = 1145,
             Height = 44
         };
@@ -448,16 +485,52 @@ public sealed class MainForm : Form
         _localResults.SelectedIndexChanged += (_, _) => SelectLocalRecord();
         _localShow.Click += (_, _) =>
         {
+            if (!_localKey.UseSystemPasswordChar)
+            {
+                ToggleKey(_localKey, _localShow);
+                return;
+            }
+
+            if (_localResults.SelectedItems.Count == 0 ||
+                _localResults.SelectedItems[0].Tag is not RecoveryRecord row)
+                return;
+
+            var context = GetOrRequestRecoveryAccessContext(
+                "AD",
+                row.BitLockerId,
+                row.ComputerName,
+                allowRotationReminder: false);
+            if (context is null) return;
+
             ToggleKey(_localKey, _localShow);
-            if (!_localKey.UseSystemPasswordChar &&
-                _localResults.SelectedItems.Count > 0 &&
-                _localResults.SelectedItems[0].Tag is RecoveryRecord row)
-                _audit.Write("RevealLocalRecoveryKey", computerName: row.ComputerName, recoveryId: row.BitLockerId, source: "AD");
+            _audit.Write(
+                "RevealLocalRecoveryKey",
+                computerName: row.ComputerName,
+                recoveryId: row.BitLockerId,
+                source: "AD",
+                reference: context.Reference,
+                reason: context.Reason);
         };
         copy.Click += (_, _) =>
         {
-            if (_localResults.SelectedItems.Count > 0 && _localResults.SelectedItems[0].Tag is RecoveryRecord row)
-                _audit.Write("CopyLocalRecoveryKey", computerName: row.ComputerName, recoveryId: row.BitLockerId, source: "AD");
+            if (_localResults.SelectedItems.Count == 0 ||
+                _localResults.SelectedItems[0].Tag is not RecoveryRecord row)
+                return;
+
+            var context = GetOrRequestRecoveryAccessContext(
+                "AD",
+                row.BitLockerId,
+                row.ComputerName,
+                allowRotationReminder: false);
+            if (context is null) return;
+
+            _audit.Write(
+                "CopyLocalRecoveryKey",
+                computerName: row.ComputerName,
+                recoveryId: row.BitLockerId,
+                source: "AD",
+                reference: context.Reference,
+                reason: context.Reason);
             CopyKeyWithAutoClear(_localCurrentKey);
         };
         return tab;
@@ -576,16 +649,56 @@ public sealed class MainForm : Form
         getKey.Click += async (_, _) => await GetCloudKeyAsync();
         _cloudShow.Click += (_, _) =>
         {
+            if (!_cloudKey.UseSystemPasswordChar)
+            {
+                ToggleKey(_cloudKey, _cloudShow);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_cloudCurrentKey) ||
+                _cloudResults.SelectedItems.Count == 0 ||
+                _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
+                return;
+
+            var context = GetOrRequestRecoveryAccessContext(
+                "Entra",
+                row.RecoveryId,
+                row.ComputerName,
+                allowRotationReminder: true);
+            if (context is null) return;
+
             ToggleKey(_cloudKey, _cloudShow);
-            if (!_cloudKey.UseSystemPasswordChar &&
-                _cloudResults.SelectedItems.Count > 0 &&
-                _cloudResults.SelectedItems[0].Tag is CloudRecoveryMetadata row)
-                _audit.Write("RevealCloudRecoveryKey", computerName: row.ComputerName, recoveryId: row.RecoveryId, source: "Entra", authMode: _cloudToken?.AuthMode);
+            _audit.Write(
+                "RevealCloudRecoveryKey",
+                computerName: row.ComputerName,
+                recoveryId: row.RecoveryId,
+                source: "Entra",
+                authMode: _cloudToken?.AuthMode,
+                reference: context.Reference,
+                reason: context.Reason);
         };
         copy.Click += (_, _) =>
         {
-            if (_cloudResults.SelectedItems.Count > 0 && _cloudResults.SelectedItems[0].Tag is CloudRecoveryMetadata row)
-                _audit.Write("CopyCloudRecoveryKey", computerName: row.ComputerName, recoveryId: row.RecoveryId, source: "Entra", authMode: _cloudToken?.AuthMode);
+            if (string.IsNullOrWhiteSpace(_cloudCurrentKey) ||
+                _cloudResults.SelectedItems.Count == 0 ||
+                _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
+                return;
+
+            var context = GetOrRequestRecoveryAccessContext(
+                "Entra",
+                row.RecoveryId,
+                row.ComputerName,
+                allowRotationReminder: true);
+            if (context is null) return;
+
+            _audit.Write(
+                "CopyCloudRecoveryKey",
+                computerName: row.ComputerName,
+                recoveryId: row.RecoveryId,
+                source: "Entra",
+                authMode: _cloudToken?.AuthMode,
+                reference: context.Reference,
+                reason: context.Reason);
             CopyKeyWithAutoClear(_cloudCurrentKey);
         };
         rotate.Click += async (_, _) => await RotateSelectedCloudKeyAsync();
@@ -616,7 +729,8 @@ public sealed class MainForm : Form
         _auditResults.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         AddColumns(_auditResults,
             ("Time (UTC)", 155), ("User", 165), ("Host", 110), ("Action", 175), ("Result", 75),
-            ("Computer", 135), ("Recovery ID", 230), ("Source", 70), ("Auth", 90), ("Details", 260));
+            ("Computer", 135), ("Recovery ID", 230), ("Source", 70), ("Auth", 90),
+            ("Reference", 130), ("Reason", 180), ("Details", 260));
         tab.Controls.Add(_auditResults);
 
         refresh.Click += (_, _) => RefreshAudit();
@@ -940,27 +1054,82 @@ public sealed class MainForm : Form
 
     private async Task GetCloudKeyAsync()
     {
-        if (_cloudResults.SelectedItems.Count == 0 || _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
+        if (_cloudResults.SelectedItems.Count == 0 ||
+            _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
         {
-            MessageBox.Show(this, "Select a cloud recovery record first.", "Cloud Recovery", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                this,
+                "Select a cloud recovery record first.",
+                "Cloud Recovery",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
             return;
         }
+
+        var context = GetOrRequestRecoveryAccessContext(
+            "Entra",
+            row.RecoveryId,
+            row.ComputerName,
+            allowRotationReminder: true);
+        if (context is null) return;
+
         if (!await EnsureCloudTokenAsync()) return;
+
         try
         {
-            _cloudStatus.Text = "Retrieving recovery password from Entra (this access is audited)...";
+            _cloudStatus.Text =
+                "Retrieving recovery password from Entra (this access is audited)...";
             using var graph = new CloudGraphService();
-            _cloudCurrentKey = await graph.GetRecoveryKeyValueAsync(_cloudToken!.AccessToken, row.RecoveryId);
+            _cloudCurrentKey = await graph.GetRecoveryKeyValueAsync(
+                _cloudToken!.AccessToken,
+                row.RecoveryId);
             _cloudKey.Text = _cloudCurrentKey;
             _cloudKey.UseSystemPasswordChar = true;
             _cloudShow.Text = "Show Key";
-            _audit.Write("GetCloudRecoveryKey", computerName: row.ComputerName, recoveryId: row.RecoveryId, source: "Entra", authMode: _cloudToken?.AuthMode);
-            _cloudStatus.Text = "Recovery password retrieved. This key-read operation is auditable in Microsoft Entra and BitKeyBridge.";
+
+            _audit.Write(
+                "GetCloudRecoveryKey",
+                computerName: row.ComputerName,
+                recoveryId: row.RecoveryId,
+                source: "Entra",
+                authMode: _cloudToken.AuthMode,
+                reference: context.Reference,
+                reason: context.Reason);
+
+            if (context.RemindRotation)
+            {
+                _cloudStatus.Text =
+                    "Recovery password retrieved. Complete recovery first, then use Rotate Key in Intune.";
+                MessageBox.Show(
+                    this,
+                    "Recovery password retrieved." + Environment.NewLine + Environment.NewLine +
+                    "After the recovery operation is complete and the device is back online, use " +
+                    "'Rotate Key in Intune' to invalidate the exposed recovery password." +
+                    (string.IsNullOrWhiteSpace(context.Reference)
+                        ? string.Empty
+                        : Environment.NewLine + Environment.NewLine + "Reference: " + context.Reference),
+                    "Recovery Rotation Reminder",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            else
+            {
+                _cloudStatus.Text =
+                    "Recovery password retrieved. This key-read operation is auditable in Microsoft Entra and BitKeyBridge.";
+            }
         }
         catch (Exception ex)
         {
-            if (_cloudResults.SelectedItems.Count > 0 && _cloudResults.SelectedItems[0].Tag is CloudRecoveryMetadata failedRow)
-                _audit.Write("GetCloudRecoveryKey", "Failed", failedRow.ComputerName, failedRow.RecoveryId, "Entra", _cloudToken?.AuthMode, ex.Message);
+            _audit.Write(
+                "GetCloudRecoveryKey",
+                "Failed",
+                row.ComputerName,
+                row.RecoveryId,
+                "Entra",
+                _cloudToken?.AuthMode,
+                ex.Message,
+                context.Reference,
+                context.Reason);
             _cloudStatus.Text = "Key retrieval failed: " + ex.Message;
         }
     }
@@ -1155,15 +1324,30 @@ public sealed class MainForm : Form
         if (_unifiedResults.SelectedItems.Count == 0 ||
             _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row)
         {
-            MessageBox.Show(this, "Select an Intune-managed device first.", "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                this,
+                "Select an Intune-managed device first.",
+                "Rotate BitLocker Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
             return;
         }
+
         if (string.IsNullOrWhiteSpace(row.ManagedDeviceId))
         {
-            MessageBox.Show(this, "The selected device is not linked to an Intune managedDevice object.", "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                this,
+                "The selected device is not linked to an Intune managedDevice object.",
+                "Rotate BitLocker Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
             return;
         }
-        await RotateManagedDeviceAsync(row.ManagedDeviceId, row.ComputerName, row.RecoveryIds.FirstOrDefault());
+
+        await RotateManagedDeviceAsync(
+            row.ManagedDeviceId,
+            row.ComputerName,
+            row.RecoveryIds.FirstOrDefault());
     }
 
     private async Task RotateSelectedCloudKeyAsync()
@@ -1171,35 +1355,89 @@ public sealed class MainForm : Form
         if (_cloudResults.SelectedItems.Count == 0 ||
             _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
         {
-            MessageBox.Show(this, "Select a cloud recovery record first.", "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                this,
+                "Select a cloud recovery record first.",
+                "Rotate BitLocker Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
             return;
         }
+
+        var context = GetOrRequestRecoveryAccessContext(
+            "Entra",
+            row.RecoveryId,
+            row.ComputerName,
+            allowRotationReminder: false);
+        if (context is null) return;
+
         if (!await EnsureCloudTokenAsync()) return;
 
         try
         {
             _cloudStatus.Text = "Resolving Intune managed device...";
             using var graph = new CloudGraphService();
-            var managed = await graph.FindManagedDeviceByEntraDeviceIdAsync(_cloudToken!.AccessToken, row.DeviceId);
+            var managed = await graph.FindManagedDeviceByEntraDeviceIdAsync(
+                _cloudToken!.AccessToken,
+                row.DeviceId);
             if (managed is null)
-                throw new InvalidOperationException("No matching Intune managedDevice was found for this Entra device.");
-            await RotateManagedDeviceAsync(managed.ManagedDeviceId, row.ComputerName, row.RecoveryId);
+                throw new InvalidOperationException(
+                    "No matching Intune managedDevice was found for this Entra device.");
+
+            await RotateManagedDeviceAsync(
+                managed.ManagedDeviceId,
+                row.ComputerName,
+                row.RecoveryId,
+                context);
         }
         catch (Exception ex)
         {
             _cloudStatus.Text = "Rotation failed: " + ex.Message;
-            _audit.Write("RotateBitLockerKey", "Failed", row.ComputerName, row.RecoveryId, "Intune", _cloudToken?.AuthMode, ex.Message);
-            MessageBox.Show(this, ex.Message, "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _audit.Write(
+                "RotateBitLockerKey",
+                "Failed",
+                row.ComputerName,
+                row.RecoveryId,
+                "Intune",
+                _cloudToken?.AuthMode,
+                ex.Message,
+                context.Reference,
+                context.Reason);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Rotate BitLocker Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
     }
 
-    private async Task RotateManagedDeviceAsync(string managedDeviceId, string computerName, string? recoveryId)
+    private async Task RotateManagedDeviceAsync(
+        string managedDeviceId,
+        string computerName,
+        string? recoveryId,
+        RecoveryAccessContext? existingContext = null)
     {
+        var auditId = string.IsNullOrWhiteSpace(recoveryId)
+            ? managedDeviceId
+            : recoveryId;
+
+        var context = existingContext ?? GetOrRequestRecoveryAccessContext(
+            "Entra",
+            auditId,
+            computerName,
+            allowRotationReminder: false);
+        if (context is null) return;
+
         if (!await EnsureCloudTokenAsync()) return;
 
-        var answer = MessageBox.Show(this,
+        var answer = MessageBox.Show(
+            this,
             $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
-            "Intune performs the rotation on the managed device. This does not immediately change the key shown in the current window.",
+            "Only rotate after the recovery operation is complete and the device can process the Intune action." +
+            (string.IsNullOrWhiteSpace(context.Reference)
+                ? string.Empty
+                : Environment.NewLine + Environment.NewLine + "Reference: " + context.Reference),
             "Confirm BitLocker Key Rotation",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
@@ -1209,11 +1447,25 @@ public sealed class MainForm : Form
         try
         {
             using var graph = new CloudGraphService();
-            await graph.RotateBitLockerKeysAsync(_cloudToken!.AccessToken, managedDeviceId);
-            _audit.Write("RotateBitLockerKey", computerName: computerName, recoveryId: recoveryId, source: "Intune", authMode: _cloudToken.AuthMode, details: $"ManagedDeviceId={managedDeviceId}");
-            _cloudStatus.Text = $"Intune accepted the BitLocker key-rotation request for {computerName}.";
+            await graph.RotateBitLockerKeysAsync(
+                _cloudToken!.AccessToken,
+                managedDeviceId);
+
+            _audit.Write(
+                "RotateBitLockerKey",
+                computerName: computerName,
+                recoveryId: recoveryId,
+                source: "Intune",
+                authMode: _cloudToken.AuthMode,
+                details: $"ManagedDeviceId={managedDeviceId}",
+                reference: context.Reference,
+                reason: context.Reason);
+
+            _cloudStatus.Text =
+                $"Intune accepted the BitLocker key-rotation request for {computerName}.";
             _unifiedStatus.Text = _cloudStatus.Text;
-            MessageBox.Show(this,
+            MessageBox.Show(
+                this,
                 "Intune accepted the rotation request. The new recovery key appears after the device processes the action and backs up the new key.",
                 "Rotate BitLocker Key",
                 MessageBoxButtons.OK,
@@ -1221,7 +1473,16 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            _audit.Write("RotateBitLockerKey", "Failed", computerName, recoveryId, "Intune", _cloudToken?.AuthMode, ex.Message);
+            _audit.Write(
+                "RotateBitLockerKey",
+                "Failed",
+                computerName,
+                recoveryId,
+                "Intune",
+                _cloudToken?.AuthMode,
+                ex.Message,
+                context.Reference,
+                context.Reason);
             throw;
         }
     }
@@ -1233,6 +1494,9 @@ public sealed class MainForm : Form
         _allowPrereleaseUpdates.Checked = _config.AllowPrereleaseUpdates;
         _remoteApiPort.Value = Math.Clamp(_config.RemoteApiPort, 1024, 65535);
         _remoteApiManagement.Checked = _config.RemoteApiAllowManagement;
+        _requireRecoveryReference.Checked = _config.RequireRecoveryAccessReference;
+        _suggestRotationAfterRecovery.Checked =
+            _config.SuggestRotationAfterCloudKeyRetrieval;
         RefreshRemoteApiStatus();
 
         try
@@ -1263,12 +1527,15 @@ public sealed class MainForm : Form
         _config.AllowPrereleaseUpdates = _allowPrereleaseUpdates.Checked;
         _config.RemoteApiPort = (int)_remoteApiPort.Value;
         _config.RemoteApiAllowManagement = _remoteApiManagement.Checked;
+        _config.RequireRecoveryAccessReference = _requireRecoveryReference.Checked;
+        _config.SuggestRotationAfterCloudKeyRetrieval =
+            _suggestRotationAfterRecovery.Checked;
         ConfigService.SaveAppConfig(_config);
         _audit.Write(
             "SaveOperationsSettings",
             source: "Local",
             details:
-                $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RemotePort={_config.RemoteApiPort}; RemoteManagement={_config.RemoteApiAllowManagement}");
+                $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RemotePort={_config.RemoteApiPort}; RemoteManagement={_config.RemoteApiAllowManagement}; RequireReference={_config.RequireRecoveryAccessReference}; SuggestRotation={_config.SuggestRotationAfterCloudKeyRetrieval}");
         RefreshRemoteApiStatus();
     }
 
@@ -1817,6 +2084,48 @@ public sealed class MainForm : Form
         }
     }
 
+    private RecoveryAccessContext? GetOrRequestRecoveryAccessContext(
+        string source,
+        string recoveryId,
+        string computerName,
+        bool allowRotationReminder)
+    {
+        var normalizedId = string.IsNullOrWhiteSpace(recoveryId)
+            ? computerName
+            : recoveryId;
+        var cacheKey = source + ":" + normalizedId;
+
+        if (_recoveryAccessContexts.TryGetValue(cacheKey, out var existing))
+            return existing;
+
+        var prompt =
+            _config.RequireRecoveryAccessReference ||
+            (allowRotationReminder &&
+             _config.SuggestRotationAfterCloudKeyRetrieval);
+
+        if (!prompt)
+        {
+            var empty = new RecoveryAccessContext();
+            _recoveryAccessContexts[cacheKey] = empty;
+            return empty;
+        }
+
+        using var dialog = new RecoveryAccessDialog(
+            computerName,
+            normalizedId,
+            _config.RequireRecoveryAccessReference,
+            allowRotationReminder,
+            allowRotationReminder &&
+            _config.SuggestRotationAfterCloudKeyRetrieval);
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return null;
+
+        var context = dialog.Context;
+        _recoveryAccessContexts[cacheKey] = context;
+        return context;
+    }
+
     private void ClearSensitiveState()
     {
         try
@@ -1834,6 +2143,7 @@ public sealed class MainForm : Form
         _localCurrentKey = null;
         _cloudCurrentKey = null;
         _cloudToken = null;
+        _recoveryAccessContexts.Clear();
         _localKey.Clear();
         _cloudKey.Clear();
         _cloudPassword.Clear();
@@ -1853,6 +2163,8 @@ public sealed class MainForm : Form
             item.SubItems.Add(row.RecoveryId);
             item.SubItems.Add(row.Source);
             item.SubItems.Add(row.AuthMode);
+            item.SubItems.Add(row.Reference);
+            item.SubItems.Add(row.Reason);
             item.SubItems.Add(row.Details);
             _auditResults.Items.Add(item);
         }
