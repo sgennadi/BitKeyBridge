@@ -2143,12 +2143,19 @@ public sealed class MainForm : Form
         _adPort.Value = Math.Clamp(_config.AdPort, 1, 65535);
         _adUseLdaps.Checked = _config.AdUseLdaps || _config.AdPort == 636;
         _adExplicitCredentials.Checked = _config.AdUseExplicitCredentials;
+        _adCredentialStorage.SelectedIndex =
+            _config.AdCredentialStorageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : _config.AdCredentialStorageMode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase)
+                    ? 2
+                    : 0;
         _outputRoot.Text = string.IsNullOrWhiteSpace(_config.OutputRoot)
             ? _config.SysvolScriptsRoot
             : _config.OutputRoot;
         _outputSubdirectory.Text = _config.OutputSubdirectory;
 
         UpdateDirectoryConnectionUi();
+        RefreshCredentialVaultStatus();
     }
 
     private void UpdateDirectoryConnectionUi()
@@ -2159,6 +2166,7 @@ public sealed class MainForm : Form
         _adPort.Enabled = explicitServer;
         _adUsername.Enabled = _adExplicitCredentials.Checked;
         _adPassword.Enabled = _adExplicitCredentials.Checked;
+        _adCredentialStorage.Enabled = _adExplicitCredentials.Checked;
     }
 
     private void SaveDirectorySettings(bool showConfirmation)
@@ -2172,11 +2180,19 @@ public sealed class MainForm : Form
         _config.AdPort = (int)_adPort.Value;
         _config.AdUseLdaps = _adUseLdaps.Checked;
         _config.AdUseExplicitCredentials = _adExplicitCredentials.Checked;
+        _config.AdCredentialStorageMode = GetSelectedCredentialStorageMode();
 
         if (_config.AdUseExplicitCredentials)
         {
-            if (!string.IsNullOrEmpty(_adPassword.Text))
-                AdSessionCredentials.SetPassword(_adPassword.Text);
+            if (_config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrEmpty(_adPassword.Text))
+                    AdSessionCredentials.SetPassword(_adPassword.Text);
+            }
+            else
+            {
+                AdSessionCredentials.Clear();
+            }
         }
         else
         {
@@ -2206,16 +2222,209 @@ public sealed class MainForm : Form
             "SaveDirectorySettings",
             source: "Local",
             details:
-                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
+                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; CredentialStorage={_config.AdCredentialStorageMode}; LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
 
         if (showConfirmation)
         {
             MessageBox.Show(
                 this,
-                "Directory/output settings saved. AD passwords are never saved; an explicit password remains only in this process memory.",
+                _config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase)
+                    ? "Directory/output settings saved. Session-mode AD password remains only in this process memory."
+                    : "Directory/output settings saved. Stored credentials remain protected by the selected Windows vault; no plaintext password is written to appsettings.",
                 "Directory Connection",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+    }
+
+    private string GetSelectedCredentialStorageMode() =>
+        _adCredentialStorage.SelectedIndex switch
+        {
+            1 => "CurrentUser",
+            2 => "LocalMachine",
+            _ => "Session"
+        };
+
+    private void SaveSelectedCredential()
+    {
+        if (!_adExplicitCredentials.Checked)
+        {
+            MessageBox.Show(
+                this,
+                "Enable explicit AD credentials first.",
+                "Credential Vault",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var username = _adUsername.Text.Trim();
+        var password = _adPassword.Text;
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password))
+        {
+            MessageBox.Show(
+                this,
+                "Enter the AD user and password before saving the credential.",
+                "Credential Vault",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            SaveDirectorySettings(showConfirmation: false);
+            var mode = GetSelectedCredentialStorageMode();
+            var vault = new CredentialVaultService();
+
+            if (mode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase))
+            {
+                vault.SaveUserCredential(
+                    _config.AdCredentialTarget,
+                    username,
+                    password);
+                AdSessionCredentials.Clear();
+                _audit.Write(
+                    "SaveAdCredential",
+                    source: "CredentialManager",
+                    details: $"Storage=CurrentUser; User={username}; Target={_config.AdCredentialTarget}");
+            }
+            else if (mode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase))
+            {
+                vault.SaveMachineCredential(
+                    username,
+                    _adDomain.Text.Trim(),
+                    password);
+                AdSessionCredentials.Clear();
+                _audit.Write(
+                    "SaveAdCredential",
+                    source: "DPAPI",
+                    details: $"Storage=LocalMachine; User={username}; File={AppPaths.MachineAdCredentialFile}");
+            }
+            else
+            {
+                AdSessionCredentials.SetPassword(password);
+                _audit.Write(
+                    "LoadAdSessionCredential",
+                    source: "Memory",
+                    details: $"Storage=Session; User={username}");
+            }
+
+            _config.AdCredentialStorageMode = mode;
+            ConfigService.SaveAppConfig(_config);
+
+            if (!mode.Equals("Session", StringComparison.OrdinalIgnoreCase))
+                _adPassword.Clear();
+
+            RefreshCredentialVaultStatus();
+            MessageBox.Show(
+                this,
+                mode.Equals("Session", StringComparison.OrdinalIgnoreCase)
+                    ? "Credential loaded for this BitKeyBridge process only."
+                    : "Credential saved successfully in the selected protected Windows vault.",
+                "Credential Vault",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write(
+                "SaveAdCredential",
+                "Failed",
+                source: "CredentialVault",
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Credential Vault",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void DeleteSelectedCredential()
+    {
+        try
+        {
+            var mode = GetSelectedCredentialStorageMode();
+            var vault = new CredentialVaultService();
+
+            if (mode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase))
+            {
+                vault.DeleteUserCredential(_config.AdCredentialTarget);
+                _audit.Write(
+                    "DeleteAdCredential",
+                    source: "CredentialManager",
+                    details: $"Storage=CurrentUser; Target={_config.AdCredentialTarget}");
+            }
+            else if (mode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase))
+            {
+                vault.DeleteMachineCredential();
+                _audit.Write(
+                    "DeleteAdCredential",
+                    source: "DPAPI",
+                    details: $"Storage=LocalMachine; File={AppPaths.MachineAdCredentialFile}");
+            }
+            else
+            {
+                AdSessionCredentials.Clear();
+                _audit.Write(
+                    "DeleteAdCredential",
+                    source: "Memory",
+                    details: "Storage=Session");
+            }
+
+            _adPassword.Clear();
+            RefreshCredentialVaultStatus();
+        }
+        catch (Exception ex)
+        {
+            _audit.Write(
+                "DeleteAdCredential",
+                "Failed",
+                source: "CredentialVault",
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Credential Vault",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void RefreshCredentialVaultStatus()
+    {
+        try
+        {
+            if (!_adExplicitCredentials.Checked)
+            {
+                _credentialVaultStatus.Text =
+                    "Using current Windows identity; no explicit AD credential is required.";
+                return;
+            }
+
+            var mode = GetSelectedCredentialStorageMode();
+            if (mode.Equals("Session", StringComparison.OrdinalIgnoreCase))
+            {
+                _credentialVaultStatus.Text = AdSessionCredentials.HasPassword
+                    ? $"Session credential loaded for {_adUsername.Text.Trim()}."
+                    : "Session credential is not loaded.";
+                return;
+            }
+
+            var vault = new CredentialVaultService();
+            var metadata = mode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase)
+                ? vault.GetUserMetadata(_config.AdCredentialTarget)
+                : vault.GetMachineMetadata();
+
+            _credentialVaultStatus.Text = metadata.Exists
+                ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}."
+                : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.";
+        }
+        catch (Exception ex)
+        {
+            _credentialVaultStatus.Text = "Credential status error: " + ex.Message;
         }
     }
 
@@ -2263,6 +2472,16 @@ public sealed class MainForm : Form
         _healthPort.Value = Math.Clamp(_config.HealthEndpointPort, 1024, 65535);
         _healthEnabled.Checked = _config.HealthEndpointEnabled;
         _serviceRunOnStart.Checked = _config.ServiceRunExportOnStart;
+        _serviceIdentityMode.SelectedIndex =
+            _config.ServiceIdentityMode.Equals("gMSA", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : _config.ServiceIdentityMode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase)
+                    ? 2
+                    : 0;
+        _serviceIdentityAccount.Text = _config.ServiceIdentityAccount;
+        _serviceIdentityPassword.Clear();
+        UpdateServiceIdentityUi();
+        RefreshServiceIdentityStatus();
     }
 
     private void SaveDashboardSettings(bool restartRunningService)
@@ -2274,11 +2493,13 @@ public sealed class MainForm : Form
             _config.HealthEndpointPort = (int)_healthPort.Value;
             _config.HealthEndpointEnabled = _healthEnabled.Checked;
             _config.ServiceRunExportOnStart = _serviceRunOnStart.Checked;
+            _config.ServiceIdentityMode = GetSelectedServiceIdentityMode();
+            _config.ServiceIdentityAccount = _serviceIdentityAccount.Text.Trim();
             ConfigService.SaveAppConfig(_config);
             _audit.Write(
                 "SaveServiceSettings",
                 source: "Local",
-                details: $"Interval={_config.ServiceIntervalMinutes}; HealthEnabled={_config.HealthEndpointEnabled}; Port={_config.HealthEndpointPort}; RunOnStart={_config.ServiceRunExportOnStart}");
+                details: $"Interval={_config.ServiceIntervalMinutes}; HealthEnabled={_config.HealthEndpointEnabled}; Port={_config.HealthEndpointPort}; RunOnStart={_config.ServiceRunExportOnStart}; IdentityMode={_config.ServiceIdentityMode}; IdentityAccount={_config.ServiceIdentityAccount}");
 
             if (restartRunningService && serviceBefore.Installed &&
                 string.Equals(serviceBefore.State, "Running", StringComparison.OrdinalIgnoreCase))
@@ -2305,8 +2526,12 @@ public sealed class MainForm : Form
                 WindowsServiceHost.Stop();
 
             WindowsServiceHost.InstallOrUpdate();
+            ApplyConfiguredServiceIdentity(restartIfRunning: false, allowExistingDomainPassword: true);
             WindowsServiceHost.Start();
-            _audit.Write("InstallOrUpdateService", source: "WindowsService", details: AppPaths.ServiceExecutable);
+            _audit.Write(
+                "InstallOrUpdateService",
+                source: "WindowsService",
+                details: $"Executable={AppPaths.ServiceExecutable}; Identity={WindowsServiceHost.GetInfo().Identity}");
             RefreshDashboard();
             MessageBox.Show(
                 this,
@@ -2321,6 +2546,126 @@ public sealed class MainForm : Form
             _audit.Write("InstallOrUpdateService", "Failed", source: "WindowsService", details: ex.Message);
             MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
             RefreshDashboard();
+        }
+    }
+
+    private string GetSelectedServiceIdentityMode() =>
+        _serviceIdentityMode.SelectedIndex switch
+        {
+            1 => "gMSA",
+            2 => "DomainAccount",
+            _ => "LocalSystem"
+        };
+
+    private void UpdateServiceIdentityUi()
+    {
+        var mode = GetSelectedServiceIdentityMode();
+        var localSystem = mode.Equals("LocalSystem", StringComparison.OrdinalIgnoreCase);
+        var domainAccount = mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase);
+
+        _serviceIdentityAccount.Enabled = !localSystem;
+        _serviceIdentityPassword.Enabled = domainAccount;
+
+        if (localSystem)
+        {
+            _serviceIdentityAccount.Clear();
+            _serviceIdentityPassword.Clear();
+        }
+        else if (!domainAccount)
+        {
+            _serviceIdentityPassword.Clear();
+        }
+    }
+
+    private void RefreshServiceIdentityStatus()
+    {
+        try
+        {
+            var info = WindowsServiceHost.GetInfo();
+            _serviceIdentityStatus.Text = info.Installed
+                ? $"Installed service identity: {(string.IsNullOrWhiteSpace(info.Identity) ? "Unknown" : info.Identity)}"
+                : "Windows Service is not installed.";
+        }
+        catch (Exception ex)
+        {
+            _serviceIdentityStatus.Text = "Service identity status error: " + ex.Message;
+        }
+    }
+
+    private void ApplyConfiguredServiceIdentity(
+        bool restartIfRunning,
+        bool allowExistingDomainPassword)
+    {
+        var mode = GetSelectedServiceIdentityMode();
+        var account = _serviceIdentityAccount.Text.Trim();
+        var password = _serviceIdentityPassword.Text;
+        var current = WindowsServiceHost.GetInfo();
+
+        if (!current.Installed)
+            throw new InvalidOperationException(
+                "Install the BitKeyBridge Windows Service before applying its identity.");
+
+        if (mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrEmpty(password) &&
+            allowExistingDomainPassword &&
+            string.Equals(current.Identity, account, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        WindowsServiceHost.ConfigureIdentity(
+            mode,
+            account,
+            mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase)
+                ? password
+                : null,
+            restartIfRunning);
+    }
+
+    private void ApplyServiceIdentityFromGui()
+    {
+        try
+        {
+            SaveDashboardSettings(restartRunningService: false);
+            ApplyConfiguredServiceIdentity(
+                restartIfRunning: true,
+                allowExistingDomainPassword: false);
+
+            _audit.Write(
+                "ConfigureServiceIdentity",
+                source: "WindowsService",
+                details: $"Mode={_config.ServiceIdentityMode}; Account={_config.ServiceIdentityAccount}; EffectiveIdentity={WindowsServiceHost.GetInfo().Identity}");
+
+            _serviceIdentityPassword.Clear();
+            RefreshServiceIdentityStatus();
+            RefreshDashboard();
+
+            MessageBox.Show(
+                this,
+                "Windows Service identity updated successfully." +
+                Environment.NewLine + Environment.NewLine +
+                (GetSelectedServiceIdentityMode().Equals("gMSA", StringComparison.OrdinalIgnoreCase)
+                    ? "The gMSA password is managed by Active Directory and is not stored by BitKeyBridge."
+                    : "BitKeyBridge does not store the Windows Service account password."),
+                "Service Identity",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _serviceIdentityPassword.Clear();
+            _audit.Write(
+                "ConfigureServiceIdentity",
+                "Failed",
+                source: "WindowsService",
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Service Identity",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshServiceIdentityStatus();
         }
     }
 
@@ -2404,6 +2749,8 @@ public sealed class MainForm : Form
             _dashboardDetails.AppendText($"Machine:                  {health.MachineName}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Service installed:        {health.ServiceInstalled}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Service state:            {health.ServiceState}{Environment.NewLine}");
+            var serviceInfo = WindowsServiceHost.GetInfo();
+            _dashboardDetails.AppendText($"Service identity:         {(serviceInfo.Installed ? serviceInfo.Identity : "-")}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Service executable:       {AppPaths.ServiceExecutable}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Health endpoint:          {health.HealthEndpoint}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Service interval:         {_config.ServiceIntervalMinutes} minute(s){Environment.NewLine}");
@@ -2584,6 +2931,7 @@ public sealed class MainForm : Form
         _cloudKey.Clear();
         _cloudPassword.Clear();
         _adPassword.Clear();
+        _serviceIdentityPassword.Clear();
     }
 
     private void RefreshAudit()
