@@ -1057,6 +1057,30 @@ Audit records contain separate structured `Reference` and `Reason` fields. The 4
 
 Rotation is never automatic: the operator must explicitly confirm **Rotate Key in Intune** after recovery is complete.
 
+
+### Windows RBAC for recovery and rotation
+
+RBAC is disabled by default so existing deployments keep their current behavior after upgrading. When enabled, BitKeyBridge authorizes privileged actions against the current Windows identity and group membership.
+
+Two permissions are independent:
+
+- **RecoveryRead** — local recovery CSV search, AD recovery reveal/copy, and Entra recovery-password retrieval/reveal/copy.
+- **Rotate** — Intune BitLocker recovery-key rotation.
+
+Configure RBAC from **Operations → Helpdesk Recovery Workflow → RBAC...** or from CLI. Principals may be Windows users, groups, or SIDs. A configurable local Administrators bypass is available.
+
+Example:
+
+```text
+BitKeyBridge.exe --rbac-reader-add "DOMAIN\BitLocker Helpdesk"
+BitKeyBridge.exe --rbac-rotator-add "DOMAIN\BitLocker Rotation Operators"
+BitKeyBridge.exe --rbac-admin-bypass off
+BitKeyBridge.exe --rbac-enable
+BitKeyBridge.exe --rbac-status
+```
+
+Denied actions are recorded in both the local security audit and Windows Application Event Log. Recovery passwords are never included in those denial records.
+
 ## Supply-chain security
 
 Tagged releases are built with additional supply-chain artifacts and GitHub-native verification:
@@ -1111,7 +1135,17 @@ The rotation action uses Microsoft Graph `deviceManagement/managedDevices/{id}/r
 
 ## Audit
 
-The **Audit** tab records local administrative actions such as recovery-key reveal/copy, cloud key retrieval, unified searches, and rotation requests. Audit records contain IDs and metadata only. Any string matching the 48-digit BitLocker recovery-password format is automatically replaced with `[REDACTED-BITLOCKER-KEY]` before being written.
+The **Audit** tab records local administrative actions such as recovery-key reveal/copy, cloud key retrieval, unified searches, rotation requests, and RBAC denials. Audit records contain IDs and metadata only. Any string matching the 48-digit BitLocker recovery-password format is automatically replaced with `[REDACTED-BITLOCKER-KEY]` before being written.
+
+New audit entries are SHA-256 hash chained. BitKeyBridge serializes audit writes across GUI/service processes so concurrent writes cannot fork the chain. Existing pre-0.11 records remain readable and are reported as legacy/unhashed entries.
+
+Verify the current audit plus its rotated `.old` file from the **Verify Chain** button or CLI:
+
+```text
+BitKeyBridge.exe --audit-verify
+```
+
+The hash chain is tamper-evident, not a replacement for an external immutable/SIEM archive: a sufficiently privileged attacker who can rewrite the whole local audit can also recompute an unkeyed hash chain. Forwarding BitKeyBridge events/audit to protected central storage is recommended for high-assurance environments.
 
 ## Build
 
