@@ -49,10 +49,19 @@ public sealed class ExportService
 
         try
         {
-            if (!Directory.Exists(_config.SysvolScriptsRoot))
-                throw new DirectoryNotFoundException($"SYSVOL scripts path '{_config.SysvolScriptsRoot}' was not found. Run on a DC with SYSVOL available or change configuration.");
-
-            Directory.CreateDirectory(_config.OutputDirectory);
+            var outputRoot = _config.EffectiveOutputRoot;
+            try
+            {
+                Directory.CreateDirectory(outputRoot);
+                Directory.CreateDirectory(_config.OutputDirectory);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException(
+                    $"Output root '{outputRoot}' is not available or cannot be created. " +
+                    "Configure a writable local or UNC output path. " + ex.Message,
+                    ex);
+            }
             _log.Initialize();
             lockStream = new FileStream(_config.LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
 
