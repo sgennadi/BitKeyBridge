@@ -2419,7 +2419,10 @@ public sealed class MainForm : Form
                 : vault.GetMachineMetadata();
 
             _credentialVaultStatus.Text = metadata.Exists
-                ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}."
+                ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}." +
+                  (mode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase)
+                      ? " Interactive user only; do not use this mode for the Windows Service."
+                      : string.Empty)
                 : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.";
         }
         catch (Exception ex)
@@ -2521,6 +2524,15 @@ public sealed class MainForm : Form
         try
         {
             SaveDashboardSettings(restartRunningService: false);
+
+            if (_config.AdUseExplicitCredentials &&
+                _config.AdCredentialStorageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Current User Credential Manager storage is intended for interactive GUI/CLI use. " +
+                    "For the Windows Service, switch AD credential storage to Machine / Service DPAPI, " +
+                    "or use integrated credentials with a gMSA/domain service identity.");
+            }
             var before = WindowsServiceHost.GetInfo();
             if (before.Installed && string.Equals(before.State, "Running", StringComparison.OrdinalIgnoreCase))
                 WindowsServiceHost.Stop();
