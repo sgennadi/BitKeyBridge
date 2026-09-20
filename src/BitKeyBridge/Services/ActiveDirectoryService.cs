@@ -362,8 +362,18 @@ public sealed class ActiveDirectoryService
         connection.AuthType = AuthType.Negotiate;
         connection.Timeout = _timeout;
         connection.SessionOptions.ProtocolVersion = 3;
-        connection.SessionOptions.Signing = true;
-        connection.SessionOptions.Sealing = true;
+
+        var useLdaps = _config.AdUseLdaps || port == 636;
+        if (useLdaps)
+        {
+            connection.SessionOptions.SecureSocketLayer = true;
+        }
+        else
+        {
+            connection.SessionOptions.Signing = true;
+            connection.SessionOptions.Sealing = true;
+        }
+
         connection.Bind();
         return connection;
     }
