@@ -3,6 +3,7 @@ namespace BitKeyBridge;
 public sealed class AppConfig
 {
     public string SysvolScriptsRoot { get; set; } = @"C:\Windows\SYSVOL\domain\scripts";
+    public string OutputRoot { get; set; } = string.Empty;
     public string OutputSubdirectory { get; set; } = "BL";
     public int StaleSuccessHours { get; set; } = 36;
     public int ReplicationStaleHours { get; set; } = 24;
@@ -45,7 +46,13 @@ public sealed class AppConfig
 
     public List<BitLockerScope> DefaultScopes { get; set; } = [];
 
-    public string OutputDirectory => Path.Combine(SysvolScriptsRoot, OutputSubdirectory);
+    public string EffectiveOutputRoot =>
+        Environment.ExpandEnvironmentVariables(
+            string.IsNullOrWhiteSpace(OutputRoot)
+                ? SysvolScriptsRoot
+                : OutputRoot);
+
+    public string OutputDirectory => Path.Combine(EffectiveOutputRoot, OutputSubdirectory);
     public string OutputCsv => Path.Combine(OutputDirectory, "bitlocker_recovery_keys.csv");
     public string ErrorLog => Path.Combine(OutputDirectory, "bitlocker_errors.log");
     public string LockFile => Path.Combine(OutputDirectory, "bitlocker_export.lock");
