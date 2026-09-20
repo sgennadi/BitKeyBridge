@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.10.0
+
+- Added automatic LocalMachine certificate private-key ACL management for Windows Service identities.
+- Supports both CNG private keys under `%ProgramData%\Microsoft\Crypto\Keys` and legacy CAPI keys under `RSA\MachineKeys`.
+- gMSA and regular domain service identities can receive a narrow explicit Read ACE without replacing the existing private-key ACL.
+- LocalSystem is recognized as not requiring a separate BitKeyBridge-managed Read grant.
+- Service identity changes now perform certificate-access preflight before SCM identity changes when scheduled Coverage depends on the machine certificate.
+- Machine cloud save/status now validates the installed service identity's certificate private-key access.
+- Added certificate ACL CLI commands: `--cert-key-status`, `--cert-key-grant`, `--cert-key-revoke`, and `--cert-account`.
+- Added **Repair Cert Access** to the Dashboard and private-key access state to the health snapshot.
+- Added a configurable Coverage Policy engine for No Recovery Key, Intune Not Encrypted, Intune Stale, and Old Cloud Key metrics.
+- Each policy metric has an allowed maximum and Error/Warning/Info severity.
+- Added Coverage Policy GUI configuration and CLI configuration/status commands.
+- Added `--coverage-fail-policy` with exit code 23 for monitoring wrappers.
+- Coverage status JSON now persists the evaluated policy result and structured violations.
+- Scheduled Coverage maps policy severity to Windows Event Log severity.
+- Added a shared unattended Coverage automation service with process-wide serialization to prevent overlapping scheduled/remote runs.
+- Added metadata-only Remote API endpoints `GET /api/v1/coverage` and `GET /api/v1/coverage/policy`.
+- Added opt-in management endpoint `POST /api/v1/coverage/run`; it never returns recovery passwords or device-level recovery secrets.
+- Extended offline self-tests for certificate identity normalization and Coverage Policy evaluation.
+
 ## 0.9.0
 
 - Added metadata-only BitLocker Coverage automation for CLI and Task Scheduler workflows.
