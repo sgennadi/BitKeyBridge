@@ -14,6 +14,10 @@ public static class CoverageCliService
         string[] args,
         CancellationToken ct = default)
     {
+        var startedUtc = DateTime.UtcNow;
+        var csvPath = string.Empty;
+        var jsonPath = string.Empty;
+
         try
         {
             var useMachineCloudConfig = HasFlag(args, "--coverage-machine-config");
@@ -48,12 +52,12 @@ public static class CoverageCliService
             outputDirectory = Path.GetFullPath(
                 Environment.ExpandEnvironmentVariables(outputDirectory));
 
-            var csvPath = ResolveOutputPath(
+            csvPath = ResolveOutputPath(
                 GetOptionValue(args, "--coverage-csv"),
                 outputDirectory,
                 "bitlocker_coverage.csv");
 
-            var jsonPath = ResolveOutputPath(
+            jsonPath = ResolveOutputPath(
                 GetOptionValue(args, "--coverage-json"),
                 outputDirectory,
                 "bitlocker_coverage.json");
@@ -72,8 +76,11 @@ public static class CoverageCliService
                 progress,
                 ct);
 
-            WriteCoverageCsvAtomic(csvPath, result.Rows);
-            JsonStore.WriteAtomic(jsonPath, result);
+            CoverageReportService.WriteResult(
+                result,
+                csvPath,
+                jsonPath,
+                startedUtc);
 
             Console.WriteLine();
             Console.WriteLine(
@@ -106,11 +113,21 @@ public static class CoverageCliService
         }
         catch (ArgumentException ex)
         {
+            CoverageReportService.TryWriteFailure(
+                startedUtc,
+                ex,
+                csvPath,
+                jsonPath);
             Console.Error.WriteLine(ex.Message);
             return 2;
         }
         catch (Exception ex)
         {
+            CoverageReportService.TryWriteFailure(
+                startedUtc,
+                ex,
+                csvPath,
+                jsonPath);
             Console.Error.WriteLine("Coverage failed: " + ex.Message);
             return 1;
         }
@@ -301,33 +318,6 @@ public static class CoverageCliService
             : Environment.ExpandEnvironmentVariables(requestedPath.Trim());
 
         return Path.GetFullPath(path);
-    }
-
-    private static void WriteCoverageCsvAtomic(
-        string path,
-        IEnumerable<CoverageDeviceRow> rows)
-    {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        var temp = path + "." + Environment.ProcessId + ".tmp";
-        try
-        {
-            CoverageService.ExportCsv(temp, rows);
-            File.Move(temp, path, overwrite: true);
-        }
-        finally
-        {
-            try
-            {
-                if (File.Exists(temp))
-                    File.Delete(temp);
-            }
-            catch
-            {
-            }
-        }
     }
 
     private static string? GetOptionValue(
