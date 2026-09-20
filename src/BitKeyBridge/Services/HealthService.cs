@@ -102,6 +102,32 @@ public sealed class HealthService
             snapshot.Warnings.Add("Cloud configuration: " + ex.Message);
         }
 
+        snapshot.RemoteApiEnabled = _config.RemoteApiEnabled;
+        snapshot.RemoteApiPort = _config.RemoteApiPort;
+        snapshot.RemoteApiManagementEnabled = _config.RemoteApiAllowManagement;
+        snapshot.RemoteApiCertificateThumbprint = _config.RemoteApiCertificateThumbprint;
+
+        try
+        {
+            var update = JsonStore.Read<UpdateInfo>(AppPaths.UpdateStatusFile);
+            if (update is not null)
+            {
+                snapshot.UpdateCheckedAtUtc = update.CheckedAtUtc;
+                snapshot.LatestVersion = update.LatestVersion;
+                snapshot.UpdateAvailable = update.UpdateAvailable;
+                snapshot.UpdateError = update.Error;
+                if (update.UpdateAvailable)
+                    snapshot.Warnings.Add(
+                        $"BitKeyBridge update {update.LatestVersion} is available.");
+                if (!string.IsNullOrWhiteSpace(update.Error))
+                    snapshot.Warnings.Add("Update check: " + update.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Warnings.Add("Update status: " + ex.Message);
+        }
+
         if (!snapshot.OutputDirectoryExists)
             snapshot.Errors.Add("Output directory does not exist.");
         if (snapshot.LastRunSuccess == false && string.IsNullOrWhiteSpace(snapshot.LastRunError))
