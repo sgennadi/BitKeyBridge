@@ -30,6 +30,10 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - Native Windows Service mode with scheduled exports and no PowerShell dependency.
 - Loopback-only JSON health endpoint for monitoring systems.
 - Secure Output Wizard for protected NTFS recovery storage and optional restricted SMB shares.
+- Verified self-update from GitHub Releases with architecture matching, SHA-256 verification, staged `--self-test`, rollback, and GUI/service replacement.
+- Windows Event Log integration for service, export, update, and Remote API lifecycle events.
+- Optional TLS Remote API with one-time bearer-token provisioning and Windows Firewall integration for Domain/Private profiles only.
+- Native Windows Service failure-recovery policy with automatic restart after transient crashes.
 
 ## Platform
 
@@ -117,6 +121,15 @@ BitKeyBridge.exe --stop-service
 BitKeyBridge.exe --uninstall-service
 ```
 
+Update commands:
+
+```text
+BitKeyBridge.exe --check-update
+BitKeyBridge.exe --update
+```
+
+`--check-update` is read-only and does not require elevation. `--update` downloads the matching architecture package, verifies SHA-256, extracts the new executable, runs its offline self-test, and then launches an elevated temporary update helper.
+
 Override the saved scopes for one run (repeat the option for multiple OUs):
 
 ```text
@@ -168,7 +181,9 @@ BitLocker recovery passwords are secrets.
 - SYSVOL/NETLOGON is convenient for legacy WinPE workflows but should not be broadly readable when it contains recovery passwords. A dedicated restricted share is preferred.
 - Device Code is the preferred interactive mode because it can satisfy MFA and Conditional Access. ROPC is legacy only. Certificate authentication is the intended unattended mode.
 - The local security audit is stored at `%ProgramData%\BitKeyBridge\audit.jsonl` and never stores a BitLocker recovery password.
-- The monitoring endpoint is loopback-only and never returns recovery passwords or authentication secrets.
+- The default monitoring endpoint is loopback-only and never returns recovery passwords or authentication secrets.
+- The optional Remote API is disabled by default, requires TLS + a 256-bit bearer token, and never exposes recovery passwords.
+- Remote API firewall exposure is limited by BitKeyBridge to Windows Domain/Private profiles; Public profile is not enabled.
 - The Windows Service executable is installed under `%ProgramFiles%\BitKeyBridge`; configuration and service logs remain under `%ProgramData%\BitKeyBridge`.
 - Cloud recovery-key reads are auditable in Microsoft Entra.
 
@@ -225,6 +240,78 @@ The wizard:
 Existing SMB shares are never overwritten automatically. If the requested share name already exists, the wizard stops instead of modifying it.
 
 If a legacy WinPE workflow currently reads recovery data from SYSVOL/NETLOGON, update that consumer before changing the production export path.
+
+## Operations: verified updates, Event Log, and Remote API
+
+The **Operations** tab contains update and remote-management controls.
+
+### Verified self-update
+
+BitKeyBridge can check the configured public GitHub repository for the latest release. Stable releases are used by default; prerelease updates must be enabled explicitly.
+
+Before an update is applied, BitKeyBridge:
+
+1. selects the package matching the running architecture (`win-x64`, `win-x86`, or `win-arm64`);
+2. downloads the release ZIP;
+3. verifies its SHA-256 against `SHA256SUMS.txt`;
+4. also compares GitHub's release-asset SHA-256 digest when that metadata is available;
+5. extracts `BitKeyBridge.exe`;
+6. verifies that the staged file version matches the release;
+7. runs the staged executable with `--self-test`;
+8. launches a temporary elevated copy of BitKeyBridge to replace the active GUI executable and installed service executable;
+9. stops/restarts the Windows Service when necessary and rolls back from `.bak` files if replacement fails.
+
+Automatic update checking may be enabled, but **installation is never silent from the GUI**. The administrator must select **Install Verified Update**.
+
+SHA-256 verification protects against corruption or an unexpected asset. It does not replace Authenticode code signing. Until signed releases are enabled, the update trust boundary still includes the GitHub repository/release publishing path.
+
+### Windows Event Log
+
+BitKeyBridge registers the **BitKeyBridge** event source in the Windows **Application** log when running elevated or installing the service. Events include:
+
+- service install/update/start/stop and service-runtime failures;
+- scheduled export success/failure;
+- update availability, installation, and rollback failures;
+- Remote API enable/disable/start and remote export requests.
+
+Recovery passwords are sanitized before Event Log writes.
+
+### Optional Remote API
+
+The Remote API is **disabled by default** and is never enabled by an upgrade.
+
+When an administrator enables it from **Operations**, BitKeyBridge:
+
+- creates or reuses a dedicated TLS server certificate in `LocalMachine\My`;
+- generates a cryptographically random bearer token;
+- stores only the token's SHA-256 hash in `appsettings.json`;
+- displays the plaintext token only once;
+- creates a Windows Firewall inbound rule for **Domain and Private** profiles only;
+- hosts the API from the Windows Service using TLS 1.2/1.3.
+
+Read-only endpoints:
+
+```text
+GET https://server:8751/api/v1/health
+GET https://server:8751/api/v1/service
+GET https://server:8751/api/v1/version
+```
+
+All Remote API requests require:
+
+```text
+Authorization: Bearer <one-time-generated-token>
+```
+
+Remote management is a separate opt-in setting. When enabled, the only management endpoint in v0.4 is:
+
+```text
+POST https://server:8751/api/v1/export
+```
+
+The Remote API has **no endpoint that returns a BitLocker recovery password**.
+
+The generated server certificate is self-signed. Monitoring clients should explicitly trust or pin the displayed certificate thumbprint, or replace the configured certificate with an organization-managed certificate suitable for TLS server authentication.
 
 ## Unified Devices and key rotation
 
