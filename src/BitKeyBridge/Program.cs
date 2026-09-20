@@ -142,6 +142,19 @@ internal static class Program
 
             try
             {
+                if (!Guid.TryParse(EntraSetupService.DefaultBootstrapClientId, out var bootstrapId) ||
+                    bootstrapId == Guid.Empty)
+                    failures.Add("Default Microsoft bootstrap Client ID is invalid.");
+                if (!string.Equals(
+                        EntraSetupService.DefaultBootstrapDisplayName,
+                        "Microsoft Graph Command Line Tools",
+                        StringComparison.Ordinal))
+                    failures.Add("Default Microsoft bootstrap display name is unexpected.");
+            }
+            catch (Exception ex) { failures.Add("Entra bootstrap defaults: " + ex.Message); }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
