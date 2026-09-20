@@ -37,6 +37,16 @@ public sealed class HealthSnapshot
     public double? CertificateDaysRemaining { get; set; }
     public string CertificateStatus { get; set; } = "NotConfigured";
 
+    public bool RemoteApiEnabled { get; set; }
+    public int RemoteApiPort { get; set; }
+    public bool RemoteApiManagementEnabled { get; set; }
+    public string RemoteApiCertificateThumbprint { get; set; } = string.Empty;
+
+    public DateTime? UpdateCheckedAtUtc { get; set; }
+    public string LatestVersion { get; set; } = string.Empty;
+    public bool UpdateAvailable { get; set; }
+    public string UpdateError { get; set; } = string.Empty;
+
     public List<string> Warnings { get; set; } = [];
     public List<string> Errors { get; set; } = [];
 }
