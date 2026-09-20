@@ -184,6 +184,112 @@ public sealed class RemoteApiServer : IDisposable
                 return;
             }
 
+            if (method == "GET" && path == "/api/v1/coverage")
+            {
+                var status = CoverageReportService.ReadStatus();
+                if (status is null)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        404,
+                        new { error = "Coverage status is not available." },
+                        ct);
+                    return;
+                }
+
+                await WriteResponseAsync(
+                    ssl,
+                    status.Success ? 200 : 503,
+                    new
+                    {
+                        status.Success,
+                        status.StartedUtc,
+                        status.FinishedUtc,
+                        status.ErrorMessage,
+                        status.DomainController,
+                        status.Summary,
+                        status.Policy
+                    },
+                    ct);
+                return;
+            }
+
+            if (method == "GET" && path == "/api/v1/coverage/policy")
+            {
+                var status = CoverageReportService.ReadStatus();
+                var policy = status is null
+                    ? null
+                    : new CoveragePolicyService(_config)
+                        .Evaluate(status.Summary);
+
+                await WriteResponseAsync(
+                    ssl,
+                    200,
+                    new
+                    {
+                        enabled = _config.CoveragePolicyEnabled,
+                        thresholds = new
+                        {
+                            noRecoveryKey = _config.CoveragePolicyMaxNoRecoveryKey,
+                            intuneNotEncrypted = _config.CoveragePolicyMaxIntuneNotEncrypted,
+                            intuneStale = _config.CoveragePolicyMaxIntuneStale,
+                            oldCloudKey = _config.CoveragePolicyMaxOldCloudKey
+                        },
+                        severities = new
+                        {
+                            noRecoveryKey = CoveragePolicyService.NormalizeSeverity(
+                                _config.CoveragePolicyNoRecoveryKeySeverity),
+                            intuneNotEncrypted = CoveragePolicyService.NormalizeSeverity(
+                                _config.CoveragePolicyIntuneNotEncryptedSeverity),
+                            intuneStale = CoveragePolicyService.NormalizeSeverity(
+                                _config.CoveragePolicyIntuneStaleSeverity),
+                            oldCloudKey = CoveragePolicyService.NormalizeSeverity(
+                                _config.CoveragePolicyOldCloudKeySeverity)
+                        },
+                        lastResult = policy
+                    },
+                    ct);
+                return;
+            }
+
+            if (method == "POST" && path == "/api/v1/coverage/run")
+            {
+                if (!_config.RemoteApiAllowManagement)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        403,
+                        new { error = "Remote management is disabled." },
+                        ct);
+                    return;
+                }
+
+                WindowsEventLogService.TryWrite(
+                    $"Remote API coverage run requested from {client.Client.RemoteEndPoint}.",
+                    EventLogSeverity.Warning,
+                    4311,
+                    "RemoteAPI");
+
+                var status = await new CoverageAutomationService(_config)
+                    .RunOnceAsync(ct);
+
+                await WriteResponseAsync(
+                    ssl,
+                    status.Success ? 200 : 500,
+                    new
+                    {
+                        status.Success,
+                        status.StartedUtc,
+                        status.FinishedUtc,
+                        status.ErrorMessage,
+                        status.DomainController,
+                        status.Summary,
+                        status.Policy
+                    },
+                    ct);
+                return;
+            }
+
             if (method == "POST" && path == "/api/v1/export")
             {
                 if (!_config.RemoteApiAllowManagement)
