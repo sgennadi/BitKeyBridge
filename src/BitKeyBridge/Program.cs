@@ -58,6 +58,7 @@ internal static class Program
             x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -234,6 +235,20 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase)))
             return RbacCliService.ShowStatus(config);
+
+        if (args.Any(x => x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase)))
+        {
+            var integrity = AuditIntegrityService.Verify(AppPaths.AuditLogFile);
+            Console.WriteLine(
+                JsonSerializer.Serialize(
+                    integrity,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    }));
+            return integrity.Valid ? 0 : 4;
+        }
 
         if (args.Any(x =>
                 x.Equals("--rbac-enable", StringComparison.OrdinalIgnoreCase) ||
@@ -1108,13 +1123,50 @@ internal static class Program
                     details: "Sensitive=" + fakeKey,
                     reference: "INC-12345",
                     reason: "Recovery validation");
+                audit.Write(
+                    "SelfTest2",
+                    details: "Second chained audit record");
+
                 var entries = audit.ReadRecent(10);
-                if (entries.Count != 1 ||
-                    entries[0].Details.Contains(fakeKey, StringComparison.Ordinal) ||
-                    !entries[0].Details.Contains("[REDACTED-BITLOCKER-KEY]", StringComparison.Ordinal) ||
-                    entries[0].Reference != "INC-12345" ||
-                    entries[0].Reason != "Recovery validation")
-                    failures.Add("Audit redaction/reference/reason round-trip failed.");
+                if (entries.Count != 2 ||
+                    entries.Any(x =>
+                        x.Details.Contains(
+                            fakeKey,
+                            StringComparison.Ordinal)) ||
+                    !entries.Any(x =>
+                        x.Details.Contains(
+                            "[REDACTED-BITLOCKER-KEY]",
+                            StringComparison.Ordinal)) ||
+                    entries.All(x => x.Reference != "INC-12345") ||
+                    entries.All(x => x.Reason != "Recovery validation"))
+                {
+                    failures.Add(
+                        "Audit redaction/reference/reason round-trip failed.");
+                }
+
+                var integrity =
+                    AuditIntegrityService.Verify(auditPath);
+                if (!integrity.Valid ||
+                    integrity.ChainedEntries != 2)
+                {
+                    failures.Add(
+                        "Audit hash-chain verification failed.");
+                }
+
+                var auditText = File.ReadAllText(auditPath);
+                auditText = auditText.Replace(
+                    "\"SelfTest2\"",
+                    "\"SelfTest2Tampered\"",
+                    StringComparison.Ordinal);
+                File.WriteAllText(auditPath, auditText);
+
+                var tampered =
+                    AuditIntegrityService.Verify(auditPath);
+                if (tampered.Valid)
+                {
+                    failures.Add(
+                        "Audit tamper detection failed.");
+                }
             }
             catch (Exception ex) { failures.Add("Audit redaction: " + ex.Message); }
         }
@@ -1186,6 +1238,7 @@ internal static class Program
         Console.WriteLine("  --rbac-reader-remove <principal>  Remove RecoveryRead principal");
         Console.WriteLine("  --rbac-rotator-add <principal> Add DOMAIN\\group/user or SID to Rotate");
         Console.WriteLine("  --rbac-rotator-remove <principal> Remove Rotate principal");
+        Console.WriteLine("  --audit-verify        Verify tamper-evident audit hash chain");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
