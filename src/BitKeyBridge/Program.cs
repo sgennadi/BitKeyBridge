@@ -260,6 +260,17 @@ internal static class Program
 
             try
             {
+                if (OperatingSystem.IsWindows())
+                {
+                    var serviceInfo = WindowsServiceHost.GetInfo();
+                    if (string.IsNullOrWhiteSpace(serviceInfo.State))
+                        failures.Add("Windows Service SCM query returned an empty state.");
+                }
+            }
+            catch (Exception ex) { failures.Add("Windows Service SCM query: " + ex.Message); }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
