@@ -236,7 +236,7 @@ public static class WindowsServiceHost
         if (normalized.Equals("LocalSystem", StringComparison.OrdinalIgnoreCase))
         {
             serviceAccount = "LocalSystem";
-            servicePassword = string.Empty;
+            servicePassword = null;
         }
         else if (normalized.Equals("gMSA", StringComparison.OrdinalIgnoreCase) ||
                  normalized.Equals("ManagedAccount", StringComparison.OrdinalIgnoreCase))
