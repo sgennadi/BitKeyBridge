@@ -836,6 +836,66 @@ Graph permission identifiers are resolved dynamically from the tenant's Microsof
 
 Use a dedicated application for this tool. The setup merges API permissions instead of replacing unrelated permissions. Certificate rotation uses Graph key-rolling semantics when an existing managed valid certificate is present.
 
+
+
+## Certificate private-key access for Windows Service identities
+
+When unattended Coverage uses certificate authentication, the configured certificate must be in `LocalMachine\My` and the Windows Service identity must be able to read its private key.
+
+BitKeyBridge 0.10 can manage that access directly without PowerShell or `certutil`. It resolves both modern CNG keys and legacy CAPI keys and adds only a narrow explicit Read ACE for the selected account; it does not replace the existing key ACL.
+
+Useful commands:
+
+```text
+BitKeyBridge.exe --cert-key-status
+BitKeyBridge.exe --cert-key-grant
+BitKeyBridge.exe --cert-key-revoke
+BitKeyBridge.exe --cert-key-status --cert-account EXAMPLE\BitKeyBridgeSvc$
+```
+
+By default the commands use the certificate from the machine cloud config and the installed BitKeyBridge service identity. `--cert-thumbprint` and `--cert-account` can override those values.
+
+When changing the service identity to a gMSA or regular domain account, BitKeyBridge prepares certificate access before changing SCM configuration if scheduled Coverage requires it. The Dashboard also provides **Repair Cert Access**.
+
+The health snapshot exposes the service account, key provider, and access state. LocalSystem is reported as `NotRequired`; gMSA/domain accounts should normally report `Allowed`.
+
+## Coverage Policy
+
+Coverage Policy turns metadata counts into a stable monitoring contract. The default policy is enabled with maximum 0 for each monitored condition and Warning severity, preserving non-blocking behavior unless stricter severity is configured.
+
+Policy metrics:
+
+- devices with no recovery metadata;
+- Intune-managed devices reported not encrypted;
+- stale Intune devices;
+- old Entra recovery-key metadata.
+
+Use **Coverage → Policy...** in the GUI, or CLI:
+
+```text
+BitKeyBridge.exe --coverage-policy-status
+BitKeyBridge.exe --coverage-policy-enable
+BitKeyBridge.exe --coverage-policy-max-no-key 0
+BitKeyBridge.exe --coverage-policy-max-unencrypted 0
+BitKeyBridge.exe --coverage-policy-max-stale 5
+BitKeyBridge.exe --coverage-policy-max-old-key 10
+BitKeyBridge.exe --coverage-policy-severity-no-key Error
+BitKeyBridge.exe --coverage-policy-severity-unencrypted Error
+BitKeyBridge.exe --coverage-policy-severity-stale Warning
+BitKeyBridge.exe --coverage-policy-severity-old-key Warning
+```
+
+For monitoring wrappers:
+
+```text
+BitKeyBridge.exe --coverage --coverage-machine-config --coverage-fail-policy
+```
+
+Exit code **23** means the configured Coverage Policy is violated. The existing specific exit codes 20/21/22 remain available.
+
+Policy results are persisted inside `%ProgramData%\BitKeyBridge\coverage_status.json` as structured violations with code, severity, actual value, and allowed maximum.
+
+
 ## Security notes
 
 BitLocker recovery passwords are secrets.
@@ -961,6 +1021,8 @@ Read-only endpoints:
 GET https://server:8751/api/v1/health
 GET https://server:8751/api/v1/service
 GET https://server:8751/api/v1/version
+GET https://server:8751/api/v1/coverage
+GET https://server:8751/api/v1/coverage/policy
 ```
 
 All Remote API requests require:
@@ -969,13 +1031,14 @@ All Remote API requests require:
 Authorization: Bearer <one-time-generated-token>
 ```
 
-Remote management is a separate opt-in setting. When enabled, the only management endpoint in v0.4 is:
+Remote management is a separate opt-in setting. When enabled, management endpoints include:
 
 ```text
 POST https://server:8751/api/v1/export
+POST https://server:8751/api/v1/coverage/run
 ```
 
-The Remote API has **no endpoint that returns a BitLocker recovery password**.
+Coverage endpoints return summary/policy metadata only. The Remote API has **no endpoint that returns a BitLocker recovery password**.
 
 The generated server certificate is self-signed. Monitoring clients should explicitly trust or pin the displayed certificate thumbprint, or replace the configured certificate with an organization-managed certificate suitable for TLS server authentication.
 
