@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0
+
+- Added a metadata-only BitLocker Coverage Dashboard across Active Directory, Microsoft Entra ID, and Intune.
+- Added AD scope inventory queries for computers without reading any BitLocker recovery password.
+- Added AD recovery-object metadata queries limited to recovery GUID and creation time.
+- Added tenant-wide Entra recovery-key metadata collection without requesting the `key` property.
+- Added Intune managed-device inventory correlation for encryption, compliance, last sync, user, serial, manufacturer, model, and OS.
+- Added coverage classifications: AD + Entra, AD only, Entra only, and No recovery key.
+- Added detection of multiple recovery objects, stale Intune devices, unencrypted Intune devices, and old Entra recovery-key metadata.
+- Added Coverage filters and visible-row CSV export.
+- Added configurable stale-Intune and old-cloud-key thresholds.
+- Coverage auditing records counts/status only and never records a recovery password.
+- Increased Intune inventory result capacity for tenant-wide coverage reports.
+
 ## 0.7.0
 
 - Added three AD credential modes: Session only, Current User Credential Manager, and Machine / Service DPAPI vault.
