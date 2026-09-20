@@ -342,19 +342,31 @@ public sealed class UpdateService : IDisposable
 
     private static void TryScheduleHelperCleanup(string directory)
     {
-        if (string.IsNullOrWhiteSpace(directory)) return;
+        if (string.IsNullOrWhiteSpace(directory) || !OperatingSystem.IsWindows()) return;
+
         try
         {
-            var cmd = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "cmd.exe");
-            Process.Start(new ProcessStartInfo
+            if (Directory.Exists(directory))
             {
-                FileName = cmd,
-                Arguments = $"/c ping 127.0.0.1 -n 3 >nul & rmdir /s /q \"{directory}\"",
-                CreateNoWindow = true,
-                UseShellExecute = false
-            });
+                foreach (var file in Directory.EnumerateFiles(
+                             directory,
+                             "*",
+                             SearchOption.AllDirectories))
+                {
+                    try { MoveFileEx(file, null, MoveFileDelayUntilReboot); } catch { }
+                }
+
+                foreach (var child in Directory.EnumerateDirectories(
+                             directory,
+                             "*",
+                             SearchOption.AllDirectories)
+                         .OrderByDescending(x => x.Length))
+                {
+                    try { MoveFileEx(child, null, MoveFileDelayUntilReboot); } catch { }
+                }
+
+                try { MoveFileEx(directory, null, MoveFileDelayUntilReboot); } catch { }
+            }
         }
         catch { }
     }
@@ -476,6 +488,18 @@ public sealed class UpdateService : IDisposable
         element.TryGetProperty(name, out var value) &&
         (value.ValueKind == JsonValueKind.True ||
          (value.ValueKind == JsonValueKind.False ? false : false));
+
+    private const uint MoveFileDelayUntilReboot = 0x00000004;
+
+    [System.Runtime.InteropServices.DllImport(
+        "kernel32.dll",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode,
+        SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool MoveFileEx(
+        string existingFileName,
+        string? newFileName,
+        uint flags);
 
     public void Dispose() => _http.Dispose();
 }
