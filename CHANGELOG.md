@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1
+
+- Removed the requirement to pre-create an App Registration for first-run Entra setup.
+- Added built-in Microsoft first-party bootstrap using Microsoft Graph Command Line Tools and Device Code.
+- Moved custom Bootstrap Client ID to an advanced fallback for restricted Conditional Access environments.
+- Resolved runtime Graph permission IDs dynamically from the Microsoft Graph service principal instead of hard-coding them.
+- Added retry/backoff for Graph throttling and transient service errors.
+- Added propagation handling for newly created Enterprise Applications.
+- Added offline self-test coverage for the built-in bootstrap configuration.
+
+
 ## 0.2.0
 
 - Added Device Code authentication as the recommended interactive Graph sign-in mode.
