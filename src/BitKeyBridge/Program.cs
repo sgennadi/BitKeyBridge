@@ -47,6 +47,9 @@ internal static class Program
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-save", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-delete", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cert-key-grant", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cert-key-revoke", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -87,6 +90,7 @@ internal static class Program
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -198,6 +202,15 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--cloud-machine-delete", StringComparison.OrdinalIgnoreCase)))
             return MachineCloudConfigService.Delete();
+
+        if (args.Any(x => x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase)))
+            return CertificateKeyCliService.ShowStatus(args);
+
+        if (args.Any(x => x.Equals("--cert-key-grant", StringComparison.OrdinalIgnoreCase)))
+            return CertificateKeyCliService.Grant(args);
+
+        if (args.Any(x => x.Equals("--cert-key-revoke", StringComparison.OrdinalIgnoreCase)))
+            return CertificateKeyCliService.Revoke(args);
 
         if (args.Any(x => x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase)))
             return ShowVaultStatus(config);
@@ -918,6 +931,33 @@ internal static class Program
 
             try
             {
+                var normalizedSystem =
+                    CertificatePrivateKeyAccessService.NormalizeServiceIdentity(
+                        "LocalSystem");
+                if (!string.Equals(
+                        normalizedSystem,
+                        @"NT AUTHORITY\SYSTEM",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add(
+                        "Certificate ACL LocalSystem normalization failed.");
+                }
+
+                if (!CertificatePrivateKeyAccessService.IsLocalSystem(
+                        @"NT AUTHORITY\SYSTEM"))
+                {
+                    failures.Add(
+                        "Certificate ACL LocalSystem detection failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Certificate ACL pure helpers: " + ex.Message);
+            }
+
+            try
+            {
                 var summary = new CoverageSummary
                 {
                     NoRecoveryKey = 1,
@@ -1007,6 +1047,10 @@ internal static class Program
         Console.WriteLine("  --cloud-machine-status Show ProgramData cloud certificate config metadata");
         Console.WriteLine("  --cloud-machine-save   Save certificate cloud config for LocalSystem/gMSA");
         Console.WriteLine("  --cloud-machine-delete Delete ProgramData machine cloud config");
+        Console.WriteLine("  --cert-key-status     Check service/account access to the machine certificate private key");
+        Console.WriteLine("  --cert-key-grant      Grant private-key Read to service/account");
+        Console.WriteLine("  --cert-key-revoke     Remove BitKeyBridge-style private-key Read ACE");
+        Console.WriteLine("  --cert-account <acct> Override service identity for certificate ACL commands");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
