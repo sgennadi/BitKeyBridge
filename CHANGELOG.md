@@ -3,7 +3,8 @@
 ## 0.6.0
 
 - Added Active Directory connection modes for domain-joined workstations/DCs and standalone/workgroup computers.
-- Added explicit DC, AD domain, LDAP port and AD username configuration.
+- Added explicit DC, AD domain, LDAP/LDAPS port and AD username configuration.
+- Added LDAPS/TLS support (normally TCP 636) alongside signed/sealed LDAP (normally TCP 389).
 - Added session-only explicit AD password handling; passwords are never written to appsettings or logs.
 - Added current-Windows-credentials mode for domain workstations and DCs.
 - Added a Directory Connection GUI tab with DC connection test and session-password clearing.
