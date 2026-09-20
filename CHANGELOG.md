@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0
+
+- Added metadata-only BitLocker Coverage automation for CLI and Task Scheduler workflows.
+- Added `--coverage` to generate both CSV and JSON coverage reports from AD, Entra ID, and Intune metadata.
+- Added Device Code, certificate, and legacy password authentication selection for coverage CLI.
+- Added per-run cloud overrides for tenant ID, client ID, certificate thumbprint, and cloud username without adding a plaintext password command-line option.
+- Added `--coverage-output`, `--coverage-csv`, `--coverage-json`, and `--coverage-json-stdout`.
+- Added monitoring exit policies: exit 20 for missing recovery metadata, 21 for Intune-reported unencrypted devices, and 22 for stale Intune devices.
+- Added offline self-test coverage for coverage monitoring exit codes.
+- Coverage automation continues to avoid AD recovery-password attributes and the Graph recovery-key value endpoint.
+
 ## 0.8.0
 
 - Added a metadata-only BitLocker Coverage Dashboard across Active Directory, Microsoft Entra ID, and Intune.
