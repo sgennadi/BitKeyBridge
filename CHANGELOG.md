@@ -13,6 +13,7 @@
 - Added SHA-256 tamper-evident hash chaining to new audit JSONL entries while keeping existing legacy audit lines readable.
 - Added cross-process audit serialization so GUI and Windows Service writes cannot race the hash chain.
 - Added `--audit-verify` and **Verify Chain** in the Audit tab to validate `audit.jsonl` and its rotated `.old` file.
+- The native Windows Service now verifies audit integrity at startup and every 24 hours, caches the result for health monitoring, and writes integrity failures to Windows Event Log.
 - Added offline self-tests for RBAC backward compatibility, audit hash-chain verification, and deliberate tamper detection.
 - Updated the public appsettings example with scheduled Coverage, Coverage Policy, and RBAC settings.
 
