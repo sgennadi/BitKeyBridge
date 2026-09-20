@@ -43,6 +43,7 @@ internal static class Program
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -250,6 +251,9 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase)))
             return RunDcTest(config, args).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--coverage", StringComparison.OrdinalIgnoreCase)))
+            return CoverageCliService.RunAsync(config, args).GetAwaiter().GetResult();
 
         if (isCli)
             return RunExport(config, args).GetAwaiter().GetResult();
@@ -787,6 +791,32 @@ internal static class Program
 
             try
             {
+                var summary = new CoverageSummary
+                {
+                    NoRecoveryKey = 1,
+                    IntuneNotEncrypted = 1,
+                    IntuneStale = 1
+                };
+
+                if (CoverageCliService.EvaluateExitCode(summary, ["--coverage-fail-no-key"]) !=
+                    CoverageCliService.ExitNoRecoveryKey)
+                    failures.Add("Coverage CLI no-key exit code failed.");
+
+                if (CoverageCliService.EvaluateExitCode(summary, ["--coverage-fail-unencrypted"]) !=
+                    CoverageCliService.ExitIntuneNotEncrypted)
+                    failures.Add("Coverage CLI unencrypted exit code failed.");
+
+                if (CoverageCliService.EvaluateExitCode(summary, ["--coverage-fail-stale"]) !=
+                    CoverageCliService.ExitIntuneStale)
+                    failures.Add("Coverage CLI stale exit code failed.");
+
+                if (CoverageCliService.EvaluateExitCode(new CoverageSummary(), []) != 0)
+                    failures.Add("Coverage CLI healthy exit code failed.");
+            }
+            catch (Exception ex) { failures.Add("Coverage CLI exit codes: " + ex.Message); }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
@@ -833,6 +863,19 @@ internal static class Program
         Console.WriteLine("  --force-publish       Override row-drop/scope-change publish guards");
         Console.WriteLine("  --dc-test             Discover and compare domain controllers");
         Console.WriteLine("  --ad-test             Test the effective Active Directory connection");
+        Console.WriteLine("  --coverage            Generate AD + Entra + Intune metadata coverage CSV/JSON");
+        Console.WriteLine("  --coverage-output <dir>  Default directory for coverage files");
+        Console.WriteLine("  --coverage-csv <path>   Coverage CSV path (metadata only)");
+        Console.WriteLine("  --coverage-json <path>  Coverage JSON path (metadata only)");
+        Console.WriteLine("  --coverage-json-stdout  Also print full coverage JSON to stdout");
+        Console.WriteLine("  --coverage-fail-no-key  Exit 20 when any device has no recovery metadata");
+        Console.WriteLine("  --coverage-fail-unencrypted  Exit 21 when Intune reports unencrypted devices");
+        Console.WriteLine("  --coverage-fail-stale   Exit 22 when stale Intune devices are found");
+        Console.WriteLine("  --cloud-auth <mode>   DeviceCode, Certificate, or Password for --coverage");
+        Console.WriteLine("  --tenant-id <id>      Override saved Entra tenant ID for this run");
+        Console.WriteLine("  --client-id <id>      Override saved BitKeyBridge client ID for this run");
+        Console.WriteLine("  --cert-thumbprint <t> Override saved certificate thumbprint for this run");
+        Console.WriteLine("  --cloud-user <upn>    Override saved cloud username for Password mode");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
