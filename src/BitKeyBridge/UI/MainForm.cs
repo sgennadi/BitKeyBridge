@@ -41,6 +41,14 @@ public sealed class MainForm : Form
     private GraphToken? _cloudToken;
     private string? _cloudCurrentKey;
 
+    private readonly ListView _coverageResults = new();
+    private readonly Label _coverageSummary = new();
+    private readonly Label _coverageStatus = new();
+    private readonly ComboBox _coverageFilter = new();
+    private readonly NumericUpDown _coverageStaleDays = new();
+    private readonly NumericUpDown _coverageOldKeyDays = new();
+    private CoverageResult? _coverageCurrent;
+
     private readonly TextBox _unifiedQuery = new();
     private readonly ListView _unifiedResults = new();
     private readonly RichTextBox _unifiedDetails = new();
@@ -112,6 +120,7 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(BuildExportTab());
         tabs.TabPages.Add(BuildDcTab());
         tabs.TabPages.Add(BuildLocalSearchTab());
+        tabs.TabPages.Add(BuildCoverageTab());
         tabs.TabPages.Add(BuildUnifiedTab());
         tabs.TabPages.Add(BuildCloudTab());
         tabs.TabPages.Add(BuildAuditTab());
@@ -839,6 +848,141 @@ public sealed class MainForm : Form
         return tab;
     }
 
+    private TabPage BuildCoverageTab()
+    {
+        var tab = new TabPage("Coverage");
+
+        var title = new Label
+        {
+            Text = "BitLocker Coverage — AD + Entra + Intune metadata",
+            Font = new Font("Segoe UI Semibold", 14F),
+            AutoSize = true,
+            Left = 16,
+            Top = 16
+        };
+        tab.Controls.Add(title);
+
+        var run = new Button
+        {
+            Text = "Run Coverage",
+            Left = 16,
+            Top = 55,
+            Width = 125,
+            Height = 34
+        };
+        var export = new Button
+        {
+            Text = "Export Visible CSV",
+            Left = 151,
+            Top = 55,
+            Width = 145,
+            Height = 34
+        };
+        tab.Controls.AddRange([run, export]);
+
+        tab.Controls.Add(new Label
+        {
+            Text = "Filter:",
+            Left = 320,
+            Top = 63,
+            Width = 45,
+            Height = 24
+        });
+        _coverageFilter.SetBounds(365, 58, 180, 27);
+        _coverageFilter.DropDownStyle = ComboBoxStyle.DropDownList;
+        _coverageFilter.Items.AddRange([
+            "All devices",
+            "No recovery key",
+            "AD only",
+            "Entra only",
+            "AD + Entra",
+            "Multiple recovery keys",
+            "Intune not encrypted",
+            "Intune stale",
+            "Old cloud key"
+        ]);
+        _coverageFilter.SelectedIndex = 0;
+        tab.Controls.Add(_coverageFilter);
+
+        tab.Controls.Add(new Label
+        {
+            Text = "Intune stale days:",
+            Left = 570,
+            Top = 63,
+            Width = 105,
+            Height = 24
+        });
+        _coverageStaleDays.SetBounds(680, 58, 70, 27);
+        _coverageStaleDays.Minimum = 1;
+        _coverageStaleDays.Maximum = 3650;
+        _coverageStaleDays.Value =
+            Math.Clamp(_config.CoverageStaleIntuneDays, 1, 3650);
+        tab.Controls.Add(_coverageStaleDays);
+
+        tab.Controls.Add(new Label
+        {
+            Text = "Old cloud key days:",
+            Left = 780,
+            Top = 63,
+            Width = 120,
+            Height = 24
+        });
+        _coverageOldKeyDays.SetBounds(905, 58, 80, 27);
+        _coverageOldKeyDays.Minimum = 1;
+        _coverageOldKeyDays.Maximum = 3650;
+        _coverageOldKeyDays.Value =
+            Math.Clamp(_config.CoverageOldCloudKeyDays, 1, 3650);
+        tab.Controls.Add(_coverageOldKeyDays);
+
+        _coverageSummary.SetBounds(16, 102, 1155, 48);
+        _coverageSummary.Font = new Font("Segoe UI Semibold", 9.5F);
+        _coverageSummary.Text =
+            "Coverage has not been generated yet. No recovery password is requested by this report.";
+        tab.Controls.Add(_coverageSummary);
+
+        _coverageResults.View = View.Details;
+        _coverageResults.FullRowSelect = true;
+        _coverageResults.GridLines = true;
+        _coverageResults.SetBounds(16, 155, 1155, 520);
+        _coverageResults.Anchor =
+            AnchorStyles.Top |
+            AnchorStyles.Bottom |
+            AnchorStyles.Left |
+            AnchorStyles.Right;
+        AddColumns(
+            _coverageResults,
+            ("Computer", 150),
+            ("Coverage", 95),
+            ("AD Keys", 60),
+            ("Entra Keys", 70),
+            ("Intune", 52),
+            ("Encrypted", 70),
+            ("Compliance", 85),
+            ("Last Sync", 130),
+            ("AD Last Logon", 130),
+            ("Newest Cloud Key", 135),
+            ("Serial", 105),
+            ("User / UPN", 155),
+            ("Model", 125));
+        tab.Controls.Add(_coverageResults);
+
+        _coverageStatus.SetBounds(16, 690, 1155, 45);
+        _coverageStatus.Anchor =
+            AnchorStyles.Bottom |
+            AnchorStyles.Left |
+            AnchorStyles.Right;
+        _coverageStatus.Text =
+            "Metadata-only report: recovery passwords are never requested.";
+        tab.Controls.Add(_coverageStatus);
+
+        run.Click += async (_, _) => await RunCoverageAsync();
+        export.Click += (_, _) => ExportCoverageCsv();
+        _coverageFilter.SelectedIndexChanged += (_, _) =>
+            RenderCoverageRows();
+
+        return tab;
+    }
+
     private TabPage BuildUnifiedTab()
     {
         var tab = new TabPage("Unified Devices");
@@ -1559,6 +1703,221 @@ public sealed class MainForm : Form
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
         await Task.CompletedTask;
+    }
+
+    private async Task RunCoverageAsync()
+    {
+        if (!await EnsureCloudTokenAsync())
+            return;
+
+        try
+        {
+            _config.CoverageStaleIntuneDays =
+                (int)_coverageStaleDays.Value;
+            _config.CoverageOldCloudKeyDays =
+                (int)_coverageOldKeyDays.Value;
+            ConfigService.SaveAppConfig(_config);
+
+            _coverageStatus.Text =
+                "Starting metadata-only coverage analysis...";
+            UseWaitCursor = true;
+
+            var progress = new Progress<string>(
+                message => _coverageStatus.Text = message);
+
+            var service = new CoverageService(_config);
+            _coverageCurrent = await service.RunAsync(
+                _cloudToken!.AccessToken,
+                GetSelectedScopes(),
+                progress);
+
+            RenderCoverageSummary();
+            RenderCoverageRows();
+
+            var s = _coverageCurrent.Summary;
+            _audit.Write(
+                "RunCoverageReport",
+                source: "AD+Entra+Intune",
+                authMode: _cloudToken.AuthMode,
+                details:
+                    $"Devices={s.TotalDevices}; Both={s.BothSources}; ADOnly={s.AdOnly}; EntraOnly={s.EntraOnly}; NoKey={s.NoRecoveryKey}; Multiple={s.MultipleKeys}; IntuneNotEncrypted={s.IntuneNotEncrypted}; Stale={s.IntuneStale}; OldCloudKey={s.OldCloudKey}");
+
+            _coverageStatus.Text =
+                $"Coverage completed at {_coverageCurrent.GeneratedAt:yyyy-MM-dd HH:mm:ss}. " +
+                $"DC={_coverageCurrent.DomainController}. Recovery passwords were not requested.";
+        }
+        catch (Exception ex)
+        {
+            _coverageStatus.Text =
+                "Coverage failed: " + ex.Message;
+            _audit.Write(
+                "RunCoverageReport",
+                "Failed",
+                source: "AD+Entra+Intune",
+                authMode: _cloudToken?.AuthMode,
+                details: ex.Message);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "BitLocker Coverage",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private void RenderCoverageSummary()
+    {
+        if (_coverageCurrent is null)
+        {
+            _coverageSummary.Text =
+                "Coverage has not been generated yet.";
+            return;
+        }
+
+        var s = _coverageCurrent.Summary;
+        _coverageSummary.Text =
+            $"Devices: {s.TotalDevices}    AD+Entra: {s.BothSources}    " +
+            $"AD only: {s.AdOnly}    Entra only: {s.EntraOnly}    " +
+            $"No key: {s.NoRecoveryKey}    Multiple keys: {s.MultipleKeys}" +
+            Environment.NewLine +
+            $"Intune managed: {s.IntuneManaged}    Encrypted: {s.IntuneEncrypted}    " +
+            $"Not encrypted: {s.IntuneNotEncrypted}    Stale: {s.IntuneStale}    " +
+            $"Old cloud key: {s.OldCloudKey}";
+    }
+
+    private IReadOnlyList<CoverageDeviceRow> GetVisibleCoverageRows()
+    {
+        if (_coverageCurrent is null)
+            return [];
+
+        IEnumerable<CoverageDeviceRow> rows =
+            _coverageCurrent.Rows;
+
+        rows = _coverageFilter.SelectedIndex switch
+        {
+            1 => rows.Where(x =>
+                x.CoverageStatus == "No recovery key"),
+            2 => rows.Where(x =>
+                x.CoverageStatus == "AD only"),
+            3 => rows.Where(x =>
+                x.CoverageStatus == "Entra only"),
+            4 => rows.Where(x =>
+                x.CoverageStatus == "AD + Entra"),
+            5 => rows.Where(x =>
+                x.MultipleRecoveryKeys),
+            6 => rows.Where(x =>
+                x.FoundInIntune && x.IsEncrypted == false),
+            7 => rows.Where(x =>
+                x.IntuneStale),
+            8 => rows.Where(x =>
+                x.CloudKeyOld),
+            _ => rows
+        };
+
+        return rows.ToList();
+    }
+
+    private void RenderCoverageRows()
+    {
+        _coverageResults.BeginUpdate();
+        try
+        {
+            _coverageResults.Items.Clear();
+
+            foreach (var row in GetVisibleCoverageRows())
+            {
+                var item = new ListViewItem(row.ComputerName);
+                item.SubItems.Add(row.CoverageStatus);
+                item.SubItems.Add(row.AdRecoveryKeyCount.ToString());
+                item.SubItems.Add(row.EntraRecoveryKeyCount.ToString());
+                item.SubItems.Add(row.FoundInIntune ? "Yes" : "No");
+                item.SubItems.Add(
+                    row.IsEncrypted is null
+                        ? "-"
+                        : row.IsEncrypted.Value ? "Yes" : "No");
+                item.SubItems.Add(row.ComplianceState);
+                item.SubItems.Add(
+                    row.IntuneLastSync?.ToString(
+                        "yyyy-MM-dd HH:mm") ?? string.Empty);
+                item.SubItems.Add(
+                    row.AdLastLogon?.ToString(
+                        "yyyy-MM-dd HH:mm") ?? string.Empty);
+                item.SubItems.Add(
+                    row.NewestEntraRecoveryKey?.ToString(
+                        "yyyy-MM-dd HH:mm") ?? string.Empty);
+                item.SubItems.Add(row.SerialNumber);
+                item.SubItems.Add(row.UserPrincipalName);
+                item.SubItems.Add(
+                    (row.Manufacturer + " " + row.Model).Trim());
+                item.Tag = row;
+                _coverageResults.Items.Add(item);
+            }
+        }
+        finally
+        {
+            _coverageResults.EndUpdate();
+        }
+
+        if (_coverageCurrent is not null)
+        {
+            _coverageStatus.Text =
+                $"Showing {_coverageResults.Items.Count} of " +
+                $"{_coverageCurrent.Rows.Count} device(s). " +
+                "Recovery passwords were not requested.";
+        }
+    }
+
+    private void ExportCoverageCsv()
+    {
+        if (_coverageCurrent is null)
+        {
+            MessageBox.Show(
+                this,
+                "Run Coverage first.",
+                "BitLocker Coverage",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export BitLocker Coverage",
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            FileName =
+                $"BitKeyBridge-Coverage-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+            AddExtension = true,
+            DefaultExt = "csv"
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            var rows = GetVisibleCoverageRows();
+            CoverageService.ExportCsv(dialog.FileName, rows);
+            _audit.Write(
+                "ExportCoverageCsv",
+                source: "Coverage",
+                details:
+                    $"Path={dialog.FileName}; Rows={rows.Count}; Filter={_coverageFilter.Text}");
+            _coverageStatus.Text =
+                $"Exported {rows.Count} visible coverage row(s) to {dialog.FileName}.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Coverage CSV Export",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private async Task SearchUnifiedDevicesAsync()
