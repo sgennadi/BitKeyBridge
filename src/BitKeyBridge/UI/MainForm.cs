@@ -1280,14 +1280,16 @@ public sealed class MainForm : Form
         var tab = new TabPage("Audit");
         var refresh = new Button { Text = "Refresh", Left = 16, Top = 16, Width = 100, Height = 32 };
         var open = new Button { Text = "Open audit.jsonl", Left = 128, Top = 16, Width = 135, Height = 32 };
+        var verify = new Button { Text = "Verify Chain", Left = 275, Top = 16, Width = 120, Height = 32 };
         var note = new Label
         {
-            Text = "Security audit contains actions and IDs only. Recovery passwords are never written to this file.",
-            Left = 280,
+            Text = "Security audit contains actions and IDs only. Recovery passwords are never written to this file. New entries are SHA-256 hash chained.",
+            Left = 410,
             Top = 24,
-            AutoSize = true
+            Width = 740,
+            Height = 24
         };
-        tab.Controls.AddRange([refresh, open, note]);
+        tab.Controls.AddRange([refresh, open, verify, note]);
 
         _auditResults.View = View.Details;
         _auditResults.FullRowSelect = true;
@@ -3983,6 +3985,44 @@ public sealed class MainForm : Form
         _cloudPassword.Clear();
         _adPassword.Clear();
         _serviceIdentityPassword.Clear();
+    }
+
+    private void VerifyAuditIntegrityGui()
+    {
+        try
+        {
+            var result = AuditIntegrityService.Verify(_audit.Path);
+            var icon = result.Valid
+                ? MessageBoxIcon.Information
+                : MessageBoxIcon.Error;
+
+            var message =
+                $"Valid: {result.Valid}{Environment.NewLine}" +
+                $"Files checked: {result.FilesChecked}{Environment.NewLine}" +
+                $"Entries: {result.TotalEntries}{Environment.NewLine}" +
+                $"Hash-chained: {result.ChainedEntries}{Environment.NewLine}" +
+                $"Legacy: {result.LegacyEntries}" +
+                (string.IsNullOrWhiteSpace(result.FirstError)
+                    ? string.Empty
+                    : Environment.NewLine + Environment.NewLine +
+                      "First error: " + result.FirstError);
+
+            MessageBox.Show(
+                this,
+                message,
+                "Audit Integrity",
+                MessageBoxButtons.OK,
+                icon);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Audit Integrity",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private void RefreshAudit()
