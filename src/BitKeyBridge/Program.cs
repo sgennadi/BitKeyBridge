@@ -54,7 +54,12 @@ internal static class Program
             x.Equals("--vault-delete-machine", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-identity-local-system", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-identity-gmsa", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--service-identity-user", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--service-identity-user", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-coverage-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-coverage-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-coverage-interval", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-coverage-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-coverage-no-run-on-start", StringComparison.OrdinalIgnoreCase));
         var needsConsole = isCli || args.Any(x =>
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (needsConsole) ConsoleHelper.EnsureConsole();
@@ -241,6 +246,16 @@ internal static class Program
                 config,
                 "DomainAccount",
                 serviceUser);
+        }
+
+        if (args.Any(x =>
+                x.Equals("--service-coverage-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--service-coverage-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--service-coverage-interval", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--service-coverage-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--service-coverage-no-run-on-start", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ConfigureServiceCoverageCli(config, args);
         }
 
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
@@ -495,6 +510,90 @@ internal static class Program
             Console.WriteLine(
                 $"BitKeyBridge service identity: {info.Identity}; State={info.State}");
             return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static int ConfigureServiceCoverageCli(
+        AppConfig config,
+        string[] args)
+    {
+        try
+        {
+            var enable = args.Any(x =>
+                x.Equals("--service-coverage-enable", StringComparison.OrdinalIgnoreCase));
+            var disable = args.Any(x =>
+                x.Equals("--service-coverage-disable", StringComparison.OrdinalIgnoreCase));
+
+            if (enable && disable)
+                throw new ArgumentException(
+                    "Specify either --service-coverage-enable or --service-coverage-disable, not both.");
+
+            if (enable)
+            {
+                if (!File.Exists(AppPaths.MachineCloudConfigFile))
+                {
+                    throw new InvalidOperationException(
+                        "Machine cloud configuration is required before enabling scheduled Coverage. " +
+                        "Run --cloud-machine-save first.");
+                }
+
+                config.ServiceCoverageEnabled = true;
+            }
+            else if (disable)
+            {
+                config.ServiceCoverageEnabled = false;
+            }
+
+            var intervalText = GetOptionValue(args, "--service-coverage-interval");
+            if (!string.IsNullOrWhiteSpace(intervalText))
+            {
+                if (!int.TryParse(intervalText, out var interval) ||
+                    interval is < 15 or > 10080)
+                {
+                    throw new ArgumentException(
+                        "--service-coverage-interval must be between 15 and 10080 minutes.");
+                }
+
+                config.ServiceCoverageIntervalMinutes = interval;
+            }
+
+            if (args.Any(x =>
+                    x.Equals("--service-coverage-run-on-start", StringComparison.OrdinalIgnoreCase)))
+            {
+                config.ServiceRunCoverageOnStart = true;
+            }
+
+            if (args.Any(x =>
+                    x.Equals("--service-coverage-no-run-on-start", StringComparison.OrdinalIgnoreCase)))
+            {
+                config.ServiceRunCoverageOnStart = false;
+            }
+
+            ConfigService.SaveAppConfig(config);
+
+            var service = WindowsServiceHost.GetInfo();
+            if (service.Installed &&
+                string.Equals(service.State, "Running", StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+                WindowsServiceHost.Start();
+            }
+
+            Console.WriteLine(
+                $"Scheduled Coverage: Enabled={config.ServiceCoverageEnabled}; " +
+                $"IntervalMinutes={config.ServiceCoverageIntervalMinutes}; " +
+                $"RunOnStart={config.ServiceRunCoverageOnStart}");
+            return 0;
+        }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 2;
         }
         catch (Exception ex)
         {
@@ -919,6 +1018,11 @@ internal static class Program
         Console.WriteLine("  --service-identity-local-system  Run installed service as LocalSystem");
         Console.WriteLine("  --service-identity-gmsa <DOMAIN\\account$>  Configure gMSA/managed account");
         Console.WriteLine("  --service-identity-user <DOMAIN\\user>  Configure regular service account; prompts for password");
+        Console.WriteLine("  --service-coverage-enable  Enable scheduled metadata-only Coverage in the service");
+        Console.WriteLine("  --service-coverage-disable Disable scheduled Coverage");
+        Console.WriteLine("  --service-coverage-interval <minutes>  Coverage interval (15-10080)");
+        Console.WriteLine("  --service-coverage-run-on-start  Run Coverage when the service starts");
+        Console.WriteLine("  --service-coverage-no-run-on-start  Do not run Coverage immediately on start");
         Console.WriteLine("  --check-update        Check the configured GitHub repository for a newer release");
         Console.WriteLine("  --update              Verify and install the latest stable release");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
