@@ -25,6 +25,8 @@ public static class AppPaths
     public static string CloudConfigFile => Path.Combine(LocalConfigDirectory, "cloud_auth_config.json");
     public static string AuditLogFile => Path.Combine(MachineConfigDirectory, "audit.jsonl");
     public static string ServiceLogFile => Path.Combine(MachineConfigDirectory, "service.log");
+    public static string UpdateStatusFile => Path.Combine(MachineConfigDirectory, "update_status.json");
+    public static string UpdatesDirectory => Path.Combine(MachineConfigDirectory, "Updates");
     public static string AppSettingsFile => Path.Combine(MachineConfigDirectory, "appsettings.json");
     public static string ServiceInstallDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BitKeyBridge");
