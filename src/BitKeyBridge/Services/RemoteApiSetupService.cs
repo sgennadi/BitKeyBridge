@@ -33,18 +33,26 @@ public sealed class RemoteApiSetupService
                 $"BitKeyBridge Remote API - {Environment.MachineName}");
         }
 
+        var previousEnabled = config.RemoteApiEnabled;
+        var previousPort = config.RemoteApiPort;
+        var previousManagement = config.RemoteApiAllowManagement;
+        var previousThumbprint = config.RemoteApiCertificateThumbprint;
+        var previousTokenHash = config.RemoteApiTokenSha256;
+
         var tokenBytes = RandomNumberGenerator.GetBytes(32);
         var token = Convert.ToBase64String(tokenBytes);
         try
         {
             var tokenHash = SHA256.HashData(tokenBytes);
+
+            WindowsFirewallService.EnsureRemoteApiRule(port);
+
             config.RemoteApiEnabled = true;
             config.RemoteApiPort = port;
             config.RemoteApiAllowManagement = allowManagement;
             config.RemoteApiCertificateThumbprint = certificate.Thumbprint;
             config.RemoteApiTokenSha256 = Convert.ToHexString(tokenHash).ToLowerInvariant();
             ConfigService.SaveAppConfig(config);
-            WindowsFirewallService.EnsureRemoteApiRule(port);
 
             WindowsEventLogService.TryWrite(
                 $"Remote API enabled on TCP {port}. Management={allowManagement}.",
@@ -59,6 +67,26 @@ public sealed class RemoteApiSetupService
                 CertificateExpires = certificate.NotAfter,
                 Port = port
             };
+        }
+        catch
+        {
+            config.RemoteApiEnabled = previousEnabled;
+            config.RemoteApiPort = previousPort;
+            config.RemoteApiAllowManagement = previousManagement;
+            config.RemoteApiCertificateThumbprint = previousThumbprint;
+            config.RemoteApiTokenSha256 = previousTokenHash;
+
+            try
+            {
+                if (previousEnabled)
+                    WindowsFirewallService.EnsureRemoteApiRule(previousPort);
+                else
+                    WindowsFirewallService.RemoveRemoteApiRule();
+            }
+            catch { }
+
+            try { ConfigService.SaveAppConfig(config); } catch { }
+            throw;
         }
         finally
         {
