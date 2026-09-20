@@ -645,8 +645,8 @@ public sealed class MainForm : Form
         _remoteApiPort.Maximum = 65535;
         remoteGroup.Controls.Add(_remoteApiPort);
 
-        _remoteApiManagement.Text = "Allow remote POST /api/v1/export";
-        _remoteApiManagement.SetBounds(220, 31, 255, 25);
+        _remoteApiManagement.Text = "Allow remote export + Coverage run";
+        _remoteApiManagement.SetBounds(220, 31, 290, 25);
         remoteGroup.Controls.Add(_remoteApiManagement);
 
         var enableRemote = new Button { Text = "Enable / Reconfigure", Left = 500, Top = 27, Width = 150, Height = 32 };
