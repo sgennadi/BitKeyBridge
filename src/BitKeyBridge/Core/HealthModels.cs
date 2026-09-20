@@ -46,6 +46,10 @@ public sealed class HealthSnapshot
     public int CoverageIntuneNotEncrypted { get; set; }
     public int CoverageIntuneStale { get; set; }
     public int CoverageOldCloudKey { get; set; }
+    public bool CoveragePolicyEnabled { get; set; }
+    public bool CoveragePolicyCompliant { get; set; } = true;
+    public int CoveragePolicyErrors { get; set; }
+    public int CoveragePolicyWarnings { get; set; }
 
     public bool CloudConfigured { get; set; }
     public string CloudAuthMode { get; set; } = string.Empty;
