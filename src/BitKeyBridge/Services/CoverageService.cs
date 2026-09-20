@@ -196,9 +196,9 @@ public sealed class CoverageService
             }
         }
 
-        var staleCutoff = DateTime.Now.AddDays(
+        var staleCutoff = DateTime.UtcNow.AddDays(
             -Math.Max(1, _config.CoverageStaleIntuneDays));
-        var oldCloudKeyCutoff = DateTime.Now.AddDays(
+        var oldCloudKeyCutoff = DateTime.UtcNow.AddDays(
             -Math.Max(1, _config.CoverageOldCloudKeyDays));
 
         foreach (var row in rows.Values)
