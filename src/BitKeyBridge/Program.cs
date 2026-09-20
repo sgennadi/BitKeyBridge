@@ -197,13 +197,36 @@ internal static class Program
         if (args.Any(x => x.Equals("--service-identity-local-system", StringComparison.OrdinalIgnoreCase)))
             return ConfigureServiceIdentityCli(config, "LocalSystem", null);
 
+        var hasGmsaOption = args.Any(x =>
+            x.Equals("--service-identity-gmsa", StringComparison.OrdinalIgnoreCase));
         var gmsaAccount = GetOptionValue(args, "--service-identity-gmsa");
-        if (gmsaAccount is not null)
+        if (hasGmsaOption)
+        {
+            if (string.IsNullOrWhiteSpace(gmsaAccount))
+            {
+                Console.Error.WriteLine(
+                    "--service-identity-gmsa requires <DOMAIN\\account$>.");
+                return 2;
+            }
             return ConfigureServiceIdentityCli(config, "gMSA", gmsaAccount);
+        }
 
+        var hasServiceUserOption = args.Any(x =>
+            x.Equals("--service-identity-user", StringComparison.OrdinalIgnoreCase));
         var serviceUser = GetOptionValue(args, "--service-identity-user");
-        if (serviceUser is not null)
-            return ConfigureServiceIdentityCli(config, "DomainAccount", serviceUser);
+        if (hasServiceUserOption)
+        {
+            if (string.IsNullOrWhiteSpace(serviceUser))
+            {
+                Console.Error.WriteLine(
+                    "--service-identity-user requires <DOMAIN\\user>.");
+                return 2;
+            }
+            return ConfigureServiceIdentityCli(
+                config,
+                "DomainAccount",
+                serviceUser);
+        }
 
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
         {
