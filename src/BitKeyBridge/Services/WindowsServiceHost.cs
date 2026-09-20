@@ -274,6 +274,18 @@ public static class WindowsServiceHost
             throw new InvalidOperationException(
                 "Install the BitKeyBridge Windows Service before changing its identity.");
 
+        var appConfig = ConfigService.LoadAppConfig();
+        var certificateAccessRequired =
+            appConfig.ServiceCoverageEnabled ||
+            File.Exists(AppPaths.MachineCloudConfigFile);
+
+        if (certificateAccessRequired)
+        {
+            EnsureConfiguredCloudCertificateAccess(
+                serviceAccount,
+                required: appConfig.ServiceCoverageEnabled);
+        }
+
         var wasRunning = string.Equals(
             before.State,
             "Running",
@@ -321,6 +333,67 @@ public static class WindowsServiceHost
         {
             if (restartIfRunning && wasRunning)
                 Start();
+        }
+    }
+
+    public static CertificateKeyAccessInfo? EnsureConfiguredCloudCertificateAccess(
+        string? identity = null,
+        bool required = false)
+    {
+        var serviceIdentity = string.IsNullOrWhiteSpace(identity)
+            ? GetInfo().Identity
+            : identity.Trim();
+
+        if (string.IsNullOrWhiteSpace(serviceIdentity))
+        {
+            if (required)
+                throw new InvalidOperationException(
+                    "The Windows Service identity could not be determined.");
+            return null;
+        }
+
+        if (!File.Exists(AppPaths.MachineCloudConfigFile))
+        {
+            if (required)
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration is required before scheduled Coverage can run.");
+            }
+
+            return null;
+        }
+
+        var cloud = ConfigService.LoadMachineCloudConfig();
+        if (string.IsNullOrWhiteSpace(cloud.CertificateThumbprint))
+        {
+            if (required)
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration does not contain a certificate thumbprint.");
+            }
+
+            return null;
+        }
+
+        try
+        {
+            return new CertificatePrivateKeyAccessService()
+                .EnsureServiceAccess(
+                    cloud.CertificateThumbprint,
+                    serviceIdentity);
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                $"Certificate private-key access setup failed for {serviceIdentity}: {ex.Message}",
+                EventLogSeverity.Error,
+                4059,
+                "CertificateACL");
+
+            if (required)
+                throw;
+
+            return null;
         }
     }
 
