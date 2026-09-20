@@ -994,7 +994,17 @@ public sealed class MainForm : Form
             Math.Clamp(_config.CoverageOldCloudKeyDays, 1, 3650);
         tab.Controls.Add(_coverageOldKeyDays);
 
-        _coverageSummary.SetBounds(16, 102, 1155, 48);
+        var policyButton = new Button
+        {
+            Text = "Policy...",
+            Left = 1010,
+            Top = 55,
+            Width = 105,
+            Height = 34
+        };
+        tab.Controls.Add(policyButton);
+
+        _coverageSummary.SetBounds(16, 102, 1155, 68);
         _coverageSummary.Font = new Font("Segoe UI Semibold", 9.5F);
         _coverageSummary.Text =
             "Coverage has not been generated yet. No recovery password is requested by this report.";
@@ -1003,7 +1013,7 @@ public sealed class MainForm : Form
         _coverageResults.View = View.Details;
         _coverageResults.FullRowSelect = true;
         _coverageResults.GridLines = true;
-        _coverageResults.SetBounds(16, 155, 1155, 520);
+        _coverageResults.SetBounds(16, 175, 1155, 500);
         _coverageResults.Anchor =
             AnchorStyles.Top |
             AnchorStyles.Bottom |
@@ -1037,6 +1047,7 @@ public sealed class MainForm : Form
 
         run.Click += async (_, _) => await RunCoverageAsync();
         export.Click += (_, _) => ExportCoverageCsv();
+        policyButton.Click += (_, _) => ConfigureCoveragePolicyFromGui();
         _coverageFilter.SelectedIndexChanged += (_, _) =>
             RenderCoverageRows();
 
@@ -1839,6 +1850,8 @@ public sealed class MainForm : Form
         }
 
         var s = _coverageCurrent.Summary;
+        var policy = new CoveragePolicyService(_config)
+            .Evaluate(s);
         _coverageSummary.Text =
             $"Devices: {s.TotalDevices}    AD+Entra: {s.BothSources}    " +
             $"AD only: {s.AdOnly}    Entra only: {s.EntraOnly}    " +
@@ -1846,7 +1859,226 @@ public sealed class MainForm : Form
             Environment.NewLine +
             $"Intune managed: {s.IntuneManaged}    Encrypted: {s.IntuneEncrypted}    " +
             $"Not encrypted: {s.IntuneNotEncrypted}    Stale: {s.IntuneStale}    " +
-            $"Old cloud key: {s.OldCloudKey}";
+            $"Old cloud key: {s.OldCloudKey}" +
+            Environment.NewLine +
+            $"Policy: {(policy.Enabled ? (policy.Compliant ? "Compliant" : "Violated") : "Disabled")}    " +
+            $"Errors: {policy.ErrorCount}    Warnings: {policy.WarningCount}";
+    }
+
+    private void ConfigureCoveragePolicyFromGui()
+    {
+        using var dialog = new Form
+        {
+            Text = "Coverage Policy",
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            ClientSize = new Size(620, 365),
+            Font = Font
+        };
+
+        var enabled = new CheckBox
+        {
+            Text = "Enable Coverage policy evaluation",
+            Left = 20,
+            Top = 18,
+            Width = 280,
+            Checked = _config.CoveragePolicyEnabled
+        };
+        dialog.Controls.Add(enabled);
+
+        dialog.Controls.Add(new Label
+        {
+            Text = "Metric",
+            Left = 20,
+            Top = 60,
+            Width = 190,
+            Font = new Font(Font, FontStyle.Bold)
+        });
+        dialog.Controls.Add(new Label
+        {
+            Text = "Allowed maximum",
+            Left = 235,
+            Top = 60,
+            Width = 120,
+            Font = new Font(Font, FontStyle.Bold)
+        });
+        dialog.Controls.Add(new Label
+        {
+            Text = "Severity",
+            Left = 390,
+            Top = 60,
+            Width = 100,
+            Font = new Font(Font, FontStyle.Bold)
+        });
+
+        var noKeyMax = CreatePolicyMaximum(
+            dialog,
+            "No recovery metadata",
+            90,
+            _config.CoveragePolicyMaxNoRecoveryKey);
+        var noKeySeverity = CreatePolicySeverity(
+            dialog,
+            90,
+            _config.CoveragePolicyNoRecoveryKeySeverity);
+
+        var unencryptedMax = CreatePolicyMaximum(
+            dialog,
+            "Intune not encrypted",
+            135,
+            _config.CoveragePolicyMaxIntuneNotEncrypted);
+        var unencryptedSeverity = CreatePolicySeverity(
+            dialog,
+            135,
+            _config.CoveragePolicyIntuneNotEncryptedSeverity);
+
+        var staleMax = CreatePolicyMaximum(
+            dialog,
+            "Intune stale",
+            180,
+            _config.CoveragePolicyMaxIntuneStale);
+        var staleSeverity = CreatePolicySeverity(
+            dialog,
+            180,
+            _config.CoveragePolicyIntuneStaleSeverity);
+
+        var oldKeyMax = CreatePolicyMaximum(
+            dialog,
+            "Old cloud key metadata",
+            225,
+            _config.CoveragePolicyMaxOldCloudKey);
+        var oldKeySeverity = CreatePolicySeverity(
+            dialog,
+            225,
+            _config.CoveragePolicyOldCloudKeySeverity);
+
+        dialog.Controls.Add(new Label
+        {
+            Text =
+                "Policy evaluates metadata counts only. It never retrieves a BitLocker recovery password.",
+            Left = 20,
+            Top = 275,
+            Width = 570,
+            Height = 36
+        });
+
+        var save = new Button
+        {
+            Text = "Save",
+            Left = 405,
+            Top = 320,
+            Width = 90,
+            DialogResult = DialogResult.OK
+        };
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            Left = 505,
+            Top = 320,
+            Width = 90,
+            DialogResult = DialogResult.Cancel
+        };
+        dialog.Controls.AddRange([save, cancel]);
+        dialog.AcceptButton = save;
+        dialog.CancelButton = cancel;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        _config.CoveragePolicyEnabled = enabled.Checked;
+        _config.CoveragePolicyMaxNoRecoveryKey = (int)noKeyMax.Value;
+        _config.CoveragePolicyMaxIntuneNotEncrypted =
+            (int)unencryptedMax.Value;
+        _config.CoveragePolicyMaxIntuneStale = (int)staleMax.Value;
+        _config.CoveragePolicyMaxOldCloudKey = (int)oldKeyMax.Value;
+        _config.CoveragePolicyNoRecoveryKeySeverity =
+            noKeySeverity.Text;
+        _config.CoveragePolicyIntuneNotEncryptedSeverity =
+            unencryptedSeverity.Text;
+        _config.CoveragePolicyIntuneStaleSeverity =
+            staleSeverity.Text;
+        _config.CoveragePolicyOldCloudKeySeverity =
+            oldKeySeverity.Text;
+
+        ConfigService.SaveAppConfig(_config);
+
+        var stored = CoverageReportService.ReadStatus();
+        if (stored is not null)
+        {
+            stored.Policy =
+                new CoveragePolicyService(_config)
+                    .Evaluate(stored.Summary);
+            try
+            {
+                JsonStore.WriteAtomic(
+                    AppPaths.CoverageStatusFile,
+                    stored);
+            }
+            catch
+            {
+            }
+        }
+
+        _audit.Write(
+            "SaveCoveragePolicy",
+            source: "Coverage",
+            details:
+                $"Enabled={_config.CoveragePolicyEnabled}; " +
+                $"NoKeyMax={_config.CoveragePolicyMaxNoRecoveryKey}/{_config.CoveragePolicyNoRecoveryKeySeverity}; " +
+                $"UnencryptedMax={_config.CoveragePolicyMaxIntuneNotEncrypted}/{_config.CoveragePolicyIntuneNotEncryptedSeverity}; " +
+                $"StaleMax={_config.CoveragePolicyMaxIntuneStale}/{_config.CoveragePolicyIntuneStaleSeverity}; " +
+                $"OldKeyMax={_config.CoveragePolicyMaxOldCloudKey}/{_config.CoveragePolicyOldCloudKeySeverity}");
+
+        RenderCoverageSummary();
+        RefreshDashboard();
+    }
+
+    private NumericUpDown CreatePolicyMaximum(
+        Control parent,
+        string label,
+        int top,
+        int value)
+    {
+        parent.Controls.Add(new Label
+        {
+            Text = label,
+            Left = 20,
+            Top = top + 4,
+            Width = 195,
+            Height = 24
+        });
+
+        var control = new NumericUpDown
+        {
+            Left = 235,
+            Top = top,
+            Width = 120,
+            Minimum = 0,
+            Maximum = 1000000,
+            Value = Math.Clamp(value, 0, 1000000)
+        };
+        parent.Controls.Add(control);
+        return control;
+    }
+
+    private ComboBox CreatePolicySeverity(
+        Control parent,
+        int top,
+        string configured)
+    {
+        var control = new ComboBox
+        {
+            Left = 390,
+            Top = top,
+            Width = 130,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        control.Items.AddRange(["Error", "Warning", "Info"]);
+        control.Text =
+            CoveragePolicyService.NormalizeSeverity(configured);
+        parent.Controls.Add(control);
+        return control;
     }
 
     private IReadOnlyList<CoverageDeviceRow> GetVisibleCoverageRows()
