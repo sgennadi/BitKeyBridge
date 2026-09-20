@@ -14,9 +14,10 @@ public sealed class CloudGraphService : IDisposable
     public CloudGraphService()
     {
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("BitKeyBridge/0.2");
+        var version = typeof(CloudGraphService).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd($"BitKeyBridge/{version}");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-name", "BitKeyBridge");
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-version", "0.2");
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-version", version);
     }
 
     public async Task<GraphToken> AcquirePasswordTokenAsync(
