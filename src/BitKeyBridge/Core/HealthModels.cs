@@ -13,6 +13,9 @@ public sealed class HealthSnapshot
     public int ServiceCoverageIntervalMinutes { get; set; }
     public bool MachineCloudConfigured { get; set; }
     public string MachineCloudCertificateThumbprint { get; set; } = string.Empty;
+    public string MachineCloudKeyAccessStatus { get; set; } = "Unknown";
+    public string MachineCloudKeyAccessAccount { get; set; } = string.Empty;
+    public string MachineCloudKeyProvider { get; set; } = string.Empty;
     public string HealthEndpoint { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
