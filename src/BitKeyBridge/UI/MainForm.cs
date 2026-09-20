@@ -686,6 +686,14 @@ public sealed class MainForm : Form
         _suggestRotationAfterRecovery.SetBounds(16, 64, 510, 26);
         helpdeskGroup.Controls.Add(_suggestRotationAfterRecovery);
 
+        var configureRbac = new Button
+        {
+            Text = "RBAC...",
+            Left = 735,
+            Top = 43,
+            Width = 150,
+            Height = 34
+        };
         var saveHelpdesk = new Button
         {
             Text = "Save Helpdesk Settings",
@@ -694,12 +702,13 @@ public sealed class MainForm : Form
             Width = 205,
             Height = 34
         };
-        helpdeskGroup.Controls.Add(saveHelpdesk);
+        helpdeskGroup.Controls.AddRange([configureRbac, saveHelpdesk]);
+        configureRbac.Click += (_, _) => ConfigureRbacFromGui();
         saveHelpdesk.Click += (_, _) => SaveOperationsSettings();
 
         var note = new Label
         {
-            Text = "Remote API never exposes BitLocker recovery passwords. Helpdesk ticket/reference and reason are audited; the recovery password is never written to the audit.",
+            Text = "Remote API never exposes BitLocker recovery passwords. RBAC can restrict recovery reads and rotation to Windows users/groups. Ticket/reference, reason, and denied actions are audited; recovery passwords are never written to the audit.",
             Left = 20,
             Top = 680,
             Width = 1145,
@@ -898,6 +907,16 @@ public sealed class MainForm : Form
             if (_localResults.SelectedItems.Count == 0 ||
                 _localResults.SelectedItems[0].Tag is not RecoveryRecord row)
                 return;
+
+            if (!AuthorizeAction(
+                    BitKeyBridgePermission.RecoveryRead,
+                    "CopyLocalRecoveryKey",
+                    row.ComputerName,
+                    row.BitLockerId,
+                    "AD"))
+            {
+                return;
+            }
 
             var context = GetOrRequestRecoveryAccessContext(
                 "AD",
@@ -2477,6 +2496,45 @@ public sealed class MainForm : Form
                 context.Reason);
             throw;
         }
+    }
+
+    private void ConfigureRbacFromGui()
+    {
+        using var dialog = new RbacSettingsDialog(_config);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        _config.RbacEnabled = dialog.RbacEnabled;
+        _config.RbacAllowLocalAdministrators =
+            dialog.AllowLocalAdministrators;
+        _config.RbacRecoveryReaders = dialog.RecoveryReaders;
+        _config.RbacRotationOperators = dialog.RotationOperators;
+
+        ConfigService.SaveAppConfig(_config);
+
+        var auth = new AuthorizationService(_config);
+        var read = auth.Check(BitKeyBridgePermission.RecoveryRead);
+        var rotate = auth.Check(BitKeyBridgePermission.Rotate);
+
+        _audit.Write(
+            "SaveRbacSettings",
+            source: "Local",
+            details:
+                $"Enabled={_config.RbacEnabled}; AdminBypass={_config.RbacAllowLocalAdministrators}; " +
+                $"Readers={string.Join("|", _config.RbacRecoveryReaders)}; " +
+                $"Rotators={string.Join("|", _config.RbacRotationOperators)}; " +
+                $"CurrentIdentity={AuthorizationService.CurrentIdentityName()}; " +
+                $"CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}");
+
+        MessageBox.Show(
+            this,
+            $"RBAC settings saved.{Environment.NewLine}{Environment.NewLine}" +
+            $"Current identity: {AuthorizationService.CurrentIdentityName()}{Environment.NewLine}" +
+            $"RecoveryRead: {(read.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
+            $"Rotate: {(rotate.Allowed ? "Allowed" : "Denied")}",
+            "BitKeyBridge RBAC",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 
     private void LoadOperationsSettings()
