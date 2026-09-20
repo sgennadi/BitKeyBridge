@@ -20,8 +20,11 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - Local recovery search with masked key display and timed clipboard clearing.
 - Microsoft Graph BitLocker metadata search.
 - Recovery password requested from Entra only on explicit **Get Key** action.
-- Graph authentication by temporary username/password (ROPC) or app registration + certificate.
+- Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
 - Native Entra App Registration setup using Graph REST + OAuth device code; no Graph SDK is required at runtime.
+- Unified device search across on-prem AD, Entra BitLocker metadata, and Intune managed devices.
+- Intune BitLocker recovery-key rotation with explicit confirmation.
+- Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
 - Certificate rolling preserves active credentials when the previously managed private certificate is available.
 
 ## Platform
@@ -99,8 +102,11 @@ BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
 
 The **Entra / Intune Cloud** tab supports:
 
-- delegated `BitlockerKey.Read.All` + `Device.Read.All` for ROPC/manual use;
-- application `BitlockerKey.Read.All` + `Device.Read.All` for certificate authentication.
+- recommended interactive Device Code authentication with MFA / Conditional Access;
+- legacy ROPC/manual authentication;
+- certificate authentication for unattended use;
+- delegated `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All`;
+- application `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All` for certificate mode.
 
 The actual 48-digit recovery password is not downloaded during search. It is requested only after selecting a result and clicking **Get Key from Entra**.
 
@@ -123,8 +129,19 @@ BitLocker recovery passwords are secrets.
 - Do not publish recovery CSV files to source control.
 - Review ACLs on the output directory. The application warns about broad read access granted to Everyone, Authenticated Users, BUILTIN\\Users, or Domain Users.
 - SYSVOL/NETLOGON is convenient for legacy WinPE workflows but should not be broadly readable when it contains recovery passwords. A dedicated restricted share is preferred.
-- ROPC cannot satisfy MFA and many Conditional Access policies. Certificate authentication is the intended unattended mode.
+- Device Code is the preferred interactive mode because it can satisfy MFA and Conditional Access. ROPC is legacy only. Certificate authentication is the intended unattended mode.
+- The local security audit is stored at `%ProgramData%\BitKeyBridge\audit.jsonl` and never stores a BitLocker recovery password.
 - Cloud recovery-key reads are auditable in Microsoft Entra.
+
+## Unified Devices and key rotation
+
+The **Unified Devices** tab can search by device name, serial number, user/UPN, Entra device ID, or Intune managed-device ID. Results merge AD computer data, Intune inventory, and Entra BitLocker metadata. If the device is Intune-managed, an administrator can submit a BitLocker recovery-key rotation request after explicit confirmation.
+
+The rotation action uses Microsoft Graph `deviceManagement/managedDevices/{id}/rotateBitLockerKeys`. Intune applies the action asynchronously on the managed device; the recovery key shown in the current session is not assumed to change immediately.
+
+## Audit
+
+The **Audit** tab records local administrative actions such as recovery-key reveal/copy, cloud key retrieval, unified searches, and rotation requests. Audit records contain IDs and metadata only. Any string matching the 48-digit BitLocker recovery-password format is automatically replaced with `[REDACTED-BITLOCKER-KEY]` before being written.
 
 ## Build
 
