@@ -14,9 +14,9 @@ public sealed class CloudGraphService : IDisposable
     public CloudGraphService()
     {
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("BitKeyBridge/0.1");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("BitKeyBridge/0.2");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-name", "BitKeyBridge");
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-version", "0.1");
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-version", "0.2");
     }
 
     public async Task<GraphToken> AcquirePasswordTokenAsync(
@@ -37,9 +37,114 @@ public sealed class CloudGraphService : IDisposable
             ["grant_type"] = "password",
             ["username"] = username.Trim(),
             ["password"] = password,
-            ["scope"] = "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All"
+            ["scope"] = "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All"
         };
         return await AcquireTokenAsync(tenantId, body, "Password", username.Trim(), ct);
+    }
+
+    public async Task<GraphToken> AcquireDeviceCodeTokenAsync(
+        string tenantId,
+        string clientId,
+        Func<DeviceCodeInfo, Task> showDeviceCode,
+        CancellationToken ct = default)
+    {
+        Require(tenantId, nameof(tenantId));
+        Require(clientId, nameof(clientId));
+
+        var tenant = Uri.EscapeDataString(tenantId.Trim());
+        var deviceUri = $"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/devicecode";
+        var scopes =
+            "https://graph.microsoft.com/BitlockerKey.Read.All " +
+            "https://graph.microsoft.com/Device.Read.All " +
+            "https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All offline_access";
+
+        using var deviceResponse = await _http.PostAsync(
+            deviceUri,
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["client_id"] = clientId.Trim(),
+                ["scope"] = scopes
+            }),
+            ct);
+        var deviceText = await deviceResponse.Content.ReadAsStringAsync(ct);
+        if (!deviceResponse.IsSuccessStatusCode)
+            throw new InvalidOperationException("Device-code request failed: " + ExtractError(deviceText));
+
+        using var deviceJson = JsonDocument.Parse(deviceText);
+        var root = deviceJson.RootElement;
+        var deviceCode = GetString(root, "device_code");
+        var userCode = GetString(root, "user_code");
+        var verificationUri = GetString(root, "verification_uri");
+        if (string.IsNullOrWhiteSpace(verificationUri))
+            verificationUri = "https://microsoft.com/devicelogin";
+        var message = GetString(root, "message");
+        if (string.IsNullOrWhiteSpace(message))
+            message = $"Open {verificationUri} and enter code {userCode}.";
+        var expiresIn = root.TryGetProperty("expires_in", out var e) && e.TryGetInt32(out var ex) ? ex : 900;
+        var interval = root.TryGetProperty("interval", out var i) && i.TryGetInt32(out var iv) ? iv : 5;
+
+        await showDeviceCode(new DeviceCodeInfo
+        {
+            UserCode = userCode,
+            VerificationUri = verificationUri,
+            Message = message,
+            ExpiresIn = expiresIn
+        });
+
+        var tokenUri = $"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token";
+        var stopAt = DateTime.UtcNow.AddSeconds(expiresIn);
+        while (DateTime.UtcNow < stopAt)
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.Delay(TimeSpan.FromSeconds(interval), ct);
+
+            using var response = await _http.PostAsync(
+                tokenUri,
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "urn:ietf:params:oauth:grant-type:device_code",
+                    ["client_id"] = clientId.Trim(),
+                    ["device_code"] = deviceCode
+                }),
+                ct);
+            var text = await response.Content.ReadAsStringAsync(ct);
+            if (response.IsSuccessStatusCode)
+            {
+                using var json = JsonDocument.Parse(text);
+                var token = GetString(json.RootElement, "access_token");
+                if (string.IsNullOrWhiteSpace(token))
+                    throw new InvalidOperationException("Device-code authentication returned no access token.");
+                var seconds = json.RootElement.TryGetProperty("expires_in", out var exp) && exp.TryGetInt32(out var sec) ? sec : 3600;
+                return new GraphToken
+                {
+                    AccessToken = token,
+                    ExpiresAt = DateTime.Now.AddSeconds(Math.Max(60, seconds - 120)),
+                    AuthMode = "DeviceCode",
+                    Username = TryGetJwtClaim(token, "preferred_username")
+                };
+            }
+
+            string error;
+            try
+            {
+                using var errorJson = JsonDocument.Parse(text);
+                error = GetString(errorJson.RootElement, "error");
+            }
+            catch
+            {
+                error = string.Empty;
+            }
+
+            if (error.Equals("authorization_pending", StringComparison.OrdinalIgnoreCase)) continue;
+            if (error.Equals("slow_down", StringComparison.OrdinalIgnoreCase))
+            {
+                interval += 5;
+                continue;
+            }
+            throw new InvalidOperationException("Device-code authentication failed: " + ExtractError(text));
+        }
+
+        throw new TimeoutException("Device-code authentication expired before sign-in completed.");
     }
 
     public async Task<GraphToken> AcquireCertificateTokenAsync(
@@ -118,6 +223,99 @@ public sealed class CloudGraphService : IDisposable
         return result;
     }
 
+    public async Task<List<ManagedDeviceInfo>> SearchManagedDevicesAsync(
+        string accessToken,
+        string query,
+        int maximumItems = 500,
+        CancellationToken ct = default)
+    {
+        var uri =
+            "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices" +
+            "?$select=id,deviceName,azureADDeviceId,serialNumber,userPrincipalName,userDisplayName,manufacturer,model,operatingSystem,osVersion,complianceState,isEncrypted,lastSyncDateTime&$top=999";
+
+        var items = await GetCollectionAsync(accessToken, uri, 50000, ct);
+        var rows = items.Select(ConvertManagedDevice).ToList();
+        query = query?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            rows = rows.Where(x =>
+                    Contains(x.DeviceName, query) ||
+                    Contains(x.SerialNumber, query) ||
+                    Contains(x.UserPrincipalName, query) ||
+                    Contains(x.UserDisplayName, query) ||
+                    Contains(x.EntraDeviceId, query) ||
+                    Contains(x.ManagedDeviceId, query))
+                .ToList();
+        }
+
+        return rows
+            .OrderBy(x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Clamp(maximumItems, 1, 5000))
+            .ToList();
+    }
+
+    public async Task<ManagedDeviceInfo?> FindManagedDeviceByEntraDeviceIdAsync(
+        string accessToken,
+        string entraDeviceId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(entraDeviceId)) return null;
+        var escaped = entraDeviceId.Replace("'", "''");
+        var filter = Uri.EscapeDataString($"azureADDeviceId eq '{escaped}'");
+        var select = "id,deviceName,azureADDeviceId,serialNumber,userPrincipalName,userDisplayName,manufacturer,model,operatingSystem,osVersion,complianceState,isEncrypted,lastSyncDateTime";
+        try
+        {
+            var items = await GetCollectionAsync(
+                accessToken,
+                $"https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$filter={filter}&$select={select}&$top=2",
+                2,
+                ct);
+            return items.Count == 0 ? null : ConvertManagedDevice(items[0]);
+        }
+        catch
+        {
+            var items = await SearchManagedDevicesAsync(accessToken, entraDeviceId, 10, ct);
+            return items.FirstOrDefault(x =>
+                string.Equals(x.EntraDeviceId, entraDeviceId, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public async Task<List<CloudRecoveryMetadata>> GetRecoveryMetadataForDeviceAsync(
+        string accessToken,
+        string entraDeviceId,
+        string? computerName = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(entraDeviceId)) return [];
+        var escaped = entraDeviceId.Replace("'", "''");
+        var filter = Uri.EscapeDataString($"deviceId eq '{escaped}'");
+        var keys = await GetCollectionAsync(
+            accessToken,
+            $"https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys?$filter={filter}",
+            5000,
+            ct);
+        var name = computerName ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name))
+            name = await GetDeviceNameAsync(accessToken, entraDeviceId, ct);
+        return keys.Select(x => ConvertMetadata(x, name)).ToList();
+    }
+
+    public async Task RotateBitLockerKeysAsync(
+        string accessToken,
+        string managedDeviceId,
+        CancellationToken ct = default)
+    {
+        Require(managedDeviceId, nameof(managedDeviceId));
+        var uri =
+            $"https://graph.microsoft.com/beta/deviceManagement/managedDevices/{Uri.EscapeDataString(managedDeviceId.Trim())}/rotateBitLockerKeys";
+        using var request = new HttpRequestMessage(HttpMethod.Post, uri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await _http.SendAsync(request, ct);
+        var content = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException("Intune BitLocker rotation failed: " + ExtractError(content));
+    }
+
     public async Task<string> GetRecoveryKeyValueAsync(string accessToken, string recoveryId, CancellationToken ct = default)
     {
         using var json = await GetJsonAsync(accessToken,
@@ -178,6 +376,58 @@ public sealed class CloudGraphService : IDisposable
             VolumeType = ConvertVolumeType(item.TryGetProperty("volumeType", out var v) ? v.ToString() : string.Empty),
             CreatedDateTime = created
         };
+    }
+
+    private static ManagedDeviceInfo ConvertManagedDevice(JsonElement item)
+    {
+        DateTime? lastSync = null;
+        if (item.TryGetProperty("lastSyncDateTime", out var sync) &&
+            sync.ValueKind == JsonValueKind.String &&
+            DateTime.TryParse(sync.GetString(), out var parsed))
+            lastSync = parsed;
+
+        bool? encrypted = null;
+        if (item.TryGetProperty("isEncrypted", out var enc) &&
+            (enc.ValueKind == JsonValueKind.True || enc.ValueKind == JsonValueKind.False))
+            encrypted = enc.GetBoolean();
+
+        return new ManagedDeviceInfo
+        {
+            ManagedDeviceId = GetString(item, "id"),
+            DeviceName = GetString(item, "deviceName"),
+            EntraDeviceId = GetString(item, "azureADDeviceId"),
+            SerialNumber = GetString(item, "serialNumber"),
+            UserPrincipalName = GetString(item, "userPrincipalName"),
+            UserDisplayName = GetString(item, "userDisplayName"),
+            Manufacturer = GetString(item, "manufacturer"),
+            Model = GetString(item, "model"),
+            OperatingSystem = GetString(item, "operatingSystem"),
+            OsVersion = GetString(item, "osVersion"),
+            ComplianceState = GetString(item, "complianceState"),
+            IsEncrypted = encrypted,
+            LastSyncDateTime = lastSync
+        };
+    }
+
+    private static bool Contains(string value, string query) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+    private static string? TryGetJwtClaim(string token, string claim)
+    {
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length < 2) return null;
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload += new string('=', (4 - payload.Length % 4) % 4);
+            using var json = JsonDocument.Parse(Convert.FromBase64String(payload));
+            return json.RootElement.TryGetProperty(claim, out var value) ? value.ToString() : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string ConvertVolumeType(string value) => value switch
