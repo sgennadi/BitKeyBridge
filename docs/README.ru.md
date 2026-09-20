@@ -205,3 +205,23 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - Current User vault заблокирован для unattended Windows Service: для службы используй Machine Vault либо integrated credentials + gMSA/domain account.
 - CLI: `--vault-status`, `--vault-save-user`, `--vault-save-machine`, `--vault-delete-user`, `--vault-delete-machine`, `--service-identity-local-system`, `--service-identity-gmsa`, `--service-identity-user`.
 - Self-test проверяет DPAPI LocalMachine protect/unprotect round-trip.
+
+
+## Новое в 0.8.0
+
+- Добавлена вкладка **Coverage** для сравнения BitLocker metadata из AD, Entra ID и Intune.
+- Coverage не читает `msFVE-RecoveryPassword` и не вызывает Graph endpoint получения самого recovery password.
+- Показываются состояния:
+  - AD + Entra;
+  - только AD;
+  - только Entra;
+  - recovery key не найден.
+- Дополнительно отмечаются:
+  - несколько recovery objects;
+  - Intune device без encryption;
+  - stale Intune sync;
+  - старый Entra recovery-key metadata.
+- В отчёт входят Intune compliance, last sync, user/UPN, serial, manufacturer/model, OS и encryption state.
+- Есть фильтры и экспорт видимых строк в CSV.
+- CSV Coverage содержит только metadata — 48-значного recovery password в нём нет.
+- Порог stale Intune и старого cloud key настраивается через `CoverageStaleIntuneDays` и `CoverageOldCloudKeyDays`.
