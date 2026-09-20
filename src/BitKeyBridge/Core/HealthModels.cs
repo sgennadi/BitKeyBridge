@@ -7,6 +7,7 @@ public sealed class HealthSnapshot
     public string MachineName { get; set; } = Environment.MachineName;
     public string OverallStatus { get; set; } = "Unknown";
     public string ServiceState { get; set; } = "NotInstalled";
+    public string ServiceIdentity { get; set; } = string.Empty;
     public bool ServiceInstalled { get; set; }
     public string HealthEndpoint { get; set; } = string.Empty;
 
