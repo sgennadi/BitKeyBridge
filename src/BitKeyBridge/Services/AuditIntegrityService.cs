@@ -140,10 +140,25 @@ public static class AuditIntegrityService
                         $"{Path.GetFileName(file)}:{lineNumber}: unsupported chain version {entry.ChainVersion}.");
                 }
 
-                var calculated = ComputeHash(entry);
+                string calculated;
+                byte[] expectedHash;
+                byte[] actualHash;
+                try
+                {
+                    calculated = ComputeHash(entry);
+                    expectedHash = Convert.FromHexString(calculated);
+                    actualHash = Convert.FromHexString(entry.EntryHash);
+                }
+                catch (Exception ex)
+                {
+                    return Fail(
+                        result,
+                        $"{Path.GetFileName(file)}:{lineNumber}: invalid hash encoding: {ex.Message}");
+                }
+
                 if (!CryptographicOperations.FixedTimeEquals(
-                        Convert.FromHexString(calculated),
-                        Convert.FromHexString(entry.EntryHash)))
+                        expectedHash,
+                        actualHash))
                 {
                     return Fail(
                         result,
