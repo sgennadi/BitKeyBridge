@@ -191,7 +191,10 @@ public static class WindowsServiceHost
     public static ServiceInfo GetInfo()
     {
         using var scm = OpenScManager(ScManagerConnect);
-        using var service = OpenServiceSafe(scm.DangerousGetHandle(), ServiceName, ServiceQueryStatus);
+        using var service = OpenServiceSafe(
+            scm.DangerousGetHandle(),
+            ServiceName,
+            ServiceQueryStatus | ServiceQueryConfig);
         if (service.IsInvalid)
         {
             var error = Marshal.GetLastWin32Error();
@@ -226,6 +229,7 @@ public static class WindowsServiceHost
         var normalized = string.IsNullOrWhiteSpace(mode)
             ? "LocalSystem"
             : mode.Trim();
+
         string serviceAccount;
         string? servicePassword;
 
@@ -239,10 +243,88 @@ public static class WindowsServiceHost
         {
             serviceAccount = (account ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(serviceAccount))
-                throw new ArgumentException("A gMSA / managed service account name is required.");
+                throw new ArgumentException(
+                    "A gMSA / managed service account name is required.");
             if (!serviceAccount.EndsWith("$", StringComparison.Ordinal))
                 throw new ArgumentException(
-                    "A gMSA account name must end with '
+                    "A gMSA account name must end with '$' (for example DOMAIN\\BitKeyBridgeSvc$).");
+
+            servicePassword = null;
+        }
+        else if (normalized.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase))
+        {
+            serviceAccount = (account ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(serviceAccount))
+                throw new ArgumentException(
+                    "A domain service account name is required.");
+            if (string.IsNullOrEmpty(password))
+                throw new ArgumentException(
+                    "A password is required when configuring a regular domain service account.");
+
+            servicePassword = password;
+        }
+        else
+        {
+            throw new ArgumentException(
+                "Service identity mode must be LocalSystem, gMSA, or DomainAccount.");
+        }
+
+        var before = GetInfo();
+        if (!before.Installed)
+            throw new InvalidOperationException(
+                "Install the BitKeyBridge Windows Service before changing its identity.");
+
+        var wasRunning = string.Equals(
+            before.State,
+            "Running",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (wasRunning)
+            Stop();
+
+        try
+        {
+            using var scm = OpenScManager(ScManagerConnect);
+            using var service = OpenServiceRequired(
+                scm.DangerousGetHandle(),
+                ServiceName,
+                ServiceChangeConfig |
+                ServiceQueryConfig |
+                ServiceQueryStatus |
+                ServiceStart |
+                ServiceStop);
+
+            if (!ChangeServiceConfig(
+                    service.DangerousGetHandle(),
+                    ServiceNoChange,
+                    ServiceNoChange,
+                    ServiceNoChange,
+                    null,
+                    null,
+                    IntPtr.Zero,
+                    null,
+                    serviceAccount,
+                    servicePassword,
+                    null))
+            {
+                ThrowLastWin32(
+                    "Failed to change the BitKeyBridge Windows Service identity.");
+            }
+
+            WindowsEventLogService.TryWrite(
+                $"BitKeyBridge Windows Service identity changed to {serviceAccount}.",
+                EventLogSeverity.Warning,
+                4005,
+                "Service");
+        }
+        finally
+        {
+            if (restartIfRunning && wasRunning)
+                Start();
+        }
+    }
+
+    public static int RunService(AppConfig config)
     {
         _serviceConfig = config;
         _serviceMain = ServiceMain;
@@ -250,7 +332,11 @@ public static class WindowsServiceHost
 
         var table = new[]
         {
-            new SERVICE_TABLE_ENTRY { lpServiceName = ServiceName, lpServiceProc = _serviceMain },
+            new SERVICE_TABLE_ENTRY
+            {
+                lpServiceName = ServiceName,
+                lpServiceProc = _serviceMain
+            },
             new SERVICE_TABLE_ENTRY()
         };
 
