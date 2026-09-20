@@ -348,7 +348,7 @@ public sealed class CoverageService
     private static string Csv(string? value)
     {
         value ??= string.Empty;
-        return """ + value.Replace(""", """") + """;
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
     private static string Bool(bool value) => value ? "True" : "False";
