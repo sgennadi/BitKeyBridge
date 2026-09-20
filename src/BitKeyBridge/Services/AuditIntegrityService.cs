@@ -186,6 +186,86 @@ public static class AuditIntegrityService
         return result;
     }
 
+    public static AuditIntegrityStatus VerifyAndPersist(
+        string path,
+        string? statusPath = null)
+    {
+        var result = Verify(path);
+        var status = new AuditIntegrityStatus
+        {
+            VerifiedAtUtc = DateTime.UtcNow,
+            Valid = result.Valid,
+            FilesChecked = result.FilesChecked,
+            TotalEntries = result.TotalEntries,
+            LegacyEntries = result.LegacyEntries,
+            ChainedEntries = result.ChainedEntries,
+            LastHash = result.LastHash,
+            FirstError = result.FirstError
+        };
+
+        TryPersistStatus(
+            statusPath ?? AppPaths.AuditIntegrityStatusFile,
+            status);
+
+        return status;
+    }
+
+    public static AuditIntegrityStatus? ReadLastStatus(
+        string? statusPath = null)
+    {
+        try
+        {
+            return JsonStore.Read<AuditIntegrityStatus>(
+                statusPath ?? AppPaths.AuditIntegrityStatusFile);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static DateTime? GetLastAuditWriteUtc(string path)
+    {
+        DateTime? latest = null;
+
+        foreach (var candidate in new[]
+                 {
+                     path + ".old",
+                     path
+                 })
+        {
+            try
+            {
+                if (!File.Exists(candidate))
+                    continue;
+
+                var value = File.GetLastWriteTimeUtc(candidate);
+                if (latest is null || value > latest)
+                    latest = value;
+            }
+            catch
+            {
+            }
+        }
+
+        return latest;
+    }
+
+    private static void TryPersistStatus(
+        string path,
+        AuditIntegrityStatus status)
+    {
+        try
+        {
+            JsonStore.WriteAtomic(path, status);
+        }
+        catch
+        {
+            // Verification result should still be returned even if the
+            // current identity cannot persist the machine-level cache.
+        }
+    }
+
     private static AuditIntegrityResult Fail(
         AuditIntegrityResult result,
         string error)
