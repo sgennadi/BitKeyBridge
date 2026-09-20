@@ -410,7 +410,7 @@ public sealed class UpdateService : IDisposable
         return new Version(version.Major, version.Minor, version.Build < 0 ? 0 : version.Build);
     }
 
-    private static string GetRid() => RuntimeInformation.ProcessArchitecture switch
+    internal static string GetRid() => RuntimeInformation.ProcessArchitecture switch
     {
         Architecture.X64 => "win-x64",
         Architecture.X86 => "win-x86",
@@ -419,7 +419,7 @@ public sealed class UpdateService : IDisposable
             $"Unsupported Windows architecture: {RuntimeInformation.ProcessArchitecture}.")
     };
 
-    private static string NormalizeRepository(string value)
+    internal static string NormalizeRepository(string value)
     {
         var text = (value ?? string.Empty).Trim().Trim('/');
         var parts = text.Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -429,7 +429,7 @@ public sealed class UpdateService : IDisposable
         return parts[0] + "/" + parts[1];
     }
 
-    private static Version ParseVersion(string value)
+    internal static Version ParseVersion(string value)
     {
         var text = NormalizeVersionText(value);
         if (!Version.TryParse(text, out var version))
@@ -449,7 +449,7 @@ public sealed class UpdateService : IDisposable
         return text;
     }
 
-    private static string ParseChecksum(string text, string assetName)
+    internal static string ParseChecksum(string text, string assetName)
     {
         foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
