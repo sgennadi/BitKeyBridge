@@ -98,7 +98,7 @@ jobs:
         run: |
           dotnet tool install --tool-path .tools CycloneDX --version 6.2.0
           $version = "${{ github.ref_name }}".TrimStart("v")
-          .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -c Release -sn BitKeyBridge -sv $version -st Application
+          .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -spv 1.7 -sn BitKeyBridge -sv $version -st Application
 
       - name: Generate SHA256SUMS
         shell: bash
