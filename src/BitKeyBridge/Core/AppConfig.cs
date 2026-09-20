@@ -23,6 +23,16 @@ public sealed class AppConfig
     public int ServiceIntervalMinutes { get; set; } = 60;
     public bool ServiceRunExportOnStart { get; set; } = true;
 
+    public string UpdateRepository { get; set; } = "sgennadi/BitKeyBridge";
+    public bool CheckForUpdatesOnStart { get; set; } = true;
+    public bool AllowPrereleaseUpdates { get; set; } = false;
+
+    public bool RemoteApiEnabled { get; set; } = false;
+    public int RemoteApiPort { get; set; } = 8751;
+    public bool RemoteApiAllowManagement { get; set; } = false;
+    public string RemoteApiCertificateThumbprint { get; set; } = string.Empty;
+    public string RemoteApiTokenSha256 { get; set; } = string.Empty;
+
     public List<BitLockerScope> DefaultScopes { get; set; } = [];
 
     public string OutputDirectory => Path.Combine(SysvolScriptsRoot, OutputSubdirectory);
