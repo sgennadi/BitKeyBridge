@@ -867,6 +867,16 @@ public sealed class MainForm : Form
                 _localResults.SelectedItems[0].Tag is not RecoveryRecord row)
                 return;
 
+            if (!AuthorizeAction(
+                    BitKeyBridgePermission.RecoveryRead,
+                    "RevealLocalRecoveryKey",
+                    row.ComputerName,
+                    row.BitLockerId,
+                    "AD"))
+            {
+                return;
+            }
+
             var context = GetOrRequestRecoveryAccessContext(
                 "AD",
                 row.BitLockerId,
@@ -1424,6 +1434,14 @@ public sealed class MainForm : Form
 
     private void SearchLocal()
     {
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                "SearchLocalRecoveryKeys",
+                source: "LocalCSV"))
+        {
+            return;
+        }
+
         try
         {
             var q = _localQuery.Text.Trim();
@@ -1581,6 +1599,16 @@ public sealed class MainForm : Form
                 "Cloud Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+            return;
+        }
+
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                "GetCloudRecoveryKey",
+                row.ComputerName,
+                row.RecoveryId,
+                "Entra"))
+        {
             return;
         }
 
@@ -2372,6 +2400,16 @@ public sealed class MainForm : Form
         string? recoveryId,
         RecoveryAccessContext? existingContext = null)
     {
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.Rotate,
+                "RotateBitLockerKey",
+                computerName,
+                recoveryId,
+                "Intune"))
+        {
+            return;
+        }
+
         var auditId = string.IsNullOrWhiteSpace(recoveryId)
             ? managedDeviceId
             : recoveryId;
@@ -3761,6 +3799,38 @@ public sealed class MainForm : Form
             _audit.Write("CreateSecureOutput", "Failed", source: "WindowsACL", details: ex.Message);
             MessageBox.Show(this, ex.Message, "Secure BitLocker Output", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private bool AuthorizeAction(
+        BitKeyBridgePermission permission,
+        string action,
+        string? computerName = null,
+        string? recoveryId = null,
+        string? source = null)
+    {
+        var decision = new AuthorizationService(_config).Check(permission);
+        if (decision.Allowed)
+            return true;
+
+        _audit.Write(
+            action,
+            "Denied",
+            computerName,
+            recoveryId,
+            source,
+            details:
+                $"Permission={decision.Permission}; Identity={decision.Identity}; Reason={decision.Reason}");
+
+        MessageBox.Show(
+            this,
+            $"Access denied for {permission}.{Environment.NewLine}{Environment.NewLine}" +
+            $"Windows identity: {decision.Identity}{Environment.NewLine}" +
+            decision.Reason,
+            "BitKeyBridge RBAC",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+
+        return false;
     }
 
     private RecoveryAccessContext? GetOrRequestRecoveryAccessContext(
