@@ -131,3 +131,28 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - Добавлены CLI-команды `--health`, `--install-service`, `--uninstall-service`, `--start-service`, `--stop-service`, `--service-status`.
 - Добавлен **Secure Output Wizard**: отключает NTFS inheritance, оставляет Full Control SYSTEM/Administrators/current admin, выдаёт указанным группам только Read & Execute и при желании создаёт ограниченный SMB share через Win32 API.
 - При закрытии GUI recovery key/password/token очищаются из состояния приложения; clipboard очищается, если в нём всё ещё находится показанный recovery key.
+
+
+## Новое в 0.4.0
+
+- Добавлена вкладка **Operations**.
+- Добавлена проверяемая установка обновлений из GitHub Releases:
+  - автоматически выбирается `win-x64` / `win-x86` / `win-arm64`;
+  - проверяется `SHA256SUMS.txt`;
+  - дополнительно сверяется GitHub asset digest, если он присутствует;
+  - распакованный новый EXE обязан пройти `--self-test`;
+  - временный elevated updater заменяет GUI/service EXE;
+  - при ошибке выполняется rollback из `.bak`.
+- Добавлены CLI `--check-update` и `--update`.
+- Добавлен Windows Event Log source **BitKeyBridge** в журнал Application.
+- Добавлен opt-in **Remote API**:
+  - по умолчанию выключен;
+  - TLS 1.2/1.3;
+  - случайный bearer token показывается один раз;
+  - в конфиг сохраняется только SHA-256 токена;
+  - firewall rule создаётся только для Domain/Private profiles;
+  - recovery passwords через Remote API не выдаются.
+- Read-only API: `/api/v1/health`, `/api/v1/service`, `/api/v1/version`.
+- Remote management включается отдельно и в 0.4 разрешает только `POST /api/v1/export`.
+- Windows Service получает failure-recovery policy: автоматический restart после transient crash.
+- Updater cleanup остаётся shell-free и использует Win32 `MoveFileEx`.
