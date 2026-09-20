@@ -73,4 +73,18 @@ public sealed class AuditEntry
     public string Reference { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
+    public int ChainVersion { get; set; }
+    public string PreviousHash { get; set; } = string.Empty;
+    public string EntryHash { get; set; } = string.Empty;
+}
+
+public sealed class AuditIntegrityResult
+{
+    public bool Valid { get; set; } = true;
+    public int FilesChecked { get; set; }
+    public int TotalEntries { get; set; }
+    public int LegacyEntries { get; set; }
+    public int ChainedEntries { get; set; }
+    public string LastHash { get; set; } = string.Empty;
+    public string FirstError { get; set; } = string.Empty;
 }
