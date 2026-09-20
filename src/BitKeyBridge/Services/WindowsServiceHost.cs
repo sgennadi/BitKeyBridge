@@ -49,6 +49,8 @@ public static class WindowsServiceHost
 
         var source = Environment.ProcessPath
             ?? throw new InvalidOperationException("The current executable path is unavailable.");
+
+        WindowsEventLogService.EnsureSource();
         Directory.CreateDirectory(AppPaths.ServiceInstallDirectory);
 
         if (!string.Equals(
@@ -84,6 +86,11 @@ public static class WindowsServiceHost
                     null,
                     DisplayName))
                 ThrowLastWin32("Failed to update the BitKeyBridge Windows Service configuration.");
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge Windows Service configuration updated.",
+                EventLogSeverity.Information,
+                4001,
+                "Service");
             return;
         }
 
@@ -106,6 +113,11 @@ public static class WindowsServiceHost
             ThrowLastWin32("Failed to create the BitKeyBridge Windows Service.");
 
         CloseServiceHandle(service);
+        WindowsEventLogService.TryWrite(
+            "BitKeyBridge Windows Service installed.",
+            EventLogSeverity.Information,
+            4000,
+            "Service");
     }
 
     public static void Uninstall()
@@ -124,6 +136,11 @@ public static class WindowsServiceHost
         try { Stop(); } catch { }
         if (!DeleteService(service.DangerousGetHandle()))
             ThrowLastWin32("Failed to delete the BitKeyBridge Windows Service.");
+        WindowsEventLogService.TryWrite(
+            "BitKeyBridge Windows Service uninstalled.",
+            EventLogSeverity.Information,
+            4004,
+            "Service");
     }
 
     public static void Start()
@@ -137,6 +154,11 @@ public static class WindowsServiceHost
                 throw new Win32Exception(error, "Failed to start the BitKeyBridge Windows Service.");
         }
         WaitForState(ServiceRunning, TimeSpan.FromSeconds(30));
+        WindowsEventLogService.TryWrite(
+            "BitKeyBridge Windows Service started.",
+            EventLogSeverity.Information,
+            4002,
+            "Service");
     }
 
     public static void Stop()
@@ -151,6 +173,11 @@ public static class WindowsServiceHost
                 throw new Win32Exception(error, "Failed to stop the BitKeyBridge Windows Service.");
         }
         WaitForState(ServiceStopped, TimeSpan.FromSeconds(30));
+        WindowsEventLogService.TryWrite(
+            "BitKeyBridge Windows Service stopped.",
+            EventLogSeverity.Information,
+            4003,
+            "Service");
     }
 
     public static ServiceInfo GetInfo()
@@ -203,6 +230,11 @@ public static class WindowsServiceHost
 
         SetRuntimeStatus(ServiceStartPending, 0, 3000);
         SetRuntimeStatus(ServiceRunning, ServiceAcceptStop | ServiceAcceptShutdown, 0);
+        WindowsEventLogService.TryWrite(
+            "BitKeyBridge service runtime entered Running state.",
+            EventLogSeverity.Information,
+            4010,
+            "Service");
 
         try
         {
@@ -214,6 +246,11 @@ public static class WindowsServiceHost
         catch (Exception ex)
         {
             _serviceLog.Error(ex.ToString());
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge service runtime failed: " + ex.Message,
+                EventLogSeverity.Error,
+                4099,
+                "Service");
         }
         finally
         {
@@ -257,9 +294,23 @@ public static class WindowsServiceHost
                         var export = new ExportService(config);
                         var result = await export.RunAsync(false, false, null, null, ct);
                         if (result.Success)
+                        {
                             _serviceLog?.Info($"Scheduled export completed. Rows={result.ValidRows}; DC={result.AdServer}.");
+                            WindowsEventLogService.TryWrite(
+                                $"Scheduled BitLocker export completed. Rows={result.ValidRows}; DC={result.AdServer}; Published={result.Published}.",
+                                EventLogSeverity.Information,
+                                4200,
+                                "Export");
+                        }
                         else
+                        {
                             _serviceLog?.Error("Scheduled export failed: " + result.ErrorMessage);
+                            WindowsEventLogService.TryWrite(
+                                "Scheduled BitLocker export failed: " + result.ErrorMessage,
+                                EventLogSeverity.Error,
+                                4299,
+                                "Export");
+                        }
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
@@ -268,6 +319,11 @@ public static class WindowsServiceHost
                     catch (Exception ex)
                     {
                         _serviceLog?.Error("Scheduled export exception: " + ex);
+                        WindowsEventLogService.TryWrite(
+                            "Scheduled BitLocker export exception: " + ex.Message,
+                            EventLogSeverity.Error,
+                            4298,
+                            "Export");
                     }
                 }
 
