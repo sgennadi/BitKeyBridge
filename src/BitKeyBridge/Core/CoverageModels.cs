@@ -65,3 +65,16 @@ public sealed class CoverageResult
     public CoverageSummary Summary { get; set; } = new();
     public List<CoverageDeviceRow> Rows { get; set; } = [];
 }
+
+
+public sealed class CoverageRunStatus
+{
+    public bool Success { get; set; }
+    public DateTime StartedUtc { get; set; }
+    public DateTime FinishedUtc { get; set; }
+    public string ErrorMessage { get; set; } = string.Empty;
+    public string DomainController { get; set; } = string.Empty;
+    public string CsvPath { get; set; } = string.Empty;
+    public string JsonPath { get; set; } = string.Empty;
+    public CoverageSummary Summary { get; set; } = new();
+}
