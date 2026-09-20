@@ -1207,6 +1207,16 @@ public sealed class MainForm : Form
                 _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
                 return;
 
+            if (!AuthorizeAction(
+                    BitKeyBridgePermission.RecoveryRead,
+                    "RevealCloudRecoveryKey",
+                    row.ComputerName,
+                    row.RecoveryId,
+                    "Entra"))
+            {
+                return;
+            }
+
             var context = GetOrRequestRecoveryAccessContext(
                 "Entra",
                 row.RecoveryId,
@@ -1230,6 +1240,16 @@ public sealed class MainForm : Form
                 _cloudResults.SelectedItems.Count == 0 ||
                 _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
                 return;
+
+            if (!AuthorizeAction(
+                    BitKeyBridgePermission.RecoveryRead,
+                    "CopyCloudRecoveryKey",
+                    row.ComputerName,
+                    row.RecoveryId,
+                    "Entra"))
+            {
+                return;
+            }
 
             var context = GetOrRequestRecoveryAccessContext(
                 "Entra",
@@ -3878,6 +3898,12 @@ public sealed class MainForm : Form
             source,
             details:
                 $"Permission={decision.Permission}; Identity={decision.Identity}; Reason={decision.Reason}");
+
+        WindowsEventLogService.TryWrite(
+            $"RBAC denied {action}. Permission={decision.Permission}; Identity={decision.Identity}; Computer={computerName}; RecoveryId={recoveryId}; Source={source}.",
+            EventLogSeverity.Warning,
+            4501,
+            "RBAC");
 
         MessageBox.Show(
             this,
