@@ -47,7 +47,10 @@ internal static class Program
             return WindowsServiceHost.RunService(config);
 
         var noElevation = args.Any(x => x.Equals("--no-elevation", StringComparison.OrdinalIgnoreCase));
-        if (!noElevation && !SecurityContext.IsAdministrator())
+        var readOnlyStatusCommand = args.Any(x =>
+            x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-status", StringComparison.OrdinalIgnoreCase));
+        if (!noElevation && !readOnlyStatusCommand && !SecurityContext.IsAdministrator())
         {
             if (!Environment.UserInteractive)
             {
