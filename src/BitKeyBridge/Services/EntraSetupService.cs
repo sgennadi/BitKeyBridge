@@ -13,6 +13,8 @@ public sealed class EntraSetupService : IDisposable
     private const string DelegatedDeviceId = "951183d1-1a61-466f-a6d1-1fde911bfd95";
     private const string AppBitLockerId = "57f1cf28-c0c4-4ec3-9a30-19a2eaaf2f6e";
     private const string AppDeviceId = "7438b122-aefc-4978-80ed-43db9fcc7715";
+    private const string DelegatedManagedDevicesReadWriteId = "44642bfe-8385-4adc-8fc6-fe3cb2c375c3";
+    private const string AppManagedDevicesReadWriteId = "243333ab-4d21-40cb-a475-36241daa0842";
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
     private readonly CertificateService _certificates = new();
@@ -89,10 +91,11 @@ public sealed class EntraSetupService : IDisposable
         progress?.Report("Granting Microsoft Graph application permissions...");
         await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, AppBitLockerId, ct);
         await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, AppDeviceId, ct);
+        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, AppManagedDevicesReadWriteId, ct);
 
         progress?.Report("Granting tenant-wide delegated admin consent...");
         await EnsureDelegatedGrantAsync(managementToken, servicePrincipalId, graphSpId,
-            "BitlockerKey.Read.All Device.Read.All", ct);
+            "BitlockerKey.Read.All Device.Read.All DeviceManagementManagedDevices.ReadWrite.All", ct);
 
         X509Certificate2 cert;
         if (!rotateCertificate && !string.IsNullOrWhiteSpace(existingConfig?.CertificateThumbprint))
@@ -232,7 +235,9 @@ public sealed class EntraSetupService : IDisposable
                     new JsonObject { ["id"] = DelegatedBitLockerId, ["type"] = "Scope" },
                     new JsonObject { ["id"] = DelegatedDeviceId, ["type"] = "Scope" },
                     new JsonObject { ["id"] = AppBitLockerId, ["type"] = "Role" },
-                    new JsonObject { ["id"] = AppDeviceId, ["type"] = "Role" }
+                    new JsonObject { ["id"] = AppDeviceId, ["type"] = "Role" },
+                    new JsonObject { ["id"] = DelegatedManagedDevicesReadWriteId, ["type"] = "Scope" },
+                    new JsonObject { ["id"] = AppManagedDevicesReadWriteId, ["type"] = "Role" }
                 }
             }
         };
@@ -271,7 +276,9 @@ public sealed class EntraSetupService : IDisposable
             (DelegatedBitLockerId, "Scope"),
             (DelegatedDeviceId, "Scope"),
             (AppBitLockerId, "Role"),
-            (AppDeviceId, "Role")
+            (AppDeviceId, "Role"),
+            (DelegatedManagedDevicesReadWriteId, "Scope"),
+            (AppManagedDevicesReadWriteId, "Role")
         };
 
         foreach (var item in required)
