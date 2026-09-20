@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+- Added Device Code authentication as the recommended interactive Graph sign-in mode.
+- Added Intune managed-device inventory and unified AD + Entra + Intune device search.
+- Added BitLocker recovery-key rotation through Intune with explicit confirmation.
+- Added local JSONL security audit with automatic BitLocker recovery-password redaction.
+- Added audit self-test.
+- Added `DeviceManagementManagedDevices.ReadWrite.All` to native Entra Auto Setup.
+- Updated GitHub Actions to Node 24 runtimes.
+- Kept legacy ROPC and certificate authentication modes.
+
 ## 0.1.0
 
 Initial native Windows implementation.
