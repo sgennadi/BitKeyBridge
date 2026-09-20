@@ -9,6 +9,13 @@
 - Added `--coverage-output`, `--coverage-csv`, `--coverage-json`, and `--coverage-json-stdout`.
 - Added monitoring exit policies: exit 20 for missing recovery metadata, 21 for Intune-reported unencrypted devices, and 22 for stale Intune devices.
 - Added offline self-test coverage for coverage monitoring exit codes.
+- Added machine-level Entra certificate configuration at `%ProgramData%\BitKeyBridge\cloud_auth_machine.json` for LocalSystem/gMSA/unattended scenarios; the file stores identifiers and a certificate thumbprint only.
+- Added `--cloud-machine-status`, `--cloud-machine-save`, `--cloud-machine-delete`, and `--coverage-machine-config`.
+- Added optional scheduled Coverage to the native Windows Service with an interval independent from the AD recovery export interval.
+- Added Dashboard controls for scheduled Coverage and machine cloud configuration.
+- Added Coverage status to the local health snapshot, including last run, age, missing recovery metadata, unencrypted Intune devices, stale Intune devices, and old cloud-key metadata.
+- Added service Coverage CLI controls: `--service-coverage-enable`, `--service-coverage-disable`, `--service-coverage-interval`, and run-on-start switches.
+- Coverage CSV now uses UTC timestamps and neutralizes spreadsheet formula-like values before export.
 - Coverage automation continues to avoid AD recovery-password attributes and the Graph recovery-key value endpoint.
 
 ## 0.8.0
