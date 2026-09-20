@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 namespace BitKeyBridge;
@@ -40,10 +41,13 @@ internal static class Program
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--update", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (isCli) ConsoleHelper.EnsureConsole();
 
         var config = ConfigService.LoadAppConfig();
+        ApplySessionCommandLine(config, args);
 
         var applyPlanIndex = Array.FindIndex(args, x =>
             x.Equals("--apply-update-plan", StringComparison.OrdinalIgnoreCase));
@@ -61,7 +65,9 @@ internal static class Program
         var readOnlyStatusCommand = args.Any(x =>
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--check-update", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase));
         if (!noElevation && !readOnlyStatusCommand && !SecurityContext.IsAdministrator())
         {
             if (!Environment.UserInteractive)
@@ -173,6 +179,9 @@ internal static class Program
         if (args.Any(x => x.Equals("--update", StringComparison.OrdinalIgnoreCase)))
             return InstallUpdateAsync(config).GetAwaiter().GetResult();
 
+        if (args.Any(x => x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase)))
+            return RunAdTest(config);
+
         if (args.Any(x => x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase)))
             return RunDcTest(config, args).GetAwaiter().GetResult();
 
@@ -269,6 +278,123 @@ internal static class Program
         {
             Console.Error.WriteLine(ex);
             return 1;
+        }
+    }
+
+    private static int RunAdTest(AppConfig config)
+    {
+        try
+        {
+            var ad = new ActiveDirectoryService(config);
+            var server = ad.GetPreferredWritableDc();
+            var root = ad.TestConnection(server);
+            Console.WriteLine("AD connection OK");
+            Console.WriteLine($"Server: {server}");
+            Console.WriteLine($"DNS host: {root.GetValueOrDefault("dnsHostName", server)}");
+            Console.WriteLine($"Default naming context: {root.GetValueOrDefault("defaultNamingContext", string.Empty)}");
+            Console.WriteLine($"RODC: {root.GetValueOrDefault("isRODC", "Unknown")}");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("AD connection failed: " + ex.Message);
+            return 1;
+        }
+        finally
+        {
+            AdSessionCredentials.Clear();
+        }
+    }
+
+    private static void ApplySessionCommandLine(AppConfig config, string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+
+            if (arg.Equals("--ad-auto", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdConnectionMode = "Auto";
+                continue;
+            }
+
+            if (arg.Equals("--ad-integrated", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdUseExplicitCredentials = false;
+                AdSessionCredentials.Clear();
+                continue;
+            }
+
+            if (arg.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdUseExplicitCredentials = true;
+                AdSessionCredentials.SetPassword(ReadPasswordFromConsole());
+                continue;
+            }
+
+            if (i + 1 >= args.Length) continue;
+            var value = args[i + 1];
+
+            if (arg.Equals("--ad-server", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdServer = value.Trim();
+                config.AdConnectionMode = "Explicit";
+                i++;
+            }
+            else if (arg.Equals("--ad-domain", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdDomain = value.Trim();
+                i++;
+            }
+            else if (arg.Equals("--ad-user", StringComparison.OrdinalIgnoreCase))
+            {
+                config.AdUsername = value.Trim();
+                config.AdUseExplicitCredentials = true;
+                i++;
+            }
+            else if (arg.Equals("--ad-port", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!int.TryParse(value, out var port) || port is < 1 or > 65535)
+                    throw new ArgumentException("--ad-port must be between 1 and 65535.");
+                config.AdPort = port;
+                i++;
+            }
+            else if (arg.Equals("--output-root", StringComparison.OrdinalIgnoreCase))
+            {
+                config.OutputRoot = value.Trim();
+                i++;
+            }
+            else if (arg.Equals("--output-subdirectory", StringComparison.OrdinalIgnoreCase))
+            {
+                config.OutputSubdirectory = value.Trim();
+                i++;
+            }
+        }
+    }
+
+    private static string ReadPasswordFromConsole()
+    {
+        Console.Write("AD password (session only): ");
+        var password = new StringBuilder();
+
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                return password.ToString();
+            }
+
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (password.Length > 0)
+                    password.Length--;
+                continue;
+            }
+
+            if (!char.IsControl(key.KeyChar))
+                password.Append(key.KeyChar);
         }
     }
 
@@ -410,7 +536,17 @@ internal static class Program
         Console.WriteLine("  --cli                 Export using saved scopes");
         Console.WriteLine("  --dry-run             Read and validate without publishing CSV");
         Console.WriteLine("  --force-publish       Override row-drop/scope-change publish guards");
-        Console.WriteLine("  --dc-test             Discover and compare current domain controllers");
+        Console.WriteLine("  --dc-test             Discover and compare domain controllers");
+        Console.WriteLine("  --ad-test             Test the effective Active Directory connection");
+        Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
+        Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
+        Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
+        Console.WriteLine("  --ad-user <user>      AD user (DOMAIN\\user or user@domain)");
+        Console.WriteLine("  --ad-password-prompt  Prompt securely for AD password; never saved");
+        Console.WriteLine("  --ad-integrated       Use current Windows credentials");
+        Console.WriteLine("  --ad-port <port>      LDAP port (default 389)");
+        Console.WriteLine("  --output-root <path>  Local/UNC export root for this run");
+        Console.WriteLine("  --output-subdirectory <name>  Export subdirectory for this run");
         Console.WriteLine("  --health              Print the local health snapshot as JSON");
         Console.WriteLine("  --install-service     Install/update and start the native Windows Service");
         Console.WriteLine("  --uninstall-service   Stop and remove the native Windows Service");
