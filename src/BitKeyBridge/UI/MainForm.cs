@@ -56,6 +56,8 @@ public sealed class MainForm : Form
     private readonly NumericUpDown _adPort = new();
     private readonly CheckBox _adUseLdaps = new();
     private readonly CheckBox _adExplicitCredentials = new();
+    private readonly ComboBox _adCredentialStorage = new();
+    private readonly Label _credentialVaultStatus = new();
     private readonly TextBox _outputRoot = new();
     private readonly TextBox _outputSubdirectory = new();
     private readonly Label _adConnectionStatus = new();
@@ -66,6 +68,10 @@ public sealed class MainForm : Form
     private readonly NumericUpDown _healthPort = new();
     private readonly CheckBox _healthEnabled = new();
     private readonly CheckBox _serviceRunOnStart = new();
+    private readonly ComboBox _serviceIdentityMode = new();
+    private readonly TextBox _serviceIdentityAccount = new();
+    private readonly TextBox _serviceIdentityPassword = new();
+    private readonly Label _serviceIdentityStatus = new();
 
     private readonly Label _updateStatus = new();
     private readonly TextBox _updateRepository = new();
@@ -146,7 +152,7 @@ public sealed class MainForm : Form
             Left = 20,
             Top = 58,
             Width = 1145,
-            Height = 330,
+            Height = 365,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         tab.Controls.Add(adGroup);
@@ -187,11 +193,41 @@ public sealed class MainForm : Form
         AddLabeled(adGroup, "Password:", _adPassword, 520, 110, 115, 420);
         _adPassword.UseSystemPasswordChar = true;
 
+        AddLabeled(adGroup, "Storage:", _adCredentialStorage, 520, 150, 115, 245);
+        _adCredentialStorage.DropDownStyle = ComboBoxStyle.DropDownList;
+        _adCredentialStorage.Items.AddRange([
+            "Session only",
+            "Current User - Credential Manager",
+            "Machine / Service - DPAPI"
+        ]);
+
+        var saveCredential = new Button
+        {
+            Text = "Save Credential",
+            Left = 895,
+            Top = 147,
+            Width = 110,
+            Height = 31
+        };
+        var deleteCredential = new Button
+        {
+            Text = "Delete Stored",
+            Left = 1015,
+            Top = 147,
+            Width = 105,
+            Height = 31
+        };
+        adGroup.Controls.AddRange([saveCredential, deleteCredential]);
+
+        _credentialVaultStatus.SetBounds(520, 188, 600, 42);
+        _credentialVaultStatus.Text = "Credential storage: session only.";
+        adGroup.Controls.Add(_credentialVaultStatus);
+
         var save = new Button
         {
             Text = "Save Settings",
             Left = 16,
-            Top = 205,
+            Top = 245,
             Width = 125,
             Height = 34
         };
@@ -199,7 +235,7 @@ public sealed class MainForm : Form
         {
             Text = "Test DC Connection",
             Left = 151,
-            Top = 205,
+            Top = 245,
             Width = 155,
             Height = 34
         };
@@ -207,18 +243,23 @@ public sealed class MainForm : Form
         {
             Text = "Clear Session Password",
             Left = 316,
-            Top = 205,
+            Top = 245,
             Width = 175,
             Height = 34
         };
         adGroup.Controls.AddRange([save, test, clearPassword]);
 
-        _adConnectionStatus.SetBounds(16, 255, 1090, 52);
+        _adConnectionStatus.SetBounds(16, 295, 1090, 52);
         _adConnectionStatus.Text = "Connection has not been tested in this GUI session.";
         adGroup.Controls.Add(_adConnectionStatus);
 
         _adMode.SelectedIndexChanged += (_, _) => UpdateDirectoryConnectionUi();
         _adExplicitCredentials.CheckedChanged += (_, _) => UpdateDirectoryConnectionUi();
+        _adCredentialStorage.SelectedIndexChanged += (_, _) =>
+        {
+            UpdateDirectoryConnectionUi();
+            RefreshCredentialVaultStatus();
+        };
         _adUseLdaps.CheckedChanged += (_, _) =>
         {
             if (_adUseLdaps.Checked && _adPort.Value == 389)
@@ -227,6 +268,8 @@ public sealed class MainForm : Form
                 _adPort.Value = 389;
         };
         save.Click += (_, _) => SaveDirectorySettings(showConfirmation: true);
+        saveCredential.Click += (_, _) => SaveSelectedCredential();
+        deleteCredential.Click += (_, _) => DeleteSelectedCredential();
         test.Click += async (_, _) => await TestDirectoryConnectionAsync();
         clearPassword.Click += (_, _) =>
         {
@@ -239,7 +282,7 @@ public sealed class MainForm : Form
         {
             Text = "Recovery Export Output",
             Left = 20,
-            Top = 405,
+            Top = 440,
             Width = 1145,
             Height = 220,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
@@ -307,7 +350,7 @@ public sealed class MainForm : Form
             Text =
                 "Microsoft 365 / Entra / Intune does not require Windows domain membership. Configure cloud authentication in the 'Entra / Intune Cloud' tab.",
             Left = 20,
-            Top = 655,
+            Top = 690,
             Width = 1145,
             Height = 42
         });
@@ -340,7 +383,7 @@ public sealed class MainForm : Form
             Left = 20,
             Top = 90,
             Width = 1145,
-            Height = 150,
+            Height = 225,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         tab.Controls.Add(serviceGroup);
@@ -377,9 +420,63 @@ public sealed class MainForm : Form
         var saveSettings = new Button { Text = "Save Service Settings", Left = 925, Top = 79, Width = 190, Height = 32 };
         serviceGroup.Controls.Add(saveSettings);
 
+        serviceGroup.Controls.Add(new Label
+        {
+            Text = "Service identity:",
+            Left = 16,
+            Top = 137,
+            Width = 95,
+            Height = 24
+        });
+        _serviceIdentityMode.SetBounds(115, 132, 215, 27);
+        _serviceIdentityMode.DropDownStyle = ComboBoxStyle.DropDownList;
+        _serviceIdentityMode.Items.AddRange([
+            "LocalSystem",
+            "gMSA / Managed Account",
+            "Domain Account"
+        ]);
+        serviceGroup.Controls.Add(_serviceIdentityMode);
+
+        serviceGroup.Controls.Add(new Label
+        {
+            Text = "Account:",
+            Left = 350,
+            Top = 137,
+            Width = 60,
+            Height = 24
+        });
+        _serviceIdentityAccount.SetBounds(412, 132, 255, 27);
+        serviceGroup.Controls.Add(_serviceIdentityAccount);
+
+        serviceGroup.Controls.Add(new Label
+        {
+            Text = "Password:",
+            Left = 682,
+            Top = 137,
+            Width = 65,
+            Height = 24
+        });
+        _serviceIdentityPassword.SetBounds(750, 132, 205, 27);
+        _serviceIdentityPassword.UseSystemPasswordChar = true;
+        serviceGroup.Controls.Add(_serviceIdentityPassword);
+
+        var applyIdentity = new Button
+        {
+            Text = "Apply Identity",
+            Left = 970,
+            Top = 129,
+            Width = 145,
+            Height = 34
+        };
+        serviceGroup.Controls.Add(applyIdentity);
+
+        _serviceIdentityStatus.SetBounds(16, 172, 1095, 42);
+        _serviceIdentityStatus.Text = "Service identity has not been queried.";
+        serviceGroup.Controls.Add(_serviceIdentityStatus);
+
         _dashboardDetails.ReadOnly = true;
         _dashboardDetails.Font = new Font("Consolas", 9.5F);
-        _dashboardDetails.SetBounds(20, 255, 1145, 485);
+        _dashboardDetails.SetBounds(20, 330, 1145, 410);
         _dashboardDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         tab.Controls.Add(_dashboardDetails);
 
@@ -391,6 +488,8 @@ public sealed class MainForm : Form
         openHealth.Click += (_, _) => OpenHealthEndpoint();
         secureOutput.Click += (_, _) => RunSecureOutputWizard();
         saveSettings.Click += (_, _) => SaveDashboardSettings(restartRunningService: true);
+        applyIdentity.Click += (_, _) => ApplyServiceIdentityFromGui();
+        _serviceIdentityMode.SelectedIndexChanged += (_, _) => UpdateServiceIdentityUi();
 
         return tab;
     }
