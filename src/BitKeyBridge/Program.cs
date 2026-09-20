@@ -42,7 +42,15 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-delete-user", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-delete-machine", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-identity-local-system", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-identity-gmsa", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-identity-user", StringComparison.OrdinalIgnoreCase));
         var needsConsole = isCli || args.Any(x =>
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (needsConsole) ConsoleHelper.EnsureConsole();
@@ -67,8 +75,15 @@ internal static class Program
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase));
-        if (!noElevation && !readOnlyStatusCommand && !SecurityContext.IsAdministrator())
+            x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
+        var currentUserVaultCommand = args.Any(x =>
+            x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--vault-delete-user", StringComparison.OrdinalIgnoreCase));
+        if (!noElevation &&
+            !readOnlyStatusCommand &&
+            !currentUserVaultCommand &&
+            !SecurityContext.IsAdministrator())
         {
             if (!Environment.UserInteractive)
             {
@@ -153,7 +168,7 @@ internal static class Program
             {
                 var service = WindowsServiceHost.GetInfo();
                 Console.WriteLine(service.Installed
-                    ? $"Installed; State={service.State}; Binary={service.BinaryPath}"
+                    ? $"Installed; State={service.State}; Identity={service.Identity}; Binary={service.BinaryPath}"
                     : "Not installed");
                 return service.Installed ? 0 : 3;
             }
@@ -163,6 +178,32 @@ internal static class Program
                 return 1;
             }
         }
+
+        if (args.Any(x => x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase)))
+            return ShowVaultStatus(config);
+
+        if (args.Any(x => x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase)))
+            return SaveVaultCredential(config, "CurrentUser");
+
+        if (args.Any(x => x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase)))
+            return SaveVaultCredential(config, "LocalMachine");
+
+        if (args.Any(x => x.Equals("--vault-delete-user", StringComparison.OrdinalIgnoreCase)))
+            return DeleteVaultCredential(config, "CurrentUser");
+
+        if (args.Any(x => x.Equals("--vault-delete-machine", StringComparison.OrdinalIgnoreCase)))
+            return DeleteVaultCredential(config, "LocalMachine");
+
+        if (args.Any(x => x.Equals("--service-identity-local-system", StringComparison.OrdinalIgnoreCase)))
+            return ConfigureServiceIdentityCli(config, "LocalSystem", null);
+
+        var gmsaAccount = GetOptionValue(args, "--service-identity-gmsa");
+        if (gmsaAccount is not null)
+            return ConfigureServiceIdentityCli(config, "gMSA", gmsaAccount);
+
+        var serviceUser = GetOptionValue(args, "--service-identity-user");
+        if (serviceUser is not null)
+            return ConfigureServiceIdentityCli(config, "DomainAccount", serviceUser);
 
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
         {
@@ -283,6 +324,154 @@ internal static class Program
         }
     }
 
+    private static int ShowVaultStatus(AppConfig config)
+    {
+        try
+        {
+            var vault = new CredentialVaultService();
+            var user = vault.GetUserMetadata(config.AdCredentialTarget);
+            CredentialVaultMetadata? machine = null;
+            string machineError = string.Empty;
+
+            try { machine = vault.GetMachineMetadata(); }
+            catch (Exception ex) { machineError = ex.Message; }
+
+            Console.WriteLine($"Configured storage: {config.AdCredentialStorageMode}");
+            Console.WriteLine(
+                $"CurrentUser: Exists={user.Exists}; User={user.Username}; Target={user.Target}; Protection={user.ProtectedBy}");
+            if (machine is not null)
+            {
+                Console.WriteLine(
+                    $"LocalMachine: Exists={machine.Exists}; User={machine.Username}; Location={machine.Location}; Protection={machine.ProtectedBy}");
+            }
+            else
+            {
+                Console.WriteLine("LocalMachine: unavailable to current identity: " + machineError);
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static int SaveVaultCredential(AppConfig config, string storageMode)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(config.AdUsername))
+                throw new InvalidOperationException(
+                    "Specify --ad-user <DOMAIN\\user|user@domain> before saving a credential.");
+
+            var password = AdSessionCredentials.HasPassword
+                ? AdSessionCredentials.GetPasswordCopy()
+                : ReadSecretFromConsole("AD password: ");
+
+            if (string.IsNullOrEmpty(password))
+                throw new InvalidOperationException("AD password is required.");
+
+            var vault = new CredentialVaultService();
+            if (storageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase))
+            {
+                vault.SaveUserCredential(
+                    config.AdCredentialTarget,
+                    config.AdUsername,
+                    password);
+            }
+            else
+            {
+                vault.SaveMachineCredential(
+                    config.AdUsername,
+                    config.AdDomain,
+                    password);
+            }
+
+            config.AdUseExplicitCredentials = true;
+            config.AdCredentialStorageMode = storageMode;
+            ConfigService.SaveAppConfig(config);
+            AdSessionCredentials.Clear();
+
+            Console.WriteLine(
+                $"AD credential saved in {storageMode} vault. Plaintext password was not written to appsettings.");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+        finally
+        {
+            AdSessionCredentials.Clear();
+        }
+    }
+
+    private static int DeleteVaultCredential(AppConfig config, string storageMode)
+    {
+        try
+        {
+            var vault = new CredentialVaultService();
+            if (storageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase))
+                vault.DeleteUserCredential(config.AdCredentialTarget);
+            else
+                vault.DeleteMachineCredential();
+
+            Console.WriteLine($"{storageMode} AD credential deleted.");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static int ConfigureServiceIdentityCli(
+        AppConfig config,
+        string mode,
+        string? account)
+    {
+        try
+        {
+            string? password = null;
+            if (mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase))
+                password = ReadSecretFromConsole("Windows Service account password: ");
+
+            WindowsServiceHost.ConfigureIdentity(
+                mode,
+                account,
+                password,
+                restartIfRunning: true);
+
+            config.ServiceIdentityMode = mode;
+            config.ServiceIdentityAccount = account ?? string.Empty;
+            ConfigService.SaveAppConfig(config);
+
+            var info = WindowsServiceHost.GetInfo();
+            Console.WriteLine(
+                $"BitKeyBridge service identity: {info.Identity}; State={info.State}");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static string? GetOptionValue(string[] args, string option)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(option, StringComparison.OrdinalIgnoreCase))
+                return args[i + 1];
+        }
+        return null;
+    }
+
     private static int RunAdTest(AppConfig config)
     {
         try
@@ -390,10 +579,13 @@ internal static class Program
         }
     }
 
-    private static string ReadPasswordFromConsole()
+    private static string ReadPasswordFromConsole() =>
+        ReadSecretFromConsole("AD password (session only): ");
+
+    private static string ReadSecretFromConsole(string prompt)
     {
-        Console.Write("AD password (session only): ");
-        var password = new StringBuilder();
+        Console.Write(prompt);
+        var secret = new StringBuilder();
 
         while (true)
         {
@@ -401,18 +593,18 @@ internal static class Program
             if (key.Key == ConsoleKey.Enter)
             {
                 Console.WriteLine();
-                return password.ToString();
+                return secret.ToString();
             }
 
             if (key.Key == ConsoleKey.Backspace)
             {
-                if (password.Length > 0)
-                    password.Length--;
+                if (secret.Length > 0)
+                    secret.Length--;
                 continue;
             }
 
             if (!char.IsControl(key.KeyChar))
-                password.Append(key.KeyChar);
+                secret.Append(key.KeyChar);
         }
     }
 
@@ -510,6 +702,32 @@ internal static class Program
 
             try
             {
+                if (OperatingSystem.IsWindows())
+                {
+                    var plain = Encoding.UTF8.GetBytes("BitKeyBridge-DPAPI-self-test-" + Guid.NewGuid().ToString("N"));
+                    byte[]? protectedBytes = null;
+                    byte[]? roundTrip = null;
+                    try
+                    {
+                        protectedBytes = CredentialVaultService.ProtectMachineData(plain);
+                        roundTrip = CredentialVaultService.UnprotectMachineData(protectedBytes);
+                        if (!plain.SequenceEqual(roundTrip))
+                            failures.Add("Machine DPAPI protect/unprotect round-trip failed.");
+                    }
+                    finally
+                    {
+                        System.Security.Cryptography.CryptographicOperations.ZeroMemory(plain);
+                        if (protectedBytes is not null)
+                            System.Security.Cryptography.CryptographicOperations.ZeroMemory(protectedBytes);
+                        if (roundTrip is not null)
+                            System.Security.Cryptography.CryptographicOperations.ZeroMemory(roundTrip);
+                    }
+                }
+            }
+            catch (Exception ex) { failures.Add("Machine DPAPI round-trip: " + ex.Message); }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
@@ -572,7 +790,15 @@ internal static class Program
         Console.WriteLine("  --uninstall-service   Stop and remove the native Windows Service");
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
         Console.WriteLine("  --stop-service        Stop the installed BitKeyBridge service");
-        Console.WriteLine("  --service-status      Show installed service state");
+        Console.WriteLine("  --service-status      Show installed service state and identity");
+        Console.WriteLine("  --vault-status        Show AD credential vault metadata (never plaintext)");
+        Console.WriteLine("  --vault-save-user     Save AD credential in current-user Credential Manager");
+        Console.WriteLine("  --vault-save-machine  Save AD credential with machine DPAPI + restricted ACL");
+        Console.WriteLine("  --vault-delete-user   Delete current-user stored AD credential");
+        Console.WriteLine("  --vault-delete-machine Delete machine/service stored AD credential");
+        Console.WriteLine("  --service-identity-local-system  Run installed service as LocalSystem");
+        Console.WriteLine("  --service-identity-gmsa <DOMAIN\\account$>  Configure gMSA/managed account");
+        Console.WriteLine("  --service-identity-user <DOMAIN\\user>  Configure regular service account; prompts for password");
         Console.WriteLine("  --check-update        Check the configured GitHub repository for a newer release");
         Console.WriteLine("  --update              Verify and install the latest stable release");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
