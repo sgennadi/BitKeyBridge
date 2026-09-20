@@ -1,0 +1,50 @@
+name: codeql
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  schedule:
+    - cron: "27 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  security-events: write
+
+concurrency:
+  group: bitkeybridge-codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze C#
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          build-mode: manual
+
+      - name: Restore
+        shell: cmd
+        run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
+
+      - name: Build
+        shell: cmd
+        run: dotnet build src\BitKeyBridge\BitKeyBridge.csproj -c Release --no-restore
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
