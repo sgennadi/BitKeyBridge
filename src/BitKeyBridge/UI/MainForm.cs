@@ -1304,6 +1304,7 @@ public sealed class MainForm : Form
 
         refresh.Click += (_, _) => RefreshAudit();
         open.Click += (_, _) => OpenPath(AppPaths.AuditLogFile, "notepad.exe");
+        verify.Click += (_, _) => VerifyAuditIntegrityGui();
         RefreshAudit();
         return tab;
     }
