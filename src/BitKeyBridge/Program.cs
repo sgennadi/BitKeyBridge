@@ -240,7 +240,9 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase)))
         {
-            var integrity = AuditIntegrityService.Verify(AppPaths.AuditLogFile);
+            var integrity =
+                AuditIntegrityService.VerifyAndPersist(
+                    AppPaths.AuditLogFile);
             Console.WriteLine(
                 JsonSerializer.Serialize(
                     integrity,
