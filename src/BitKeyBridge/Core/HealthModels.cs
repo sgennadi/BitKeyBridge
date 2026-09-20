@@ -9,6 +9,10 @@ public sealed class HealthSnapshot
     public string ServiceState { get; set; } = "NotInstalled";
     public string ServiceIdentity { get; set; } = string.Empty;
     public bool ServiceInstalled { get; set; }
+    public bool ServiceCoverageEnabled { get; set; }
+    public int ServiceCoverageIntervalMinutes { get; set; }
+    public bool MachineCloudConfigured { get; set; }
+    public string MachineCloudCertificateThumbprint { get; set; } = string.Empty;
     public string HealthEndpoint { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
@@ -29,6 +33,16 @@ public sealed class HealthSnapshot
     public DateTime? LastSuccessfulExport { get; set; }
     public double? LastSuccessfulExportAgeHours { get; set; }
     public bool LastSuccessfulExportStale { get; set; }
+
+    public bool? LastCoverageSuccess { get; set; }
+    public DateTime? LastCoverageFinishedUtc { get; set; }
+    public double? LastCoverageAgeHours { get; set; }
+    public string LastCoverageError { get; set; } = string.Empty;
+    public int CoverageTotalDevices { get; set; }
+    public int CoverageNoRecoveryKey { get; set; }
+    public int CoverageIntuneNotEncrypted { get; set; }
+    public int CoverageIntuneStale { get; set; }
+    public int CoverageOldCloudKey { get; set; }
 
     public bool CloudConfigured { get; set; }
     public string CloudAuthMode { get; set; } = string.Empty;
