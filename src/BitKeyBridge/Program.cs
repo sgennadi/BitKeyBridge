@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace BitKeyBridge;
 
 internal static class Program
@@ -27,12 +29,23 @@ internal static class Program
             return RunSelfTest();
         }
 
-        var isCli = args.Any(x => x.Equals("--cli", StringComparison.OrdinalIgnoreCase) ||
-                                  x.Equals("--dry-run", StringComparison.OrdinalIgnoreCase) ||
-                                  x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase));
+        var isCli = args.Any(x =>
+            x.Equals("--cli", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--dry-run", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--install-service", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--uninstall-service", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--start-service", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--stop-service", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--health", StringComparison.OrdinalIgnoreCase));
         if (isCli) ConsoleHelper.EnsureConsole();
 
         var config = ConfigService.LoadAppConfig();
+
+        if (args.Any(x => x.Equals("--service", StringComparison.OrdinalIgnoreCase)))
+            return WindowsServiceHost.RunService(config);
+
         var noElevation = args.Any(x => x.Equals("--no-elevation", StringComparison.OrdinalIgnoreCase));
         if (!noElevation && !SecurityContext.IsAdministrator())
         {
@@ -48,6 +61,95 @@ internal static class Program
                 Console.Error.WriteLine("Administrative rights are required.");
                 return 5;
             }
+        }
+
+        if (args.Any(x => x.Equals("--install-service", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                WindowsServiceHost.InstallOrUpdate();
+                WindowsServiceHost.Start();
+                Console.WriteLine($"Installed and started {WindowsServiceHost.DisplayName}.");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--uninstall-service", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                WindowsServiceHost.Uninstall();
+                Console.WriteLine($"Uninstalled {WindowsServiceHost.DisplayName}.");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--start-service", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                WindowsServiceHost.Start();
+                Console.WriteLine("BitKeyBridge service state: " + WindowsServiceHost.GetInfo().State);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--stop-service", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                WindowsServiceHost.Stop();
+                Console.WriteLine("BitKeyBridge service state: " + WindowsServiceHost.GetInfo().State);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--service-status", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                var service = WindowsServiceHost.GetInfo();
+                Console.WriteLine(service.Installed
+                    ? $"Installed; State={service.State}; Binary={service.BinaryPath}"
+                    : "Not installed");
+                return service.Installed ? 0 : 3;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
+        {
+            var health = new HealthService(config).GetSnapshot();
+            Console.WriteLine(JsonSerializer.Serialize(health, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            }));
+            return health.OverallStatus == "Error" ? 2 : 0;
         }
 
         if (args.Any(x => x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase)))
@@ -194,6 +296,12 @@ internal static class Program
         Console.WriteLine("  --dry-run             Read and validate without publishing CSV");
         Console.WriteLine("  --force-publish       Override row-drop/scope-change publish guards");
         Console.WriteLine("  --dc-test             Discover and compare current domain controllers");
+        Console.WriteLine("  --health              Print the local health snapshot as JSON");
+        Console.WriteLine("  --install-service     Install/update and start the native Windows Service");
+        Console.WriteLine("  --uninstall-service   Stop and remove the native Windows Service");
+        Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
+        Console.WriteLine("  --stop-service        Stop the installed BitKeyBridge service");
+        Console.WriteLine("  --service-status      Show installed service state");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
         Console.WriteLine("  --no-elevation        Do not relaunch through UAC");
         Console.WriteLine("  --self-test           Run offline smoke tests and exit");
