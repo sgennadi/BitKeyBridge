@@ -9,7 +9,7 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 ## Highlights
 
 - Self-contained single-file Windows builds for x64, x86, and ARM64 (`BitKeyBridge.exe` in each architecture package).
-- GUI and non-interactive CLI in the same executable.
+- GUI, native Windows Service host, and non-interactive CLI in the same executable.
 - Reads `msFVE-RecoveryInformation` directly over LDAP v3 using the current Windows credentials.
 - No destructive AD operations. The exporter never deletes or changes BitLocker objects.
 - Dynamic domain-controller discovery; no hard-coded DC names.
@@ -26,6 +26,10 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - Intune BitLocker recovery-key rotation with explicit confirmation.
 - Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
 - Certificate rolling preserves active credentials when the previously managed private certificate is available.
+- Health Dashboard with service/export/replication/certificate status.
+- Native Windows Service mode with scheduled exports and no PowerShell dependency.
+- Loopback-only JSON health endpoint for monitoring systems.
+- Secure Output Wizard for protected NTFS recovery storage and optional restricted SMB shares.
 
 ## Platform
 
@@ -92,6 +96,27 @@ Test all currently discovered domain controllers:
 BitKeyBridge.exe --dc-test
 ```
 
+Show the local health snapshot as JSON:
+
+```text
+BitKeyBridge.exe --health
+```
+
+Install/update and start the native Windows Service:
+
+```text
+BitKeyBridge.exe --install-service
+```
+
+Service lifecycle commands:
+
+```text
+BitKeyBridge.exe --service-status
+BitKeyBridge.exe --start-service
+BitKeyBridge.exe --stop-service
+BitKeyBridge.exe --uninstall-service
+```
+
 Override the saved scopes for one run (repeat the option for multiple OUs):
 
 ```text
@@ -143,7 +168,63 @@ BitLocker recovery passwords are secrets.
 - SYSVOL/NETLOGON is convenient for legacy WinPE workflows but should not be broadly readable when it contains recovery passwords. A dedicated restricted share is preferred.
 - Device Code is the preferred interactive mode because it can satisfy MFA and Conditional Access. ROPC is legacy only. Certificate authentication is the intended unattended mode.
 - The local security audit is stored at `%ProgramData%\BitKeyBridge\audit.jsonl` and never stores a BitLocker recovery password.
+- The monitoring endpoint is loopback-only and never returns recovery passwords or authentication secrets.
+- The Windows Service executable is installed under `%ProgramFiles%\BitKeyBridge`; configuration and service logs remain under `%ProgramData%\BitKeyBridge`.
 - Cloud recovery-key reads are auditable in Microsoft Entra.
+
+## Dashboard, Windows Service and monitoring
+
+BitKeyBridge can run its AD export engine as a native Windows Service. **Install / Update** from the Dashboard copies the current single-file executable to:
+
+```text
+%ProgramFiles%\BitKeyBridge\BitKeyBridge.exe
+```
+
+and registers the **BitKeyBridge** service with Windows Service Control Manager. The service runs as LocalSystem, uses the same machine configuration in `%ProgramData%\BitKeyBridge\appsettings.json`, and performs published exports on the configured interval. By default it also performs an export immediately when the service starts.
+
+The Dashboard can:
+
+- install/update, start, stop, and uninstall the service;
+- change the export interval;
+- enable/disable the health endpoint and select its port;
+- show last export status, row count, DC, replication health, output state, and certificate expiry;
+- open the local monitoring endpoint;
+- launch Secure Output Wizard.
+
+### Local health endpoint
+
+When enabled, the service exposes:
+
+```text
+http://127.0.0.1:8750/health
+http://127.0.0.1:8750/health/live
+```
+
+The listener is bound to **127.0.0.1 only**. It is not exposed to the LAN and does not require an HTTP URL reservation. The JSON response intentionally excludes recovery passwords, Graph access tokens, passwords, and certificate private-key material.
+
+`/health` returns HTTP 200 for Healthy/Warning states and HTTP 503 when the snapshot contains a health error. This makes it suitable for local agents such as PRTG, Zabbix, Nagios/NRPE-style wrappers, SCOM agents, or custom monitoring scripts.
+
+The same snapshot can be retrieved without HTTP:
+
+```text
+BitKeyBridge.exe --health
+```
+
+### Secure Output Wizard
+
+The Dashboard's **Secure Output...** action can create a dedicated local recovery directory with protected NTFS permissions.
+
+The wizard:
+
+- disables inherited NTFS permissions;
+- grants Full Control to LocalSystem, local Administrators, and the administrator creating the directory;
+- grants configured reader accounts/groups **Read & Execute** only;
+- can optionally create an SMB share with a matching restricted share ACL using the native Windows `NetShareAdd` API;
+- can update BitKeyBridge's export configuration to use the new protected directory.
+
+Existing SMB shares are never overwritten automatically. If the requested share name already exists, the wizard stops instead of modifying it.
+
+If a legacy WinPE workflow currently reads recovery data from SYSVOL/NETLOGON, update that consumer before changing the production export path.
 
 ## Unified Devices and key rotation
 
