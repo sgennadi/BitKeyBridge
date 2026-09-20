@@ -142,6 +142,9 @@ public sealed class CredentialVaultService
         string? path = null)
     {
         EnsureWindows();
+        if (!SecurityContext.IsAdministrator())
+            throw new InvalidOperationException(
+                "Administrator rights are required to write the Machine / Service credential vault.");
         ValidateCredential(username, password);
 
         path ??= AppPaths.MachineAdCredentialFile;
@@ -211,6 +214,9 @@ public sealed class CredentialVaultService
     public void DeleteMachineCredential(string? path = null)
     {
         EnsureWindows();
+        if (!SecurityContext.IsAdministrator())
+            throw new InvalidOperationException(
+                "Administrator rights are required to delete the Machine / Service credential vault.");
         path ??= AppPaths.MachineAdCredentialFile;
         if (File.Exists(path))
             File.Delete(path);
