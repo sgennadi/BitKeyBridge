@@ -127,7 +127,7 @@ public sealed class CloudAuthConfig
     public string ClientId { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string CertificateThumbprint { get; set; } = string.Empty;
-    public string AuthMode { get; set; } = "Password";
+    public string AuthMode { get; set; } = "DeviceCode";
     public string BootstrapClientId { get; set; } = string.Empty;
 }
 
