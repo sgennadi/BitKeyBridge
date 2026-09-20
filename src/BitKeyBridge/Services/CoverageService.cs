@@ -348,11 +348,19 @@ public sealed class CoverageService
     private static string Csv(string? value)
     {
         value ??= string.Empty;
+
+        if (value.Length > 0 &&
+            value[0] is '=' or '+' or '-' or '@')
+        {
+            value = "'" + value;
+        }
+
         return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
     private static string Bool(bool value) => value ? "True" : "False";
 
     private static string Date(DateTime? value) =>
-        value?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty;
+        value?.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") ??
+        string.Empty;
 }
