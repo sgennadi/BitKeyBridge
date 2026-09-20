@@ -88,14 +88,22 @@ public sealed class EntraSetupService : IDisposable
         var applicationId = application["appId"]!.GetValue<string>();
         var applicationObjectId = application["id"]!.GetValue<string>();
         var servicePrincipal = await FindServicePrincipalByAppIdAsync(managementToken, applicationId, ct);
+        var servicePrincipalWasCreated = false;
         if (servicePrincipal is null)
         {
             progress?.Report("Creating Enterprise Application (service principal)...");
             servicePrincipal = await GraphObjectAsync(HttpMethod.Post, managementToken,
                 "https://graph.microsoft.com/v1.0/servicePrincipals",
                 new JsonObject { ["appId"] = applicationId }, ct);
+            servicePrincipalWasCreated = true;
         }
         var servicePrincipalId = servicePrincipal["id"]!.GetValue<string>();
+
+        if (servicePrincipalWasCreated)
+        {
+            progress?.Report("Waiting briefly for the new Enterprise Application to propagate...");
+            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+        }
 
         progress?.Report("Granting Microsoft Graph application permissions...");
         await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppBitLocker, ct);
@@ -569,18 +577,49 @@ public sealed class EntraSetupService : IDisposable
     private static string Base64Url(byte[] value) =>
         Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    private async Task<JsonObject> GraphObjectAsync(HttpMethod method, string token, string uri, JsonNode? body, CancellationToken ct)
+    private async Task<JsonObject> GraphObjectAsync(
+        HttpMethod method,
+        string token,
+        string uri,
+        JsonNode? body,
+        CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(method, uri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        if (body is not null)
-            request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-        using var response = await _http.SendAsync(request, ct);
-        var text = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Graph {method} failed: {ExtractError(text)}");
-        if (string.IsNullOrWhiteSpace(text)) return new JsonObject();
-        return JsonNode.Parse(text) as JsonObject ?? new JsonObject();
+        var payload = body?.ToJsonString();
+
+        for (var attempt = 1; attempt <= 6; attempt++)
+        {
+            using var request = new HttpRequestMessage(method, uri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (payload is not null)
+                request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            using var response = await _http.SendAsync(request, ct);
+            var text = await response.Content.ReadAsStringAsync(ct);
+            if (response.IsSuccessStatusCode)
+            {
+                if (string.IsNullOrWhiteSpace(text)) return new JsonObject();
+                return JsonNode.Parse(text) as JsonObject ?? new JsonObject();
+            }
+
+            var status = (int)response.StatusCode;
+            var transient =
+                status == 408 ||
+                status == 429 ||
+                status >= 500 ||
+                (status == 404 && method != HttpMethod.Get);
+
+            if (transient && attempt < 6)
+            {
+                var retryAfter = response.Headers.RetryAfter?.Delta;
+                var delay = retryAfter ?? TimeSpan.FromSeconds(Math.Min(15, Math.Pow(2, attempt)));
+                await Task.Delay(delay, ct);
+                continue;
+            }
+
+            throw new InvalidOperationException($"Graph {method} failed ({status}): {ExtractError(text)}");
+        }
+
+        throw new InvalidOperationException($"Graph {method} failed after retry attempts.");
     }
 
     private async Task GraphNoContentAsync(HttpMethod method, string token, string uri, JsonNode body, CancellationToken ct)
