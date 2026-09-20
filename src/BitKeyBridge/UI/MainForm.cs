@@ -6,6 +6,7 @@ public sealed class MainForm : Form
 {
     private readonly AppConfig _config;
     private readonly ActiveDirectoryService _ad = new();
+    private readonly AuditService _audit = new();
     private readonly CheckedListBox _scopes = new();
     private readonly RichTextBox _exportLog = new();
     private readonly Label _lastSuccess = new();
@@ -40,11 +41,18 @@ public sealed class MainForm : Form
     private GraphToken? _cloudToken;
     private string? _cloudCurrentKey;
 
+    private readonly TextBox _unifiedQuery = new();
+    private readonly ListView _unifiedResults = new();
+    private readonly RichTextBox _unifiedDetails = new();
+    private readonly Label _unifiedStatus = new();
+
+    private readonly ListView _auditResults = new();
+
     public MainForm(AppConfig config)
     {
         _config = config;
         _cloudConfig = ConfigService.LoadCloudConfig();
-        Text = "BitKeyBridge (.NET)";
+        Text = "BitKeyBridge 0.2 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
@@ -54,7 +62,9 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(BuildExportTab());
         tabs.TabPages.Add(BuildDcTab());
         tabs.TabPages.Add(BuildLocalSearchTab());
+        tabs.TabPages.Add(BuildUnifiedTab());
         tabs.TabPages.Add(BuildCloudTab());
+        tabs.TabPages.Add(BuildAuditTab());
         Controls.Add(tabs);
 
         LoadDefaultScopes();
@@ -207,8 +217,63 @@ public sealed class MainForm : Form
         search.Click += (_, _) => SearchLocal();
         _localQuery.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) SearchLocal(); };
         _localResults.SelectedIndexChanged += (_, _) => SelectLocalRecord();
-        _localShow.Click += (_, _) => ToggleKey(_localKey, _localShow);
-        copy.Click += (_, _) => CopyKeyWithAutoClear(_localCurrentKey);
+        _localShow.Click += (_, _) =>
+        {
+            ToggleKey(_localKey, _localShow);
+            if (!_localKey.UseSystemPasswordChar &&
+                _localResults.SelectedItems.Count > 0 &&
+                _localResults.SelectedItems[0].Tag is RecoveryRecord row)
+                _audit.Write("RevealLocalRecoveryKey", computerName: row.ComputerName, recoveryId: row.BitLockerId, source: "AD");
+        };
+        copy.Click += (_, _) =>
+        {
+            if (_localResults.SelectedItems.Count > 0 && _localResults.SelectedItems[0].Tag is RecoveryRecord row)
+                _audit.Write("CopyLocalRecoveryKey", computerName: row.ComputerName, recoveryId: row.BitLockerId, source: "AD");
+            CopyKeyWithAutoClear(_localCurrentKey);
+        };
+        return tab;
+    }
+
+    private TabPage BuildUnifiedTab()
+    {
+        var tab = new TabPage("Unified Devices");
+        var label = new Label
+        {
+            Text = "Search name, serial, user/UPN or device ID:",
+            Left = 16,
+            Top = 23,
+            AutoSize = true
+        };
+        _unifiedQuery.SetBounds(275, 18, 460, 27);
+        var search = new Button { Text = "Search AD + Cloud", Left = 750, Top = 16, Width = 145, Height = 32 };
+        var rotate = new Button { Text = "Rotate BitLocker Key", Left = 910, Top = 16, Width = 165, Height = 32 };
+        tab.Controls.AddRange([label, _unifiedQuery, search, rotate]);
+
+        _unifiedStatus.SetBounds(16, 58, 1155, 24);
+        _unifiedStatus.Text = "Search combines on-prem AD computer data with Entra/Intune inventory and BitLocker metadata.";
+        tab.Controls.Add(_unifiedStatus);
+
+        _unifiedResults.View = View.Details;
+        _unifiedResults.FullRowSelect = true;
+        _unifiedResults.GridLines = true;
+        _unifiedResults.SetBounds(16, 90, 1155, 390);
+        _unifiedResults.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        AddColumns(_unifiedResults,
+            ("Computer", 150), ("AD", 45), ("Entra", 50), ("Intune", 52), ("Serial", 120),
+            ("User / UPN", 185), ("Model", 135), ("OS", 120), ("Compliance", 90),
+            ("Encrypted", 70), ("Last Sync", 140), ("Keys", 45));
+        tab.Controls.Add(_unifiedResults);
+
+        _unifiedDetails.ReadOnly = true;
+        _unifiedDetails.Font = new Font("Consolas", 9F);
+        _unifiedDetails.SetBounds(16, 492, 1155, 245);
+        _unifiedDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        tab.Controls.Add(_unifiedDetails);
+
+        search.Click += async (_, _) => await SearchUnifiedDevicesAsync();
+        _unifiedQuery.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) await SearchUnifiedDevicesAsync(); };
+        rotate.Click += async (_, _) => await RotateSelectedUnifiedDeviceAsync();
+        _unifiedResults.SelectedIndexChanged += (_, _) => ShowUnifiedDeviceDetails();
         return tab;
     }
 
@@ -226,7 +291,11 @@ public sealed class MainForm : Form
         AddLabeled(authGroup, "Certificate thumbprint:", _cloudThumbprint, 585, 28, 150, 390);
         AddLabeled(authGroup, "Authentication:", _cloudAuthMode, 585, 62, 150, 390);
         _cloudAuthMode.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cloudAuthMode.Items.AddRange(["Username + Password (ROPC)", "App registration + certificate"]);
+        _cloudAuthMode.Items.AddRange([
+            "Device Code (MFA / Conditional Access)",
+            "Username + Password (ROPC legacy)",
+            "App registration + certificate"
+        ]);
 
         var save = new Button { Text = "Save Config", Left = 585, Top = 103, Width = 115, Height = 32 };
         var connect = new Button { Text = "Connect / Test", Left = 710, Top = 103, Width = 120, Height = 32 };
@@ -234,7 +303,7 @@ public sealed class MainForm : Form
         authGroup.Controls.AddRange([save, connect, autoSetup]);
         var ropcNote = new Label
         {
-            Text = "ROPC is for temporary/manual use and does not work when MFA/Conditional Access requires interactive authentication. Password is never saved.",
+            Text = "Device Code is the recommended interactive mode and supports MFA/Conditional Access. ROPC is legacy only. Password is never saved.",
             Left = 585,
             Top = 148,
             Width = 545,
@@ -267,17 +336,61 @@ public sealed class MainForm : Form
         _cloudShow.Text = "Show Key";
         _cloudShow.SetBounds(780, 600, 95, 32);
         var copy = new Button { Text = "Copy Key", Left = 885, Top = 600, Width = 95, Height = 32 };
-        tab.Controls.AddRange([keyLabel, _cloudKey, getKey, _cloudShow, copy]);
+        var rotate = new Button { Text = "Rotate Key in Intune", Left = 990, Top = 600, Width = 165, Height = 32 };
+        tab.Controls.AddRange([keyLabel, _cloudKey, getKey, _cloudShow, copy, rotate]);
 
         save.Click += (_, _) => SaveCloudFields();
         connect.Click += async (_, _) => await ConnectCloudAsync();
         search.Click += async (_, _) => await SearchCloudAsync();
         _cloudQuery.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) await SearchCloudAsync(); };
         getKey.Click += async (_, _) => await GetCloudKeyAsync();
-        _cloudShow.Click += (_, _) => ToggleKey(_cloudKey, _cloudShow);
-        copy.Click += (_, _) => CopyKeyWithAutoClear(_cloudCurrentKey);
+        _cloudShow.Click += (_, _) =>
+        {
+            ToggleKey(_cloudKey, _cloudShow);
+            if (!_cloudKey.UseSystemPasswordChar &&
+                _cloudResults.SelectedItems.Count > 0 &&
+                _cloudResults.SelectedItems[0].Tag is CloudRecoveryMetadata row)
+                _audit.Write("RevealCloudRecoveryKey", computerName: row.ComputerName, recoveryId: row.RecoveryId, source: "Entra", authMode: _cloudToken?.AuthMode);
+        };
+        copy.Click += (_, _) =>
+        {
+            if (_cloudResults.SelectedItems.Count > 0 && _cloudResults.SelectedItems[0].Tag is CloudRecoveryMetadata row)
+                _audit.Write("CopyCloudRecoveryKey", computerName: row.ComputerName, recoveryId: row.RecoveryId, source: "Entra", authMode: _cloudToken?.AuthMode);
+            CopyKeyWithAutoClear(_cloudCurrentKey);
+        };
+        rotate.Click += async (_, _) => await RotateSelectedCloudKeyAsync();
         autoSetup.Click += async (_, _) => await RunNativeAutoSetupAsync();
         _cloudAuthMode.SelectedIndexChanged += (_, _) => UpdateCloudAuthUi();
+        return tab;
+    }
+
+    private TabPage BuildAuditTab()
+    {
+        var tab = new TabPage("Audit");
+        var refresh = new Button { Text = "Refresh", Left = 16, Top = 16, Width = 100, Height = 32 };
+        var open = new Button { Text = "Open audit.jsonl", Left = 128, Top = 16, Width = 135, Height = 32 };
+        var note = new Label
+        {
+            Text = "Security audit contains actions and IDs only. Recovery passwords are never written to this file.",
+            Left = 280,
+            Top = 24,
+            AutoSize = true
+        };
+        tab.Controls.AddRange([refresh, open, note]);
+
+        _auditResults.View = View.Details;
+        _auditResults.FullRowSelect = true;
+        _auditResults.GridLines = true;
+        _auditResults.SetBounds(16, 62, 1155, 675);
+        _auditResults.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        AddColumns(_auditResults,
+            ("Time (UTC)", 155), ("User", 165), ("Host", 110), ("Action", 175), ("Result", 75),
+            ("Computer", 135), ("Recovery ID", 230), ("Source", 70), ("Auth", 90), ("Details", 260));
+        tab.Controls.Add(_auditResults);
+
+        refresh.Click += (_, _) => RefreshAudit();
+        open.Click += (_, _) => OpenPath(AppPaths.AuditLogFile, "notepad.exe");
+        RefreshAudit();
         return tab;
     }
 
@@ -490,7 +603,11 @@ public sealed class MainForm : Form
         _cloudClient.Text = _cloudConfig.ClientId;
         _cloudUsername.Text = _cloudConfig.Username;
         _cloudThumbprint.Text = _cloudConfig.CertificateThumbprint;
-        _cloudAuthMode.SelectedIndex = _cloudConfig.AuthMode.Equals("Certificate", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        _cloudAuthMode.SelectedIndex = _cloudConfig.AuthMode.Equals("Certificate", StringComparison.OrdinalIgnoreCase)
+            ? 2
+            : _cloudConfig.AuthMode.Equals("Password", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
         UpdateCloudAuthUi();
     }
 
@@ -500,17 +617,25 @@ public sealed class MainForm : Form
         _cloudConfig.ClientId = _cloudClient.Text.Trim();
         _cloudConfig.Username = _cloudUsername.Text.Trim();
         _cloudConfig.CertificateThumbprint = _cloudThumbprint.Text.Trim();
-        _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex == 1 ? "Certificate" : "Password";
+        _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex switch
+        {
+            2 => "Certificate",
+            1 => "Password",
+            _ => "DeviceCode"
+        };
         ConfigService.SaveCloudConfig(_cloudConfig);
         _cloudStatus.Text = "Cloud config saved. Password was not saved.";
     }
 
     private void UpdateCloudAuthUi()
     {
-        var cert = _cloudAuthMode.SelectedIndex == 1;
-        _cloudUsername.Enabled = !cert;
-        _cloudPassword.Enabled = !cert;
+        var deviceCode = _cloudAuthMode.SelectedIndex == 0;
+        var password = _cloudAuthMode.SelectedIndex == 1;
+        var cert = _cloudAuthMode.SelectedIndex == 2;
+        _cloudUsername.Enabled = password;
+        _cloudPassword.Enabled = password;
         _cloudThumbprint.Enabled = cert;
+        if (deviceCode) _cloudPassword.Clear();
     }
 
     private async Task<bool> ConnectCloudAsync()
@@ -520,9 +645,15 @@ public sealed class MainForm : Form
             SaveCloudFields();
             _cloudStatus.Text = "Connecting...";
             using var graph = new CloudGraphService();
-            _cloudToken = _cloudAuthMode.SelectedIndex == 1
-                ? await graph.AcquireCertificateTokenAsync(_cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text)
-                : await graph.AcquirePasswordTokenAsync(_cloudTenant.Text, _cloudClient.Text, _cloudUsername.Text, _cloudPassword.Text);
+            _cloudToken = _cloudAuthMode.SelectedIndex switch
+            {
+                2 => await graph.AcquireCertificateTokenAsync(_cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text),
+                1 => await graph.AcquirePasswordTokenAsync(_cloudTenant.Text, _cloudClient.Text, _cloudUsername.Text, _cloudPassword.Text),
+                _ => await graph.AcquireDeviceCodeTokenAsync(
+                    _cloudTenant.Text,
+                    _cloudClient.Text,
+                    ShowDeviceCodeAsync)
+            };
             var count = await graph.TestAccessAsync(_cloudToken.AccessToken);
             _cloudStatus.Text = $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).";
             return true;
@@ -587,10 +718,13 @@ public sealed class MainForm : Form
             _cloudKey.Text = _cloudCurrentKey;
             _cloudKey.UseSystemPasswordChar = true;
             _cloudShow.Text = "Show Key";
-            _cloudStatus.Text = "Recovery password retrieved. This key-read operation is auditable in Microsoft Entra.";
+            _audit.Write("GetCloudRecoveryKey", computerName: row.ComputerName, recoveryId: row.RecoveryId, source: "Entra", authMode: _cloudToken?.AuthMode);
+            _cloudStatus.Text = "Recovery password retrieved. This key-read operation is auditable in Microsoft Entra and BitKeyBridge.";
         }
         catch (Exception ex)
         {
+            if (_cloudResults.SelectedItems.Count > 0 && _cloudResults.SelectedItems[0].Tag is CloudRecoveryMetadata failedRow)
+                _audit.Write("GetCloudRecoveryKey", "Failed", failedRow.ComputerName, failedRow.RecoveryId, "Entra", _cloudToken?.AuthMode, ex.Message);
             _cloudStatus.Text = "Key retrieval failed: " + ex.Message;
         }
     }
@@ -616,18 +750,7 @@ public sealed class MainForm : Form
                 input.Value,
                 "BitKeyBridge",
                 _cloudConfig,
-                async info =>
-                {
-                    try { Clipboard.SetText(info.UserCode); } catch { }
-                    try { Process.Start(new ProcessStartInfo(info.VerificationUri) { UseShellExecute = true }); } catch { }
-                    MessageBox.Show(this,
-                        info.Message + Environment.NewLine + Environment.NewLine +
-                        "The code has also been copied to the clipboard. Sign in with an Entra administrator account and approve the requested management permissions, then close this dialog.",
-                        "Microsoft Entra Device Code",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    await Task.CompletedTask;
-                },
+                ShowDeviceCodeAsync,
                 progress);
             LoadCloudFields();
             _cloudStatus.Text = $"Auto Setup complete. Client ID: {result.ClientId}; certificate: {result.CertificateThumbprint}";
@@ -638,6 +761,175 @@ public sealed class MainForm : Form
             MessageBox.Show(this, ex.Message, "Native Entra Auto Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally { Enabled = true; }
+    }
+
+    private async Task ShowDeviceCodeAsync(DeviceCodeInfo info)
+    {
+        try { Clipboard.SetText(info.UserCode); } catch { }
+        try { Process.Start(new ProcessStartInfo(info.VerificationUri) { UseShellExecute = true }); } catch { }
+        MessageBox.Show(this,
+            info.Message + Environment.NewLine + Environment.NewLine +
+            "The code has been copied to the clipboard. Complete sign-in in the browser, then return to BitKeyBridge.",
+            "Microsoft Entra Device Code",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+        await Task.CompletedTask;
+    }
+
+    private async Task SearchUnifiedDevicesAsync()
+    {
+        if (!await EnsureCloudTokenAsync()) return;
+        try
+        {
+            _unifiedStatus.Text = "Searching Active Directory, Entra and Intune...";
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            var service = new UnifiedDeviceService();
+            var rows = await service.SearchAsync(_cloudToken!.AccessToken, _unifiedQuery.Text);
+            foreach (var row in rows)
+            {
+                var item = new ListViewItem(row.ComputerName);
+                item.SubItems.Add(row.FoundInAd ? "Yes" : "No");
+                item.SubItems.Add(row.FoundInEntra ? "Yes" : "No");
+                item.SubItems.Add(row.FoundInIntune ? "Yes" : "No");
+                item.SubItems.Add(row.SerialNumber);
+                item.SubItems.Add(string.IsNullOrWhiteSpace(row.UserPrincipalName) ? row.UserDisplayName : row.UserPrincipalName);
+                item.SubItems.Add((row.Manufacturer + " " + row.Model).Trim());
+                item.SubItems.Add((row.OperatingSystem + " " + row.OsVersion).Trim());
+                item.SubItems.Add(row.ComplianceState);
+                item.SubItems.Add(row.IsEncrypted is null ? "-" : row.IsEncrypted.Value ? "Yes" : "No");
+                item.SubItems.Add(row.LastSyncDateTime?.ToString("yyyy-MM-dd HH:mm") ?? string.Empty);
+                item.SubItems.Add(row.RecoveryKeyCount.ToString());
+                item.Tag = row;
+                _unifiedResults.Items.Add(item);
+            }
+            _unifiedStatus.Text = $"Unified search returned {rows.Count} device(s). Recovery passwords were not requested.";
+            _audit.Write("UnifiedDeviceSearch", computerName: _unifiedQuery.Text.Trim(), source: "AD+Entra+Intune", authMode: _cloudToken.AuthMode, details: $"Results={rows.Count}");
+        }
+        catch (Exception ex)
+        {
+            _unifiedStatus.Text = "Unified search failed: " + ex.Message;
+            _audit.Write("UnifiedDeviceSearch", "Failed", source: "AD+Entra+Intune", authMode: _cloudToken?.AuthMode, details: ex.Message);
+        }
+    }
+
+    private void ShowUnifiedDeviceDetails()
+    {
+        _unifiedDetails.Clear();
+        if (_unifiedResults.SelectedItems.Count == 0 ||
+            _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row) return;
+
+        _unifiedDetails.AppendText($"Computer:          {row.ComputerName}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"AD:                {row.FoundInAd}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Entra:             {row.FoundInEntra}  Device ID: {row.EntraDeviceId}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Intune:            {row.FoundInIntune}  Managed Device ID: {row.ManagedDeviceId}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Serial:            {row.SerialNumber}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"User:              {row.UserDisplayName}  {row.UserPrincipalName}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Hardware:          {(row.Manufacturer + " " + row.Model).Trim()}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"OS:                {(row.OperatingSystem + " " + row.OsVersion).Trim()}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Compliance:        {row.ComplianceState}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Encrypted:         {(row.IsEncrypted is null ? "-" : row.IsEncrypted.Value ? "Yes" : "No")}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Intune last sync:  {row.LastSyncDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"AD last logon:     {row.AdLastLogonTimestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"AD DN:             {row.AdDistinguishedName}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Recovery IDs:      {row.RecoveryKeyCount}{Environment.NewLine}");
+        foreach (var recoveryId in row.RecoveryIds)
+            _unifiedDetails.AppendText($"  {recoveryId}{Environment.NewLine}");
+    }
+
+    private async Task RotateSelectedUnifiedDeviceAsync()
+    {
+        if (_unifiedResults.SelectedItems.Count == 0 ||
+            _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row)
+        {
+            MessageBox.Show(this, "Select an Intune-managed device first.", "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(row.ManagedDeviceId))
+        {
+            MessageBox.Show(this, "The selected device is not linked to an Intune managedDevice object.", "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        await RotateManagedDeviceAsync(row.ManagedDeviceId, row.ComputerName, row.RecoveryIds.FirstOrDefault());
+    }
+
+    private async Task RotateSelectedCloudKeyAsync()
+    {
+        if (_cloudResults.SelectedItems.Count == 0 ||
+            _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
+        {
+            MessageBox.Show(this, "Select a cloud recovery record first.", "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (!await EnsureCloudTokenAsync()) return;
+
+        try
+        {
+            _cloudStatus.Text = "Resolving Intune managed device...";
+            using var graph = new CloudGraphService();
+            var managed = await graph.FindManagedDeviceByEntraDeviceIdAsync(_cloudToken!.AccessToken, row.DeviceId);
+            if (managed is null)
+                throw new InvalidOperationException("No matching Intune managedDevice was found for this Entra device.");
+            await RotateManagedDeviceAsync(managed.ManagedDeviceId, row.ComputerName, row.RecoveryId);
+        }
+        catch (Exception ex)
+        {
+            _cloudStatus.Text = "Rotation failed: " + ex.Message;
+            _audit.Write("RotateBitLockerKey", "Failed", row.ComputerName, row.RecoveryId, "Intune", _cloudToken?.AuthMode, ex.Message);
+            MessageBox.Show(this, ex.Message, "Rotate BitLocker Key", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private async Task RotateManagedDeviceAsync(string managedDeviceId, string computerName, string? recoveryId)
+    {
+        if (!await EnsureCloudTokenAsync()) return;
+
+        var answer = MessageBox.Show(this,
+            $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
+            "Intune performs the rotation on the managed device. This does not immediately change the key shown in the current window.",
+            "Confirm BitLocker Key Rotation",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+
+        try
+        {
+            using var graph = new CloudGraphService();
+            await graph.RotateBitLockerKeysAsync(_cloudToken!.AccessToken, managedDeviceId);
+            _audit.Write("RotateBitLockerKey", computerName: computerName, recoveryId: recoveryId, source: "Intune", authMode: _cloudToken.AuthMode, details: $"ManagedDeviceId={managedDeviceId}");
+            _cloudStatus.Text = $"Intune accepted the BitLocker key-rotation request for {computerName}.";
+            _unifiedStatus.Text = _cloudStatus.Text;
+            MessageBox.Show(this,
+                "Intune accepted the rotation request. The new recovery key appears after the device processes the action and backs up the new key.",
+                "Rotate BitLocker Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("RotateBitLockerKey", "Failed", computerName, recoveryId, "Intune", _cloudToken?.AuthMode, ex.Message);
+            throw;
+        }
+    }
+
+    private void RefreshAudit()
+    {
+        _auditResults.Items.Clear();
+        foreach (var row in _audit.ReadRecent(1000))
+        {
+            var item = new ListViewItem(row.TimestampUtc.ToString("yyyy-MM-dd HH:mm:ss"));
+            item.SubItems.Add(row.User);
+            item.SubItems.Add(row.Host);
+            item.SubItems.Add(row.Action);
+            item.SubItems.Add(row.Result);
+            item.SubItems.Add(row.ComputerName);
+            item.SubItems.Add(row.RecoveryId);
+            item.SubItems.Add(row.Source);
+            item.SubItems.Add(row.AuthMode);
+            item.SubItems.Add(row.Details);
+            _auditResults.Items.Add(item);
+        }
     }
 
     private static void ToggleKey(TextBox box, Button button)
