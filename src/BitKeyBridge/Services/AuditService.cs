@@ -49,8 +49,26 @@ public sealed class AuditService
             {
                 var directory = System.IO.Path.GetDirectoryName(_path)!;
                 Directory.CreateDirectory(directory);
+
+                using var processLock = AcquireInterprocessLock();
+                if (processLock is null)
+                    return;
+
+                var previousHash =
+                    AuditIntegrityService.GetLastHash(_path);
+
                 RotateIfNeeded();
-                File.AppendAllText(_path, JsonSerializer.Serialize(entry) + Environment.NewLine);
+
+                entry.ChainVersion =
+                    AuditIntegrityService.CurrentChainVersion;
+                entry.PreviousHash = previousHash;
+                entry.EntryHash =
+                    AuditIntegrityService.ComputeHash(entry);
+
+                File.AppendAllText(
+                    _path,
+                    JsonSerializer.Serialize(entry) +
+                    Environment.NewLine);
             }
             catch
             {
@@ -89,6 +107,33 @@ public sealed class AuditService
                 return [];
             }
         }
+    }
+
+    private FileStream? AcquireInterprocessLock()
+    {
+        var lockPath = _path + ".lock";
+
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            try
+            {
+                return new FileStream(
+                    lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None);
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(20);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     private void RotateIfNeeded()
