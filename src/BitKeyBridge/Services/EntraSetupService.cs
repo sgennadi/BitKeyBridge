@@ -9,12 +9,12 @@ namespace BitKeyBridge;
 public sealed class EntraSetupService : IDisposable
 {
     private const string GraphAppId = "00000003-0000-0000-c000-000000000000";
-    private const string DelegatedBitLockerId = "b27a61ec-b99c-4d6a-b126-c4375d08ae30";
-    private const string DelegatedDeviceId = "951183d1-1a61-466f-a6d1-1fde911bfd95";
-    private const string AppBitLockerId = "57f1cf28-c0c4-4ec3-9a30-19a2eaaf2f6e";
-    private const string AppDeviceId = "7438b122-aefc-4978-80ed-43db9fcc7715";
-    private const string DelegatedManagedDevicesReadWriteId = "44642bfe-8385-4adc-8fc6-fe3cb2c375c3";
-    private const string AppManagedDevicesReadWriteId = "243333ab-4d21-40cb-a475-36241daa0842";
+    public const string DefaultBootstrapClientId = "14d82eec-204b-4c2f-b7e8-296a70dab67e";
+    public const string DefaultBootstrapDisplayName = "Microsoft Graph Command Line Tools";
+
+    private const string BitLockerPermission = "BitlockerKey.Read.All";
+    private const string DevicePermission = "Device.Read.All";
+    private const string ManagedDevicesReadWritePermission = "DeviceManagementManagedDevices.ReadWrite.All";
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
     private readonly CertificateService _certificates = new();
@@ -29,26 +29,35 @@ public sealed class EntraSetupService : IDisposable
         bool rotateCertificate = false,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(bootstrapClientId))
-            throw new ArgumentException("Bootstrap Client ID is required for first-run native Entra setup.");
         tenant = string.IsNullOrWhiteSpace(tenant) ? "organizations" : tenant.Trim();
         displayName = string.IsNullOrWhiteSpace(displayName) ? "BitKeyBridge" : displayName.Trim();
+        var effectiveBootstrapClientId = string.IsNullOrWhiteSpace(bootstrapClientId)
+            ? DefaultBootstrapClientId
+            : bootstrapClientId.Trim();
+        var usingDefaultBootstrap = string.Equals(
+            effectiveBootstrapClientId,
+            DefaultBootstrapClientId,
+            StringComparison.OrdinalIgnoreCase);
 
-        progress?.Report("Requesting Entra device code...");
-        var managementToken = await AcquireManagementTokenByDeviceCodeAsync(tenant, bootstrapClientId.Trim(), showDeviceCode, ct);
+        progress?.Report(usingDefaultBootstrap
+            ? $"Requesting Entra device code through Microsoft first-party '{DefaultBootstrapDisplayName}'..."
+            : "Requesting Entra device code through the configured bootstrap application...");
+        var managementToken = await AcquireManagementTokenByDeviceCodeAsync(tenant, effectiveBootstrapClientId, showDeviceCode, ct);
         var tenantId = ResolveTenantIdFromAccessToken(managementToken);
         progress?.Report($"Connected to tenant {tenantId}.");
 
-        var graphSp = await FindServicePrincipalByAppIdAsync(managementToken, GraphAppId, ct)
+        var graphSp = await GetMicrosoftGraphServicePrincipalAsync(managementToken, ct)
             ?? throw new InvalidOperationException("Microsoft Graph service principal was not found in the tenant.");
         var graphSpId = graphSp["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Graph service principal ID is missing.");
+        var permissionIds = ResolveGraphPermissionIds(graphSp);
+        progress?.Report("Resolved current Microsoft Graph permission identifiers dynamically.");
 
         JsonObject? application = null;
         if (!string.IsNullOrWhiteSpace(existingConfig?.ClientId))
             application = await FindApplicationByAppIdAsync(managementToken, existingConfig.ClientId, ct);
         application ??= await FindSingleApplicationByNameAsync(managementToken, displayName, ct);
 
-        var requiredResourceAccess = BuildRequiredResourceAccess();
+        var requiredResourceAccess = BuildRequiredResourceAccess(permissionIds);
         if (application is null)
         {
             progress?.Report($"Creating App Registration '{displayName}'...");
@@ -65,7 +74,7 @@ public sealed class EntraSetupService : IDisposable
         {
             progress?.Report("Updating App Registration permissions/public-client settings...");
             var appObjectId = application["id"]!.GetValue<string>();
-            var mergedResourceAccess = MergeRequiredResourceAccess(application["requiredResourceAccess"] as JsonArray);
+            var mergedResourceAccess = MergeRequiredResourceAccess(application["requiredResourceAccess"] as JsonArray, permissionIds);
             await GraphNoContentAsync(new HttpMethod("PATCH"), managementToken,
                 $"https://graph.microsoft.com/v1.0/applications/{appObjectId}",
                 new JsonObject
@@ -89,13 +98,13 @@ public sealed class EntraSetupService : IDisposable
         var servicePrincipalId = servicePrincipal["id"]!.GetValue<string>();
 
         progress?.Report("Granting Microsoft Graph application permissions...");
-        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, AppBitLockerId, ct);
-        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, AppDeviceId, ct);
-        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, AppManagedDevicesReadWriteId, ct);
+        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppBitLocker, ct);
+        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppDevice, ct);
+        await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppManagedDevicesReadWrite, ct);
 
         progress?.Report("Granting tenant-wide delegated admin consent...");
         await EnsureDelegatedGrantAsync(managementToken, servicePrincipalId, graphSpId,
-            "BitlockerKey.Read.All Device.Read.All DeviceManagementManagedDevices.ReadWrite.All", ct);
+            $"{BitLockerPermission} {DevicePermission} {ManagedDevicesReadWritePermission}", ct);
 
         X509Certificate2 cert;
         if (!rotateCertificate && !string.IsNullOrWhiteSpace(existingConfig?.CertificateThumbprint))
@@ -129,8 +138,8 @@ public sealed class EntraSetupService : IDisposable
             ClientId = applicationId,
             Username = existingConfig?.Username ?? string.Empty,
             CertificateThumbprint = cert.Thumbprint,
-            AuthMode = existingConfig?.AuthMode ?? "Password",
-            BootstrapClientId = bootstrapClientId.Trim()
+            AuthMode = existingConfig?.AuthMode ?? "DeviceCode",
+            BootstrapClientId = effectiveBootstrapClientId
         };
         JsonStore.WriteAtomic(AppPaths.CloudConfigFile, config);
 
@@ -207,7 +216,14 @@ public sealed class EntraSetupService : IDisposable
             var error = errorJson.RootElement.TryGetProperty("error", out var er) ? er.GetString() : string.Empty;
             if (error == "authorization_pending") continue;
             if (error == "slow_down") { interval += 5; continue; }
-            throw new InvalidOperationException("Device-code authentication failed: " + ExtractError(text));
+            var detail = ExtractError(text);
+            if (detail.Contains("53003", StringComparison.OrdinalIgnoreCase) ||
+                detail.Contains("530033", StringComparison.OrdinalIgnoreCase))
+            {
+                detail += " Conditional Access blocked Device Code for the bootstrap application. " +
+                          "Use a permitted administrator workstation/policy or configure a custom BootstrapClientId.";
+            }
+            throw new InvalidOperationException("Device-code authentication failed: " + detail);
         }
         throw new TimeoutException("Device-code authentication expired before sign-in completed.");
     }
@@ -224,7 +240,59 @@ public sealed class EntraSetupService : IDisposable
         throw new InvalidOperationException("The Entra access token does not contain a valid tenant ID (tid) claim.");
     }
 
-    private static JsonArray BuildRequiredResourceAccess() =>
+    private sealed record GraphPermissionIds(
+        string DelegatedBitLocker,
+        string DelegatedDevice,
+        string AppBitLocker,
+        string AppDevice,
+        string DelegatedManagedDevicesReadWrite,
+        string AppManagedDevicesReadWrite);
+
+    private static GraphPermissionIds ResolveGraphPermissionIds(JsonObject graphServicePrincipal)
+    {
+        return new GraphPermissionIds(
+            ResolveDelegatedScopeId(graphServicePrincipal, BitLockerPermission),
+            ResolveDelegatedScopeId(graphServicePrincipal, DevicePermission),
+            ResolveApplicationRoleId(graphServicePrincipal, BitLockerPermission),
+            ResolveApplicationRoleId(graphServicePrincipal, DevicePermission),
+            ResolveDelegatedScopeId(graphServicePrincipal, ManagedDevicesReadWritePermission),
+            ResolveApplicationRoleId(graphServicePrincipal, ManagedDevicesReadWritePermission));
+    }
+
+    private static string ResolveDelegatedScopeId(JsonObject graphServicePrincipal, string value)
+    {
+        var scopes = graphServicePrincipal["oauth2PermissionScopes"] as JsonArray
+            ?? throw new InvalidOperationException("Microsoft Graph delegated permission metadata is unavailable.");
+
+        var match = scopes.OfType<JsonObject>().FirstOrDefault(x =>
+            string.Equals(x["value"]?.GetValue<string>(), value, StringComparison.OrdinalIgnoreCase) &&
+            (x["isEnabled"]?.GetValue<bool>() ?? true));
+
+        return match?["id"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Microsoft Graph delegated permission '{value}' was not found.");
+    }
+
+    private static string ResolveApplicationRoleId(JsonObject graphServicePrincipal, string value)
+    {
+        var roles = graphServicePrincipal["appRoles"] as JsonArray
+            ?? throw new InvalidOperationException("Microsoft Graph application permission metadata is unavailable.");
+
+        var match = roles.OfType<JsonObject>().FirstOrDefault(x =>
+        {
+            if (!string.Equals(x["value"]?.GetValue<string>(), value, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (!(x["isEnabled"]?.GetValue<bool>() ?? true))
+                return false;
+            var members = x["allowedMemberTypes"] as JsonArray;
+            return members is not null && members.Any(m =>
+                string.Equals(m?.GetValue<string>(), "Application", StringComparison.OrdinalIgnoreCase));
+        });
+
+        return match?["id"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Microsoft Graph application permission '{value}' was not found.");
+    }
+
+    private static JsonArray BuildRequiredResourceAccess(GraphPermissionIds ids) =>
         new()
         {
             new JsonObject
@@ -232,17 +300,17 @@ public sealed class EntraSetupService : IDisposable
                 ["resourceAppId"] = GraphAppId,
                 ["resourceAccess"] = new JsonArray
                 {
-                    new JsonObject { ["id"] = DelegatedBitLockerId, ["type"] = "Scope" },
-                    new JsonObject { ["id"] = DelegatedDeviceId, ["type"] = "Scope" },
-                    new JsonObject { ["id"] = AppBitLockerId, ["type"] = "Role" },
-                    new JsonObject { ["id"] = AppDeviceId, ["type"] = "Role" },
-                    new JsonObject { ["id"] = DelegatedManagedDevicesReadWriteId, ["type"] = "Scope" },
-                    new JsonObject { ["id"] = AppManagedDevicesReadWriteId, ["type"] = "Role" }
+                    new JsonObject { ["id"] = ids.DelegatedBitLocker, ["type"] = "Scope" },
+                    new JsonObject { ["id"] = ids.DelegatedDevice, ["type"] = "Scope" },
+                    new JsonObject { ["id"] = ids.AppBitLocker, ["type"] = "Role" },
+                    new JsonObject { ["id"] = ids.AppDevice, ["type"] = "Role" },
+                    new JsonObject { ["id"] = ids.DelegatedManagedDevicesReadWrite, ["type"] = "Scope" },
+                    new JsonObject { ["id"] = ids.AppManagedDevicesReadWrite, ["type"] = "Role" }
                 }
             }
         };
 
-    private static JsonArray MergeRequiredResourceAccess(JsonArray? existing)
+    private static JsonArray MergeRequiredResourceAccess(JsonArray? existing, GraphPermissionIds ids)
     {
         var result = new JsonArray();
         if (existing is not null)
@@ -273,12 +341,12 @@ public sealed class EntraSetupService : IDisposable
 
         var required = new (string Id, string Type)[]
         {
-            (DelegatedBitLockerId, "Scope"),
-            (DelegatedDeviceId, "Scope"),
-            (AppBitLockerId, "Role"),
-            (AppDeviceId, "Role"),
-            (DelegatedManagedDevicesReadWriteId, "Scope"),
-            (AppManagedDevicesReadWriteId, "Role")
+            (ids.DelegatedBitLocker, "Scope"),
+            (ids.DelegatedDevice, "Scope"),
+            (ids.AppBitLocker, "Role"),
+            (ids.AppDevice, "Role"),
+            (ids.DelegatedManagedDevicesReadWrite, "Scope"),
+            (ids.AppManagedDevicesReadWrite, "Role")
         };
 
         foreach (var item in required)
@@ -314,6 +382,18 @@ public sealed class EntraSetupService : IDisposable
     private Task<JsonObject> GetApplicationByObjectIdAsync(string token, string objectId, CancellationToken ct) =>
         GraphObjectAsync(HttpMethod.Get, token,
             $"https://graph.microsoft.com/v1.0/applications/{objectId}?$select=id,appId,displayName,keyCredentials,requiredResourceAccess", null, ct);
+
+    private async Task<JsonObject?> GetMicrosoftGraphServicePrincipalAsync(string token, CancellationToken ct)
+    {
+        var filter = Uri.EscapeDataString($"appId eq '{GraphAppId}'");
+        var result = await GraphObjectAsync(
+            HttpMethod.Get,
+            token,
+            $"https://graph.microsoft.com/v1.0/servicePrincipals?$filter={filter}&$select=id,appId,displayName,appRoles,oauth2PermissionScopes",
+            null,
+            ct);
+        return FirstValue(result);
+    }
 
     private async Task<JsonObject?> FindServicePrincipalByAppIdAsync(string token, string appId, CancellationToken ct)
     {
