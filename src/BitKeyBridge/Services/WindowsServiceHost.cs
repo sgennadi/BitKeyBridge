@@ -273,6 +273,7 @@ public static class WindowsServiceHost
     private static async Task RunWorkerAsync(AppConfig config, CancellationToken ct)
     {
         HealthHttpServer? health = null;
+        RemoteApiServer? remoteApi = null;
         try
         {
             if (config.HealthEndpointEnabled)
@@ -281,6 +282,19 @@ public static class WindowsServiceHost
                 health.Start(ct);
                 _serviceLog?.Info(
                     $"Health endpoint listening on 127.0.0.1:{Math.Clamp(config.HealthEndpointPort, 1024, 65535)}.");
+            }
+
+            if (config.RemoteApiEnabled)
+            {
+                remoteApi = new RemoteApiServer(config);
+                remoteApi.Start(ct);
+                _serviceLog?.Info(
+                    $"Remote API listening with TLS on TCP {Math.Clamp(config.RemoteApiPort, 1024, 65535)}. Management={config.RemoteApiAllowManagement}.");
+                WindowsEventLogService.TryWrite(
+                    $"Remote API started on TCP {Math.Clamp(config.RemoteApiPort, 1024, 65535)}. Management={config.RemoteApiAllowManagement}.",
+                    EventLogSeverity.Information,
+                    4302,
+                    "RemoteAPI");
             }
 
             var first = true;
@@ -334,6 +348,7 @@ public static class WindowsServiceHost
         }
         finally
         {
+            remoteApi?.Dispose();
             health?.Dispose();
         }
     }
