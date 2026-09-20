@@ -278,3 +278,40 @@ BitKeyBridge.exe --service-coverage-enable --service-coverage-interval 1440 --se
 
 Coverage CSV теперь использует UTC timestamps и нейтрализует значения, похожие на Excel/CSV formula injection.
 
+## Новое в 0.10.0
+
+- Добавлено автоматическое управление ACL private key для certificate из `LocalMachine\My`.
+- Поддерживаются CNG keys в `%ProgramData%\Microsoft\Crypto\Keys` и legacy CAPI keys в `RSA\MachineKeys`.
+- Для gMSA/domain service account BitKeyBridge добавляет только точечный Read ACE и не заменяет существующий ACL ключа.
+- При смене identity службы доступ к certificate проверяется/подготавливается до изменения SCM, если scheduled Coverage зависит от certificate.
+- В Dashboard появилась кнопка **Repair Cert Access**.
+- CLI:
+  - `--cert-key-status`
+  - `--cert-key-grant`
+  - `--cert-key-revoke`
+  - `--cert-account <DOMAIN\\account>`
+- Health теперь показывает состояние доступа service identity к private key.
+- Добавлен **Coverage Policy Engine** с порогами для No Key, Intune Not Encrypted, Intune Stale и Old Cloud Key.
+- Для каждого правила можно выбрать Error / Warning / Info.
+- В Coverage появилась кнопка **Policy...**.
+- CLI policy поддерживает status, enable/disable, max thresholds и severity.
+- `--coverage-fail-policy` возвращает exit code 23 при нарушении policy.
+- Policy сохраняется в `coverage_status.json` как структурированный список нарушений.
+- Scheduled Coverage пишет severity policy в Windows Event Log.
+- Добавлен общий unattended Coverage runner с защитой от одновременного запуска нескольких экземпляров.
+- Remote API получил:
+  - `GET /api/v1/coverage`
+  - `GET /api/v1/coverage/policy`
+  - `POST /api/v1/coverage/run` при включённом management.
+- Эти API не возвращают recovery password и не отдают device-level recovery secrets.
+
+Пример строгой policy:
+
+```text
+BitKeyBridge.exe --coverage-policy-enable ^
+  --coverage-policy-max-no-key 0 ^
+  --coverage-policy-severity-no-key Error
+```
+
+Для обычного CMD можно передать параметры одной строкой; символ `^` выше используется только для наглядности примера.
+
