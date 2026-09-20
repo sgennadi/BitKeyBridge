@@ -311,3 +311,27 @@ Coverage CSV теперь использует UTC timestamps и нейтрал�
 BitKeyBridge.exe --coverage-policy-enable --coverage-policy-max-no-key 0 --coverage-policy-severity-no-key Error
 ```
 
+## Новое в 0.11.0
+
+- Добавлен опциональный **RBAC по Windows users/groups/SID**. По умолчанию он выключен, поэтому upgrade не меняет существующее поведение.
+- Права разделены:
+  - **RecoveryRead** — поиск локального recovery CSV, Show/Copy AD key, получение/Show/Copy Entra recovery password;
+  - **Rotate** — запрос ротации BitLocker key через Intune.
+- Local Administrators bypass можно отдельно включить или выключить.
+- В **Operations → Helpdesk Recovery Workflow → RBAC...** можно задать группы, проверить их разрешение в SID и сразу увидеть права текущей Windows identity.
+- CLI:
+  `--rbac-status`, `--rbac-enable`, `--rbac-disable`, `--rbac-admin-bypass`,
+  `--rbac-reader-add/remove`, `--rbac-rotator-add/remove`.
+- Отказы RBAC пишутся в `audit.jsonl` и Windows Application Event Log без recovery password.
+- Health endpoint показывает только состояние RBAC и количество configured principals/errors, но не раскрывает названия групп.
+- Новые audit-записи получили **SHA-256 hash chain**. GUI и Windows Service используют cross-process lock, чтобы параллельные записи не ломали цепочку.
+- Старые audit lines остаются читаемыми как legacy/unhashed.
+- Проверка integrity доступна кнопкой **Verify Chain** во вкладке Audit и командой:
+
+```text
+BitKeyBridge.exe --audit-verify
+```
+
+- Self-test теперь проверяет RBAC backward compatibility, валидную audit chain и специально изменённую запись, которая обязана определиться как tampered.
+- Hash chain является tamper-evident, но не заменяет внешний immutable/SIEM archive; для высокой гарантии audit лучше пересылать на центральное защищённое хранилище.
+
