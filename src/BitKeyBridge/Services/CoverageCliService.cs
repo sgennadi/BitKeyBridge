@@ -16,8 +16,29 @@ public static class CoverageCliService
     {
         try
         {
-            var cloud = ConfigService.LoadCloudConfig();
+            var useMachineCloudConfig = HasFlag(args, "--coverage-machine-config");
+            if (useMachineCloudConfig &&
+                !File.Exists(AppPaths.MachineCloudConfigFile))
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration is not configured. " +
+                    "Run --cloud-machine-save first or omit --coverage-machine-config.");
+            }
+
+            var cloud = useMachineCloudConfig
+                ? ConfigService.LoadMachineCloudConfig()
+                : ConfigService.LoadCloudConfig();
             ApplyCloudOverrides(cloud, args);
+
+            if (useMachineCloudConfig &&
+                !string.Equals(
+                    cloud.AuthMode,
+                    "Certificate",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration must use Certificate authentication.");
+            }
 
             var scopes = ParseScopes(args);
             var outputDirectory = GetOptionValue(args, "--coverage-output");
