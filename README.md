@@ -148,6 +148,7 @@ In **Directory Connection**:
 - **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
 - **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
 - Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
+- LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
 - The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
 - **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
 - The output root can be a local folder or UNC path. Leaving the new `OutputRoot` setting empty preserves the legacy `SysvolScriptsRoot` behavior.
@@ -155,7 +156,7 @@ In **Directory Connection**:
 Standalone CLI example:
 
 ```text
-BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt
+BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --ad-ldaps
 ```
 
 Standalone export example:
