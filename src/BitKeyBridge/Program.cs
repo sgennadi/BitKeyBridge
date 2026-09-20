@@ -112,6 +112,8 @@ internal static class Program
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
