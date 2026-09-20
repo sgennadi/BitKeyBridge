@@ -2,6 +2,7 @@ namespace BitKeyBridge;
 
 public sealed class CoverageAutomationService
 {
+    private static readonly SemaphoreSlim RunGate = new(1, 1);
     private readonly AppConfig _config;
 
     public CoverageAutomationService(AppConfig config) => _config = config;
@@ -9,6 +10,7 @@ public sealed class CoverageAutomationService
     public async Task<CoverageRunStatus> RunOnceAsync(
         CancellationToken ct = default)
     {
+        await RunGate.WaitAsync(ct);
         var startedUtc = DateTime.UtcNow;
 
         try
@@ -76,6 +78,10 @@ public sealed class CoverageAutomationService
                     CsvPath = _config.CoverageCsv,
                     JsonPath = _config.CoverageJson
                 };
+        }
+        finally
+        {
+            RunGate.Release();
         }
     }
 
