@@ -19,6 +19,9 @@ public sealed class HealthService
             OutputDirectoryExists = Directory.Exists(_config.OutputDirectory),
             CsvExists = File.Exists(_config.OutputCsv),
             CsvRows = CsvUtility.CountDataRows(_config.OutputCsv),
+            ServiceCoverageEnabled = _config.ServiceCoverageEnabled,
+            ServiceCoverageIntervalMinutes = _config.ServiceCoverageIntervalMinutes,
+            MachineCloudConfigured = File.Exists(AppPaths.MachineCloudConfigFile),
             HealthEndpoint = _config.HealthEndpointEnabled
                 ? $"http://127.0.0.1:{Math.Clamp(_config.HealthEndpointPort, 1024, 65535)}/health"
                 : "Disabled"
@@ -84,6 +87,110 @@ public sealed class HealthService
         catch (Exception ex)
         {
             snapshot.Warnings.Add("Last-success status: " + ex.Message);
+        }
+
+        try
+        {
+            var coverage = CoverageReportService.ReadStatus();
+            if (coverage is not null)
+            {
+                snapshot.LastCoverageSuccess = coverage.Success;
+                snapshot.LastCoverageFinishedUtc =
+                    coverage.FinishedUtc == default
+                        ? null
+                        : coverage.FinishedUtc;
+                snapshot.LastCoverageError = coverage.ErrorMessage;
+                snapshot.CoverageTotalDevices = coverage.Summary.TotalDevices;
+                snapshot.CoverageNoRecoveryKey = coverage.Summary.NoRecoveryKey;
+                snapshot.CoverageIntuneNotEncrypted =
+                    coverage.Summary.IntuneNotEncrypted;
+                snapshot.CoverageIntuneStale = coverage.Summary.IntuneStale;
+                snapshot.CoverageOldCloudKey = coverage.Summary.OldCloudKey;
+
+                if (snapshot.LastCoverageFinishedUtc is not null)
+                {
+                    snapshot.LastCoverageAgeHours =
+                        (DateTime.UtcNow -
+                         snapshot.LastCoverageFinishedUtc.Value.ToUniversalTime())
+                        .TotalHours;
+                }
+
+                if (_config.ServiceCoverageEnabled && !coverage.Success)
+                {
+                    snapshot.Errors.Add(
+                        "Last coverage run failed: " +
+                        (string.IsNullOrWhiteSpace(coverage.ErrorMessage)
+                            ? "unknown error"
+                            : coverage.ErrorMessage));
+                }
+
+                if (coverage.Success)
+                {
+                    if (coverage.Summary.NoRecoveryKey > 0)
+                        snapshot.Warnings.Add(
+                            $"Coverage: {coverage.Summary.NoRecoveryKey} device(s) have no recovery metadata.");
+                    if (coverage.Summary.IntuneNotEncrypted > 0)
+                        snapshot.Warnings.Add(
+                            $"Coverage: {coverage.Summary.IntuneNotEncrypted} Intune device(s) are reported not encrypted.");
+                    if (coverage.Summary.IntuneStale > 0)
+                        snapshot.Warnings.Add(
+                            $"Coverage: {coverage.Summary.IntuneStale} Intune device(s) are stale.");
+                }
+
+                if (_config.ServiceCoverageEnabled &&
+                    snapshot.LastCoverageAgeHours >
+                    Math.Max(1, _config.ServiceCoverageIntervalMinutes) / 60.0 * 2.0)
+                {
+                    snapshot.Warnings.Add(
+                        $"Last coverage report is {snapshot.LastCoverageAgeHours:0.0} hours old.");
+                }
+            }
+            else if (_config.ServiceCoverageEnabled)
+            {
+                snapshot.Warnings.Add(
+                    "Scheduled Coverage is enabled, but no coverage status has been recorded yet.");
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Warnings.Add("Coverage status: " + ex.Message);
+        }
+
+        try
+        {
+            if (File.Exists(AppPaths.MachineCloudConfigFile))
+            {
+                var machineCloud = ConfigService.LoadMachineCloudConfig();
+                snapshot.MachineCloudConfigured =
+                    !string.IsNullOrWhiteSpace(machineCloud.TenantId) &&
+                    !string.IsNullOrWhiteSpace(machineCloud.ClientId) &&
+                    !string.IsNullOrWhiteSpace(machineCloud.CertificateThumbprint);
+                snapshot.MachineCloudCertificateThumbprint =
+                    machineCloud.CertificateThumbprint;
+
+                if (_config.ServiceCoverageEnabled)
+                {
+                    try
+                    {
+                        new CertificateService().FindLocalMachineByThumbprint(
+                            machineCloud.CertificateThumbprint);
+                    }
+                    catch (Exception ex)
+                    {
+                        snapshot.Errors.Add(
+                            "Machine cloud certificate: " + ex.Message);
+                    }
+                }
+            }
+            else if (_config.ServiceCoverageEnabled)
+            {
+                snapshot.Errors.Add(
+                    "Scheduled Coverage is enabled, but machine cloud configuration is missing.");
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Warnings.Add("Machine cloud configuration: " + ex.Message);
         }
 
         try
