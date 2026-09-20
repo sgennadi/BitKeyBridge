@@ -29,6 +29,7 @@ public sealed class HealthService
             var service = WindowsServiceHost.GetInfo();
             snapshot.ServiceInstalled = service.Installed;
             snapshot.ServiceState = service.State;
+            snapshot.ServiceIdentity = service.Identity;
         }
         catch (Exception ex)
         {
