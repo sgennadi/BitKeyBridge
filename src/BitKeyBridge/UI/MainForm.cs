@@ -48,17 +48,25 @@ public sealed class MainForm : Form
 
     private readonly ListView _auditResults = new();
 
+    private readonly Label _dashboardStatus = new();
+    private readonly RichTextBox _dashboardDetails = new();
+    private readonly NumericUpDown _serviceInterval = new();
+    private readonly NumericUpDown _healthPort = new();
+    private readonly CheckBox _healthEnabled = new();
+    private readonly CheckBox _serviceRunOnStart = new();
+
     public MainForm(AppConfig config)
     {
         _config = config;
         _cloudConfig = ConfigService.LoadCloudConfig();
-        Text = "BitKeyBridge 0.2.1 (.NET)";
+        Text = "BitKeyBridge 0.3.0 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
         Font = new Font("Segoe UI", 9F);
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
+        tabs.TabPages.Add(BuildDashboardTab());
         tabs.TabPages.Add(BuildExportTab());
         tabs.TabPages.Add(BuildDcTab());
         tabs.TabPages.Add(BuildLocalSearchTab());
@@ -70,6 +78,89 @@ public sealed class MainForm : Form
         LoadDefaultScopes();
         RefreshLastSuccess();
         LoadCloudFields();
+        LoadDashboardSettings();
+        RefreshDashboard();
+        FormClosing += (_, _) => ClearSensitiveState();
+    }
+
+    private TabPage BuildDashboardTab()
+    {
+        var tab = new TabPage("Dashboard");
+
+        var header = new Label
+        {
+            Text = "BitKeyBridge Health & Service",
+            Font = new Font("Segoe UI Semibold", 16F),
+            AutoSize = true,
+            Left = 18,
+            Top = 16
+        };
+        tab.Controls.Add(header);
+
+        _dashboardStatus.SetBounds(20, 54, 1145, 30);
+        _dashboardStatus.Font = new Font("Segoe UI Semibold", 11F);
+        _dashboardStatus.Text = "Loading health status...";
+        tab.Controls.Add(_dashboardStatus);
+
+        var serviceGroup = new GroupBox
+        {
+            Text = "Native Windows Service",
+            Left = 20,
+            Top = 90,
+            Width = 1145,
+            Height = 150,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(serviceGroup);
+
+        var install = new Button { Text = "Install / Update", Left = 16, Top = 28, Width = 125, Height = 32 };
+        var start = new Button { Text = "Start", Left = 151, Top = 28, Width = 80, Height = 32 };
+        var stop = new Button { Text = "Stop", Left = 241, Top = 28, Width = 80, Height = 32 };
+        var uninstall = new Button { Text = "Uninstall", Left = 331, Top = 28, Width = 95, Height = 32 };
+        var refresh = new Button { Text = "Refresh", Left = 436, Top = 28, Width = 90, Height = 32 };
+        var openHealth = new Button { Text = "Open /health", Left = 536, Top = 28, Width = 110, Height = 32 };
+        var secureOutput = new Button { Text = "Secure Output...", Left = 656, Top = 28, Width = 125, Height = 32 };
+        serviceGroup.Controls.AddRange([install, start, stop, uninstall, refresh, openHealth, secureOutput]);
+
+        serviceGroup.Controls.Add(new Label { Text = "Export interval (minutes):", Left = 16, Top = 86, Width = 145, Height = 24 });
+        _serviceInterval.SetBounds(165, 82, 90, 27);
+        _serviceInterval.Minimum = 1;
+        _serviceInterval.Maximum = 10080;
+        serviceGroup.Controls.Add(_serviceInterval);
+
+        _healthEnabled.Text = "Enable loopback health endpoint";
+        _healthEnabled.SetBounds(285, 84, 220, 25);
+        serviceGroup.Controls.Add(_healthEnabled);
+
+        serviceGroup.Controls.Add(new Label { Text = "Port:", Left = 515, Top = 86, Width = 38, Height = 24 });
+        _healthPort.SetBounds(555, 82, 90, 27);
+        _healthPort.Minimum = 1024;
+        _healthPort.Maximum = 65535;
+        serviceGroup.Controls.Add(_healthPort);
+
+        _serviceRunOnStart.Text = "Run export when service starts";
+        _serviceRunOnStart.SetBounds(675, 84, 220, 25);
+        serviceGroup.Controls.Add(_serviceRunOnStart);
+
+        var saveSettings = new Button { Text = "Save Service Settings", Left = 925, Top = 79, Width = 190, Height = 32 };
+        serviceGroup.Controls.Add(saveSettings);
+
+        _dashboardDetails.ReadOnly = true;
+        _dashboardDetails.Font = new Font("Consolas", 9.5F);
+        _dashboardDetails.SetBounds(20, 255, 1145, 485);
+        _dashboardDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        tab.Controls.Add(_dashboardDetails);
+
+        refresh.Click += (_, _) => RefreshDashboard();
+        install.Click += (_, _) => InstallOrUpdateService();
+        start.Click += (_, _) => StartServiceFromGui();
+        stop.Click += (_, _) => StopServiceFromGui();
+        uninstall.Click += (_, _) => UninstallServiceFromGui();
+        openHealth.Click += (_, _) => OpenHealthEndpoint();
+        secureOutput.Click += (_, _) => RunSecureOutputWizard();
+        saveSettings.Click += (_, _) => SaveDashboardSettings(restartRunningService: true);
+
+        return tab;
     }
 
     private TabPage BuildExportTab()
@@ -995,6 +1086,278 @@ public sealed class MainForm : Form
             _audit.Write("RotateBitLockerKey", "Failed", computerName, recoveryId, "Intune", _cloudToken?.AuthMode, ex.Message);
             throw;
         }
+    }
+
+    private void LoadDashboardSettings()
+    {
+        _serviceInterval.Value = Math.Clamp(_config.ServiceIntervalMinutes, 1, 10080);
+        _healthPort.Value = Math.Clamp(_config.HealthEndpointPort, 1024, 65535);
+        _healthEnabled.Checked = _config.HealthEndpointEnabled;
+        _serviceRunOnStart.Checked = _config.ServiceRunExportOnStart;
+    }
+
+    private void SaveDashboardSettings(bool restartRunningService)
+    {
+        try
+        {
+            var serviceBefore = WindowsServiceHost.GetInfo();
+            _config.ServiceIntervalMinutes = (int)_serviceInterval.Value;
+            _config.HealthEndpointPort = (int)_healthPort.Value;
+            _config.HealthEndpointEnabled = _healthEnabled.Checked;
+            _config.ServiceRunExportOnStart = _serviceRunOnStart.Checked;
+            ConfigService.SaveAppConfig(_config);
+            _audit.Write(
+                "SaveServiceSettings",
+                source: "Local",
+                details: $"Interval={_config.ServiceIntervalMinutes}; HealthEnabled={_config.HealthEndpointEnabled}; Port={_config.HealthEndpointPort}; RunOnStart={_config.ServiceRunExportOnStart}");
+
+            if (restartRunningService && serviceBefore.Installed &&
+                string.Equals(serviceBefore.State, "Running", StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+                WindowsServiceHost.Start();
+            }
+
+            RefreshDashboard();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Service Settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void InstallOrUpdateService()
+    {
+        try
+        {
+            SaveDashboardSettings(restartRunningService: false);
+            var before = WindowsServiceHost.GetInfo();
+            if (before.Installed && string.Equals(before.State, "Running", StringComparison.OrdinalIgnoreCase))
+                WindowsServiceHost.Stop();
+
+            WindowsServiceHost.InstallOrUpdate();
+            WindowsServiceHost.Start();
+            _audit.Write("InstallOrUpdateService", source: "WindowsService", details: AppPaths.ServiceExecutable);
+            RefreshDashboard();
+            MessageBox.Show(
+                this,
+                $"BitKeyBridge service is installed and running.{Environment.NewLine}{Environment.NewLine}" +
+                $"Executable: {AppPaths.ServiceExecutable}",
+                "BitKeyBridge Service",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("InstallOrUpdateService", "Failed", source: "WindowsService", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            RefreshDashboard();
+        }
+    }
+
+    private void StartServiceFromGui()
+    {
+        try
+        {
+            WindowsServiceHost.Start();
+            _audit.Write("StartService", source: "WindowsService");
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("StartService", "Failed", source: "WindowsService", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        RefreshDashboard();
+    }
+
+    private void StopServiceFromGui()
+    {
+        try
+        {
+            WindowsServiceHost.Stop();
+            _audit.Write("StopService", source: "WindowsService");
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("StopService", "Failed", source: "WindowsService", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        RefreshDashboard();
+    }
+
+    private void UninstallServiceFromGui()
+    {
+        var answer = MessageBox.Show(
+            this,
+            "Stop and remove the BitKeyBridge Windows Service? Configuration, audit logs and exported recovery data will be preserved.",
+            "Uninstall BitKeyBridge Service",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+
+        try
+        {
+            WindowsServiceHost.Uninstall();
+            _audit.Write("UninstallService", source: "WindowsService");
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("UninstallService", "Failed", source: "WindowsService", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        RefreshDashboard();
+    }
+
+    private void OpenHealthEndpoint()
+    {
+        try
+        {
+            var url = $"http://127.0.0.1:{Math.Clamp(_config.HealthEndpointPort, 1024, 65535)}/health";
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Health Endpoint", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RefreshDashboard()
+    {
+        try
+        {
+            var health = new HealthService(_config).GetSnapshot();
+            _dashboardStatus.Text =
+                $"Overall: {health.OverallStatus}    Service: {health.ServiceState}    Last rows: {health.LastRunRows}    DC: {(string.IsNullOrWhiteSpace(health.LastRunDc) ? "-" : health.LastRunDc)}";
+
+            _dashboardDetails.Clear();
+            _dashboardDetails.AppendText($"Version:                  {health.Version}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Machine:                  {health.MachineName}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Service installed:        {health.ServiceInstalled}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Service state:            {health.ServiceState}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Service executable:       {AppPaths.ServiceExecutable}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Health endpoint:          {health.HealthEndpoint}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Service interval:         {_config.ServiceIntervalMinutes} minute(s){Environment.NewLine}");
+            _dashboardDetails.AppendText(Environment.NewLine);
+            _dashboardDetails.AppendText($"Output directory:         {health.OutputDirectory}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Output exists:            {health.OutputDirectoryExists}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Recovery CSV exists:      {health.CsvExists}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Recovery CSV rows:        {health.CsvRows}{Environment.NewLine}");
+            _dashboardDetails.AppendText(Environment.NewLine);
+            _dashboardDetails.AppendText($"Last run success:         {health.LastRunSuccess?.ToString() ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Last run finished:        {health.LastRunFinished?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Last run published:       {health.LastRunPublished}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Last run rows:            {health.LastRunRows}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Last run DC:              {health.LastRunDc}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Replication healthy:      {health.ReplicationHealthy?.ToString() ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Replication errors:       {health.ReplicationErrors}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Replication warnings:     {health.ReplicationWarnings}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Last successful export:   {health.LastSuccessfulExport?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Last success age (hours): {health.LastSuccessfulExportAgeHours?.ToString("0.0") ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText(Environment.NewLine);
+            _dashboardDetails.AppendText($"Cloud configured:         {health.CloudConfigured}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Cloud auth mode:          {health.CloudAuthMode}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Certificate status:       {health.CertificateStatus}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Certificate expires:      {health.CertificateExpires?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Certificate days left:    {health.CertificateDaysRemaining?.ToString("0.0") ?? "-"}{Environment.NewLine}");
+
+            if (health.Warnings.Count > 0)
+            {
+                _dashboardDetails.AppendText(Environment.NewLine + "WARNINGS" + Environment.NewLine);
+                foreach (var warning in health.Warnings)
+                    _dashboardDetails.AppendText("  - " + warning + Environment.NewLine);
+            }
+
+            if (health.Errors.Count > 0)
+            {
+                _dashboardDetails.AppendText(Environment.NewLine + "ERRORS" + Environment.NewLine);
+                foreach (var error in health.Errors)
+                    _dashboardDetails.AppendText("  - " + error + Environment.NewLine);
+            }
+        }
+        catch (Exception ex)
+        {
+            _dashboardStatus.Text = "Dashboard error: " + ex.Message;
+        }
+    }
+
+    private void RunSecureOutputWizard()
+    {
+        using var dialog = new SecureOutputDialog(_config.OutputDirectory);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            var service = new SecureOutputService();
+            var result = service.Create(dialog.DirectoryPath, dialog.ReaderPrincipals, dialog.ShareName);
+
+            if (dialog.UpdateApplicationConfig)
+            {
+                var full = Path.GetFullPath(result.DirectoryPath).TrimEnd(Path.DirectorySeparatorChar);
+                var parent = Path.GetDirectoryName(full)
+                    ?? throw new InvalidOperationException("The selected output directory has no parent directory.");
+                var name = Path.GetFileName(full);
+                _config.SysvolScriptsRoot = parent;
+                _config.OutputSubdirectory = name;
+                ConfigService.SaveAppConfig(_config);
+
+                var svc = WindowsServiceHost.GetInfo();
+                if (svc.Installed && string.Equals(svc.State, "Running", StringComparison.OrdinalIgnoreCase))
+                {
+                    WindowsServiceHost.Stop();
+                    WindowsServiceHost.Start();
+                }
+            }
+
+            _audit.Write(
+                "CreateSecureOutput",
+                source: "WindowsACL",
+                details: $"Path={result.DirectoryPath}; Share={result.ShareName}; Readers={string.Join(",", result.ReaderPrincipals)}; ConfigUpdated={dialog.UpdateApplicationConfig}");
+
+            RefreshLastSuccess();
+            RefreshDashboard();
+
+            var shareText = result.ShareCreated
+                ? $"SMB share: \\{Environment.MachineName}\\{result.ShareName}"
+                : "SMB share: not created";
+            MessageBox.Show(
+                this,
+                $"Protected output created successfully.{Environment.NewLine}{Environment.NewLine}" +
+                $"Directory: {result.DirectoryPath}{Environment.NewLine}{shareText}{Environment.NewLine}{Environment.NewLine}" +
+                (dialog.UpdateApplicationConfig
+                    ? "BitKeyBridge export configuration was updated. If an existing WinPE workflow still reads NETLOGON/SYSVOL, update that consumer before switching production export."
+                    : "BitKeyBridge export configuration was not changed."),
+                "Secure BitLocker Output",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write("CreateSecureOutput", "Failed", source: "WindowsACL", details: ex.Message);
+            MessageBox.Show(this, ex.Message, "Secure BitLocker Output", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ClearSensitiveState()
+    {
+        try
+        {
+            if (Clipboard.ContainsText())
+            {
+                var text = Clipboard.GetText();
+                if ((!string.IsNullOrWhiteSpace(_localCurrentKey) && string.Equals(text, _localCurrentKey, StringComparison.Ordinal)) ||
+                    (!string.IsNullOrWhiteSpace(_cloudCurrentKey) && string.Equals(text, _cloudCurrentKey, StringComparison.Ordinal)))
+                    Clipboard.Clear();
+            }
+        }
+        catch { }
+
+        _localCurrentKey = null;
+        _cloudCurrentKey = null;
+        _cloudToken = null;
+        _localKey.Clear();
+        _cloudKey.Clear();
+        _cloudPassword.Clear();
     }
 
     private void RefreshAudit()
