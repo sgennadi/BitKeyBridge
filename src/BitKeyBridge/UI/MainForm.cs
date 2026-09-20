@@ -69,6 +69,12 @@ public sealed class MainForm : Form
     {
         _config = config;
         _cloudConfig = ConfigService.LoadCloudConfig();
+        try
+        {
+            if (SecurityContext.IsAdministrator())
+                WindowsEventLogService.EnsureSource();
+        }
+        catch { }
         Text = "BitKeyBridge 0.4.0 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
