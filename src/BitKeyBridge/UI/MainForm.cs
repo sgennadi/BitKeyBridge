@@ -54,6 +54,7 @@ public sealed class MainForm : Form
     private readonly TextBox _adUsername = new();
     private readonly TextBox _adPassword = new();
     private readonly NumericUpDown _adPort = new();
+    private readonly CheckBox _adUseLdaps = new();
     private readonly CheckBox _adExplicitCredentials = new();
     private readonly TextBox _outputRoot = new();
     private readonly TextBox _outputSubdirectory = new();
@@ -173,6 +174,10 @@ public sealed class MainForm : Form
         _adPort.Maximum = 65535;
         adGroup.Controls.Add(_adPort);
 
+        _adUseLdaps.Text = "Use LDAPS / TLS";
+        _adUseLdaps.SetBounds(280, 151, 160, 25);
+        adGroup.Controls.Add(_adUseLdaps);
+
         _adExplicitCredentials.Text =
             "Use explicit AD credentials (password remains in memory only)";
         _adExplicitCredentials.SetBounds(520, 32, 450, 26);
@@ -214,6 +219,13 @@ public sealed class MainForm : Form
 
         _adMode.SelectedIndexChanged += (_, _) => UpdateDirectoryConnectionUi();
         _adExplicitCredentials.CheckedChanged += (_, _) => UpdateDirectoryConnectionUi();
+        _adUseLdaps.CheckedChanged += (_, _) =>
+        {
+            if (_adUseLdaps.Checked && _adPort.Value == 389)
+                _adPort.Value = 636;
+            else if (!_adUseLdaps.Checked && _adPort.Value == 636)
+                _adPort.Value = 389;
+        };
         save.Click += (_, _) => SaveDirectorySettings(showConfirmation: true);
         test.Click += async (_, _) => await TestDirectoryConnectionAsync();
         clearPassword.Click += (_, _) =>
@@ -2030,6 +2042,7 @@ public sealed class MainForm : Form
         _adUsername.Text = _config.AdUsername;
         _adPassword.Clear();
         _adPort.Value = Math.Clamp(_config.AdPort, 1, 65535);
+        _adUseLdaps.Checked = _config.AdUseLdaps || _config.AdPort == 636;
         _adExplicitCredentials.Checked = _config.AdUseExplicitCredentials;
         _outputRoot.Text = string.IsNullOrWhiteSpace(_config.OutputRoot)
             ? _config.SysvolScriptsRoot
@@ -2058,6 +2071,7 @@ public sealed class MainForm : Form
         _config.AdDomain = _adDomain.Text.Trim();
         _config.AdUsername = _adUsername.Text.Trim();
         _config.AdPort = (int)_adPort.Value;
+        _config.AdUseLdaps = _adUseLdaps.Checked;
         _config.AdUseExplicitCredentials = _adExplicitCredentials.Checked;
 
         if (_config.AdUseExplicitCredentials)
@@ -2093,7 +2107,7 @@ public sealed class MainForm : Form
             "SaveDirectorySettings",
             source: "Local",
             details:
-                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
+                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
 
         if (showConfirmation)
         {
@@ -2123,7 +2137,9 @@ public sealed class MainForm : Form
             });
 
             _adConnectionStatus.Text =
-                $"OK: {result.Server}    Domain DN: {result.Root.GetValueOrDefault("defaultNamingContext", "-")}    " +
+                $"OK: {result.Server}:{_config.AdPort}    " +
+                $"Protocol: {(_config.AdUseLdaps || _config.AdPort == 636 ? "LDAPS" : "LDAP signed/sealed")}    " +
+                $"Domain DN: {result.Root.GetValueOrDefault("defaultNamingContext", "-")}    " +
                 $"RODC: {result.Root.GetValueOrDefault("isRODC", "Unknown")}";
         }
         catch (Exception ex)
