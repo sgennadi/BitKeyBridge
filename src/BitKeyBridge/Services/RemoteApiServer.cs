@@ -200,7 +200,7 @@ public sealed class RemoteApiServer : IDisposable
                 var result = await new ExportService(_config).RunAsync(
                     dryRun: false,
                     forcePublish: false,
-                    scopes: null,
+                    selectedScopes: null,
                     progress: null,
                     cancellationToken: ct);
                 await WriteResponseAsync(

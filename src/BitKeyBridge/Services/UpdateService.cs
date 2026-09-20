@@ -54,9 +54,7 @@ public sealed class UpdateService : IDisposable
                 if (json.RootElement.ValueKind != JsonValueKind.Array)
                     throw new InvalidOperationException("GitHub returned an unexpected release-list response.");
                 var found = json.RootElement.EnumerateArray()
-                    .FirstOrDefault(x =>
-                        !GetBool(x, "draft") &&
-                        (GetBool(x, "prerelease") || !GetBool(x, "prerelease")));
+                    .FirstOrDefault(x => !GetBool(x, "draft"));
                 if (found.ValueKind == JsonValueKind.Undefined)
                     throw new InvalidOperationException("No GitHub release was found.");
                 release = found;
@@ -239,7 +237,7 @@ public sealed class UpdateService : IDisposable
         if (OperatingSystem.IsWindows())
             psi.Verb = "runas";
 
-        Process.Start(psi)
+        _ = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start the BitKeyBridge update helper.");
         return planPath;
     }
