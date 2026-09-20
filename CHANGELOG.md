@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- Added optional ticket/reference requirement before recovery-key access.
+- Added helpdesk reason capture and structured Reference/Reason fields in the JSONL security audit.
+- Reused recovery access context across reveal, copy, retrieval, and rotation during the GUI session.
+- Added post-recovery Intune rotation reminders without automatic rotation.
+- Added CodeQL v4 scanning on Node 24.
+- Added Dependabot for NuGet and GitHub Actions.
+- Added pinned CycloneDX 6.2.0 JSON SBOM generation for tagged releases.
+- Added GitHub provenance and SBOM attestations through actions/attest@v4.
+- Added the SBOM to SHA256SUMS and GitHub Release assets.
+- Extended offline self-test coverage for audit reference/reason persistence.
+
+
 ## 0.4.0
 
 - Added verified GitHub Release self-update for x64, x86, and ARM64.

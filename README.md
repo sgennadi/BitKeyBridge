@@ -34,6 +34,8 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - Windows Event Log integration for service, export, update, and Remote API lifecycle events.
 - Optional TLS Remote API with one-time bearer-token provisioning and Windows Firewall integration for Domain/Private profiles only.
 - Native Windows Service failure-recovery policy with automatic restart after transient crashes.
+- Optional helpdesk recovery workflow with ticket/reference, reason, structured audit, and post-recovery Intune rotation reminder.
+- CodeQL scanning, Dependabot, CycloneDX SBOM generation, and GitHub build/SBOM attestations for tagged releases.
 
 ## Platform
 
@@ -312,6 +314,34 @@ POST https://server:8751/api/v1/export
 The Remote API has **no endpoint that returns a BitLocker recovery password**.
 
 The generated server certificate is self-signed. Monitoring clients should explicitly trust or pin the displayed certificate thumbprint, or replace the configured certificate with an organization-managed certificate suitable for TLS server authentication.
+
+## Helpdesk recovery workflow
+
+BitKeyBridge can attach a helpdesk ticket/reference and reason to every recovery-secret access without ever writing the recovery password itself to the audit.
+
+In **Operations → Helpdesk Recovery Workflow**:
+
+- **Require a ticket/reference before recovery-key access** blocks Local AD reveal/copy and Entra recovery-key retrieval until a reference is entered.
+- **Suggest Intune key rotation after a cloud recovery password is retrieved** records a recovery session and reminds the operator to rotate the exposed recovery key only after the recovery operation is complete and the device is able to process the Intune action.
+
+The same in-memory access context is reused for reveal/copy/rotate operations on that recovery ID during the GUI session. It is cleared when BitKeyBridge closes.
+
+Audit records contain separate structured `Reference` and `Reason` fields. The 48-digit BitLocker recovery password is never written to JSONL or Windows Event Log.
+
+Rotation is never automatic: the operator must explicitly confirm **Rotate Key in Intune** after recovery is complete.
+
+## Supply-chain security
+
+Tagged releases are built with additional supply-chain artifacts and GitHub-native verification:
+
+- weekly and pull-request **CodeQL** analysis for C#;
+- weekly **Dependabot** updates for NuGet and GitHub Actions;
+- a pinned **CycloneDX JSON SBOM** (`BitKeyBridge.cdx.json`);
+- `SHA256SUMS.txt` covering all architecture ZIPs and the SBOM;
+- GitHub artifact provenance attestation for release packages;
+- GitHub SBOM attestation binding the release ZIPs to the generated CycloneDX SBOM.
+
+The Actions used by these workflows are Node 24 generations.
 
 ## Unified Devices and key rotation
 

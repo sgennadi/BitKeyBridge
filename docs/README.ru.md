@@ -156,3 +156,14 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 - Remote management включается отдельно и в 0.4 разрешает только `POST /api/v1/export`.
 - Windows Service получает failure-recovery policy: автоматический restart после transient crash.
 - Updater cleanup остаётся shell-free и использует Win32 `MoveFileEx`.
+
+
+## Новое в 0.5.0
+
+- Опционально можно требовать **номер тикета / Reference** перед показом или копированием recovery key.
+- Добавлено поле **Reason** — причина доступа к секрету.
+- Reference и Reason пишутся отдельными структурированными полями в audit JSONL; сам recovery password туда не попадает.
+- Один recovery access context переиспользуется в текущей GUI-сессии для Show/Copy/Get/Rotate и очищается при закрытии программы.
+- После получения Entra recovery password BitKeyBridge может напомнить выполнить **Rotate Key in Intune** после завершения восстановления.
+- Автоматической ротации нет — действие всегда требует отдельного подтверждения.
+- Добавлены CodeQL, Dependabot, CycloneDX SBOM и GitHub provenance/SBOM attestations для релизов.
