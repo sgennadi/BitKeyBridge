@@ -1729,6 +1729,16 @@ public sealed class MainForm : Form
             _dashboardDetails.AppendText($"Certificate status:       {health.CertificateStatus}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Certificate expires:      {health.CertificateExpires?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
             _dashboardDetails.AppendText($"Certificate days left:    {health.CertificateDaysRemaining?.ToString("0.0") ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText(Environment.NewLine);
+            _dashboardDetails.AppendText($"Remote API enabled:       {health.RemoteApiEnabled}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Remote API port:          {(health.RemoteApiEnabled ? health.RemoteApiPort.ToString() : "-")}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Remote management:        {health.RemoteApiManagementEnabled}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Remote API certificate:   {health.RemoteApiCertificateThumbprint}{Environment.NewLine}");
+            _dashboardDetails.AppendText(Environment.NewLine);
+            _dashboardDetails.AppendText($"Update checked (UTC):     {health.UpdateCheckedAtUtc?.ToString("u") ?? "-"}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Latest release:           {health.LatestVersion}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Update available:         {health.UpdateAvailable}{Environment.NewLine}");
+            _dashboardDetails.AppendText($"Update error:             {health.UpdateError}{Environment.NewLine}");
 
             if (health.Warnings.Count > 0)
             {
