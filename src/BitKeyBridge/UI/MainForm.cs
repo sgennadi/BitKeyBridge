@@ -48,6 +48,17 @@ public sealed class MainForm : Form
 
     private readonly ListView _auditResults = new();
 
+    private readonly ComboBox _adMode = new();
+    private readonly TextBox _adServer = new();
+    private readonly TextBox _adDomain = new();
+    private readonly TextBox _adUsername = new();
+    private readonly TextBox _adPassword = new();
+    private readonly NumericUpDown _adPort = new();
+    private readonly CheckBox _adExplicitCredentials = new();
+    private readonly TextBox _outputRoot = new();
+    private readonly TextBox _outputSubdirectory = new();
+    private readonly Label _adConnectionStatus = new();
+
     private readonly Label _dashboardStatus = new();
     private readonly RichTextBox _dashboardDetails = new();
     private readonly NumericUpDown _serviceInterval = new();
@@ -88,6 +99,7 @@ public sealed class MainForm : Form
         Font = new Font("Segoe UI", 9F);
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
+        tabs.TabPages.Add(BuildDirectoryConnectionTab());
         tabs.TabPages.Add(BuildDashboardTab());
         tabs.TabPages.Add(BuildOperationsTab());
         tabs.TabPages.Add(BuildExportTab());
@@ -98,6 +110,7 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(BuildAuditTab());
         Controls.Add(tabs);
 
+        LoadDirectorySettings();
         LoadDefaultScopes();
         RefreshLastSuccess();
         LoadCloudFields();
@@ -110,6 +123,184 @@ public sealed class MainForm : Form
             if (_config.CheckForUpdatesOnStart)
                 await CheckForUpdatesGuiAsync(silentWhenCurrent: true);
         };
+    }
+
+    private TabPage BuildDirectoryConnectionTab()
+    {
+        var tab = new TabPage("Directory Connection");
+
+        var header = new Label
+        {
+            Text = "Active Directory / DC Connection",
+            Font = new Font("Segoe UI Semibold", 16F),
+            AutoSize = true,
+            Left = 18,
+            Top = 16
+        };
+        tab.Controls.Add(header);
+
+        var adGroup = new GroupBox
+        {
+            Text = "Active Directory",
+            Left = 20,
+            Top = 58,
+            Width = 1145,
+            Height = 330,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(adGroup);
+
+        AddLabeled(adGroup, "Mode:", _adMode, 16, 30, 145, 330);
+        _adMode.DropDownStyle = ComboBoxStyle.DropDownList;
+        _adMode.Items.AddRange([
+            "Auto - domain workstation / DC",
+            "Explicit DC - standalone / workstation"
+        ]);
+
+        AddLabeled(adGroup, "DC host / FQDN:", _adServer, 16, 70, 145, 330);
+        AddLabeled(adGroup, "Domain:", _adDomain, 16, 110, 145, 330);
+
+        adGroup.Controls.Add(new Label
+        {
+            Text = "LDAP port:",
+            Left = 16,
+            Top = 154,
+            Width = 145,
+            Height = 24
+        });
+        _adPort.SetBounds(161, 150, 100, 27);
+        _adPort.Minimum = 1;
+        _adPort.Maximum = 65535;
+        adGroup.Controls.Add(_adPort);
+
+        _adExplicitCredentials.Text =
+            "Use explicit AD credentials (password remains in memory only)";
+        _adExplicitCredentials.SetBounds(520, 32, 450, 26);
+        adGroup.Controls.Add(_adExplicitCredentials);
+
+        AddLabeled(adGroup, "AD user:", _adUsername, 520, 70, 115, 420);
+        AddLabeled(adGroup, "Password:", _adPassword, 520, 110, 115, 420);
+        _adPassword.UseSystemPasswordChar = true;
+
+        var save = new Button
+        {
+            Text = "Save Settings",
+            Left = 16,
+            Top = 205,
+            Width = 125,
+            Height = 34
+        };
+        var test = new Button
+        {
+            Text = "Test DC Connection",
+            Left = 151,
+            Top = 205,
+            Width = 155,
+            Height = 34
+        };
+        var clearPassword = new Button
+        {
+            Text = "Clear Session Password",
+            Left = 316,
+            Top = 205,
+            Width = 175,
+            Height = 34
+        };
+        adGroup.Controls.AddRange([save, test, clearPassword]);
+
+        _adConnectionStatus.SetBounds(16, 255, 1090, 52);
+        _adConnectionStatus.Text = "Connection has not been tested in this GUI session.";
+        adGroup.Controls.Add(_adConnectionStatus);
+
+        _adMode.SelectedIndexChanged += (_, _) => UpdateDirectoryConnectionUi();
+        _adExplicitCredentials.CheckedChanged += (_, _) => UpdateDirectoryConnectionUi();
+        save.Click += (_, _) => SaveDirectorySettings(showConfirmation: true);
+        test.Click += async (_, _) => await TestDirectoryConnectionAsync();
+        clearPassword.Click += (_, _) =>
+        {
+            _adPassword.Clear();
+            AdSessionCredentials.Clear();
+            _adConnectionStatus.Text = "Session AD password cleared.";
+        };
+
+        var outputGroup = new GroupBox
+        {
+            Text = "Recovery Export Output",
+            Left = 20,
+            Top = 405,
+            Width = 1145,
+            Height = 220,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(outputGroup);
+
+        AddLabeled(outputGroup, "Output root:", _outputRoot, 16, 34, 145, 760);
+        var browse = new Button
+        {
+            Text = "Browse...",
+            Left = 935,
+            Top = 31,
+            Width = 105,
+            Height = 31
+        };
+        outputGroup.Controls.Add(browse);
+
+        AddLabeled(
+            outputGroup,
+            "Subdirectory:",
+            _outputSubdirectory,
+            16,
+            76,
+            145,
+            330);
+
+        outputGroup.Controls.Add(new Label
+        {
+            Text =
+                "Local and UNC paths are supported. If OutputRoot is left on the legacy SYSVOL path, existing DC/WinPE deployments continue to work.",
+            Left = 16,
+            Top = 118,
+            Width = 1085,
+            Height = 42
+        });
+
+        var saveOutput = new Button
+        {
+            Text = "Save Output Settings",
+            Left = 16,
+            Top = 168,
+            Width = 160,
+            Height = 32
+        };
+        outputGroup.Controls.Add(saveOutput);
+
+        browse.Click += (_, _) =>
+        {
+            using var picker = new FolderBrowserDialog
+            {
+                Description = "Select BitKeyBridge output root",
+                UseDescriptionForTitle = true,
+                SelectedPath = Directory.Exists(_outputRoot.Text)
+                    ? _outputRoot.Text
+                    : string.Empty
+            };
+
+            if (picker.ShowDialog(this) == DialogResult.OK)
+                _outputRoot.Text = picker.SelectedPath;
+        };
+        saveOutput.Click += (_, _) => SaveDirectorySettings(showConfirmation: true);
+
+        tab.Controls.Add(new Label
+        {
+            Text =
+                "Microsoft 365 / Entra / Intune does not require Windows domain membership. Configure cloud authentication in the 'Entra / Intune Cloud' tab.",
+            Left = 20,
+            Top = 655,
+            Width = 1145,
+            Height = 42
+        });
+
+        return tab;
     }
 
     private TabPage BuildDashboardTab()
@@ -1267,7 +1458,7 @@ public sealed class MainForm : Form
             _unifiedStatus.Text = "Searching Active Directory, Entra and Intune...";
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
-            var service = new UnifiedDeviceService();
+            var service = new UnifiedDeviceService(_config);
             var rows = await service.SearchAsync(_cloudToken!.AccessToken, _unifiedQuery.Text);
             foreach (var row in rows)
             {
@@ -1825,6 +2016,132 @@ public sealed class MainForm : Form
         }
     }
 
+    private void LoadDirectorySettings()
+    {
+        _adMode.SelectedIndex = string.Equals(
+            _config.AdConnectionMode,
+            "Explicit",
+            StringComparison.OrdinalIgnoreCase)
+            ? 1
+            : 0;
+
+        _adServer.Text = _config.AdServer;
+        _adDomain.Text = _config.AdDomain;
+        _adUsername.Text = _config.AdUsername;
+        _adPassword.Clear();
+        _adPort.Value = Math.Clamp(_config.AdPort, 1, 65535);
+        _adExplicitCredentials.Checked = _config.AdUseExplicitCredentials;
+        _outputRoot.Text = string.IsNullOrWhiteSpace(_config.OutputRoot)
+            ? _config.SysvolScriptsRoot
+            : _config.OutputRoot;
+        _outputSubdirectory.Text = _config.OutputSubdirectory;
+
+        UpdateDirectoryConnectionUi();
+    }
+
+    private void UpdateDirectoryConnectionUi()
+    {
+        var explicitServer = _adMode.SelectedIndex == 1;
+        _adServer.Enabled = explicitServer;
+        _adDomain.Enabled = explicitServer || _adExplicitCredentials.Checked;
+        _adPort.Enabled = explicitServer;
+        _adUsername.Enabled = _adExplicitCredentials.Checked;
+        _adPassword.Enabled = _adExplicitCredentials.Checked;
+    }
+
+    private void SaveDirectorySettings(bool showConfirmation)
+    {
+        _config.AdConnectionMode = _adMode.SelectedIndex == 1
+            ? "Explicit"
+            : "Auto";
+        _config.AdServer = _adServer.Text.Trim();
+        _config.AdDomain = _adDomain.Text.Trim();
+        _config.AdUsername = _adUsername.Text.Trim();
+        _config.AdPort = (int)_adPort.Value;
+        _config.AdUseExplicitCredentials = _adExplicitCredentials.Checked;
+
+        if (_config.AdUseExplicitCredentials)
+        {
+            if (!string.IsNullOrEmpty(_adPassword.Text))
+                AdSessionCredentials.SetPassword(_adPassword.Text);
+        }
+        else
+        {
+            AdSessionCredentials.Clear();
+            _adPassword.Clear();
+        }
+
+        var outputRoot = _outputRoot.Text.Trim();
+        _config.OutputRoot = string.Equals(
+            outputRoot.TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar),
+            _config.SysvolScriptsRoot.TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : outputRoot;
+
+        _config.OutputSubdirectory =
+            string.IsNullOrWhiteSpace(_outputSubdirectory.Text)
+                ? "BL"
+                : _outputSubdirectory.Text.Trim();
+
+        ConfigService.SaveAppConfig(_config);
+        _audit.Write(
+            "SaveDirectorySettings",
+            source: "Local",
+            details:
+                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
+
+        if (showConfirmation)
+        {
+            MessageBox.Show(
+                this,
+                "Directory/output settings saved. AD passwords are never saved; an explicit password remains only in this process memory.",
+                "Directory Connection",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+    }
+
+    private async Task TestDirectoryConnectionAsync()
+    {
+        try
+        {
+            SaveDirectorySettings(showConfirmation: false);
+            _adConnectionStatus.Text = "Testing Active Directory connection...";
+            UseWaitCursor = true;
+
+            var result = await Task.Run(() =>
+            {
+                var service = new ActiveDirectoryService(_config);
+                var server = service.GetPreferredWritableDc();
+                var root = service.TestConnection(server);
+                return (Server: server, Root: root);
+            });
+
+            _adConnectionStatus.Text =
+                $"OK: {result.Server}    Domain DN: {result.Root.GetValueOrDefault("defaultNamingContext", "-")}    " +
+                $"RODC: {result.Root.GetValueOrDefault("isRODC", "Unknown")}";
+        }
+        catch (Exception ex)
+        {
+            _adConnectionStatus.Text = "FAILED: " + ex.Message;
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Directory Connection",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
     private void LoadDashboardSettings()
     {
         _serviceInterval.Value = Math.Clamp(_config.ServiceIntervalMinutes, 1, 10080);
@@ -2044,8 +2361,10 @@ public sealed class MainForm : Form
                 var parent = Path.GetDirectoryName(full)
                     ?? throw new InvalidOperationException("The selected output directory has no parent directory.");
                 var name = Path.GetFileName(full);
-                _config.SysvolScriptsRoot = parent;
+                _config.OutputRoot = parent;
                 _config.OutputSubdirectory = name;
+                _outputRoot.Text = parent;
+                _outputSubdirectory.Text = name;
                 ConfigService.SaveAppConfig(_config);
 
                 var svc = WindowsServiceHost.GetInfo();
@@ -2149,6 +2468,7 @@ public sealed class MainForm : Form
         _localKey.Clear();
         _cloudKey.Clear();
         _cloudPassword.Clear();
+        _adPassword.Clear();
     }
 
     private void RefreshAudit()
