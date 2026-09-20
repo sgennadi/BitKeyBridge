@@ -16,6 +16,11 @@ public sealed class HealthSnapshot
     public string MachineCloudKeyAccessStatus { get; set; } = "Unknown";
     public string MachineCloudKeyAccessAccount { get; set; } = string.Empty;
     public string MachineCloudKeyProvider { get; set; } = string.Empty;
+    public bool RbacEnabled { get; set; }
+    public bool RbacAllowLocalAdministrators { get; set; }
+    public int RbacRecoveryReaderPrincipals { get; set; }
+    public int RbacRotationOperatorPrincipals { get; set; }
+    public int RbacValidationErrors { get; set; }
     public string HealthEndpoint { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
