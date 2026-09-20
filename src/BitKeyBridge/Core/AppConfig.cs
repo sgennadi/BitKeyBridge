@@ -24,6 +24,8 @@ public sealed class AppConfig
     public string AdDomain { get; set; } = string.Empty;
     public string AdUsername { get; set; } = string.Empty;
     public bool AdUseExplicitCredentials { get; set; } = false;
+    public string AdCredentialStorageMode { get; set; } = "Session";
+    public string AdCredentialTarget { get; set; } = "BitKeyBridge:ActiveDirectory";
     public bool AdUseLdaps { get; set; } = false;
     public int AdPort { get; set; } = 389;
 
@@ -31,6 +33,8 @@ public sealed class AppConfig
     public int HealthEndpointPort { get; set; } = 8750;
     public int ServiceIntervalMinutes { get; set; } = 60;
     public bool ServiceRunExportOnStart { get; set; } = true;
+    public string ServiceIdentityMode { get; set; } = "LocalSystem";
+    public string ServiceIdentityAccount { get; set; } = string.Empty;
 
     public string UpdateRepository { get; set; } = "sgennadi/BitKeyBridge";
     public bool CheckForUpdatesOnStart { get; set; } = true;
