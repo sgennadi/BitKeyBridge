@@ -20,6 +20,11 @@ public static class AdSessionCredentials
         lock (Sync) _password = password ?? string.Empty;
     }
 
+    public static string GetPasswordCopy()
+    {
+        lock (Sync) return _password;
+    }
+
     public static void Clear()
     {
         lock (Sync) _password = string.Empty;
