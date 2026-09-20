@@ -38,10 +38,21 @@ internal static class Program
             x.Equals("--start-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--stop-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--health", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update", StringComparison.OrdinalIgnoreCase));
         if (isCli) ConsoleHelper.EnsureConsole();
 
         var config = ConfigService.LoadAppConfig();
+
+        var applyPlanIndex = Array.FindIndex(args, x =>
+            x.Equals("--apply-update-plan", StringComparison.OrdinalIgnoreCase));
+        if (applyPlanIndex >= 0)
+        {
+            if (applyPlanIndex + 1 >= args.Length)
+                return 2;
+            return UpdateService.ApplyPlan(args[applyPlanIndex + 1]);
+        }
 
         if (args.Any(x => x.Equals("--service", StringComparison.OrdinalIgnoreCase)))
             return WindowsServiceHost.RunService(config);
@@ -49,7 +60,8 @@ internal static class Program
         var noElevation = args.Any(x => x.Equals("--no-elevation", StringComparison.OrdinalIgnoreCase));
         var readOnlyStatusCommand = args.Any(x =>
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
-            x.Equals("--service-status", StringComparison.OrdinalIgnoreCase));
+            x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--check-update", StringComparison.OrdinalIgnoreCase));
         if (!noElevation && !readOnlyStatusCommand && !SecurityContext.IsAdministrator())
         {
             if (!Environment.UserInteractive)
@@ -155,6 +167,12 @@ internal static class Program
             return health.OverallStatus == "Error" ? 2 : 0;
         }
 
+        if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
+            return CheckUpdateAsync(config).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--update", StringComparison.OrdinalIgnoreCase)))
+            return InstallUpdateAsync(config).GetAwaiter().GetResult();
+
         if (args.Any(x => x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase)))
             return RunDcTest(config, args).GetAwaiter().GetResult();
 
@@ -193,6 +211,59 @@ internal static class Program
                 Console.WriteLine($"{row.Name,-18} Site={row.Site,-18} RODC={row.IsReadOnly,-5} Status={row.Status,-8} Objects={row.ObjectsFound,-8} ReplErrors={row.ReplicationErrors}");
             }
             return rows.Any(x => x.Status == "ERROR") ? 1 : 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            return 1;
+        }
+    }
+
+    private static async Task<int> CheckUpdateAsync(AppConfig config)
+    {
+        try
+        {
+            using var updater = new UpdateService(config);
+            var info = await updater.CheckAsync();
+            Console.WriteLine(JsonSerializer.Serialize(info, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            }));
+            return string.IsNullOrWhiteSpace(info.Error) ? (info.UpdateAvailable ? 10 : 0) : 1;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            return 1;
+        }
+    }
+
+    private static async Task<int> InstallUpdateAsync(AppConfig config)
+    {
+        try
+        {
+            using var updater = new UpdateService(config);
+            var info = await updater.CheckAsync();
+            if (!string.IsNullOrWhiteSpace(info.Error))
+            {
+                Console.Error.WriteLine(info.Error);
+                return 1;
+            }
+
+            if (!info.UpdateAvailable)
+            {
+                Console.WriteLine($"BitKeyBridge {info.CurrentVersion} is already current.");
+                return 0;
+            }
+
+            Console.WriteLine(
+                $"Preparing BitKeyBridge {info.LatestVersion} for {info.Architecture}...");
+            var prepared = await updater.PrepareAsync(info);
+            Console.WriteLine(
+                $"Verified {info.AssetName}; launching elevated update helper.");
+            updater.LaunchApplyHelper(prepared, restartGui: false);
+            return 0;
         }
         catch (Exception ex)
         {
@@ -316,6 +387,8 @@ internal static class Program
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
         Console.WriteLine("  --stop-service        Stop the installed BitKeyBridge service");
         Console.WriteLine("  --service-status      Show installed service state");
+        Console.WriteLine("  --check-update        Check the configured GitHub repository for a newer release");
+        Console.WriteLine("  --update              Verify and install the latest stable release");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
         Console.WriteLine("  --no-elevation        Do not relaunch through UAC");
         Console.WriteLine("  --self-test           Run offline smoke tests and exit");
