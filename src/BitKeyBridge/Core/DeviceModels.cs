@@ -126,13 +126,17 @@ public sealed class AuditSigningVerification
     public bool CertificateFound { get; set; }
     public bool CertificateHasPrivateKey { get; set; }
     public DateTime? CertificateExpiresUtc { get; set; }
+    public double? CertificateDaysRemaining { get; set; }
+    public bool CertificateExpired { get; set; }
     public bool CheckpointExists { get; set; }
     public bool SignatureValid { get; set; }
     public bool AuditChainValid { get; set; }
     public bool CheckpointHashPresent { get; set; }
+    public bool CurrentHeadSigned { get; set; }
     public bool Valid =>
         Configured &&
         CertificateFound &&
+        !CertificateExpired &&
         CheckpointExists &&
         SignatureValid &&
         AuditChainValid &&
