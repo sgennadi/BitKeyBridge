@@ -230,8 +230,7 @@ public sealed class CertificateService
                 pfx,
                 password,
                 X509KeyStorageFlags.MachineKeySet |
-                X509KeyStorageFlags.PersistKeySet |
-                X509KeyStorageFlags.Exportable);
+                X509KeyStorageFlags.PersistKeySet);
             using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
             store.Open(OpenFlags.ReadWrite);
             store.Add(persisted);
