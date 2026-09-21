@@ -57,6 +57,10 @@ public sealed class AppConfig
     public List<string> RbacRecoveryReaders { get; set; } = [];
     public List<string> RbacRotationOperators { get; set; } = [];
 
+    public bool AuditSigningEnabled { get; set; } = false;
+    public string AuditSigningCertificateThumbprint { get; set; } = string.Empty;
+    public int AuditSigningCertificateWarningDays { get; set; } = 90;
+
     public int CoverageStaleIntuneDays { get; set; } = 30;
     public int CoverageOldCloudKeyDays { get; set; } = 365;
 
