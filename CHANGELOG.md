@@ -19,6 +19,7 @@
 - Entra rollover retains the previous Graph credential and local certificate for rollback/grace instead of automatically deleting them.
 - Added dual-signed audit-signing certificate rollover. The transition payload is signed by both the previous and new RSA private keys and transition history is retained under `%ProgramData%\BitKeyBridge\AuditSigningTransitions`.
 - Audit-signing rollover verifies the current trust anchor before transition, creates a new signed checkpoint, rolls configuration/checkpoint back on normal failures, and retains old certificates for historical verification.
+- BitKeyBridge now verifies the complete archived dual-signed transition history, including both signatures, certificate availability, machine identity, chain version, and old→new thumbprint continuity; failures are surfaced through CLI/GUI/security health.
 - New Remote API TLS certificates are persisted without the Exportable flag.
 - Added Remote API TLS private-key ACL preflight for installed service identities and service-identity changes.
 - Health/security output now reports Remote API scope configuration, TLS certificate expiry/status, and service private-key access without exposing token hashes.
