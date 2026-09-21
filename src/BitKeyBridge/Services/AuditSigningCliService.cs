@@ -182,9 +182,19 @@ public static class AuditSigningCliService
 
             try
             {
+                var signing =
+                    new AuditSigningService(config);
+
                 var result =
-                    new AuditSigningService(config)
-                        .Rollover(years);
+                    signing.Rollover(years);
+
+                new AuditService().Write(
+                    "AuditSigningRollover",
+                    source: "Local",
+                    details:
+                        $"Previous={result.PreviousThumbprint}; New={result.NewThumbprint}; OldSignatureValid={result.PreviousSignatureValid}; NewSignatureValid={result.NewSignatureValid}; NewCheckpointValid={result.NewCheckpointValid}");
+
+                _ = signing.SignCheckpoint();
 
                 Console.WriteLine(
                     "Audit-signing certificate rollover completed.");
