@@ -1464,6 +1464,106 @@ internal static class Program
                     }
                 }
 
+                using (var oldSigner = RSA.Create(2048))
+                using (var newSigner = RSA.Create(2048))
+                {
+                    var transition =
+                        new AuditSigningTransition
+                        {
+                            CreatedAtUtc =
+                                DateTime.UtcNow,
+                            MachineName =
+                                "SELFTEST",
+                            ChainVersion =
+                                AuditIntegrityService.CurrentChainVersion,
+                            AuditHeadHash =
+                                integrity.LastHash,
+                            PreviousCertificateThumbprint =
+                                "111122223333444455556666777788889999AAAA",
+                            NewCertificateThumbprint =
+                                "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+                            PreviousCertificateNotAfterUtc =
+                                DateTime.UtcNow.AddYears(1),
+                            NewCertificateNotAfterUtc =
+                                DateTime.UtcNow.AddYears(5)
+                        };
+
+                    var transitionPayload =
+                        AuditSigningService.BuildTransitionPayload(
+                            transition);
+
+                    var oldSignature =
+                        oldSigner.SignData(
+                            transitionPayload,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1);
+                    var newSignature =
+                        newSigner.SignData(
+                            transitionPayload,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1);
+
+                    if (!oldSigner.VerifyData(
+                            transitionPayload,
+                            oldSignature,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1) ||
+                        !newSigner.VerifyData(
+                            transitionPayload,
+                            newSignature,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1))
+                    {
+                        failures.Add(
+                            "Audit signing rollover dual-signature round-trip failed.");
+                    }
+
+                    transition.AuditHeadHash += "00";
+                    var tamperedPayload =
+                        AuditSigningService.BuildTransitionPayload(
+                            transition);
+
+                    if (oldSigner.VerifyData(
+                            tamperedPayload,
+                            oldSignature,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1) ||
+                        newSigner.VerifyData(
+                            tamperedPayload,
+                            newSignature,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1))
+                    {
+                        failures.Add(
+                            "Audit signing rollover transition tamper detection failed.");
+                    }
+                }
+
+                if (RemoteApiSetupService.NormalizeScope(
+                        "read-only") != "read" ||
+                    RemoteApiSetupService.NormalizeScope(
+                        "coverage") != "coverage-run" ||
+                    RemoteApiSetupService.NormalizeScope(
+                        "export") != "export")
+                {
+                    failures.Add(
+                        "Remote API scope normalization failed.");
+                }
+
+                try
+                {
+                    ConfigurationMaintenanceService.ValidateAppConfig(
+                        new AppConfig
+                        {
+                            HealthEndpointPort = 80
+                        });
+                    failures.Add(
+                        "Configuration validation accepted an invalid health port.");
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
                 var auditText = File.ReadAllText(auditPath);
                 auditText = auditText.Replace(
                     "\"SelfTest2\"",
