@@ -72,6 +72,7 @@ internal static class Program
             x.Equals("--config-backup", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--config-restore", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--incident-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--entra-cert-rollover", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -133,6 +134,7 @@ internal static class Program
             x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--config-backup", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--incident-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -399,6 +401,26 @@ internal static class Program
 
             return ConfigurationMaintenanceCliService.Diagnostics(
                 diagnosticsPath);
+        }
+
+        var incidentSessionId =
+            GetOptionValue(
+                args,
+                "--incident-verify");
+        if (args.Any(x => x.Equals(
+                "--incident-verify",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    incidentSessionId))
+            {
+                Console.Error.WriteLine(
+                    "--incident-verify requires <session-id>.");
+                return 2;
+            }
+
+            return RecoveryIncidentCliService.Verify(
+                incidentSessionId);
         }
 
         if (args.Any(x => x.Equals(
@@ -1664,6 +1686,7 @@ internal static class Program
         Console.WriteLine("  --config-backup <path>     Create JSON config backup without credential/private-key material");
         Console.WriteLine("  --config-restore <path>    Validate and restore config; creates rollback backup");
         Console.WriteLine("  --diagnostics-bundle <zip> Create sanitized troubleshooting ZIP");
+        Console.WriteLine("  --incident-verify <session-id> Verify incident bundle against retained audit hashes");
         Console.WriteLine("  --entra-cert-rollover    Add/test/switch Entra certificate; retain previous credential");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
