@@ -583,6 +583,185 @@ public sealed class AuditSigningService
         return result;
     }
 
+    public AuditSigningTransitionHistoryStatus VerifyTransitionHistory()
+    {
+        var result =
+            new AuditSigningTransitionHistoryStatus();
+
+        if (!Directory.Exists(
+                AppPaths.AuditSigningTransitionsDirectory))
+        {
+            return result;
+        }
+
+        var files =
+            Directory.GetFiles(
+                    AppPaths.AuditSigningTransitionsDirectory,
+                    "*.json",
+                    SearchOption.TopDirectoryOnly)
+                .OrderBy(
+                    x => x,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        if (files.Length == 0)
+            return result;
+
+        string? expectedPrevious =
+            null;
+
+        foreach (var file in files)
+        {
+            result.FilesChecked++;
+
+            AuditSigningTransition? transition;
+            try
+            {
+                transition =
+                    JsonStore.Read<AuditSigningTransition>(
+                        file);
+            }
+            catch (Exception ex)
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: invalid transition JSON: {ex.Message}");
+            }
+
+            if (transition is null)
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: empty transition.");
+            }
+
+            var previousThumbprint =
+                NormalizeThumbprint(
+                    transition.PreviousCertificateThumbprint);
+            var newThumbprint =
+                NormalizeThumbprint(
+                    transition.NewCertificateThumbprint);
+
+            if (string.IsNullOrWhiteSpace(
+                    previousThumbprint) ||
+                string.IsNullOrWhiteSpace(
+                    newThumbprint) ||
+                string.IsNullOrWhiteSpace(
+                    transition.AuditHeadHash))
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: transition identity/hash is incomplete.");
+            }
+
+            if (!string.Equals(
+                    transition.MachineName,
+                    Environment.MachineName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: transition belongs to machine '{transition.MachineName}', not '{Environment.MachineName}'.");
+            }
+
+            if (transition.ChainVersion is < 1 or >
+                AuditIntegrityService.CurrentChainVersion)
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: unsupported audit chain version {transition.ChainVersion}.");
+            }
+
+            if (expectedPrevious is not null &&
+                !string.Equals(
+                    expectedPrevious,
+                    previousThumbprint,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: certificate transition continuity mismatch.");
+            }
+
+            X509Certificate2 previousCertificate;
+            X509Certificate2 newCertificate;
+            try
+            {
+                var certificates =
+                    new CertificateService();
+
+                previousCertificate =
+                    certificates.FindLocalMachineCertificate(
+                        previousThumbprint,
+                        requirePrivateKey: false,
+                        requireCurrentValidity: false);
+
+                newCertificate =
+                    certificates.FindLocalMachineCertificate(
+                        newThumbprint,
+                        requirePrivateKey: false,
+                        requireCurrentValidity: false);
+            }
+            catch (Exception ex)
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: transition certificate is unavailable: {ex.Message}");
+            }
+
+            if (!VerifyTransitionSignature(
+                    transition,
+                    previousCertificate,
+                    transition.PreviousSignatureBase64))
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: previous-certificate signature is invalid.");
+            }
+
+            if (!VerifyTransitionSignature(
+                    transition,
+                    newCertificate,
+                    transition.NewSignatureBase64))
+            {
+                return FailTransitionHistory(
+                    result,
+                    $"{Path.GetFileName(file)}: new-certificate signature is invalid.");
+            }
+
+            if (result.ValidTransitions == 0)
+            {
+                result.FirstPreviousThumbprint =
+                    previousThumbprint;
+            }
+
+            result.ValidTransitions++;
+            result.CurrentThumbprint =
+                newThumbprint;
+            result.LastTransitionUtc =
+                transition.CreatedAtUtc;
+            expectedPrevious =
+                newThumbprint;
+        }
+
+        if (_config.AuditSigningEnabled &&
+            !string.IsNullOrWhiteSpace(
+                _config.AuditSigningCertificateThumbprint) &&
+            !string.Equals(
+                NormalizeThumbprint(
+                    _config.AuditSigningCertificateThumbprint),
+                result.CurrentThumbprint,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return FailTransitionHistory(
+                result,
+                "Configured audit-signing certificate does not match the end of the transition history.");
+        }
+
+        result.Status = "Valid";
+        return result;
+    }
+
     public CertificateKeyAccessInfo? EnsureServiceAccess(
         string? identity = null,
         bool required = false)
@@ -802,6 +981,16 @@ public sealed class AuditSigningService
         JsonStore.WriteAtomic(
             historyPath,
             transition);
+    }
+
+    private static AuditSigningTransitionHistoryStatus FailTransitionHistory(
+        AuditSigningTransitionHistoryStatus result,
+        string error)
+    {
+        result.Valid = false;
+        result.Status = "Invalid";
+        result.FirstError = error;
+        return result;
     }
 
     private static string ShortThumbprint(
