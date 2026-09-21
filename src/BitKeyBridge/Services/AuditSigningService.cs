@@ -30,12 +30,13 @@ public sealed class AuditSigningService
                         requirePrivateKey: true,
                         requireCurrentValidity: true);
             }
-            catch
+            catch (Exception ex)
             {
-                cert = new CertificateService()
-                    .CreateAuditSigningCertificate(
-                        "BitKeyBridge Audit Signing",
-                        years);
+                throw new InvalidOperationException(
+                    "An audit-signing certificate is already configured but is unavailable or invalid. " +
+                    "BitKeyBridge will not silently replace the audit trust anchor. " +
+                    "Use the controlled certificate rollover workflow instead.",
+                    ex);
             }
         }
         else
