@@ -101,3 +101,43 @@ public sealed class AuditIntegrityStatus
     public string LastHash { get; set; } = string.Empty;
     public string FirstError { get; set; } = string.Empty;
 }
+
+
+public sealed class AuditSigningCheckpoint
+{
+    public int Version { get; set; } = 1;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public string MachineName { get; set; } = Environment.MachineName;
+    public int ChainVersion { get; set; } =
+        AuditIntegrityService.CurrentChainVersion;
+    public int FilesChecked { get; set; }
+    public int TotalEntries { get; set; }
+    public int LegacyEntries { get; set; }
+    public int ChainedEntries { get; set; }
+    public string LastHash { get; set; } = string.Empty;
+    public string CertificateThumbprint { get; set; } = string.Empty;
+    public string SignatureAlgorithm { get; set; } = "RSA-SHA256-PKCS1";
+    public string SignatureBase64 { get; set; } = string.Empty;
+}
+
+public sealed class AuditSigningVerification
+{
+    public bool Configured { get; set; }
+    public bool CertificateFound { get; set; }
+    public bool CertificateHasPrivateKey { get; set; }
+    public DateTime? CertificateExpiresUtc { get; set; }
+    public bool CheckpointExists { get; set; }
+    public bool SignatureValid { get; set; }
+    public bool AuditChainValid { get; set; }
+    public bool CheckpointHashPresent { get; set; }
+    public bool Valid =>
+        Configured &&
+        CertificateFound &&
+        CheckpointExists &&
+        SignatureValid &&
+        AuditChainValid &&
+        CheckpointHashPresent;
+    public string Status { get; set; } = "NotConfigured";
+    public string Error { get; set; } = string.Empty;
+    public AuditSigningCheckpoint? Checkpoint { get; set; }
+}
