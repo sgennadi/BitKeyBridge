@@ -566,7 +566,10 @@ public sealed class MainForm : Form
 
     private TabPage BuildOperationsTab()
     {
-        var tab = new TabPage("Operations");
+        var tab = new TabPage("Operations")
+        {
+            AutoScroll = true
+        };
 
         var updateGroup = new GroupBox
         {
@@ -709,11 +712,71 @@ public sealed class MainForm : Form
         configureRbac.Click += (_, _) => ConfigureRbacFromGui();
         saveHelpdesk.Click += (_, _) => SaveOperationsSettings();
 
-        var note = new Label
+        var maintenanceGroup = new GroupBox
         {
-            Text = "Remote API never exposes BitLocker recovery passwords. RBAC can restrict recovery reads and rotation to Windows users/groups. Ticket/reference, reason, and denied actions are audited; recovery passwords are never written to the audit.",
+            Text = "Configuration / Diagnostics",
             Left = 20,
             Top = 680,
+            Width = 1145,
+            Height = 88,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        tab.Controls.Add(maintenanceGroup);
+
+        var backupConfig = new Button
+        {
+            Text = "Backup Config",
+            Left = 16,
+            Top = 30,
+            Width = 140,
+            Height = 34
+        };
+        var restoreConfig = new Button
+        {
+            Text = "Restore Config",
+            Left = 166,
+            Top = 30,
+            Width = 140,
+            Height = 34
+        };
+        var diagnostics = new Button
+        {
+            Text = "Diagnostics ZIP",
+            Left = 316,
+            Top = 30,
+            Width = 145,
+            Height = 34
+        };
+        var openIncidents = new Button
+        {
+            Text = "Open Incidents",
+            Left = 471,
+            Top = 30,
+            Width = 140,
+            Height = 34
+        };
+
+        maintenanceGroup.Controls.AddRange([
+            backupConfig,
+            restoreConfig,
+            diagnostics,
+            openIncidents
+        ]);
+
+        backupConfig.Click += (_, _) =>
+            BackupConfigurationGui();
+        restoreConfig.Click += (_, _) =>
+            RestoreConfigurationGui();
+        diagnostics.Click += (_, _) =>
+            CreateDiagnosticsBundleGui();
+        openIncidents.Click += (_, _) =>
+            OpenPath(AppPaths.IncidentsDirectory);
+
+        var note = new Label
+        {
+            Text = "Remote API never exposes BitLocker recovery passwords. RBAC can restrict recovery reads and rotation to Windows users/groups. Recovery sessions create metadata-only incident bundles; recovery passwords are never written to audit or incident files.",
+            Left = 20,
+            Top = 785,
             Width = 1145,
             Height = 44
         };
@@ -2972,6 +3035,212 @@ public sealed class MainForm : Form
               $"Management: {_config.RemoteApiAllowManagement}    Certificate: {_config.RemoteApiCertificateThumbprint}{Environment.NewLine}" +
               $"Tokens: Admin={Configured(_config.RemoteApiTokenSha256)}  Read={Configured(_config.RemoteApiReadTokenSha256)}  CoverageRun={Configured(_config.RemoteApiCoverageRunTokenSha256)}  Export={Configured(_config.RemoteApiExportTokenSha256)}"
             : "DISABLED. Remote API does not listen on the network until explicitly enabled.";
+    }
+
+    private void BackupConfigurationGui()
+    {
+        try
+        {
+            using var dialog = new SaveFileDialog
+            {
+                Filter =
+                    "BitKeyBridge configuration (*.json)|*.json|All files (*.*)|*.*",
+                FileName =
+                    "BitKeyBridge-config-" +
+                    DateTime.Now.ToString(
+                        "yyyyMMdd-HHmmss") +
+                    ".json",
+                OverwritePrompt = true
+            };
+
+            if (dialog.ShowDialog(this) !=
+                DialogResult.OK)
+            {
+                return;
+            }
+
+            var path =
+                new ConfigurationMaintenanceService()
+                    .CreateBackup(
+                        dialog.FileName);
+
+            _audit.Write(
+                "BackupConfiguration",
+                source: "Configuration",
+                details:
+                    $"Path={path}");
+
+            MessageBox.Show(
+                this,
+                "Configuration backup created." +
+                Environment.NewLine +
+                Environment.NewLine +
+                path +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Credential blobs, access tokens, private keys, and BitLocker recovery passwords are not included.",
+                "Configuration Backup",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Configuration Backup",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void RestoreConfigurationGui()
+    {
+        try
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Filter =
+                    "BitKeyBridge configuration (*.json)|*.json|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog(this) !=
+                DialogResult.OK)
+            {
+                return;
+            }
+
+            var answer = MessageBox.Show(
+                this,
+                "Restore this BitKeyBridge configuration?" +
+                Environment.NewLine +
+                Environment.NewLine +
+                "A rollback backup of the current configuration will be created first.",
+                "Configuration Restore",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (answer != DialogResult.Yes)
+                return;
+
+            var serviceBefore =
+                WindowsServiceHost.GetInfo();
+
+            var result =
+                new ConfigurationMaintenanceService()
+                    .Restore(
+                        dialog.FileName);
+
+            if (serviceBefore.Installed &&
+                string.Equals(
+                    serviceBefore.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+                WindowsServiceHost.Start();
+            }
+
+            _audit.Write(
+                "RestoreConfiguration",
+                source: "Configuration",
+                details:
+                    $"Path={dialog.FileName}; Rollback={result.RollbackBackupPath}; Warnings={result.Warnings.Count}");
+
+            MessageBox.Show(
+                this,
+                "Configuration restored." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Rollback: " +
+                result.RollbackBackupPath +
+                (result.Warnings.Count == 0
+                    ? string.Empty
+                    : Environment.NewLine +
+                      Environment.NewLine +
+                      "Warnings:" +
+                      Environment.NewLine +
+                      string.Join(
+                          Environment.NewLine,
+                          result.Warnings.Select(
+                              x => "- " + x))) +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Restart the BitKeyBridge GUI to reload all restored settings.",
+                "Configuration Restore",
+                MessageBoxButtons.OK,
+                result.Warnings.Count == 0
+                    ? MessageBoxIcon.Information
+                    : MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Configuration Restore",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void CreateDiagnosticsBundleGui()
+    {
+        try
+        {
+            using var dialog = new SaveFileDialog
+            {
+                Filter =
+                    "ZIP archive (*.zip)|*.zip|All files (*.*)|*.*",
+                FileName =
+                    "BitKeyBridge-Diagnostics-" +
+                    DateTime.Now.ToString(
+                        "yyyyMMdd-HHmmss") +
+                    ".zip",
+                OverwritePrompt = true
+            };
+
+            if (dialog.ShowDialog(this) !=
+                DialogResult.OK)
+            {
+                return;
+            }
+
+            var result =
+                new ConfigurationMaintenanceService()
+                    .CreateDiagnosticsBundle(
+                        dialog.FileName);
+
+            _audit.Write(
+                "CreateDiagnosticsBundle",
+                source: "Diagnostics",
+                details:
+                    $"Path={result.ZipPath}; Files={result.IncludedFiles.Count}");
+
+            MessageBox.Show(
+                this,
+                "Sanitized diagnostics bundle created." +
+                Environment.NewLine +
+                Environment.NewLine +
+                result.ZipPath +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Recovery CSV/passwords, audit contents, credential blobs, bearer tokens/hashes, Graph tokens, and private keys are excluded.",
+                "Diagnostics Bundle",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Diagnostics Bundle",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private void ConfigureRemoteApiScopedTokens()
