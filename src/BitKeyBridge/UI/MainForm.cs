@@ -55,6 +55,7 @@ public sealed class MainForm : Form
     private readonly Label _unifiedStatus = new();
 
     private readonly ListView _auditResults = new();
+    private readonly Label _auditSigningStatus = new();
 
     private readonly ComboBox _adMode = new();
     private readonly TextBox _adServer = new();
@@ -1278,34 +1279,137 @@ public sealed class MainForm : Form
     private TabPage BuildAuditTab()
     {
         var tab = new TabPage("Audit");
-        var refresh = new Button { Text = "Refresh", Left = 16, Top = 16, Width = 100, Height = 32 };
-        var open = new Button { Text = "Open audit.jsonl", Left = 128, Top = 16, Width = 135, Height = 32 };
-        var verify = new Button { Text = "Verify Chain", Left = 275, Top = 16, Width = 120, Height = 32 };
+
+        var refresh = new Button
+        {
+            Text = "Refresh",
+            Left = 16,
+            Top = 16,
+            Width = 90,
+            Height = 32
+        };
+        var open = new Button
+        {
+            Text = "Open audit.jsonl",
+            Left = 116,
+            Top = 16,
+            Width = 130,
+            Height = 32
+        };
+        var verify = new Button
+        {
+            Text = "Verify Chain",
+            Left = 256,
+            Top = 16,
+            Width = 110,
+            Height = 32
+        };
+        var setupSigning = new Button
+        {
+            Text = "Setup Signing",
+            Left = 386,
+            Top = 16,
+            Width = 125,
+            Height = 32
+        };
+        var signNow = new Button
+        {
+            Text = "Sign Now",
+            Left = 521,
+            Top = 16,
+            Width = 105,
+            Height = 32
+        };
+        var verifySignature = new Button
+        {
+            Text = "Verify Signature",
+            Left = 636,
+            Top = 16,
+            Width = 130,
+            Height = 32
+        };
+        var disableSigning = new Button
+        {
+            Text = "Disable Signing",
+            Left = 776,
+            Top = 16,
+            Width = 130,
+            Height = 32
+        };
+
         var note = new Label
         {
-            Text = "Security audit contains actions and IDs only. Recovery passwords are never written to this file. New entries are SHA-256 hash chained.",
-            Left = 410,
-            Top = 24,
-            Width = 740,
+            Text =
+                "Recovery passwords are never written to audit. Entries are SHA-256 chained; optional checkpoints are signed by a dedicated LocalMachine certificate.",
+            Left = 16,
+            Top = 58,
+            Width = 1135,
             Height = 24
         };
-        tab.Controls.AddRange([refresh, open, verify, note]);
+
+        _auditSigningStatus.SetBounds(16, 84, 1135, 42);
+        _auditSigningStatus.Text =
+            "Audit signing status has not been checked.";
+
+        tab.Controls.AddRange([
+            refresh,
+            open,
+            verify,
+            setupSigning,
+            signNow,
+            verifySignature,
+            disableSigning,
+            note,
+            _auditSigningStatus
+        ]);
 
         _auditResults.View = View.Details;
         _auditResults.FullRowSelect = true;
         _auditResults.GridLines = true;
-        _auditResults.SetBounds(16, 62, 1155, 675);
-        _auditResults.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        AddColumns(_auditResults,
-            ("Time (UTC)", 155), ("User", 165), ("Host", 110), ("Action", 175), ("Result", 75),
-            ("Computer", 135), ("Recovery ID", 230), ("Source", 70), ("Auth", 90),
-            ("Reference", 130), ("Reason", 180), ("Details", 260));
+        _auditResults.SetBounds(16, 132, 1155, 605);
+        _auditResults.Anchor =
+            AnchorStyles.Top |
+            AnchorStyles.Bottom |
+            AnchorStyles.Left |
+            AnchorStyles.Right;
+        AddColumns(
+            _auditResults,
+            ("Time (UTC)", 155),
+            ("User", 165),
+            ("Host", 110),
+            ("Action", 175),
+            ("Result", 75),
+            ("Computer", 135),
+            ("Recovery ID", 230),
+            ("Source", 70),
+            ("Auth", 90),
+            ("Reference", 130),
+            ("Reason", 180),
+            ("Details", 260));
         tab.Controls.Add(_auditResults);
 
-        refresh.Click += (_, _) => RefreshAudit();
-        open.Click += (_, _) => OpenPath(AppPaths.AuditLogFile, "notepad.exe");
-        verify.Click += (_, _) => VerifyAuditIntegrityGui();
+        refresh.Click += (_, _) =>
+        {
+            RefreshAudit();
+            RefreshAuditSigningStatus();
+        };
+        open.Click += (_, _) =>
+            OpenPath(
+                AppPaths.AuditLogFile,
+                "notepad.exe");
+        verify.Click += (_, _) =>
+            VerifyAuditIntegrityGui();
+        setupSigning.Click += (_, _) =>
+            SetupAuditSigningGui();
+        signNow.Click += (_, _) =>
+            SignAuditCheckpointGui();
+        verifySignature.Click += (_, _) =>
+            VerifyAuditSignatureGui();
+        disableSigning.Click += (_, _) =>
+            DisableAuditSigningGui();
+
         RefreshAudit();
+        RefreshAuditSigningStatus();
         return tab;
     }
 
@@ -3986,6 +4090,249 @@ public sealed class MainForm : Form
         _cloudPassword.Clear();
         _adPassword.Clear();
         _serviceIdentityPassword.Clear();
+    }
+
+    private void RefreshAuditSigningStatus()
+    {
+        try
+        {
+            var result =
+                new AuditSigningService(_config)
+                    .VerifyCheckpoint();
+
+            _auditSigningStatus.Text =
+                $"Signed audit: {result.Status}; Enabled={_config.AuditSigningEnabled}; " +
+                $"SignatureValid={result.SignatureValid}; CurrentHeadSigned={result.CurrentHeadSigned}" +
+                (result.CertificateExpiresUtc is null
+                    ? string.Empty
+                    : $"; CertificateExpires={result.CertificateExpiresUtc:yyyy-MM-dd}") +
+                (result.Checkpoint is null
+                    ? string.Empty
+                    : $"; Checkpoint={result.Checkpoint.CreatedAtUtc:u}; Entries={result.Checkpoint.TotalEntries}");
+        }
+        catch (Exception ex)
+        {
+            _auditSigningStatus.Text =
+                "Signed audit status error: " + ex.Message;
+        }
+    }
+
+    private void SetupAuditSigningGui()
+    {
+        try
+        {
+            if (!SecurityContext.IsAdministrator())
+            {
+                throw new InvalidOperationException(
+                    "Administrator rights are required to configure audit signing.");
+            }
+
+            var before = WindowsServiceHost.GetInfo();
+            var signing =
+                new AuditSigningService(_config);
+            var cert = signing.Setup();
+
+            _audit.Write(
+                "AuditSigningSetup",
+                source: "Local",
+                details:
+                    $"Certificate={cert.Thumbprint}; Expires={cert.NotAfter:O}");
+
+            AuditSigningCheckpoint? checkpoint = null;
+            try
+            {
+                checkpoint = signing.SignCheckpoint();
+            }
+            catch (InvalidOperationException ex)
+                when (ex.Message.Contains(
+                    "no hash-chained audit entries",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+            }
+
+            if (before.Installed &&
+                string.Equals(
+                    before.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+                WindowsServiceHost.Start();
+            }
+
+            RefreshAudit();
+            RefreshAuditSigningStatus();
+            RefreshDashboard();
+
+            MessageBox.Show(
+                this,
+                "Audit signing is enabled." +
+                Environment.NewLine +
+                $"Certificate: {cert.Thumbprint}" +
+                Environment.NewLine +
+                $"Expires: {cert.NotAfter:yyyy-MM-dd}" +
+                Environment.NewLine +
+                (checkpoint is null
+                    ? "Checkpoint will be created after the first chained audit entry."
+                    : $"Signed checkpoint entries: {checkpoint.TotalEntries}"),
+                "Audit Signing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Audit Signing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshAuditSigningStatus();
+        }
+    }
+
+    private void SignAuditCheckpointGui()
+    {
+        try
+        {
+            var checkpoint =
+                new AuditSigningService(_config)
+                    .SignCheckpoint();
+
+            RefreshAuditSigningStatus();
+            RefreshDashboard();
+
+            MessageBox.Show(
+                this,
+                $"Signed {checkpoint.TotalEntries} audit entries." +
+                Environment.NewLine +
+                $"Hash: {checkpoint.LastHash}",
+                "Audit Signing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Audit Signing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshAuditSigningStatus();
+        }
+    }
+
+    private void VerifyAuditSignatureGui()
+    {
+        try
+        {
+            var result =
+                new AuditSigningService(_config)
+                    .VerifyCheckpoint();
+
+            RefreshAuditSigningStatus();
+
+            MessageBox.Show(
+                this,
+                $"Status: {result.Status}" +
+                Environment.NewLine +
+                $"Signature valid: {result.SignatureValid}" +
+                Environment.NewLine +
+                $"Audit chain valid: {result.AuditChainValid}" +
+                Environment.NewLine +
+                $"Checkpoint hash present: {result.CheckpointHashPresent}" +
+                Environment.NewLine +
+                $"Current head signed: {result.CurrentHeadSigned}" +
+                (string.IsNullOrWhiteSpace(result.Error)
+                    ? string.Empty
+                    : Environment.NewLine +
+                      "Error: " + result.Error),
+                "Audit Signature Verification",
+                MessageBoxButtons.OK,
+                result.Valid
+                    ? MessageBoxIcon.Information
+                    : MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Audit Signature Verification",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void DisableAuditSigningGui()
+    {
+        try
+        {
+            if (!_config.AuditSigningEnabled)
+            {
+                RefreshAuditSigningStatus();
+                return;
+            }
+
+            var answer = MessageBox.Show(
+                this,
+                "Disable creation of new signed audit checkpoints?" +
+                Environment.NewLine +
+                Environment.NewLine +
+                "The existing certificate and signed checkpoint will be retained.",
+                "Disable Audit Signing",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (answer != DialogResult.Yes)
+                return;
+
+            var before = WindowsServiceHost.GetInfo();
+            var signing =
+                new AuditSigningService(_config);
+
+            _audit.Write(
+                "AuditSigningDisable",
+                source: "Local",
+                details:
+                    "Audit signing disabled by administrator. Existing trust material retained.");
+
+            try
+            {
+                _ = signing.SignCheckpoint();
+            }
+            catch
+            {
+            }
+
+            signing.Disable();
+
+            if (before.Installed &&
+                string.Equals(
+                    before.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+                WindowsServiceHost.Start();
+            }
+
+            RefreshAudit();
+            RefreshAuditSigningStatus();
+            RefreshDashboard();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Audit Signing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshAuditSigningStatus();
+        }
     }
 
     private void VerifyAuditIntegrityGui()
