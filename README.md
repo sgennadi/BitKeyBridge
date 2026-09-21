@@ -1147,6 +1147,44 @@ BitKeyBridge.exe --audit-verify
 
 The native Windows Service verifies the audit chain when it starts and every 24 hours. The latest verification is cached in `%ProgramData%\BitKeyBridge\audit_integrity_status.json`; the health endpoint reports `Valid`, `Invalid`, `Stale`, or `NeverVerified`, and a failed verification is also written to Windows Event Log.
 
+### Signed audit checkpoints
+
+BitKeyBridge can optionally add a cryptographic trust anchor on top of the local SHA-256 audit hash chain. Audit signing uses a dedicated RSA-3072 certificate in `LocalMachine\My`; it is separate from the Entra and Remote API certificates, and its private key is persisted without the Exportable flag.
+
+Enable signing:
+
+```text
+BitKeyBridge.exe --audit-signing-setup
+```
+
+Optional certificate lifetime:
+
+```text
+BitKeyBridge.exe --audit-signing-setup --audit-signing-years 5
+```
+
+Inspect, sign, and verify:
+
+```text
+BitKeyBridge.exe --audit-signing-status
+BitKeyBridge.exe --audit-signing-sign
+BitKeyBridge.exe --audit-signing-verify
+```
+
+Disable creation of new signed checkpoints while retaining the existing certificate and checkpoint:
+
+```text
+BitKeyBridge.exe --audit-signing-disable
+```
+
+The signed checkpoint records the current audit head hash, entry counts, chain version, machine name, signer certificate thumbprint, timestamp, and an RSA-SHA256-PKCS1 signature. Before replacing an existing checkpoint, BitKeyBridge first verifies the old signature and confirms that its signed hash still exists in the current valid audit chain. If that trust anchor is missing or invalid, BitKeyBridge refuses to overwrite it.
+
+When enabled, the native Windows Service signs the verified audit head during its daily integrity cycle. The Audit tab also provides **Setup Signing**, **Sign Now**, **Verify Signature**, and **Disable Signing** controls.
+
+The health snapshot exposes signer-certificate expiry, signature validity, signed-checkpoint state, and whether the current audit head is already signed. Certificate expiry warnings use `AuditSigningCertificateWarningDays`.
+
+Audit signing does not make the local machine immutable. Protecting the host, certificate private key, and BitKeyBridge configuration remains necessary.
+
 The hash chain is tamper-evident, not a replacement for an external immutable/SIEM archive: a sufficiently privileged attacker who can rewrite the whole local audit can also recompute an unkeyed hash chain. Forwarding BitKeyBridge events/audit to protected central storage is recommended for high-assurance environments.
 
 ## Build
