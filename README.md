@@ -1245,6 +1245,8 @@ Audit-signing trust-anchor replacement is explicit. **Rollover Signing** / `--au
 
 The previous certificate is retained for historical verification. On a normal rollover failure BitKeyBridge restores the previous configured thumbprint and checkpoint.
 
+BitKeyBridge verifies every archived transition in order. Both old/new signatures must validate, both certificates must still be available, and each transition's previous thumbprint must match the prior transition's new thumbprint. The result is exposed in the Audit tab, audit-signing CLI status/verify output, and `/health/security`.
+
 ```text
 BitKeyBridge.exe --audit-signing-rollover
 BitKeyBridge.exe --audit-signing-rollover --audit-signing-rollover-years 5
