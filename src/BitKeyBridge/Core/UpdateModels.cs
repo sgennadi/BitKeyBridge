@@ -42,3 +42,11 @@ public sealed class RemoteApiSetupResult
     public DateTime CertificateExpires { get; set; }
     public int Port { get; set; }
 }
+
+
+public sealed class RemoteApiScopedTokenResult
+{
+    public string Scope { get; set; } = string.Empty;
+    public string Token { get; set; } = string.Empty;
+    public int Port { get; set; }
+}
