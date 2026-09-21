@@ -1407,6 +1407,14 @@ public sealed class MainForm : Form
             Width = 130,
             Height = 32
         };
+        var verifyIncident = new Button
+        {
+            Text = "Incident...",
+            Left = 1071,
+            Top = 16,
+            Width = 95,
+            Height = 32
+        };
 
         var note = new Label
         {
@@ -1431,6 +1439,7 @@ public sealed class MainForm : Form
             verifySignature,
             rolloverSigning,
             disableSigning,
+            verifyIncident,
             note,
             _auditSigningStatus
         ]);
@@ -1482,6 +1491,8 @@ public sealed class MainForm : Form
             RolloverAuditSigningGui();
         disableSigning.Click += (_, _) =>
             DisableAuditSigningGui();
+        verifyIncident.Click += (_, _) =>
+            VerifyRecoveryIncidentGui();
 
         RefreshAudit();
         RefreshAuditSigningStatus();
@@ -4959,6 +4970,25 @@ public sealed class MainForm : Form
         }
     }
 
+    private void VerifyRecoveryIncidentGui()
+    {
+        string? sessionId = null;
+
+        if (_auditResults.SelectedItems.Count > 0 &&
+            _auditResults.SelectedItems[0].Tag
+                is AuditEntry entry &&
+            !string.IsNullOrWhiteSpace(
+                entry.CorrelationId))
+        {
+            sessionId = entry.CorrelationId;
+        }
+
+        using var dialog =
+            new RecoveryIncidentVerificationDialog(
+                sessionId);
+        dialog.ShowDialog(this);
+    }
+
     private void RefreshAudit()
     {
         _auditResults.Items.Clear();
@@ -4977,6 +5007,7 @@ public sealed class MainForm : Form
             item.SubItems.Add(row.CorrelationId);
             item.SubItems.Add(row.Reason);
             item.SubItems.Add(row.Details);
+            item.Tag = row;
             _auditResults.Items.Add(item);
         }
     }
