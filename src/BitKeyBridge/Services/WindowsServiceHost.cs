@@ -294,6 +294,16 @@ public static class WindowsServiceHost
                     required: true);
         }
 
+        if (appConfig.RemoteApiEnabled &&
+            !string.IsNullOrWhiteSpace(
+                appConfig.RemoteApiCertificateThumbprint))
+        {
+            new CertificatePrivateKeyAccessService()
+                .EnsureServiceAccess(
+                    appConfig.RemoteApiCertificateThumbprint,
+                    serviceAccount);
+        }
+
         var wasRunning = string.Equals(
             before.State,
             "Running",
