@@ -1212,16 +1212,17 @@ public sealed class MainForm : Form
 
         var save = new Button { Text = "Save Config", Left = 585, Top = 103, Width = 115, Height = 32 };
         var connect = new Button { Text = "Connect / Test", Left = 710, Top = 103, Width = 120, Height = 32 };
-        var autoSetup = new Button { Text = "First-Run / Repair Setup", Left = 840, Top = 103, Width = 165, Height = 32 };
-        var bootstrap = new Button { Text = "Bootstrap...", Left = 1015, Top = 103, Width = 115, Height = 32 };
-        authGroup.Controls.AddRange([save, connect, autoSetup, bootstrap]);
+        var autoSetup = new Button { Text = "First-Run / Repair", Left = 840, Top = 103, Width = 145, Height = 32 };
+        var bootstrap = new Button { Text = "Bootstrap...", Left = 995, Top = 103, Width = 135, Height = 32 };
+        var rotateCertificate = new Button { Text = "Rollover Certificate...", Left = 585, Top = 146, Width = 165, Height = 32 };
+        authGroup.Controls.AddRange([save, connect, autoSetup, bootstrap, rotateCertificate]);
         var ropcNote = new Label
         {
-            Text = "No pre-created App Registration is required. First-Run Setup uses a Microsoft first-party bootstrap, then creates BitKeyBridge's dedicated Entra app. Device Code supports MFA/Conditional Access.",
-            Left = 585,
-            Top = 148,
-            Width = 545,
-            Height = 42
+            Text = "First-Run Setup creates BitKeyBridge's dedicated Entra app. Certificate rollover adds and verifies a new credential before switching config; the previous credential is retained for rollback/grace.",
+            Left = 765,
+            Top = 145,
+            Width = 365,
+            Height = 50
         };
         authGroup.Controls.Add(ropcNote);
 
@@ -1333,6 +1334,7 @@ public sealed class MainForm : Form
         rotate.Click += async (_, _) => await RotateSelectedCloudKeyAsync();
         autoSetup.Click += async (_, _) => await RunNativeAutoSetupAsync();
         bootstrap.Click += (_, _) => ConfigureCustomBootstrap();
+        rotateCertificate.Click += async (_, _) => await RolloverEntraCertificateGuiAsync();
         _cloudAuthMode.SelectedIndexChanged += (_, _) => UpdateCloudAuthUi();
         return tab;
     }
@@ -1968,6 +1970,125 @@ public sealed class MainForm : Form
                 MessageBoxIcon.Error);
         }
         finally { Enabled = true; }
+    }
+
+    private async Task RolloverEntraCertificateGuiAsync()
+    {
+        SaveCloudFields();
+
+        if (string.IsNullOrWhiteSpace(
+                _cloudConfig.ClientId) ||
+            string.IsNullOrWhiteSpace(
+                _cloudConfig.CertificateThumbprint))
+        {
+            MessageBox.Show(
+                this,
+                "Run First-Run / Repair Setup first. A managed Client ID and certificate are required before rollover.",
+                "Entra Certificate Rollover",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            this,
+            "Roll over the BitKeyBridge Entra certificate?" +
+            Environment.NewLine +
+            Environment.NewLine +
+            "A new LocalMachine certificate will be added to the existing App Registration and tested with app-only Graph authentication before BitKeyBridge switches its configuration." +
+            Environment.NewLine +
+            Environment.NewLine +
+            "The previous Graph credential and local certificate will be retained for rollback/grace.",
+            "Entra Certificate Rollover",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        if (answer != DialogResult.Yes)
+            return;
+
+        try
+        {
+            Enabled = false;
+            _cloudStatus.Text =
+                "Starting staged Entra certificate rollover...";
+
+            using var lifecycle =
+                new EntraCertificateLifecycleService();
+
+            var progress =
+                new Progress<string>(
+                    message =>
+                        _cloudStatus.Text =
+                            message);
+
+            var result =
+                await lifecycle.RolloverAsync(
+                    _cloudConfig,
+                    ShowDeviceCodeAsync,
+                    progress);
+
+            LoadCloudFields();
+            RefreshMachineCloudStatus();
+            RefreshDashboard();
+
+            _audit.Write(
+                "EntraCertificateRollover",
+                source: "Entra",
+                authMode: "DeviceCode",
+                details:
+                    $"Previous={result.PreviousThumbprint}; New={result.NewThumbprint}; Verified={result.CertificateAuthenticationVerified}; MachineConfigUpdated={result.MachineCloudConfigUpdated}; ServiceKeyAccess={result.ServiceKeyAccessStatus}");
+
+            _cloudStatus.Text =
+                $"Certificate rollover completed. New certificate: {result.NewThumbprint}; expires {result.NewCertificateNotAfter:yyyy-MM-dd}.";
+
+            MessageBox.Show(
+                this,
+                "Entra certificate rollover completed successfully." +
+                Environment.NewLine +
+                Environment.NewLine +
+                $"Previous: {result.PreviousThumbprint}" +
+                Environment.NewLine +
+                $"New: {result.NewThumbprint}" +
+                Environment.NewLine +
+                $"Expires: {result.NewCertificateNotAfter:yyyy-MM-dd}" +
+                Environment.NewLine +
+                $"Certificate auth verified: {result.CertificateAuthenticationVerified}" +
+                Environment.NewLine +
+                $"Machine service config updated: {result.MachineCloudConfigUpdated}" +
+                Environment.NewLine +
+                Environment.NewLine +
+                "The previous credential/certificate was retained for rollback/grace.",
+                "Entra Certificate Rollover",
+                MessageBoxButtons.OK,
+                result.Warnings.Count == 0
+                    ? MessageBoxIcon.Information
+                    : MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            _audit.Write(
+                "EntraCertificateRollover",
+                "Failed",
+                source: "Entra",
+                authMode: "DeviceCode",
+                details: ex.Message);
+
+            _cloudStatus.Text =
+                "Certificate rollover failed: " +
+                ex.Message;
+
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Entra Certificate Rollover",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            Enabled = true;
+        }
     }
 
     private void ConfigureCustomBootstrap()
