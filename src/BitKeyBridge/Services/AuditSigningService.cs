@@ -152,7 +152,10 @@ public sealed class AuditSigningService
             Version = 1,
             CreatedAtUtc = DateTime.UtcNow,
             MachineName = Environment.MachineName,
-            ChainVersion = AuditIntegrityService.CurrentChainVersion,
+            ChainVersion =
+                integrity.LastChainVersion > 0
+                    ? integrity.LastChainVersion
+                    : AuditIntegrityService.CurrentChainVersion,
             FilesChecked = integrity.FilesChecked,
             TotalEntries = integrity.TotalEntries,
             LegacyEntries = integrity.LegacyEntries,
