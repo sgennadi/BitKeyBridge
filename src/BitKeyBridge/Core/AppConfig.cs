@@ -48,6 +48,9 @@ public sealed class AppConfig
     public bool RemoteApiAllowManagement { get; set; } = false;
     public string RemoteApiCertificateThumbprint { get; set; } = string.Empty;
     public string RemoteApiTokenSha256 { get; set; } = string.Empty;
+    public string RemoteApiReadTokenSha256 { get; set; } = string.Empty;
+    public string RemoteApiCoverageRunTokenSha256 { get; set; } = string.Empty;
+    public string RemoteApiExportTokenSha256 { get; set; } = string.Empty;
 
     public bool RequireRecoveryAccessReference { get; set; } = false;
     public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = true;
