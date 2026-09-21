@@ -29,6 +29,15 @@ public sealed class HealthSnapshot
     public int AuditIntegrityLegacyEntries { get; set; }
     public int AuditIntegrityChainedEntries { get; set; }
     public string AuditIntegrityError { get; set; } = string.Empty;
+    public bool AuditSigningEnabled { get; set; }
+    public string AuditSigningStatus { get; set; } = "NotConfigured";
+    public string AuditSigningCertificateThumbprint { get; set; } = string.Empty;
+    public DateTime? AuditSigningCertificateExpiresUtc { get; set; }
+    public double? AuditSigningCertificateDaysRemaining { get; set; }
+    public DateTime? AuditSigningCheckpointCreatedAtUtc { get; set; }
+    public int AuditSigningCheckpointEntries { get; set; }
+    public bool AuditSigningSignatureValid { get; set; }
+    public bool AuditSigningCurrentHeadSigned { get; set; }
     public string HealthEndpoint { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
