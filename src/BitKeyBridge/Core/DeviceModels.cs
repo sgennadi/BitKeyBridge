@@ -221,3 +221,30 @@ public sealed class AuditSigningTransitionHistoryStatus
     public DateTime? LastTransitionUtc { get; set; }
     public string FirstError { get; set; } = string.Empty;
 }
+
+
+public sealed class RecoveryIncidentVerificationResult
+{
+    public string SessionId { get; set; } = string.Empty;
+    public bool BundleFound { get; set; }
+    public bool AuditChainValid { get; set; }
+    public bool StableAuditSnapshot { get; set; }
+    public int ActionsTotal { get; set; }
+    public int ActionsAnchored { get; set; }
+    public int ActionsMissingFromRetainedAudit { get; set; }
+    public int MetadataMismatches { get; set; }
+    public bool SensitiveDataDetected { get; set; }
+    public bool RotationStateValid { get; set; } = true;
+    public string Status { get; set; } = "Unknown";
+    public bool Valid =>
+        BundleFound &&
+        AuditChainValid &&
+        StableAuditSnapshot &&
+        ActionsTotal > 0 &&
+        ActionsAnchored == ActionsTotal &&
+        MetadataMismatches == 0 &&
+        !SensitiveDataDetected &&
+        RotationStateValid;
+    public List<string> Warnings { get; set; } = [];
+    public List<string> Errors { get; set; } = [];
+}
