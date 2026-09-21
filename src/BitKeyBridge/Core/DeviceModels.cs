@@ -179,3 +179,32 @@ public sealed class RecoveryIncidentBundle
     public bool RotationSucceeded { get; set; }
     public List<RecoveryIncidentAction> Actions { get; set; } = [];
 }
+
+
+public sealed class AuditSigningTransition
+{
+    public int Version { get; set; } = 1;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public string MachineName { get; set; } = Environment.MachineName;
+    public int ChainVersion { get; set; }
+    public string AuditHeadHash { get; set; } = string.Empty;
+    public string PreviousCertificateThumbprint { get; set; } = string.Empty;
+    public string NewCertificateThumbprint { get; set; } = string.Empty;
+    public DateTime PreviousCertificateNotAfterUtc { get; set; }
+    public DateTime NewCertificateNotAfterUtc { get; set; }
+    public string SignatureAlgorithm { get; set; } = "RSA-SHA256-PKCS1";
+    public string PreviousSignatureBase64 { get; set; } = string.Empty;
+    public string NewSignatureBase64 { get; set; } = string.Empty;
+}
+
+public sealed class AuditSigningRolloverResult
+{
+    public string PreviousThumbprint { get; set; } = string.Empty;
+    public string NewThumbprint { get; set; } = string.Empty;
+    public DateTime NewCertificateNotAfterUtc { get; set; }
+    public string AuditHeadHash { get; set; } = string.Empty;
+    public bool PreviousSignatureValid { get; set; }
+    public bool NewSignatureValid { get; set; }
+    public bool NewCheckpointValid { get; set; }
+    public string ServiceKeyAccessStatus { get; set; } = string.Empty;
+}
