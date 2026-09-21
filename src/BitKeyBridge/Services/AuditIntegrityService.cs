@@ -6,10 +6,16 @@ namespace BitKeyBridge;
 
 public static class AuditIntegrityService
 {
-    public const int CurrentChainVersion = 1;
+    public const int CurrentChainVersion = 2;
 
     public static string ComputeHash(AuditEntry entry)
     {
+        if (entry.ChainVersion is < 1 or > CurrentChainVersion)
+        {
+            throw new InvalidOperationException(
+                $"Unsupported audit chain version {entry.ChainVersion}.");
+        }
+
         var builder = new StringBuilder(1024);
 
         Append(builder, entry.ChainVersion.ToString());
@@ -30,6 +36,9 @@ public static class AuditIntegrityService
         Append(builder, entry.Reference);
         Append(builder, entry.Reason);
         Append(builder, entry.Details);
+
+        if (entry.ChainVersion >= 2)
+            Append(builder, entry.CorrelationId);
 
         return Convert.ToHexString(
             SHA256.HashData(
@@ -141,7 +150,7 @@ public static class AuditIntegrityService
                     continue;
                 }
 
-                if (entry.ChainVersion != CurrentChainVersion)
+                if (entry.ChainVersion is < 1 or > CurrentChainVersion)
                 {
                     return Fail(
                         result,
@@ -187,6 +196,7 @@ public static class AuditIntegrityService
                 chainStarted = true;
                 previousHash = entry.EntryHash;
                 result.LastHash = entry.EntryHash;
+                result.LastChainVersion = entry.ChainVersion;
                 result.ChainedEntries++;
             }
         }
@@ -254,6 +264,7 @@ public static class AuditIntegrityService
             LegacyEntries = result.LegacyEntries,
             ChainedEntries = result.ChainedEntries,
             LastHash = result.LastHash,
+            LastChainVersion = result.LastChainVersion,
             FirstError = result.FirstError
         };
 
