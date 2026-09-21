@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -59,6 +60,11 @@ internal static class Program
             x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-setup", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-sign", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -114,6 +120,8 @@ internal static class Program
             x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -253,6 +261,21 @@ internal static class Program
                     }));
             return integrity.Valid ? 0 : 4;
         }
+
+        if (args.Any(x => x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase)))
+            return AuditSigningCliService.ShowStatus(config);
+
+        if (args.Any(x => x.Equals("--audit-signing-setup", StringComparison.OrdinalIgnoreCase)))
+            return AuditSigningCliService.Setup(config, args);
+
+        if (args.Any(x => x.Equals("--audit-signing-sign", StringComparison.OrdinalIgnoreCase)))
+            return AuditSigningCliService.Sign(config);
+
+        if (args.Any(x => x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase)))
+            return AuditSigningCliService.Verify(config);
+
+        if (args.Any(x => x.Equals("--audit-signing-disable", StringComparison.OrdinalIgnoreCase)))
+            return AuditSigningCliService.Disable(config);
 
         if (args.Any(x =>
                 x.Equals("--rbac-enable", StringComparison.OrdinalIgnoreCase) ||
@@ -1157,6 +1180,56 @@ internal static class Program
                         "Audit hash-chain verification failed.");
                 }
 
+                using (var signingRsa = RSA.Create(2048))
+                {
+                    var checkpoint = new AuditSigningCheckpoint
+                    {
+                        Version = 1,
+                        CreatedAtUtc = DateTime.UtcNow,
+                        MachineName = "SELFTEST",
+                        ChainVersion =
+                            AuditIntegrityService.CurrentChainVersion,
+                        FilesChecked = integrity.FilesChecked,
+                        TotalEntries = integrity.TotalEntries,
+                        LegacyEntries = integrity.LegacyEntries,
+                        ChainedEntries = integrity.ChainedEntries,
+                        LastHash = integrity.LastHash,
+                        CertificateThumbprint = "00112233445566778899AABBCCDDEEFF00112233",
+                        SignatureAlgorithm = "RSA-SHA256-PKCS1"
+                    };
+
+                    var payload =
+                        AuditSigningService.BuildPayload(
+                            checkpoint);
+                    var signature =
+                        signingRsa.SignData(
+                            payload,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1);
+
+                    if (!signingRsa.VerifyData(
+                            payload,
+                            signature,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1))
+                    {
+                        failures.Add(
+                            "Audit signing checkpoint signature round-trip failed.");
+                    }
+
+                    checkpoint.LastHash += "00";
+                    if (signingRsa.VerifyData(
+                            AuditSigningService.BuildPayload(
+                                checkpoint),
+                            signature,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1))
+                    {
+                        failures.Add(
+                            "Audit signing payload tamper detection failed.");
+                    }
+                }
+
                 var auditText = File.ReadAllText(auditPath);
                 auditText = auditText.Replace(
                     "\"SelfTest2\"",
@@ -1243,6 +1316,12 @@ internal static class Program
         Console.WriteLine("  --rbac-rotator-add <principal> Add DOMAIN\\group/user or SID to Rotate");
         Console.WriteLine("  --rbac-rotator-remove <principal> Remove Rotate principal");
         Console.WriteLine("  --audit-verify        Verify tamper-evident audit hash chain");
+        Console.WriteLine("  --audit-signing-status  Show signed-checkpoint and certificate state");
+        Console.WriteLine("  --audit-signing-setup   Create/reuse non-exportable machine signing certificate");
+        Console.WriteLine("  --audit-signing-years <1-10>  Certificate lifetime for setup");
+        Console.WriteLine("  --audit-signing-sign    Sign the current audit-chain checkpoint");
+        Console.WriteLine("  --audit-signing-verify  Verify checkpoint signature + audit chain");
+        Console.WriteLine("  --audit-signing-disable Disable new checkpoints; retain cert/checkpoint");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
