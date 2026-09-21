@@ -73,12 +73,12 @@ public sealed class HealthHttpServer : IDisposable
                 return;
             }
 
-            if (path is not "/health" and
-                path is not "/" and
-                path is not "/health/ready" and
-                path is not "/ready" and
-                path is not "/health/security" and
-                path is not "/health/coverage")
+            if (path != "/health" &&
+                path != "/" &&
+                path != "/health/ready" &&
+                path != "/ready" &&
+                path != "/health/security" &&
+                path != "/health/coverage")
             {
                 await WriteResponseAsync(
                     stream,
