@@ -68,6 +68,9 @@ internal static class Program
             x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-generate", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-revoke", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--config-backup", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--config-restore", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -126,6 +129,8 @@ internal static class Program
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--config-backup", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -329,6 +334,66 @@ internal static class Program
             return RemoteApiCliService.RevokeScopedToken(
                 config,
                 revokeRemoteScope);
+        }
+
+        var configBackupPath =
+            GetOptionValue(
+                args,
+                "--config-backup");
+        if (args.Any(x => x.Equals(
+                "--config-backup",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    configBackupPath))
+            {
+                Console.Error.WriteLine(
+                    "--config-backup requires <path>.");
+                return 2;
+            }
+
+            return ConfigurationMaintenanceCliService.Backup(
+                configBackupPath);
+        }
+
+        var configRestorePath =
+            GetOptionValue(
+                args,
+                "--config-restore");
+        if (args.Any(x => x.Equals(
+                "--config-restore",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    configRestorePath))
+            {
+                Console.Error.WriteLine(
+                    "--config-restore requires <path>.");
+                return 2;
+            }
+
+            return ConfigurationMaintenanceCliService.Restore(
+                configRestorePath);
+        }
+
+        var diagnosticsPath =
+            GetOptionValue(
+                args,
+                "--diagnostics-bundle");
+        if (args.Any(x => x.Equals(
+                "--diagnostics-bundle",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    diagnosticsPath))
+            {
+                Console.Error.WriteLine(
+                    "--diagnostics-bundle requires <path>.");
+                return 2;
+            }
+
+            return ConfigurationMaintenanceCliService.Diagnostics(
+                diagnosticsPath);
         }
 
         if (args.Any(x =>
@@ -1482,6 +1547,9 @@ internal static class Program
         Console.WriteLine("  --remote-token-status  Show configured Remote API token scopes");
         Console.WriteLine("  --remote-token-generate <scope>  Create read, coverage-run, or export token");
         Console.WriteLine("  --remote-token-revoke <scope>    Revoke read, coverage-run, or export token");
+        Console.WriteLine("  --config-backup <path>     Create JSON config backup without credential/private-key material");
+        Console.WriteLine("  --config-restore <path>    Validate and restore config; creates rollback backup");
+        Console.WriteLine("  --diagnostics-bundle <zip> Create sanitized troubleshooting ZIP");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
