@@ -361,4 +361,55 @@ BitKeyBridge.exe --audit-signing-disable
 - `/health` показывает status подписи, expiry certificate, checkpoint time/count и подписана ли текущая голова audit.
 - Добавлен warning horizon `AuditSigningCertificateWarningDays`.
 - Self-test проверяет RSA signature round-trip и обнаружение изменения подписанного payload.
+## Новое в 0.13.0
+
+- Каждый recovery workflow получил `SessionId` / `CorrelationId`. Один ID связывает Get/Show/Copy/Rotate в audit.
+- Audit chain обновлена до **version 2**: `CorrelationId` входит в SHA-256 hash новой записи. Старые v1 audit-записи продолжают проходить verification без миграции.
+- Для recovery session автоматически создаётся metadata-only incident JSON:
+
+```text
+%ProgramData%\BitKeyBridge\Incidents\<SessionId>.json
+```
+
+- Incident bundle содержит operator, host, computer, Recovery ID, ticket/reference, reason, timestamps, actions, audit EntryHash и rotation state. 48-digit recovery password туда не записывается.
+- В Audit tab добавлена колонка Session.
+- Local health разделён на дополнительные безопасные endpoints:
+
+```text
+/health/ready
+/health/security
+/health/coverage
+```
+
+- `/health/security` показывает RBAC/audit/certificate/Remote API security posture без token hashes.
+- Remote API получил least-privilege bearer tokens: `read`, `coverage-run`, `export`. Старый token остаётся Admin token для backward compatibility.
+- GET разрешён любому валидному scope. `POST /coverage/run` требует Admin или CoverageRun; `POST /export` — Admin или Export. Global remote-management switch всё равно обязателен.
+- Scoped tokens создаются/отзываются через **Operations → Scoped Tokens...** или CLI:
+
+```text
+BitKeyBridge.exe --remote-token-status
+BitKeyBridge.exe --remote-token-generate read
+BitKeyBridge.exe --remote-token-generate coverage-run
+BitKeyBridge.exe --remote-token-generate export
+BitKeyBridge.exe --remote-token-revoke read
+```
+
+- Добавлены безопасные config backup/restore и diagnostics ZIP:
+
+```text
+BitKeyBridge.exe --config-backup C:\Backup\BitKeyBridge.json
+BitKeyBridge.exe --config-restore C:\Backup\BitKeyBridge.json
+BitKeyBridge.exe --diagnostics-bundle C:\Temp\BitKeyBridge-Diagnostics.zip
+```
+
+- Перед restore автоматически создаётся rollback backup. Credential Manager/DPAPI password, Graph tokens, certificate private keys и recovery passwords в backup не включаются.
+- Diagnostics ZIP дополнительно исключает recovery CSV, audit contents, bearer tokens и даже их hashes. В нём только sanitized health/service/config/status/log/certificate metadata.
+- Добавлен staged **Entra certificate rollover**: новый certificate добавляется через Graph без удаления старого, проверяется app-only authentication, готовится service private-key ACL и только после этого обновляется user/machine config.
+- Старый Entra Graph credential и local certificate автоматически не удаляются — они остаются для rollback/grace.
+- Добавлен explicit **audit-signing certificate rollover**. Transition подписывается одновременно старым и новым RSA private key; история хранится в `%ProgramData%\BitKeyBridge\AuditSigningTransitions`.
+- При обычной ошибке audit rollover BitKeyBridge пытается вернуть предыдущий thumbprint/checkpoint. Старый certificate остаётся для исторической проверки.
+- Новые Remote API TLS private keys больше не создаются Exportable.
+- При Remote API setup и смене LocalSystem/gMSA/domain service identity выполняется private-key ACL preflight.
+- `/health/security` показывает Remote API scopes, TLS expiry/status и key ACL без раскрытия hashes.
+- Self-test расширен проверками mixed audit v1→v2, CorrelationId, metadata-only incident bundle, dual-sign transition tamper detection, Remote API scope normalization и config validation.
 
