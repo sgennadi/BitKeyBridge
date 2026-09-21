@@ -65,6 +65,9 @@ internal static class Program
             x.Equals("--audit-signing-sign", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--remote-token-generate", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--remote-token-revoke", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -122,6 +125,7 @@ internal static class Program
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -276,6 +280,56 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--audit-signing-disable", StringComparison.OrdinalIgnoreCase)))
             return AuditSigningCliService.Disable(config);
+
+        if (args.Any(x => x.Equals(
+                "--remote-token-status",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return RemoteApiCliService.ShowTokenStatus(
+                config);
+        }
+
+        var generateRemoteScope =
+            GetOptionValue(
+                args,
+                "--remote-token-generate");
+        if (args.Any(x => x.Equals(
+                "--remote-token-generate",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    generateRemoteScope))
+            {
+                Console.Error.WriteLine(
+                    "--remote-token-generate requires <read|coverage-run|export>.");
+                return 2;
+            }
+
+            return RemoteApiCliService.GenerateScopedToken(
+                config,
+                generateRemoteScope);
+        }
+
+        var revokeRemoteScope =
+            GetOptionValue(
+                args,
+                "--remote-token-revoke");
+        if (args.Any(x => x.Equals(
+                "--remote-token-revoke",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    revokeRemoteScope))
+            {
+                Console.Error.WriteLine(
+                    "--remote-token-revoke requires <read|coverage-run|export>.");
+                return 2;
+            }
+
+            return RemoteApiCliService.RevokeScopedToken(
+                config,
+                revokeRemoteScope);
+        }
 
         if (args.Any(x =>
                 x.Equals("--rbac-enable", StringComparison.OrdinalIgnoreCase) ||
@@ -1425,6 +1479,9 @@ internal static class Program
         Console.WriteLine("  --audit-signing-sign    Sign the current audit-chain checkpoint");
         Console.WriteLine("  --audit-signing-verify  Verify checkpoint signature + audit chain");
         Console.WriteLine("  --audit-signing-disable Disable new checkpoints; retain cert/checkpoint");
+        Console.WriteLine("  --remote-token-status  Show configured Remote API token scopes");
+        Console.WriteLine("  --remote-token-generate <scope>  Create read, coverage-run, or export token");
+        Console.WriteLine("  --remote-token-revoke <scope>    Revoke read, coverage-run, or export token");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
