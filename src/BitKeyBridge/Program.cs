@@ -1180,6 +1180,109 @@ internal static class Program
                         "Audit hash-chain verification failed.");
                 }
 
+                var mixedPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "audit-v1-v2.jsonl");
+
+                var legacyEntry = new AuditEntry
+                {
+                    TimestampUtc = DateTime.UtcNow.AddSeconds(-1),
+                    User = "SELFTEST\\Legacy",
+                    Host = "SELFTEST",
+                    Action = "LegacyV1",
+                    Result = "Success",
+                    ChainVersion = 1,
+                    PreviousHash = string.Empty
+                };
+                legacyEntry.EntryHash =
+                    AuditIntegrityService.ComputeHash(
+                        legacyEntry);
+
+                File.WriteAllText(
+                    mixedPath,
+                    JsonSerializer.Serialize(legacyEntry) +
+                    Environment.NewLine);
+
+                var mixedAudit =
+                    new AuditService(mixedPath, 1);
+                var sessionId =
+                    "00112233445566778899aabbccddeeff";
+                var context =
+                    new RecoveryAccessContext
+                    {
+                        SessionId = sessionId,
+                        Reference = "INC-54321",
+                        Reason = "Mixed-chain test"
+                    };
+
+                var v2Entry = mixedAudit.Write(
+                    "RecoveryReadV2",
+                    computerName: "PC-SELFTEST",
+                    recoveryId: "{SELFTEST}",
+                    source: "AD",
+                    details:
+                        "Sensitive=" + fakeKey,
+                    reference:
+                        context.Reference,
+                    reason:
+                        context.Reason,
+                    correlationId:
+                        context.SessionId);
+
+                var mixedIntegrity =
+                    AuditIntegrityService.Verify(
+                        mixedPath);
+
+                if (!mixedIntegrity.Valid ||
+                    mixedIntegrity.ChainedEntries != 2 ||
+                    mixedIntegrity.LastChainVersion !=
+                    AuditIntegrityService.CurrentChainVersion ||
+                    v2Entry is null ||
+                    v2Entry.ChainVersion != 2 ||
+                    v2Entry.CorrelationId != sessionId)
+                {
+                    failures.Add(
+                        "Audit v1-to-v2 compatibility/correlation failed.");
+                }
+
+                var incidentDir =
+                    Path.Combine(
+                        tempDirectory,
+                        "Incidents");
+                var incident =
+                    new RecoveryIncidentService(
+                        incidentDir)
+                    .Append(
+                        context,
+                        v2Entry);
+
+                var incidentPath =
+                    Path.Combine(
+                        incidentDir,
+                        sessionId + ".json");
+                var incidentText =
+                    File.Exists(incidentPath)
+                        ? File.ReadAllText(incidentPath)
+                        : string.Empty;
+
+                if (incident is null ||
+                    !File.Exists(incidentPath) ||
+                    !incidentText.Contains(
+                        sessionId,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    incidentText.Contains(
+                        fakeKey,
+                        StringComparison.Ordinal) ||
+                    string.IsNullOrWhiteSpace(
+                        incident.Actions
+                            .FirstOrDefault()?
+                            .AuditEntryHash))
+                {
+                    failures.Add(
+                        "Recovery incident metadata-only bundle failed.");
+                }
+
                 using (var signingRsa = RSA.Create(2048))
                 {
                     var checkpoint = new AuditSigningCheckpoint
