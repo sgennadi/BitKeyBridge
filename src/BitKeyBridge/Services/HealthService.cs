@@ -29,6 +29,10 @@ public sealed class HealthService
                 _config.RbacRecoveryReaders.Count,
             RbacRotationOperatorPrincipals =
                 _config.RbacRotationOperators.Count,
+            AuditSigningEnabled =
+                _config.AuditSigningEnabled,
+            AuditSigningCertificateThumbprint =
+                _config.AuditSigningCertificateThumbprint,
             HealthEndpoint = _config.HealthEndpointEnabled
                 ? $"http://127.0.0.1:{Math.Clamp(_config.HealthEndpointPort, 1024, 65535)}/health"
                 : "Disabled"
@@ -141,6 +145,81 @@ public sealed class HealthService
             snapshot.AuditIntegrityStatus = "Error";
             snapshot.Warnings.Add(
                 "Audit integrity status: " + ex.Message);
+        }
+
+        try
+        {
+            if (_config.AuditSigningEnabled)
+            {
+                var signing =
+                    new AuditSigningService(_config)
+                        .VerifyCheckpoint();
+
+                snapshot.AuditSigningStatus =
+                    signing.Status;
+                snapshot.AuditSigningCertificateExpiresUtc =
+                    signing.CertificateExpiresUtc;
+                snapshot.AuditSigningCertificateDaysRemaining =
+                    signing.CertificateDaysRemaining;
+                snapshot.AuditSigningSignatureValid =
+                    signing.SignatureValid;
+                snapshot.AuditSigningCurrentHeadSigned =
+                    signing.CurrentHeadSigned;
+
+                if (signing.Checkpoint is not null)
+                {
+                    snapshot.AuditSigningCheckpointCreatedAtUtc =
+                        signing.Checkpoint.CreatedAtUtc;
+                    snapshot.AuditSigningCheckpointEntries =
+                        signing.Checkpoint.TotalEntries;
+                }
+
+                if (!signing.Valid)
+                {
+                    if (signing.Status is "NoCheckpoint")
+                    {
+                        snapshot.Warnings.Add(
+                            "Audit signing is enabled but no signed checkpoint exists yet.");
+                    }
+                    else
+                    {
+                        snapshot.Errors.Add(
+                            "Audit signing verification failed: " +
+                            signing.Status +
+                            (string.IsNullOrWhiteSpace(signing.Error)
+                                ? string.Empty
+                                : " - " + signing.Error));
+                    }
+                }
+                else if (!signing.CurrentHeadSigned)
+                {
+                    snapshot.Warnings.Add(
+                        "Audit signing checkpoint is valid, but newer audit entries are not signed yet.");
+                }
+
+                if (signing.CertificateDaysRemaining is not null &&
+                    signing.CertificateDaysRemaining <=
+                    Math.Max(
+                        1,
+                        _config.AuditSigningCertificateWarningDays))
+                {
+                    if (signing.CertificateDaysRemaining <= 0)
+                    {
+                        snapshot.Errors.Add(
+                            "Audit-signing certificate has expired.");
+                    }
+                    else
+                    {
+                        snapshot.Warnings.Add(
+                            $"Audit-signing certificate expires in {signing.CertificateDaysRemaining:0} days.");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Errors.Add(
+                "Audit signing: " + ex.Message);
         }
 
         try
