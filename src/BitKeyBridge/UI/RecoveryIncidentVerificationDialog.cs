@@ -278,7 +278,7 @@ public sealed class RecoveryIncidentVerificationDialog : Form
             Process.Start(
                 new ProcessStartInfo(
                     "notepad.exe",
-                    $""{path}"")
+                    $"\"{path}\"")
                 {
                     UseShellExecute = true
                 });
