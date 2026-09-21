@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.13.0
+
+- Added recovery-session correlation IDs across local AD reveal/copy, Entra get/reveal/copy, and Intune rotation workflows.
+- Added metadata-only recovery incident bundles under `%ProgramData%\BitKeyBridge\Incidents`; bundles contain operator/device/ticket/timestamps/actions/audit hashes and rotation state, never the 48-digit recovery password.
+- Added backward-compatible audit chain version 2. Version 1 entries remain verifiable; version 2 adds the recovery-session CorrelationId to the SHA-256 entry hash.
+- Audit writes now return the appended entry and EntryHash so incident bundles can reference exact tamper-evident audit records.
+- Added the Session/Correlation ID column to the Audit tab.
+- Added focused local health endpoints: `/health/ready`, `/health/security`, and `/health/coverage`, while preserving `/health` and `/health/live`.
+- Added least-privilege Remote API bearer tokens with independent `read`, `coverage-run`, and `export` scopes. The existing bearer token remains the backward-compatible Admin token.
+- Remote API GET endpoints accept any valid scope; Coverage POST requires Admin/CoverageRun and Export POST requires Admin/Export, in addition to the global remote-management switch.
+- Added scoped-token lifecycle through CLI and GUI; tokens are shown once and only SHA-256 hashes are persisted.
+- Added safe JSON configuration backup/restore with validation and an automatic pre-restore rollback backup.
+- Configuration backup intentionally excludes Credential Manager/DPAPI password material, Graph tokens, certificate private keys, and BitLocker recovery passwords.
+- Added sanitized diagnostics ZIP generation with health/service/config/certificate ACL/status/log metadata while explicitly excluding recovery CSV/passwords, audit contents, credential blobs, bearer tokens/hashes, Graph tokens, and private keys.
+- Added Configuration / Diagnostics controls to Operations and CLI commands `--config-backup`, `--config-restore`, and `--diagnostics-bundle`.
+- Added staged Microsoft Entra certificate rollover. A new credential is added without removing the active credential, app-only Graph authentication is verified, service private-key ACL is prepared, and only then are user/machine configs switched.
+- Entra rollover retains the previous Graph credential and local certificate for rollback/grace instead of automatically deleting them.
+- Added dual-signed audit-signing certificate rollover. The transition payload is signed by both the previous and new RSA private keys and transition history is retained under `%ProgramData%\BitKeyBridge\AuditSigningTransitions`.
+- Audit-signing rollover verifies the current trust anchor before transition, creates a new signed checkpoint, rolls configuration/checkpoint back on normal failures, and retains old certificates for historical verification.
+- New Remote API TLS certificates are persisted without the Exportable flag.
+- Added Remote API TLS private-key ACL preflight for installed service identities and service-identity changes.
+- Health/security output now reports Remote API scope configuration, TLS certificate expiry/status, and service private-key access without exposing token hashes.
+- Added offline self-tests for mixed audit v1→v2 chains, CorrelationId hashing, metadata-only incident bundles, dual-signed rollover tamper detection, Remote API scope normalization, and configuration validation.
+- Updated the public appsettings example for scoped Remote API token hashes.
+
 ## 0.12.0
 
 - Added cryptographically signed audit checkpoints on top of the existing SHA-256 audit hash chain.
