@@ -4568,19 +4568,26 @@ public sealed class MainForm : Form
     {
         try
         {
+            var service =
+                new AuditSigningService(_config);
             var result =
-                new AuditSigningService(_config)
-                    .VerifyCheckpoint();
+                service.VerifyCheckpoint();
+            var transitions =
+                service.VerifyTransitionHistory();
 
             _auditSigningStatus.Text =
                 $"Signed audit: {result.Status}; Enabled={_config.AuditSigningEnabled}; " +
-                $"SignatureValid={result.SignatureValid}; CurrentHeadSigned={result.CurrentHeadSigned}" +
+                $"SignatureValid={result.SignatureValid}; CurrentHeadSigned={result.CurrentHeadSigned}; " +
+                $"Transitions={transitions.Status}/{transitions.ValidTransitions}" +
                 (result.CertificateExpiresUtc is null
                     ? string.Empty
                     : $"; CertificateExpires={result.CertificateExpiresUtc:yyyy-MM-dd}") +
                 (result.Checkpoint is null
                     ? string.Empty
-                    : $"; Checkpoint={result.Checkpoint.CreatedAtUtc:u}; Entries={result.Checkpoint.TotalEntries}");
+                    : $"; Checkpoint={result.Checkpoint.CreatedAtUtc:u}; Entries={result.Checkpoint.TotalEntries}") +
+                (string.IsNullOrWhiteSpace(transitions.FirstError)
+                    ? string.Empty
+                    : $"; TransitionError={transitions.FirstError}");
         }
         catch (Exception ex)
         {
