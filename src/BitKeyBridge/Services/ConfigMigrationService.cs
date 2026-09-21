@@ -86,18 +86,31 @@ public sealed class ConfigMigrationService
             config.SchemaVersion =
                 ConfigSchema.CurrentVersion;
 
-            TryPersistStatus(
-                new ConfigMigrationStatus
-                {
-                    CheckedAtUtc =
-                        DateTime.UtcNow,
-                    StoredSchemaVersion =
-                        storedVersion,
-                    EffectiveSchemaVersion =
-                        config.SchemaVersion,
-                    MigrationRequired = false,
-                    Migrated = false
-                });
+            var existing =
+                ReadStatus();
+
+            if (existing is null ||
+                existing.EffectiveSchemaVersion !=
+                    ConfigSchema.CurrentVersion ||
+                existing.StoredSchemaVersion !=
+                    ConfigSchema.CurrentVersion ||
+                existing.MigrationRequired ||
+                !string.IsNullOrWhiteSpace(
+                    existing.Error))
+            {
+                TryPersistStatus(
+                    new ConfigMigrationStatus
+                    {
+                        CheckedAtUtc =
+                            DateTime.UtcNow,
+                        StoredSchemaVersion =
+                            storedVersion,
+                        EffectiveSchemaVersion =
+                            config.SchemaVersion,
+                        MigrationRequired = false,
+                        Migrated = false
+                    });
+            }
 
             return config;
         }
