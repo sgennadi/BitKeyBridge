@@ -85,6 +85,14 @@ public sealed class HealthSnapshot
     public int RemoteApiPort { get; set; }
     public bool RemoteApiManagementEnabled { get; set; }
     public string RemoteApiCertificateThumbprint { get; set; } = string.Empty;
+    public bool RemoteApiAdminTokenConfigured { get; set; }
+    public bool RemoteApiReadTokenConfigured { get; set; }
+    public bool RemoteApiCoverageRunTokenConfigured { get; set; }
+    public bool RemoteApiExportTokenConfigured { get; set; }
+    public DateTime? RemoteApiCertificateExpiresUtc { get; set; }
+    public double? RemoteApiCertificateDaysRemaining { get; set; }
+    public string RemoteApiCertificateStatus { get; set; } = "NotConfigured";
+    public string RemoteApiKeyAccessStatus { get; set; } = "Unknown";
 
     public DateTime? UpdateCheckedAtUtc { get; set; }
     public string LatestVersion { get; set; } = string.Empty;
