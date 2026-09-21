@@ -148,6 +148,90 @@ public static class AuditSigningCliService
         }
     }
 
+    public static int Rollover(
+        AppConfig config,
+        string[] args)
+    {
+        try
+        {
+            var years = 5;
+            var value =
+                GetOptionValue(
+                    args,
+                    "--audit-signing-rollover-years");
+
+            if (!string.IsNullOrWhiteSpace(value) &&
+                (!int.TryParse(value, out years) ||
+                 years is < 1 or > 10))
+            {
+                throw new ArgumentException(
+                    "--audit-signing-rollover-years must be between 1 and 10.");
+            }
+
+            var serviceBefore =
+                WindowsServiceHost.GetInfo();
+
+            if (serviceBefore.Installed &&
+                string.Equals(
+                    serviceBefore.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+            }
+
+            try
+            {
+                var result =
+                    new AuditSigningService(config)
+                        .Rollover(years);
+
+                Console.WriteLine(
+                    "Audit-signing certificate rollover completed.");
+                Console.WriteLine(
+                    $"Previous: {result.PreviousThumbprint}");
+                Console.WriteLine(
+                    $"New: {result.NewThumbprint}");
+                Console.WriteLine(
+                    $"Expires: {result.NewCertificateNotAfterUtc:O}");
+                Console.WriteLine(
+                    $"Audit head: {result.AuditHeadHash}");
+                Console.WriteLine(
+                    $"Old signature valid: {result.PreviousSignatureValid}");
+                Console.WriteLine(
+                    $"New signature valid: {result.NewSignatureValid}");
+                Console.WriteLine(
+                    $"New checkpoint valid: {result.NewCheckpointValid}");
+                Console.WriteLine(
+                    $"Service key access: {result.ServiceKeyAccessStatus}");
+                Console.WriteLine(
+                    $"Transition history: {AppPaths.AuditSigningTransitionsDirectory}");
+                return 0;
+            }
+            finally
+            {
+                if (serviceBefore.Installed &&
+                    string.Equals(
+                        serviceBefore.State,
+                        "Running",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    WindowsServiceHost.Start();
+                }
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 2;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
     public static int Disable(AppConfig config)
     {
         try
