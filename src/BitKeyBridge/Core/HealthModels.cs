@@ -38,6 +38,10 @@ public sealed class HealthSnapshot
     public int AuditSigningCheckpointEntries { get; set; }
     public bool AuditSigningSignatureValid { get; set; }
     public bool AuditSigningCurrentHeadSigned { get; set; }
+    public string AuditSigningTransitionHistoryStatus { get; set; } = "None";
+    public int AuditSigningTransitionCount { get; set; }
+    public DateTime? AuditSigningLastTransitionUtc { get; set; }
+    public string AuditSigningTransitionError { get; set; } = string.Empty;
     public string HealthEndpoint { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
