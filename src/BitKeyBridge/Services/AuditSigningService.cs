@@ -35,7 +35,7 @@ public sealed class AuditSigningService
                 throw new InvalidOperationException(
                     "An audit-signing certificate is already configured but is unavailable or invalid. " +
                     "BitKeyBridge will not silently replace the audit trust anchor. " +
-                    "Use the controlled certificate rollover workflow instead.",
+                    "Restore the configured certificate or perform an explicit trust-anchor migration.",
                     ex);
             }
         }
