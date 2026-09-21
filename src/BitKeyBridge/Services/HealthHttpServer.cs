@@ -73,21 +73,135 @@ public sealed class HealthHttpServer : IDisposable
                 return;
             }
 
-            if (path is not "/health" and not "/")
+            if (path is not "/health" and
+                path is not "/" and
+                path is not "/health/ready" and
+                path is not "/ready" and
+                path is not "/health/security" and
+                path is not "/health/coverage")
             {
-                await WriteResponseAsync(stream, 404, "text/plain; charset=utf-8", "Not Found\n", ct);
+                await WriteResponseAsync(
+                    stream,
+                    404,
+                    "text/plain; charset=utf-8",
+                    "Not Found\n",
+                    ct);
                 return;
             }
 
-            var snapshot = new HealthService(_config).GetSnapshot();
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+            var snapshot =
+                new HealthService(_config)
+                    .GetSnapshot();
+
+            object payload = path switch
             {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            }) + "\n";
+                "/health/ready" or "/ready" => new
+                {
+                    status = snapshot.OverallStatus,
+                    ready =
+                        snapshot.OverallStatus != "Error",
+                    serviceState =
+                        snapshot.ServiceState,
+                    lastSuccessfulExport =
+                        snapshot.LastSuccessfulExport,
+                    lastSuccessfulExportAgeHours =
+                        snapshot.LastSuccessfulExportAgeHours,
+                    lastSuccessfulExportStale =
+                        snapshot.LastSuccessfulExportStale,
+                    errors =
+                        snapshot.Errors.Count
+                },
+                "/health/security" => new
+                {
+                    status = snapshot.OverallStatus,
+                    rbacEnabled =
+                        snapshot.RbacEnabled,
+                    rbacValidationErrors =
+                        snapshot.RbacValidationErrors,
+                    auditIntegrityStatus =
+                        snapshot.AuditIntegrityStatus,
+                    auditIntegrityVerifiedAtUtc =
+                        snapshot.AuditIntegrityVerifiedAtUtc,
+                    auditSigningEnabled =
+                        snapshot.AuditSigningEnabled,
+                    auditSigningStatus =
+                        snapshot.AuditSigningStatus,
+                    auditSigningSignatureValid =
+                        snapshot.AuditSigningSignatureValid,
+                    auditSigningCurrentHeadSigned =
+                        snapshot.AuditSigningCurrentHeadSigned,
+                    auditSigningCertificateExpiresUtc =
+                        snapshot.AuditSigningCertificateExpiresUtc,
+                    auditSigningCertificateDaysRemaining =
+                        snapshot.AuditSigningCertificateDaysRemaining,
+                    machineCloudConfigured =
+                        snapshot.MachineCloudConfigured,
+                    machineCloudKeyAccessStatus =
+                        snapshot.MachineCloudKeyAccessStatus,
+                    certificateStatus =
+                        snapshot.CertificateStatus,
+                    certificateExpires =
+                        snapshot.CertificateExpires,
+                    certificateDaysRemaining =
+                        snapshot.CertificateDaysRemaining,
+                    errors =
+                        snapshot.Errors.Count,
+                    warnings =
+                        snapshot.Warnings.Count
+                },
+                "/health/coverage" => new
+                {
+                    enabled =
+                        snapshot.ServiceCoverageEnabled,
+                    lastSuccess =
+                        snapshot.LastCoverageSuccess,
+                    finishedUtc =
+                        snapshot.LastCoverageFinishedUtc,
+                    ageHours =
+                        snapshot.LastCoverageAgeHours,
+                    totalDevices =
+                        snapshot.CoverageTotalDevices,
+                    noRecoveryKey =
+                        snapshot.CoverageNoRecoveryKey,
+                    intuneNotEncrypted =
+                        snapshot.CoverageIntuneNotEncrypted,
+                    intuneStale =
+                        snapshot.CoverageIntuneStale,
+                    oldCloudKey =
+                        snapshot.CoverageOldCloudKey,
+                    policyEnabled =
+                        snapshot.CoveragePolicyEnabled,
+                    policyCompliant =
+                        snapshot.CoveragePolicyCompliant,
+                    policyErrors =
+                        snapshot.CoveragePolicyErrors,
+                    policyWarnings =
+                        snapshot.CoveragePolicyWarnings
+                },
+                _ => snapshot
+            };
+
+            var json = JsonSerializer.Serialize(
+                payload,
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy =
+                        JsonNamingPolicy.CamelCase
+                }) + "\n";
+
+            var unavailable =
+                path is "/health/ready" or "/ready"
+                    ? snapshot.OverallStatus == "Error"
+                    : path is "/health/security"
+                        ? snapshot.AuditIntegrityStatus == "Invalid" ||
+                          (_config.AuditSigningEnabled &&
+                           snapshot.AuditSigningStatus is not "Valid" and not "ValidCheckpointStale")
+                        : false;
+
             await WriteResponseAsync(
                 stream,
-                snapshot.OverallStatus == "Error" ? 503 : 200,
+                unavailable ? 503 : 200,
                 "application/json; charset=utf-8",
                 json,
                 ct);
