@@ -10,6 +10,14 @@ namespace BitKeyBridge;
 
 public sealed class RemoteApiServer : IDisposable
 {
+    private enum RemoteApiAccessScope
+    {
+        Admin,
+        Read,
+        CoverageRun,
+        Export
+    }
+
     private readonly AppConfig _config;
     private readonly TcpListener _listener;
     private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate;
@@ -21,8 +29,14 @@ public sealed class RemoteApiServer : IDisposable
         _config = config;
         if (!config.RemoteApiEnabled)
             throw new InvalidOperationException("Remote API is disabled.");
-        if (string.IsNullOrWhiteSpace(config.RemoteApiTokenSha256))
-            throw new InvalidOperationException("Remote API bearer token is not configured.");
+        if (string.IsNullOrWhiteSpace(config.RemoteApiTokenSha256) &&
+            string.IsNullOrWhiteSpace(config.RemoteApiReadTokenSha256) &&
+            string.IsNullOrWhiteSpace(config.RemoteApiCoverageRunTokenSha256) &&
+            string.IsNullOrWhiteSpace(config.RemoteApiExportTokenSha256))
+        {
+            throw new InvalidOperationException(
+                "Remote API bearer token is not configured.");
+        }
         if (string.IsNullOrWhiteSpace(config.RemoteApiCertificateThumbprint))
             throw new InvalidOperationException("Remote API TLS certificate is not configured.");
 
@@ -139,8 +153,11 @@ public sealed class RemoteApiServer : IDisposable
                 headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
             }
 
-            if (!headers.TryGetValue("Authorization", out var authorization) ||
-                !ValidateAuthorization(authorization))
+            if (!headers.TryGetValue(
+                    "Authorization",
+                    out var authorization) ||
+                ResolveAuthorizationScope(
+                    authorization) is not { } accessScope)
             {
                 await WriteResponseAsync(
                     ssl,
@@ -264,8 +281,23 @@ public sealed class RemoteApiServer : IDisposable
                     return;
                 }
 
+                if (accessScope is not RemoteApiAccessScope.Admin and
+                    not RemoteApiAccessScope.CoverageRun)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        403,
+                        new
+                        {
+                            error =
+                                "Bearer token does not have the coverage-run scope."
+                        },
+                        ct);
+                    return;
+                }
+
                 WindowsEventLogService.TryWrite(
-                    $"Remote API coverage run requested from {client.Client.RemoteEndPoint}.",
+                    $"Remote API coverage run requested from {client.Client.RemoteEndPoint}. Scope={accessScope}.",
                     EventLogSeverity.Warning,
                     4311,
                     "RemoteAPI");
@@ -294,12 +326,31 @@ public sealed class RemoteApiServer : IDisposable
             {
                 if (!_config.RemoteApiAllowManagement)
                 {
-                    await WriteResponseAsync(ssl, 403, new { error = "Remote management is disabled." }, ct);
+                    await WriteResponseAsync(
+                        ssl,
+                        403,
+                        new { error = "Remote management is disabled." },
+                        ct);
+                    return;
+                }
+
+                if (accessScope is not RemoteApiAccessScope.Admin and
+                    not RemoteApiAccessScope.Export)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        403,
+                        new
+                        {
+                            error =
+                                "Bearer token does not have the export scope."
+                        },
+                        ct);
                     return;
                 }
 
                 WindowsEventLogService.TryWrite(
-                    $"Remote API export requested from {client.Client.RemoteEndPoint}.",
+                    $"Remote API export requested from {client.Client.RemoteEndPoint}. Scope={accessScope}.",
                     EventLogSeverity.Warning,
                     4310,
                     "RemoteAPI");
@@ -329,28 +380,82 @@ public sealed class RemoteApiServer : IDisposable
         }
     }
 
-    private bool ValidateAuthorization(string value)
+    private RemoteApiAccessScope? ResolveAuthorizationScope(
+        string value)
     {
         const string prefix = "Bearer ";
-        if (!value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            return false;
-        var token = value[prefix.Length..].Trim();
-        if (token.Length < 32) return false;
+        if (!value.StartsWith(
+                prefix,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var token =
+            value[prefix.Length..]
+                .Trim();
+        if (token.Length < 32)
+            return null;
 
         try
         {
-            var tokenBytes = Convert.FromBase64String(token);
+            var tokenBytes =
+                Convert.FromBase64String(token);
             try
             {
-                var actual = SHA256.HashData(tokenBytes);
-                var expected = Convert.FromHexString(_config.RemoteApiTokenSha256);
-                return actual.Length == expected.Length &&
-                       CryptographicOperations.FixedTimeEquals(actual, expected);
+                var actual =
+                    SHA256.HashData(tokenBytes);
+
+                if (HashMatches(
+                        actual,
+                        _config.RemoteApiTokenSha256))
+                    return RemoteApiAccessScope.Admin;
+
+                if (HashMatches(
+                        actual,
+                        _config.RemoteApiReadTokenSha256))
+                    return RemoteApiAccessScope.Read;
+
+                if (HashMatches(
+                        actual,
+                        _config.RemoteApiCoverageRunTokenSha256))
+                    return RemoteApiAccessScope.CoverageRun;
+
+                if (HashMatches(
+                        actual,
+                        _config.RemoteApiExportTokenSha256))
+                    return RemoteApiAccessScope.Export;
+
+                return null;
             }
             finally
             {
-                CryptographicOperations.ZeroMemory(tokenBytes);
+                CryptographicOperations.ZeroMemory(
+                    tokenBytes);
             }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool HashMatches(
+        ReadOnlySpan<byte> actual,
+        string expectedHex)
+    {
+        if (string.IsNullOrWhiteSpace(expectedHex))
+            return false;
+
+        try
+        {
+            var expected =
+                Convert.FromHexString(expectedHex);
+
+            return actual.Length == expected.Length &&
+                   CryptographicOperations.FixedTimeEquals(
+                       actual,
+                       expected);
         }
         catch
         {
