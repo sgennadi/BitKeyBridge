@@ -85,9 +85,7 @@ public sealed class ConfigurationMaintenanceService
             backup.AppConfig);
 
         var rollbackDirectory =
-            Path.Combine(
-                AppPaths.MachineConfigDirectory,
-                "Backups");
+            AppPaths.BackupsDirectory;
         Directory.CreateDirectory(
             rollbackDirectory);
 
@@ -282,6 +280,12 @@ public sealed class ConfigurationMaintenanceService
                 tempDirectory,
                 appConfig.DcTestStatusFile,
                 "dc-test-status.json",
+                result);
+
+            WriteStatusFile(
+                tempDirectory,
+                AppPaths.ConfigMigrationStatusFile,
+                "config-migration-status.json",
                 result);
 
             WriteStatusFile(
