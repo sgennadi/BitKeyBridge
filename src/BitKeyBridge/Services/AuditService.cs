@@ -16,7 +16,7 @@ public sealed class AuditService
 
     public string Path => _path;
 
-    public void Write(
+    public AuditEntry? Write(
         string action,
         string result = "Success",
         string? computerName = null,
@@ -25,7 +25,8 @@ public sealed class AuditService
         string? authMode = null,
         string? details = null,
         string? reference = null,
-        string? reason = null)
+        string? reason = null,
+        string? correlationId = null)
     {
         var entry = new AuditEntry
         {
@@ -40,7 +41,8 @@ public sealed class AuditService
             AuthMode = authMode ?? string.Empty,
             Reference = Sanitize(reference),
             Reason = Sanitize(reason),
-            Details = Sanitize(details)
+            Details = Sanitize(details),
+            CorrelationId = Sanitize(correlationId)
         };
 
         lock (Sync)
@@ -52,7 +54,7 @@ public sealed class AuditService
 
                 using var processLock = AcquireInterprocessLock();
                 if (processLock is null)
-                    return;
+                    return null;
 
                 var previousHash =
                     AuditIntegrityService.GetLastHash(_path);
@@ -69,10 +71,13 @@ public sealed class AuditService
                     _path,
                     JsonSerializer.Serialize(entry) +
                     Environment.NewLine);
+
+                return entry;
             }
             catch
             {
                 // Audit logging must not expose a recovery key or crash the recovery workflow.
+                return null;
             }
         }
     }
