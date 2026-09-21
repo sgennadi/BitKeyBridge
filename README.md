@@ -939,7 +939,12 @@ When enabled, the service exposes:
 ```text
 http://127.0.0.1:8750/health
 http://127.0.0.1:8750/health/live
+http://127.0.0.1:8750/health/ready
+http://127.0.0.1:8750/health/security
+http://127.0.0.1:8750/health/coverage
 ```
+
+`/health/ready` is a compact readiness view. `/health/security` exposes security posture such as RBAC validation, audit/signing state, certificate expiry/private-key ACL state, and Remote API scope configuration without returning token hashes. `/health/coverage` exposes only coverage/policy summary state.
 
 The listener is bound to **127.0.0.1 only**. It is not exposed to the LAN and does not require an HTTP URL reservation. The JSON response intentionally excludes recovery passwords, Graph access tokens, passwords, and certificate private-key material.
 
@@ -1031,6 +1036,23 @@ All Remote API requests require:
 Authorization: Bearer <one-time-generated-token>
 ```
 
+The original token remains the backward-compatible **Admin** token. BitKeyBridge can additionally issue independent least-privilege tokens from **Operations → Scoped Tokens...** or CLI:
+
+```text
+BitKeyBridge.exe --remote-token-status
+BitKeyBridge.exe --remote-token-generate read
+BitKeyBridge.exe --remote-token-generate coverage-run
+BitKeyBridge.exe --remote-token-generate export
+BitKeyBridge.exe --remote-token-revoke read
+```
+
+- `read` — GET endpoints only.
+- `coverage-run` — GET endpoints plus `POST /api/v1/coverage/run`.
+- `export` — GET endpoints plus `POST /api/v1/export`.
+- Admin — all configured endpoints.
+
+POST scopes still require the global **Allow remote export + Coverage run** switch. All token types are displayed only once and only SHA-256 hashes are persisted.
+
 Remote management is a separate opt-in setting. When enabled, management endpoints include:
 
 ```text
@@ -1042,6 +1064,26 @@ Coverage endpoints return summary/policy metadata only. The Remote API has **no 
 
 The generated server certificate is self-signed. Monitoring clients should explicitly trust or pin the displayed certificate thumbprint, or replace the configured certificate with an organization-managed certificate suitable for TLS server authentication.
 
+### Configuration maintenance and sanitized diagnostics
+
+Operations includes **Backup Config**, **Restore Config**, **Diagnostics ZIP**, and **Open Incidents**. CLI equivalents:
+
+```text
+BitKeyBridge.exe --config-backup C:\Backup\BitKeyBridge.json
+BitKeyBridge.exe --config-restore C:\Backup\BitKeyBridge.json
+BitKeyBridge.exe --diagnostics-bundle C:\Temp\BitKeyBridge-Diagnostics.zip
+```
+
+Restore validates the configuration and creates a pre-restore rollback backup first. Configuration backup excludes Credential Manager/DPAPI password material, Graph access/refresh tokens, certificate private keys, and BitLocker recovery passwords.
+
+The diagnostics ZIP is more restrictive: it excludes recovery CSV/passwords, audit contents, credential blobs, bearer tokens **and token hashes**, Graph tokens, and certificate private keys. It contains sanitized health/service/config/status/log/certificate metadata useful for troubleshooting.
+
+### Entra certificate rollover
+
+The Cloud tab provides **Rollover Certificate...** and CLI provides `--entra-cert-rollover`. BitKeyBridge uses the existing managed certificate to add a new credential without deleting active credentials, verifies app-only Graph authentication with the new certificate, prepares the Windows Service private-key ACL, and only then switches matching user/machine cloud configuration.
+
+The previous Graph credential and local certificate are deliberately retained for rollback/grace; 0.13 does not automatically delete them.
+
 ## Helpdesk recovery workflow
 
 BitKeyBridge can attach a helpdesk ticket/reference and reason to every recovery-secret access without ever writing the recovery password itself to the audit.
@@ -1052,6 +1094,14 @@ In **Operations → Helpdesk Recovery Workflow**:
 - **Suggest Intune key rotation after a cloud recovery password is retrieved** records a recovery session and reminds the operator to rotate the exposed recovery key only after the recovery operation is complete and the device is able to process the Intune action.
 
 The same in-memory access context is reused for reveal/copy/rotate operations on that recovery ID during the GUI session. It is cleared when BitKeyBridge closes.
+
+Starting with 0.13, every recovery access context also has a random `SessionId`. Recovery actions are written to audit chain v2 with that `CorrelationId`, and BitKeyBridge maintains a metadata-only incident bundle at:
+
+```text
+%ProgramData%\BitKeyBridge\Incidents\<SessionId>.json
+```
+
+The incident bundle contains operator/host/device/recovery ID/reference/reason/timestamps/action results/audit entry hashes and rotation state. It never contains the 48-digit recovery password.
 
 Audit records contain separate structured `Reference` and `Reason` fields. The 48-digit BitLocker recovery password is never written to JSONL or Windows Event Log.
 
@@ -1184,6 +1234,21 @@ When enabled, the native Windows Service signs the verified audit head during it
 The health snapshot exposes signer-certificate expiry, signature validity, signed-checkpoint state, and whether the current audit head is already signed. Certificate expiry warnings use `AuditSigningCertificateWarningDays`.
 
 Audit signing does not make the local machine immutable. Protecting the host, certificate private key, and BitKeyBridge configuration remains necessary.
+
+### Audit-signing certificate rollover
+
+Audit-signing trust-anchor replacement is explicit. **Rollover Signing** / `--audit-signing-rollover` first verifies and signs the current audit head, creates a new non-exportable machine certificate, and writes a transition signed by **both** the previous and new private keys. Transition history is retained under:
+
+```text
+%ProgramData%\BitKeyBridge\AuditSigningTransitions
+```
+
+The previous certificate is retained for historical verification. On a normal rollover failure BitKeyBridge restores the previous configured thumbprint and checkpoint.
+
+```text
+BitKeyBridge.exe --audit-signing-rollover
+BitKeyBridge.exe --audit-signing-rollover --audit-signing-rollover-years 5
+```
 
 The hash chain is tamper-evident, not a replacement for an external immutable/SIEM archive: a sufficiently privileged attacker who can rewrite the whole local audit can also recompute an unkeyed hash chain. Forwarding BitKeyBridge events/audit to protected central storage is recommended for high-assurance environments.
 
