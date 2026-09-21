@@ -286,6 +286,14 @@ public static class WindowsServiceHost
                 required: appConfig.ServiceCoverageEnabled);
         }
 
+        if (appConfig.AuditSigningEnabled)
+        {
+            new AuditSigningService(appConfig)
+                .EnsureServiceAccess(
+                    serviceAccount,
+                    required: true);
+        }
+
         var wasRunning = string.Equals(
             before.State,
             "Running",
@@ -500,7 +508,7 @@ public static class WindowsServiceHost
             var workers = new List<Task>
             {
                 RunExportWorkerAsync(config, ct),
-                RunAuditIntegrityWorkerAsync(ct)
+                RunAuditIntegrityWorkerAsync(config, ct)
             };
 
             if (config.ServiceCoverageEnabled)
@@ -581,6 +589,7 @@ public static class WindowsServiceHost
     }
 
     private static async Task RunAuditIntegrityWorkerAsync(
+        AppConfig config,
         CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -605,6 +614,49 @@ public static class WindowsServiceHost
                             EventLogSeverity.Information,
                             4510,
                             "AuditIntegrity");
+
+                        if (config.AuditSigningEnabled &&
+                            status.ChainedEntries > 0 &&
+                            !string.IsNullOrWhiteSpace(status.LastHash))
+                        {
+                            try
+                            {
+                                var signing =
+                                    new AuditSigningService(config);
+                                var checkpoint =
+                                    signing.SignCheckpoint();
+                                var verification =
+                                    signing.VerifyCheckpoint();
+
+                                _serviceLog?.Info(
+                                    $"Audit checkpoint signed. Entries={checkpoint.TotalEntries}; " +
+                                    $"SignatureValid={verification.SignatureValid}; " +
+                                    $"CurrentHeadSigned={verification.CurrentHeadSigned}.");
+
+                                WindowsEventLogService.TryWrite(
+                                    $"Audit checkpoint signed. Entries={checkpoint.TotalEntries}; " +
+                                    $"Certificate={checkpoint.CertificateThumbprint}; " +
+                                    $"CurrentHeadSigned={verification.CurrentHeadSigned}.",
+                                    verification.Valid
+                                        ? EventLogSeverity.Information
+                                        : EventLogSeverity.Warning,
+                                    4525,
+                                    "AuditSigning");
+                            }
+                            catch (Exception ex)
+                            {
+                                _serviceLog?.Error(
+                                    "Audit checkpoint signing failed: " +
+                                    ex);
+
+                                WindowsEventLogService.TryWrite(
+                                    "Audit checkpoint signing failed: " +
+                                    ex.Message,
+                                    EventLogSeverity.Error,
+                                    4529,
+                                    "AuditSigning");
+                            }
+                        }
                     }
                     else
                     {
