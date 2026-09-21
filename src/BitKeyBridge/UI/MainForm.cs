@@ -1391,10 +1391,18 @@ public sealed class MainForm : Form
             Width = 130,
             Height = 32
         };
+        var rolloverSigning = new Button
+        {
+            Text = "Rollover Signing",
+            Left = 776,
+            Top = 16,
+            Width = 145,
+            Height = 32
+        };
         var disableSigning = new Button
         {
             Text = "Disable Signing",
-            Left = 776,
+            Left = 931,
             Top = 16,
             Width = 130,
             Height = 32
@@ -1421,6 +1429,7 @@ public sealed class MainForm : Form
             setupSigning,
             signNow,
             verifySignature,
+            rolloverSigning,
             disableSigning,
             note,
             _auditSigningStatus
@@ -1468,6 +1477,8 @@ public sealed class MainForm : Form
             SignAuditCheckpointGui();
         verifySignature.Click += (_, _) =>
             VerifyAuditSignatureGui();
+        rolloverSigning.Click += (_, _) =>
+            RolloverAuditSigningGui();
         disableSigning.Click += (_, _) =>
             DisableAuditSigningGui();
 
@@ -4722,6 +4733,112 @@ public sealed class MainForm : Form
                 "Audit Signature Verification",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+    }
+
+    private void RolloverAuditSigningGui()
+    {
+        try
+        {
+            if (!_config.AuditSigningEnabled)
+            {
+                throw new InvalidOperationException(
+                    "Enable audit signing before certificate rollover.");
+            }
+
+            var answer = MessageBox.Show(
+                this,
+                "Roll over the audit-signing certificate?" +
+                Environment.NewLine +
+                Environment.NewLine +
+                "BitKeyBridge will verify/sign the current audit head, create a new non-exportable LocalMachine certificate, and create a transition signed by BOTH the old and new certificates." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "The previous certificate is retained so historical trust transitions remain verifiable.",
+                "Audit Signing Rollover",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (answer != DialogResult.Yes)
+                return;
+
+            var serviceBefore =
+                WindowsServiceHost.GetInfo();
+
+            if (serviceBefore.Installed &&
+                string.Equals(
+                    serviceBefore.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+            }
+
+            try
+            {
+                var signing =
+                    new AuditSigningService(_config);
+
+                var result =
+                    signing.Rollover();
+
+                _audit.Write(
+                    "AuditSigningRollover",
+                    source: "Local",
+                    details:
+                        $"Previous={result.PreviousThumbprint}; New={result.NewThumbprint}; OldSignatureValid={result.PreviousSignatureValid}; NewSignatureValid={result.NewSignatureValid}; NewCheckpointValid={result.NewCheckpointValid}");
+
+                _ = signing.SignCheckpoint();
+
+                RefreshAudit();
+                RefreshAuditSigningStatus();
+                RefreshDashboard();
+
+                MessageBox.Show(
+                    this,
+                    "Audit-signing certificate rollover completed." +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    $"Previous: {result.PreviousThumbprint}" +
+                    Environment.NewLine +
+                    $"New: {result.NewThumbprint}" +
+                    Environment.NewLine +
+                    $"Expires: {result.NewCertificateNotAfterUtc:yyyy-MM-dd}" +
+                    Environment.NewLine +
+                    $"Old signature valid: {result.PreviousSignatureValid}" +
+                    Environment.NewLine +
+                    $"New signature valid: {result.NewSignatureValid}" +
+                    Environment.NewLine +
+                    $"Checkpoint valid: {result.NewCheckpointValid}" +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    $"Transition history: {AppPaths.AuditSigningTransitionsDirectory}",
+                    "Audit Signing Rollover",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            finally
+            {
+                if (serviceBefore.Installed &&
+                    string.Equals(
+                        serviceBefore.State,
+                        "Running",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    WindowsServiceHost.Start();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Audit Signing Rollover",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            RefreshAuditSigningStatus();
         }
     }
 
