@@ -1456,6 +1456,7 @@ public sealed class MainForm : Form
             ("Source", 70),
             ("Auth", 90),
             ("Reference", 130),
+            ("Session", 230),
             ("Reason", 180),
             ("Details", 260));
         tab.Controls.Add(_auditResults);
@@ -4966,6 +4967,7 @@ public sealed class MainForm : Form
             item.SubItems.Add(row.Source);
             item.SubItems.Add(row.AuthMode);
             item.SubItems.Add(row.Reference);
+            item.SubItems.Add(row.CorrelationId);
             item.SubItems.Add(row.Reason);
             item.SubItems.Add(row.Details);
             _auditResults.Items.Add(item);
