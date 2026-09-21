@@ -138,6 +138,26 @@ public sealed class HealthHttpServer : IDisposable
                         snapshot.MachineCloudConfigured,
                     machineCloudKeyAccessStatus =
                         snapshot.MachineCloudKeyAccessStatus,
+                    remoteApiEnabled =
+                        snapshot.RemoteApiEnabled,
+                    remoteApiManagementEnabled =
+                        snapshot.RemoteApiManagementEnabled,
+                    remoteApiAdminTokenConfigured =
+                        snapshot.RemoteApiAdminTokenConfigured,
+                    remoteApiReadTokenConfigured =
+                        snapshot.RemoteApiReadTokenConfigured,
+                    remoteApiCoverageRunTokenConfigured =
+                        snapshot.RemoteApiCoverageRunTokenConfigured,
+                    remoteApiExportTokenConfigured =
+                        snapshot.RemoteApiExportTokenConfigured,
+                    remoteApiCertificateStatus =
+                        snapshot.RemoteApiCertificateStatus,
+                    remoteApiCertificateExpiresUtc =
+                        snapshot.RemoteApiCertificateExpiresUtc,
+                    remoteApiCertificateDaysRemaining =
+                        snapshot.RemoteApiCertificateDaysRemaining,
+                    remoteApiKeyAccessStatus =
+                        snapshot.RemoteApiKeyAccessStatus,
                     certificateStatus =
                         snapshot.CertificateStatus,
                     certificateExpires =
