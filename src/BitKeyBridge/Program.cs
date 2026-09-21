@@ -1436,6 +1436,62 @@ internal static class Program
                         "Recovery incident metadata-only bundle failed.");
                 }
 
+                if (incident is not null)
+                {
+                    var incidentVerifier =
+                        new RecoveryIncidentVerificationService(
+                            incidentDir,
+                            mixedPath);
+
+                    var verifiedIncident =
+                        incidentVerifier.Verify(
+                            sessionId);
+
+                    if (!verifiedIncident.Valid ||
+                        verifiedIncident.Status != "Valid" ||
+                        verifiedIncident.ActionsAnchored != 1)
+                    {
+                        failures.Add(
+                            "Recovery incident verification failed.");
+                    }
+
+                    incident.Actions[0].Source =
+                        "TamperedSource";
+                    JsonStore.WriteAtomic(
+                        incidentPath,
+                        incident);
+
+                    var tamperedIncident =
+                        incidentVerifier.Verify(
+                            sessionId);
+
+                    if (tamperedIncident.MetadataMismatches == 0 ||
+                        tamperedIncident.Status != "MetadataMismatch")
+                    {
+                        failures.Add(
+                            "Recovery incident metadata tamper detection failed.");
+                    }
+
+                    incident.Actions[0].Source =
+                        v2Entry?.Source ?? "AD";
+                    incident.Reason =
+                        fakeKey;
+                    JsonStore.WriteAtomic(
+                        incidentPath,
+                        incident);
+
+                    var sensitiveIncident =
+                        incidentVerifier.Verify(
+                            sessionId);
+
+                    if (!sensitiveIncident.SensitiveDataDetected ||
+                        sensitiveIncident.Status != "SensitiveDataDetected")
+                    {
+                        failures.Add(
+                            "Recovery incident sensitive-data detection failed.");
+                    }
+                }
+
                 using (var signingRsa = RSA.Create(2048))
                 {
                     var checkpoint = new AuditSigningCheckpoint
