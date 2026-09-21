@@ -53,6 +53,8 @@ public sealed class UnifiedDeviceInfo
 
 public sealed class RecoveryAccessContext
 {
+    public string SessionId { get; set; } =
+        Guid.NewGuid().ToString("N");
     public string Reference { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public bool RemindRotation { get; set; }
@@ -73,6 +75,7 @@ public sealed class AuditEntry
     public string Reference { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
+    public string CorrelationId { get; set; } = string.Empty;
     public int ChainVersion { get; set; }
     public string PreviousHash { get; set; } = string.Empty;
     public string EntryHash { get; set; } = string.Empty;
@@ -86,6 +89,7 @@ public sealed class AuditIntegrityResult
     public int LegacyEntries { get; set; }
     public int ChainedEntries { get; set; }
     public string LastHash { get; set; } = string.Empty;
+    public int LastChainVersion { get; set; }
     public string FirstError { get; set; } = string.Empty;
 }
 
@@ -99,6 +103,7 @@ public sealed class AuditIntegrityStatus
     public int LegacyEntries { get; set; }
     public int ChainedEntries { get; set; }
     public string LastHash { get; set; } = string.Empty;
+    public int LastChainVersion { get; set; }
     public string FirstError { get; set; } = string.Empty;
 }
 
@@ -144,4 +149,33 @@ public sealed class AuditSigningVerification
     public string Status { get; set; } = "NotConfigured";
     public string Error { get; set; } = string.Empty;
     public AuditSigningCheckpoint? Checkpoint { get; set; }
+}
+
+
+public sealed class RecoveryIncidentAction
+{
+    public DateTime TimestampUtc { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string Result { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string AuthMode { get; set; } = string.Empty;
+    public string AuditEntryHash { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+}
+
+public sealed class RecoveryIncidentBundle
+{
+    public int Version { get; set; } = 1;
+    public string SessionId { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+    public string Operator { get; set; } = string.Empty;
+    public string Host { get; set; } = string.Empty;
+    public string ComputerName { get; set; } = string.Empty;
+    public string RecoveryId { get; set; } = string.Empty;
+    public string Reference { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public bool RotationRequested { get; set; }
+    public bool RotationSucceeded { get; set; }
+    public List<RecoveryIncidentAction> Actions { get; set; } = [];
 }
