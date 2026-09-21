@@ -23,6 +23,45 @@ public sealed class CertificateService
         throw new InvalidOperationException($"Certificate {normalized} was not found in CurrentUser\\My or LocalMachine\\My.");
     }
 
+    public X509Certificate2 FindLocalMachineCertificate(
+        string thumbprint,
+        bool requirePrivateKey = false,
+        bool requireCurrentValidity = false)
+    {
+        var normalized = Normalize(thumbprint);
+        using var store = new X509Store(
+            StoreName.My,
+            StoreLocation.LocalMachine);
+        store.Open(OpenFlags.ReadOnly);
+
+        var cert = store.Certificates
+            .OfType<X509Certificate2>()
+            .FirstOrDefault(x =>
+                Normalize(x.Thumbprint) == normalized);
+
+        if (cert is null)
+        {
+            throw new InvalidOperationException(
+                $"Certificate {normalized} was not found in LocalMachine\\My.");
+        }
+
+        if (requirePrivateKey && !cert.HasPrivateKey)
+        {
+            throw new InvalidOperationException(
+                $"Certificate {normalized} in LocalMachine\\My has no private key.");
+        }
+
+        if (requireCurrentValidity &&
+            (cert.NotAfter <= DateTime.Now ||
+             cert.NotBefore > DateTime.Now))
+        {
+            throw new InvalidOperationException(
+                $"Certificate {normalized} is outside its validity period.");
+        }
+
+        return cert;
+    }
+
     public X509Certificate2 FindLocalMachineByThumbprint(string thumbprint)
     {
         var normalized = Normalize(thumbprint);
@@ -68,6 +107,72 @@ public sealed class CertificateService
             using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
             store.Open(OpenFlags.ReadWrite);
             store.Add(persisted);
+            return persisted;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(pfx);
+        }
+    }
+
+    public X509Certificate2 CreateAuditSigningCertificate(
+        string subjectName = "BitKeyBridge Audit Signing",
+        int years = 5)
+    {
+        if (!SecurityContext.IsAdministrator())
+        {
+            throw new InvalidOperationException(
+                "Administrator rights are required to create the audit-signing certificate.");
+        }
+
+        years = Math.Clamp(years, 1, 10);
+
+        using var rsa = RSA.Create(3072);
+        var request = new CertificateRequest(
+            new X500DistinguishedName($"CN={subjectName}"),
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        request.CertificateExtensions.Add(
+            new X509KeyUsageExtension(
+                X509KeyUsageFlags.DigitalSignature,
+                true));
+        request.CertificateExtensions.Add(
+            new X509BasicConstraintsExtension(
+                false,
+                false,
+                0,
+                true));
+        request.CertificateExtensions.Add(
+            new X509SubjectKeyIdentifierExtension(
+                request.PublicKey,
+                false));
+
+        using var generated = request.CreateSelfSigned(
+            DateTimeOffset.Now.AddMinutes(-5),
+            DateTimeOffset.Now.AddYears(years));
+
+        var password = Convert.ToBase64String(
+            RandomNumberGenerator.GetBytes(32));
+        var pfx = generated.Export(
+            X509ContentType.Pfx,
+            password);
+
+        try
+        {
+            var persisted = X509CertificateLoader.LoadPkcs12(
+                pfx,
+                password,
+                X509KeyStorageFlags.MachineKeySet |
+                X509KeyStorageFlags.PersistKeySet);
+
+            using var store = new X509Store(
+                StoreName.My,
+                StoreLocation.LocalMachine);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(persisted);
+
             return persisted;
         }
         finally
