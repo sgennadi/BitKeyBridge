@@ -5,6 +5,15 @@ namespace BitKeyBridge;
 public sealed class RecoveryIncidentService
 {
     private static readonly object Sync = new();
+    private readonly string _directory;
+
+    public RecoveryIncidentService(
+        string? directory = null)
+    {
+        _directory = string.IsNullOrWhiteSpace(directory)
+            ? AppPaths.IncidentsDirectory
+            : Path.GetFullPath(directory);
+    }
 
     public RecoveryIncidentBundle? Append(
         RecoveryAccessContext context,
@@ -129,14 +138,14 @@ public sealed class RecoveryIncidentService
         };
     }
 
-    private static string GetPath(
+    private string GetPath(
         string sessionId)
     {
         Directory.CreateDirectory(
-            AppPaths.IncidentsDirectory);
+            _directory);
 
         return Path.Combine(
-            AppPaths.IncidentsDirectory,
+            _directory,
             sessionId + ".json");
     }
 
