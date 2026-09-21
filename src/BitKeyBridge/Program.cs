@@ -71,6 +71,7 @@ internal static class Program
             x.Equals("--config-backup", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--config-restore", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--entra-cert-rollover", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-machine", StringComparison.OrdinalIgnoreCase) ||
@@ -394,6 +395,13 @@ internal static class Program
 
             return ConfigurationMaintenanceCliService.Diagnostics(
                 diagnosticsPath);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--entra-cert-rollover",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return EntraCertificateLifecycleCliService.Rollover();
         }
 
         if (args.Any(x =>
@@ -1550,6 +1558,7 @@ internal static class Program
         Console.WriteLine("  --config-backup <path>     Create JSON config backup without credential/private-key material");
         Console.WriteLine("  --config-restore <path>    Validate and restore config; creates rollback backup");
         Console.WriteLine("  --diagnostics-bundle <zip> Create sanitized troubleshooting ZIP");
+        Console.WriteLine("  --entra-cert-rollover    Add/test/switch Entra certificate; retain previous credential");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
         Console.WriteLine("  --ad-domain <domain>  AD DNS/NetBIOS domain for explicit connection");
