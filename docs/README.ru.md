@@ -408,6 +408,7 @@ BitKeyBridge.exe --diagnostics-bundle C:\Temp\BitKeyBridge-Diagnostics.zip
 - Старый Entra Graph credential и local certificate автоматически не удаляются — они остаются для rollback/grace.
 - Добавлен explicit **audit-signing certificate rollover**. Transition подписывается одновременно старым и новым RSA private key; история хранится в `%ProgramData%\BitKeyBridge\AuditSigningTransitions`.
 - При обычной ошибке audit rollover BitKeyBridge пытается вернуть предыдущий thumbprint/checkpoint. Старый certificate остаётся для исторической проверки.
+- Вся история dual-signed transitions теперь проверяется автоматически: обе подписи, наличие старого/нового certificates, machine identity, chain version и непрерывность old→new thumbprints. Ошибка видна в GUI/CLI и `/health/security`.
 - Новые Remote API TLS private keys больше не создаются Exportable.
 - При Remote API setup и смене LocalSystem/gMSA/domain service identity выполняется private-key ACL preflight.
 - `/health/security` показывает Remote API scopes, TLS expiry/status и key ACL без раскрытия hashes.
