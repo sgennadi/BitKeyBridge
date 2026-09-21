@@ -86,16 +86,24 @@ public static class AuditSigningCliService
     {
         try
         {
+            var service =
+                new AuditSigningService(config);
             var result =
-                new AuditSigningService(config)
-                    .VerifyCheckpoint();
+                service.VerifyCheckpoint();
+            var transitions =
+                service.VerifyTransitionHistory();
 
             Print(result);
+            PrintTransitionHistory(
+                transitions);
 
             if (!config.AuditSigningEnabled)
                 return 3;
 
-            return result.Valid ? 0 : 4;
+            return result.Valid &&
+                   transitions.Valid
+                ? 0
+                : 4;
         }
         catch (Exception ex)
         {
@@ -134,12 +142,21 @@ public static class AuditSigningCliService
     {
         try
         {
+            var service =
+                new AuditSigningService(config);
             var result =
-                new AuditSigningService(config)
-                    .VerifyCheckpoint();
+                service.VerifyCheckpoint();
+            var transitions =
+                service.VerifyTransitionHistory();
 
             Print(result);
-            return result.Valid ? 0 : 4;
+            PrintTransitionHistory(
+                transitions);
+
+            return result.Valid &&
+                   transitions.Valid
+                ? 0
+                : 4;
         }
         catch (Exception ex)
         {
@@ -280,6 +297,27 @@ public static class AuditSigningCliService
         {
             Console.Error.WriteLine(ex.Message);
             return 1;
+        }
+    }
+
+    private static void PrintTransitionHistory(
+        AuditSigningTransitionHistoryStatus result)
+    {
+        Console.WriteLine(
+            $"Transition history: {result.Status}");
+        Console.WriteLine(
+            $"Transitions checked: {result.FilesChecked}");
+        Console.WriteLine(
+            $"Valid transitions: {result.ValidTransitions}");
+        Console.WriteLine(
+            $"Last transition: {result.LastTransitionUtc:O}");
+
+        if (!string.IsNullOrWhiteSpace(
+                result.FirstError))
+        {
+            Console.WriteLine(
+                "Transition error: " +
+                result.FirstError);
         }
     }
 
