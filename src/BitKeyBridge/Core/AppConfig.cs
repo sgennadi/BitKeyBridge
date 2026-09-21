@@ -1,7 +1,15 @@
 namespace BitKeyBridge;
 
+public static class ConfigSchema
+{
+    public const int CurrentVersion = 1;
+}
+
 public sealed class AppConfig
 {
+    public int SchemaVersion { get; set; } =
+        ConfigSchema.CurrentVersion;
+
     public string SysvolScriptsRoot { get; set; } = @"C:\Windows\SYSVOL\domain\scripts";
     public string OutputRoot { get; set; } = string.Empty;
     public string OutputSubdirectory { get; set; } = "BL";
