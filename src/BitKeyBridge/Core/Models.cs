@@ -168,3 +168,17 @@ public sealed class EntraSetupResult
     public string CertificateThumbprint { get; set; } = string.Empty;
     public DateTime CertificateNotAfter { get; set; }
 }
+
+public sealed class EntraCertificateRolloverResult
+{
+    public string TenantId { get; set; } = string.Empty;
+    public string ClientId { get; set; } = string.Empty;
+    public string PreviousThumbprint { get; set; } = string.Empty;
+    public string NewThumbprint { get; set; } = string.Empty;
+    public DateTime NewCertificateNotAfter { get; set; }
+    public bool CertificateAuthenticationVerified { get; set; }
+    public int MetadataObjectsReadDuringTest { get; set; }
+    public bool MachineCloudConfigUpdated { get; set; }
+    public string ServiceKeyAccessStatus { get; set; } = string.Empty;
+    public List<string> Warnings { get; set; } = [];
+}
