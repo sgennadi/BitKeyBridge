@@ -43,6 +43,12 @@ public sealed class HealthSnapshot
     public DateTime? AuditSigningLastTransitionUtc { get; set; }
     public string AuditSigningTransitionError { get; set; } = string.Empty;
     public string HealthEndpoint { get; set; } = string.Empty;
+    public int ConfigSchemaVersion { get; set; }
+    public int ConfigSchemaCurrentVersion { get; set; } =
+        ConfigSchema.CurrentVersion;
+    public bool ConfigMigrationRequired { get; set; }
+    public bool ConfigMigrationPersisted { get; set; }
+    public string ConfigMigrationError { get; set; } = string.Empty;
 
     public string OutputDirectory { get; set; } = string.Empty;
     public bool OutputDirectoryExists { get; set; }
