@@ -208,3 +208,16 @@ public sealed class AuditSigningRolloverResult
     public bool NewCheckpointValid { get; set; }
     public string ServiceKeyAccessStatus { get; set; } = string.Empty;
 }
+
+
+public sealed class AuditSigningTransitionHistoryStatus
+{
+    public bool Valid { get; set; } = true;
+    public string Status { get; set; } = "None";
+    public int FilesChecked { get; set; }
+    public int ValidTransitions { get; set; }
+    public string FirstPreviousThumbprint { get; set; } = string.Empty;
+    public string CurrentThumbprint { get; set; } = string.Empty;
+    public DateTime? LastTransitionUtc { get; set; }
+    public string FirstError { get; set; } = string.Empty;
+}
