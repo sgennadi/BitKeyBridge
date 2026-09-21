@@ -78,7 +78,8 @@ public sealed class HealthHttpServer : IDisposable
                 path != "/health/ready" &&
                 path != "/ready" &&
                 path != "/health/security" &&
-                path != "/health/coverage")
+                path != "/health/coverage" &&
+                path != "/metrics")
             {
                 await WriteResponseAsync(
                     stream,
@@ -92,6 +93,21 @@ public sealed class HealthHttpServer : IDisposable
             var snapshot =
                 new HealthService(_config)
                     .GetSnapshot();
+
+            if (path == "/metrics")
+            {
+                var metrics =
+                    MetricsService.BuildPrometheus(
+                        snapshot);
+
+                await WriteResponseAsync(
+                    stream,
+                    200,
+                    "text/plain; version=0.0.4; charset=utf-8",
+                    metrics,
+                    ct);
+                return;
+            }
 
             object payload = path switch
             {
