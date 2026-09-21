@@ -42,3 +42,15 @@ public sealed class DiagnosticsBundleResult
         "certificate private keys"
     ];
 }
+
+
+public sealed class ConfigMigrationStatus
+{
+    public DateTime CheckedAtUtc { get; set; } = DateTime.UtcNow;
+    public int StoredSchemaVersion { get; set; }
+    public int EffectiveSchemaVersion { get; set; }
+    public bool MigrationRequired { get; set; }
+    public bool Migrated { get; set; }
+    public string BackupPath { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+}
