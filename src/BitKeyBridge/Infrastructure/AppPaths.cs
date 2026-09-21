@@ -28,6 +28,7 @@ public static class AppPaths
     public static string AuditLogFile => Path.Combine(MachineConfigDirectory, "audit.jsonl");
     public static string AuditIntegrityStatusFile => Path.Combine(MachineConfigDirectory, "audit_integrity_status.json");
     public static string AuditSigningCheckpointFile => Path.Combine(MachineConfigDirectory, "audit_signing_checkpoint.json");
+    public static string AuditSigningTransitionFile => Path.Combine(MachineConfigDirectory, "audit_signing_transition.json");
     public static string IncidentsDirectory => Path.Combine(MachineConfigDirectory, "Incidents");
     public static string ServiceLogFile => Path.Combine(MachineConfigDirectory, "service.log");
     public static string UpdateStatusFile => Path.Combine(MachineConfigDirectory, "update_status.json");
