@@ -895,13 +895,12 @@ public sealed class MainForm : Form
             if (context is null) return;
 
             ToggleKey(_localKey, _localShow);
-            _audit.Write(
+            WriteRecoveryAudit(
                 "RevealLocalRecoveryKey",
+                context,
                 computerName: row.ComputerName,
                 recoveryId: row.BitLockerId,
-                source: "AD",
-                reference: context.Reference,
-                reason: context.Reason);
+                source: "AD");
         };
         copy.Click += (_, _) =>
         {
@@ -926,13 +925,12 @@ public sealed class MainForm : Form
                 allowRotationReminder: false);
             if (context is null) return;
 
-            _audit.Write(
+            WriteRecoveryAudit(
                 "CopyLocalRecoveryKey",
+                context,
                 computerName: row.ComputerName,
                 recoveryId: row.BitLockerId,
-                source: "AD",
-                reference: context.Reference,
-                reason: context.Reason);
+                source: "AD");
             CopyKeyWithAutoClear(_localCurrentKey);
         };
         return tab;
@@ -1226,14 +1224,13 @@ public sealed class MainForm : Form
             if (context is null) return;
 
             ToggleKey(_cloudKey, _cloudShow);
-            _audit.Write(
+            WriteRecoveryAudit(
                 "RevealCloudRecoveryKey",
+                context,
                 computerName: row.ComputerName,
                 recoveryId: row.RecoveryId,
                 source: "Entra",
-                authMode: _cloudToken?.AuthMode,
-                reference: context.Reference,
-                reason: context.Reason);
+                authMode: _cloudToken?.AuthMode);
         };
         copy.Click += (_, _) =>
         {
@@ -1259,14 +1256,13 @@ public sealed class MainForm : Form
                 allowRotationReminder: true);
             if (context is null) return;
 
-            _audit.Write(
+            WriteRecoveryAudit(
                 "CopyCloudRecoveryKey",
+                context,
                 computerName: row.ComputerName,
                 recoveryId: row.RecoveryId,
                 source: "Entra",
-                authMode: _cloudToken?.AuthMode,
-                reference: context.Reference,
-                reason: context.Reason);
+                authMode: _cloudToken?.AuthMode);
             CopyKeyWithAutoClear(_cloudCurrentKey);
         };
         rotate.Click += async (_, _) => await RotateSelectedCloudKeyAsync();
@@ -1779,14 +1775,13 @@ public sealed class MainForm : Form
             _cloudKey.UseSystemPasswordChar = true;
             _cloudShow.Text = "Show Key";
 
-            _audit.Write(
+            WriteRecoveryAudit(
                 "GetCloudRecoveryKey",
+                context,
                 computerName: row.ComputerName,
                 recoveryId: row.RecoveryId,
                 source: "Entra",
-                authMode: _cloudToken.AuthMode,
-                reference: context.Reference,
-                reason: context.Reason);
+                authMode: _cloudToken.AuthMode);
 
             if (context.RemindRotation)
             {
@@ -1812,16 +1807,15 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            _audit.Write(
+            WriteRecoveryAudit(
                 "GetCloudRecoveryKey",
-                "Failed",
-                row.ComputerName,
-                row.RecoveryId,
-                "Entra",
-                _cloudToken?.AuthMode,
-                ex.Message,
-                context.Reference,
-                context.Reason);
+                context,
+                result: "Failed",
+                computerName: row.ComputerName,
+                recoveryId: row.RecoveryId,
+                source: "Entra",
+                authMode: _cloudToken?.AuthMode,
+                details: ex.Message);
             _cloudStatus.Text = "Key retrieval failed: " + ex.Message;
         }
     }
@@ -2521,16 +2515,17 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             _cloudStatus.Text = "Rotation failed: " + ex.Message;
-            _audit.Write(
+            WriteRecoveryAudit(
                 "RotateBitLockerKey",
-                "Failed",
-                row.ComputerName,
-                row.RecoveryId,
-                "Intune",
-                _cloudToken?.AuthMode,
-                ex.Message,
-                context.Reference,
-                context.Reason);
+                context,
+                result: "Failed",
+                computerName: row.ComputerName,
+                recoveryId: row.RecoveryId,
+                source: "Intune",
+                authMode: _cloudToken?.AuthMode,
+                details: ex.Message,
+                rotationRequested: true,
+                rotationSucceeded: false);
             MessageBox.Show(
                 this,
                 ex.Message,
@@ -2589,15 +2584,16 @@ public sealed class MainForm : Form
                 _cloudToken!.AccessToken,
                 managedDeviceId);
 
-            _audit.Write(
+            WriteRecoveryAudit(
                 "RotateBitLockerKey",
+                context,
                 computerName: computerName,
                 recoveryId: recoveryId,
                 source: "Intune",
                 authMode: _cloudToken.AuthMode,
                 details: $"ManagedDeviceId={managedDeviceId}",
-                reference: context.Reference,
-                reason: context.Reason);
+                rotationRequested: true,
+                rotationSucceeded: true);
 
             _cloudStatus.Text =
                 $"Intune accepted the BitLocker key-rotation request for {computerName}.";
@@ -2611,16 +2607,17 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            _audit.Write(
+            WriteRecoveryAudit(
                 "RotateBitLockerKey",
-                "Failed",
-                computerName,
-                recoveryId,
-                "Intune",
-                _cloudToken?.AuthMode,
-                ex.Message,
-                context.Reference,
-                context.Reason);
+                context,
+                result: "Failed",
+                computerName: computerName,
+                recoveryId: recoveryId,
+                source: "Intune",
+                authMode: _cloudToken?.AuthMode,
+                details: ex.Message,
+                rotationRequested: true,
+                rotationSucceeded: false);
             throw;
         }
     }
@@ -3984,6 +3981,51 @@ public sealed class MainForm : Form
             _audit.Write("CreateSecureOutput", "Failed", source: "WindowsACL", details: ex.Message);
             MessageBox.Show(this, ex.Message, "Secure BitLocker Output", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private AuditEntry? WriteRecoveryAudit(
+        string action,
+        RecoveryAccessContext context,
+        string result = "Success",
+        string? computerName = null,
+        string? recoveryId = null,
+        string? source = null,
+        string? authMode = null,
+        string? details = null,
+        bool rotationRequested = false,
+        bool rotationSucceeded = false)
+    {
+        var entry = _audit.Write(
+            action,
+            result,
+            computerName,
+            recoveryId,
+            source,
+            authMode,
+            details,
+            context.Reference,
+            context.Reason,
+            context.SessionId);
+
+        try
+        {
+            _ = new RecoveryIncidentService()
+                .Append(
+                    context,
+                    entry,
+                    rotationRequested,
+                    rotationSucceeded);
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                $"Recovery incident bundle update failed. Session={context.SessionId}; Action={action}; Error={ex.Message}",
+                EventLogSeverity.Warning,
+                4538,
+                "RecoveryIncident");
+        }
+
+        return entry;
     }
 
     private bool AuthorizeAction(
