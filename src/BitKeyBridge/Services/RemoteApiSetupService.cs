@@ -33,6 +33,19 @@ public sealed class RemoteApiSetupService
                 $"BitKeyBridge Remote API - {Environment.MachineName}");
         }
 
+        var installedService =
+            WindowsServiceHost.GetInfo();
+
+        if (installedService.Installed &&
+            !string.IsNullOrWhiteSpace(
+                installedService.Identity))
+        {
+            new CertificatePrivateKeyAccessService()
+                .EnsureServiceAccess(
+                    certificate.Thumbprint,
+                    installedService.Identity);
+        }
+
         var previousEnabled = config.RemoteApiEnabled;
         var previousPort = config.RemoteApiPort;
         var previousManagement = config.RemoteApiAllowManagement;
