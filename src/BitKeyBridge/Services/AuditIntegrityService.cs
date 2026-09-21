@@ -194,6 +194,52 @@ public static class AuditIntegrityService
         return result;
     }
 
+    public static bool ContainsEntryHash(
+        string path,
+        string entryHash)
+    {
+        if (string.IsNullOrWhiteSpace(entryHash))
+            return false;
+
+        using var processLock = AcquireInterprocessLock(path);
+        if (processLock is null)
+            return false;
+
+        foreach (var file in new[]
+                 {
+                     path + ".old",
+                     path
+                 }
+                 .Where(File.Exists))
+        {
+            foreach (var line in File.ReadLines(file))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                try
+                {
+                    var entry =
+                        JsonSerializer.Deserialize<AuditEntry>(line);
+                    if (entry is not null &&
+                        string.Equals(
+                            entry.EntryHash,
+                            entryHash,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public static AuditIntegrityStatus VerifyAndPersist(
         string path,
         string? statusPath = null)
