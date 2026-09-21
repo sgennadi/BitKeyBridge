@@ -1254,6 +1254,28 @@ BitKeyBridge.exe --audit-signing-rollover --audit-signing-rollover-years 5
 
 The hash chain is tamper-evident, not a replacement for an external immutable/SIEM archive: a sufficiently privileged attacker who can rewrite the whole local audit can also recompute an unkeyed hash chain. Forwarding BitKeyBridge events/audit to protected central storage is recommended for high-assurance environments.
 
+## Recovery incident verification, metrics, and config schema
+
+Starting with 0.14, recovery incident bundles can be verified against the retained tamper-evident audit chain:
+
+```text
+BitKeyBridge.exe --incident-verify <session-id>
+```
+
+The verifier checks the audit chain, a stable audit snapshot, exact `AuditEntryHash` anchors, `CorrelationId`, action/result/source/auth metadata, operator/host/device/recovery ID, ticket/reference, reason, and rotation state. The **Audit → Incident...** dialog can verify recent sessions and open the metadata-only bundle.
+
+A result of `NotFullyRetained` means the incident refers to audit entries older than the currently retained `audit.jsonl` / `.old` window. Missing anchors inside the retained window, metadata mismatches, invalid audit chains, or a 48-digit recovery-password pattern in the incident bundle are reported separately.
+
+The loopback health listener now also exposes Prometheus text metrics:
+
+```text
+http://127.0.0.1:8750/metrics
+```
+
+Metrics contain numeric operational/security state only. They do not include computer names, users, OU names, tickets/references, recovery IDs/passwords, bearer tokens, or token hashes.
+
+Application configuration is explicitly versioned with `SchemaVersion` (current schema: v1). Pre-versioned `appsettings.json` is backed up before atomic migration. An appsettings file created by a newer unsupported schema is rejected without modification. Migration state is available in the health snapshot and sanitized diagnostics bundle.
+
 ## Build
 
 Install the .NET 10 SDK and run:
