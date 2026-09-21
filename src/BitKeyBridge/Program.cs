@@ -65,6 +65,7 @@ internal static class Program
             x.Equals("--audit-signing-sign", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-signing-rollover", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-generate", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-revoke", StringComparison.OrdinalIgnoreCase) ||
@@ -286,6 +287,9 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--audit-signing-disable", StringComparison.OrdinalIgnoreCase)))
             return AuditSigningCliService.Disable(config);
+
+        if (args.Any(x => x.Equals("--audit-signing-rollover", StringComparison.OrdinalIgnoreCase)))
+            return AuditSigningCliService.Rollover(config, args);
 
         if (args.Any(x => x.Equals(
                 "--remote-token-status",
@@ -1552,6 +1556,8 @@ internal static class Program
         Console.WriteLine("  --audit-signing-sign    Sign the current audit-chain checkpoint");
         Console.WriteLine("  --audit-signing-verify  Verify checkpoint signature + audit chain");
         Console.WriteLine("  --audit-signing-disable Disable new checkpoints; retain cert/checkpoint");
+        Console.WriteLine("  --audit-signing-rollover  Dual-sign transition to a new audit-signing certificate");
+        Console.WriteLine("  --audit-signing-rollover-years <1-10>  New signing certificate lifetime");
         Console.WriteLine("  --remote-token-status  Show configured Remote API token scopes");
         Console.WriteLine("  --remote-token-generate <scope>  Create read, coverage-run, or export token");
         Console.WriteLine("  --remote-token-revoke <scope>    Revoke read, coverage-run, or export token");
