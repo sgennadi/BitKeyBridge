@@ -197,6 +197,26 @@ public sealed class HealthService
                         "Audit signing checkpoint is valid, but newer audit entries are not signed yet.");
                 }
 
+                var transitionHistory =
+                    new AuditSigningService(_config)
+                        .VerifyTransitionHistory();
+
+                snapshot.AuditSigningTransitionHistoryStatus =
+                    transitionHistory.Status;
+                snapshot.AuditSigningTransitionCount =
+                    transitionHistory.ValidTransitions;
+                snapshot.AuditSigningLastTransitionUtc =
+                    transitionHistory.LastTransitionUtc;
+                snapshot.AuditSigningTransitionError =
+                    transitionHistory.FirstError;
+
+                if (!transitionHistory.Valid)
+                {
+                    snapshot.Errors.Add(
+                        "Audit-signing certificate transition history is invalid: " +
+                        transitionHistory.FirstError);
+                }
+
                 if (signing.CertificateDaysRemaining is not null &&
                     signing.CertificateDaysRemaining <=
                     Math.Max(
