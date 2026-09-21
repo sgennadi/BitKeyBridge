@@ -112,7 +112,7 @@ public sealed class MainForm : Form
                 WindowsEventLogService.EnsureSource();
         }
         catch { }
-        Text = "BitKeyBridge 0.11.0 (.NET)";
+        Text = "BitKeyBridge 0.12.0 (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
