@@ -6,11 +6,20 @@ public static class ConfigService
     {
         try
         {
-            return JsonStore.Read<AppConfig>(AppPaths.AppSettingsFile) ?? new AppConfig();
+            return new ConfigMigrationService()
+                .LoadAndMigrate();
+        }
+        catch (FutureConfigurationSchemaException)
+        {
+            throw;
         }
         catch
         {
-            return new AppConfig();
+            return new AppConfig
+            {
+                SchemaVersion =
+                    ConfigSchema.CurrentVersion
+            };
         }
     }
 
@@ -56,6 +65,21 @@ public static class ConfigService
             File.Delete(AppPaths.MachineCloudConfigFile);
     }
 
-    public static void SaveAppConfig(AppConfig config) =>
-        JsonStore.WriteAtomic(AppPaths.AppSettingsFile, config);
+    public static void SaveAppConfig(AppConfig config)
+    {
+        if (config.SchemaVersion >
+            ConfigSchema.CurrentVersion)
+        {
+            throw new FutureConfigurationSchemaException(
+                config.SchemaVersion,
+                ConfigSchema.CurrentVersion);
+        }
+
+        config.SchemaVersion =
+            ConfigSchema.CurrentVersion;
+
+        JsonStore.WriteAtomic(
+            AppPaths.AppSettingsFile,
+            config);
+    }
 }
