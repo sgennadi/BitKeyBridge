@@ -1295,6 +1295,138 @@ internal static class Program
 
             try
             {
+                var metricSecret =
+                    "123456-123456-123456-123456-123456-123456-123456-123456";
+
+                var metrics =
+                    MetricsService.BuildPrometheus(
+                        new HealthSnapshot
+                        {
+                            OverallStatus = "OK",
+                            MachineName = metricSecret,
+                            OutputDirectory = metricSecret,
+                            LastRunDc = metricSecret,
+                            AuditIntegrityError = metricSecret,
+                            ServiceState = "Running",
+                            ServiceInstalled = true,
+                            CoveragePolicyCompliant = true
+                        });
+
+                if (!metrics.Contains(
+                        "bitkeybridge_up 1",
+                        StringComparison.Ordinal) ||
+                    !metrics.Contains(
+                        "bitkeybridge_ready 1",
+                        StringComparison.Ordinal) ||
+                    metrics.Contains(
+                        metricSecret,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "Secret-free Prometheus metrics formatting failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Prometheus metrics helper: " +
+                    ex.Message);
+            }
+
+            try
+            {
+                var legacyConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "legacy-appsettings.json");
+                var legacyStatusPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "legacy-migration-status.json");
+                var legacyBackups =
+                    Path.Combine(
+                        tempDirectory,
+                        "legacy-backups");
+
+                File.WriteAllText(
+                    legacyConfigPath,
+                    "{\"HealthEndpointPort\":8750,\"RemoteApiPort\":8751,\"ServiceIntervalMinutes\":60,\"ServiceCoverageIntervalMinutes\":1440,\"AdPort\":389}");
+
+                var migrator =
+                    new ConfigMigrationService(
+                        legacyConfigPath,
+                        legacyStatusPath,
+                        legacyBackups);
+
+                var migrated =
+                    migrator.LoadAndMigrate();
+                var migrationStatus =
+                    migrator.ReadStatus();
+
+                if (migrated.SchemaVersion !=
+                        ConfigSchema.CurrentVersion ||
+                    ConfigMigrationService
+                        .DetectStoredSchemaVersion(
+                            legacyConfigPath) !=
+                        ConfigSchema.CurrentVersion ||
+                    migrationStatus is null ||
+                    !migrationStatus.Migrated ||
+                    string.IsNullOrWhiteSpace(
+                        migrationStatus.BackupPath) ||
+                    !File.Exists(
+                        migrationStatus.BackupPath))
+                {
+                    failures.Add(
+                        "Legacy configuration schema migration failed.");
+                }
+
+                var futureConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "future-appsettings.json");
+                const string futureText =
+                    "{\"SchemaVersion\":999,\"HealthEndpointPort\":8750}";
+
+                File.WriteAllText(
+                    futureConfigPath,
+                    futureText);
+
+                var futureRejected = false;
+                try
+                {
+                    _ = new ConfigMigrationService(
+                            futureConfigPath,
+                            Path.Combine(
+                                tempDirectory,
+                                "future-status.json"),
+                            Path.Combine(
+                                tempDirectory,
+                                "future-backups"))
+                        .LoadAndMigrate();
+                }
+                catch (FutureConfigurationSchemaException)
+                {
+                    futureRejected = true;
+                }
+
+                if (!futureRejected ||
+                    File.ReadAllText(
+                        futureConfigPath) !=
+                    futureText)
+                {
+                    failures.Add(
+                        "Future configuration schema refusal failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Configuration schema migration: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var auditPath = Path.Combine(tempDirectory, "audit.jsonl");
                 var audit = new AuditService(auditPath, 1);
                 var fakeKey = "111111-222222-333333-444444-555555-666666-777777-888888";
