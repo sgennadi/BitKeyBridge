@@ -336,4 +336,29 @@ BitKeyBridge.exe --audit-verify
 
 - Self-test теперь проверяет RBAC backward compatibility, валидную audit chain и специально изменённую запись, которая обязана определиться как tampered.
 - Hash chain является tamper-evident, но не заменяет внешний immutable/SIEM archive; для высокой гарантии audit лучше пересылать на центральное защищённое хранилище.
+## Новое в 0.12.0
+
+- Поверх SHA-256 hash chain добавлены **криптографически подписанные audit checkpoints**.
+- Используется отдельный RSA-3072 certificate в `LocalMachine\My`; он не зависит от Entra certificate и Remote API certificate.
+- Private key сохраняется как machine key без флага Exportable.
+- Signed checkpoint содержит hash текущей головы audit chain, количество записей, версию chain, имя компьютера, thumbprint signing certificate, timestamp и RSA-SHA256-PKCS1 signature.
+- Перед заменой существующего signed checkpoint BitKeyBridge сначала проверяет старую подпись и убеждается, что подписанный hash всё ещё присутствует в текущей валидной audit chain. Если anchor пропал или изменён, новый checkpoint не создаётся.
+- Это не позволяет Windows Service автоматически «узаконить» уже переписанный audit при следующей суточной проверке.
+- CLI:
+
+```text
+BitKeyBridge.exe --audit-signing-setup
+BitKeyBridge.exe --audit-signing-status
+BitKeyBridge.exe --audit-signing-sign
+BitKeyBridge.exe --audit-signing-verify
+BitKeyBridge.exe --audit-signing-disable
+```
+
+- Для setup можно задать срок certificate через `--audit-signing-years 1-10`.
+- В Audit tab добавлены **Setup Signing / Sign Now / Verify Signature / Disable Signing**.
+- При смене LocalSystem/gMSA/domain service account автоматически выполняется preflight доступа к signing private key.
+- Native Windows Service подписывает проверенную audit chain в своём ежедневном integrity cycle.
+- `/health` показывает status подписи, expiry certificate, checkpoint time/count и подписана ли текущая голова audit.
+- Добавлен warning horizon `AuditSigningCertificateWarningDays`.
+- Self-test проверяет RSA signature round-trip и обнаружение изменения подписанного payload.
 
