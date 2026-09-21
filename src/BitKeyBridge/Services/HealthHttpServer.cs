@@ -130,6 +130,14 @@ public sealed class HealthHttpServer : IDisposable
                         snapshot.AuditSigningSignatureValid,
                     auditSigningCurrentHeadSigned =
                         snapshot.AuditSigningCurrentHeadSigned,
+                    auditSigningTransitionHistoryStatus =
+                        snapshot.AuditSigningTransitionHistoryStatus,
+                    auditSigningTransitionCount =
+                        snapshot.AuditSigningTransitionCount,
+                    auditSigningLastTransitionUtc =
+                        snapshot.AuditSigningLastTransitionUtc,
+                    auditSigningTransitionError =
+                        snapshot.AuditSigningTransitionError,
                     auditSigningCertificateExpiresUtc =
                         snapshot.AuditSigningCertificateExpiresUtc,
                     auditSigningCertificateDaysRemaining =
