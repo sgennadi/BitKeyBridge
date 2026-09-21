@@ -457,6 +457,96 @@ public sealed class HealthService
         snapshot.RemoteApiPort = _config.RemoteApiPort;
         snapshot.RemoteApiManagementEnabled = _config.RemoteApiAllowManagement;
         snapshot.RemoteApiCertificateThumbprint = _config.RemoteApiCertificateThumbprint;
+        snapshot.RemoteApiAdminTokenConfigured =
+            !string.IsNullOrWhiteSpace(
+                _config.RemoteApiTokenSha256);
+        snapshot.RemoteApiReadTokenConfigured =
+            !string.IsNullOrWhiteSpace(
+                _config.RemoteApiReadTokenSha256);
+        snapshot.RemoteApiCoverageRunTokenConfigured =
+            !string.IsNullOrWhiteSpace(
+                _config.RemoteApiCoverageRunTokenSha256);
+        snapshot.RemoteApiExportTokenConfigured =
+            !string.IsNullOrWhiteSpace(
+                _config.RemoteApiExportTokenSha256);
+
+        if (_config.RemoteApiEnabled)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(
+                        _config.RemoteApiCertificateThumbprint))
+                {
+                    throw new InvalidOperationException(
+                        "Remote API is enabled but no TLS certificate thumbprint is configured.");
+                }
+
+                var certificate =
+                    new CertificateService()
+                        .FindLocalMachineCertificate(
+                            _config.RemoteApiCertificateThumbprint,
+                            requirePrivateKey: true,
+                            requireCurrentValidity: false);
+
+                snapshot.RemoteApiCertificateExpiresUtc =
+                    certificate.NotAfter
+                        .ToUniversalTime();
+                snapshot.RemoteApiCertificateDaysRemaining =
+                    (certificate.NotAfter.ToUniversalTime() -
+                     DateTime.UtcNow)
+                    .TotalDays;
+
+                if (snapshot.RemoteApiCertificateDaysRemaining <= 0)
+                {
+                    snapshot.RemoteApiCertificateStatus =
+                        "Expired";
+                    snapshot.Errors.Add(
+                        "Remote API TLS certificate has expired.");
+                }
+                else if (snapshot.RemoteApiCertificateDaysRemaining <= 30)
+                {
+                    snapshot.RemoteApiCertificateStatus =
+                        "Expiring";
+                    snapshot.Warnings.Add(
+                        $"Remote API TLS certificate expires in {snapshot.RemoteApiCertificateDaysRemaining:0} days.");
+                }
+                else
+                {
+                    snapshot.RemoteApiCertificateStatus =
+                        "Healthy";
+                }
+
+                if (snapshot.ServiceInstalled &&
+                    !string.IsNullOrWhiteSpace(
+                        snapshot.ServiceIdentity))
+                {
+                    var access =
+                        new CertificatePrivateKeyAccessService()
+                            .GetStatus(
+                                _config.RemoteApiCertificateThumbprint,
+                                snapshot.ServiceIdentity);
+
+                    snapshot.RemoteApiKeyAccessStatus =
+                        access.Status;
+
+                    if (access.AccessRequired &&
+                        (!access.ExplicitReadAllowed ||
+                         access.ExplicitReadDenied))
+                    {
+                        snapshot.Errors.Add(
+                            $"Remote API TLS private-key access for {access.Account}: {access.Status}.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                snapshot.RemoteApiCertificateStatus =
+                    "Error";
+                snapshot.Errors.Add(
+                    "Remote API TLS certificate/private-key access: " +
+                    ex.Message);
+            }
+        }
 
         try
         {
