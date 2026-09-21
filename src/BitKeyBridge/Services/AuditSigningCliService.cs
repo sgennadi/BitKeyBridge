@@ -21,6 +21,8 @@ public static class AuditSigningCliService
                     "--audit-signing-years must be between 1 and 10.");
             }
 
+            var windowsServiceBefore =
+                WindowsServiceHost.GetInfo();
             var service = new AuditSigningService(config);
             var cert = service.Setup(years);
 
@@ -54,6 +56,18 @@ public static class AuditSigningCliService
                     ? "Checkpoint: not created yet (no chained audit entries)."
                     : $"Checkpoint: {checkpoint.CreatedAtUtc:O}; Entries={checkpoint.TotalEntries}; Hash={checkpoint.LastHash}");
 
+            if (windowsServiceBefore.Installed &&
+                string.Equals(
+                    windowsServiceBefore.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                WindowsServiceHost.Stop();
+                WindowsServiceHost.Start();
+                Console.WriteLine(
+                    "Windows Service restarted to load audit-signing configuration.");
+            }
+
             return 0;
         }
         catch (ArgumentException ex)
@@ -72,16 +86,14 @@ public static class AuditSigningCliService
     {
         try
         {
-            Print(
-                new AuditSigningService(config)
-                    .VerifyCheckpoint());
-
-            if (!config.AuditSigningEnabled)
-                return 3;
-
             var result =
                 new AuditSigningService(config)
                     .VerifyCheckpoint();
+
+            Print(result);
+
+            if (!config.AuditSigningEnabled)
+                return 3;
 
             return result.Valid ? 0 : 4;
         }
