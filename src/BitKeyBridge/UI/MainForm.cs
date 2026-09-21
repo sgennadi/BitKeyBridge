@@ -651,10 +651,11 @@ public sealed class MainForm : Form
         remoteGroup.Controls.Add(_remoteApiManagement);
 
         var enableRemote = new Button { Text = "Enable / Reconfigure", Left = 500, Top = 27, Width = 150, Height = 32 };
-        var rotateToken = new Button { Text = "Rotate Token", Left = 660, Top = 27, Width = 120, Height = 32 };
-        var disableRemote = new Button { Text = "Disable", Left = 790, Top = 27, Width = 100, Height = 32 };
-        var openEvents = new Button { Text = "Open Event Log", Left = 900, Top = 27, Width = 130, Height = 32 };
-        remoteGroup.Controls.AddRange([enableRemote, rotateToken, disableRemote, openEvents]);
+        var rotateToken = new Button { Text = "Rotate Admin", Left = 660, Top = 27, Width = 115, Height = 32 };
+        var scopedTokens = new Button { Text = "Scoped Tokens...", Left = 785, Top = 27, Width = 130, Height = 32 };
+        var disableRemote = new Button { Text = "Disable", Left = 925, Top = 27, Width = 90, Height = 32 };
+        var openEvents = new Button { Text = "Event Log", Left = 1025, Top = 27, Width = 90, Height = 32 };
+        remoteGroup.Controls.AddRange([enableRemote, rotateToken, scopedTokens, disableRemote, openEvents]);
 
         _remoteApiStatus.SetBounds(16, 78, 1095, 118);
         _remoteApiStatus.Text =
@@ -663,6 +664,7 @@ public sealed class MainForm : Form
 
         enableRemote.Click += (_, _) => EnableOrReconfigureRemoteApi();
         rotateToken.Click += (_, _) => RotateRemoteApiToken();
+        scopedTokens.Click += (_, _) => ConfigureRemoteApiScopedTokens();
         disableRemote.Click += (_, _) => DisableRemoteApi();
         openEvents.Click += (_, _) => OpenWindowsEventLog();
 
@@ -2968,9 +2970,35 @@ public sealed class MainForm : Form
         _remoteApiStatus.Text = _config.RemoteApiEnabled
             ? $"ENABLED: https://{Environment.MachineName}:{_config.RemoteApiPort}/api/v1/{Environment.NewLine}" +
               $"Management: {_config.RemoteApiAllowManagement}    Certificate: {_config.RemoteApiCertificateThumbprint}{Environment.NewLine}" +
-              "Bearer token is stored only as SHA-256. Use Rotate Token if the original token is no longer available."
+              $"Tokens: Admin={Configured(_config.RemoteApiTokenSha256)}  Read={Configured(_config.RemoteApiReadTokenSha256)}  CoverageRun={Configured(_config.RemoteApiCoverageRunTokenSha256)}  Export={Configured(_config.RemoteApiExportTokenSha256)}"
             : "DISABLED. Remote API does not listen on the network until explicitly enabled.";
     }
+
+    private void ConfigureRemoteApiScopedTokens()
+    {
+        if (!_config.RemoteApiEnabled)
+        {
+            MessageBox.Show(
+                this,
+                "Enable the Remote API before creating scoped tokens.",
+                "Remote API",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog =
+            new RemoteApiScopedTokenDialog(
+                _config);
+        dialog.ShowDialog(this);
+        RefreshRemoteApiStatus();
+    }
+
+    private static string Configured(
+        string hash) =>
+        string.IsNullOrWhiteSpace(hash)
+            ? "No"
+            : "Yes";
 
     private void RestartServiceIfRunning()
     {
