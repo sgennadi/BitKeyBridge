@@ -35,8 +35,50 @@ public sealed class HealthService
                 _config.AuditSigningCertificateThumbprint,
             HealthEndpoint = _config.HealthEndpointEnabled
                 ? $"http://127.0.0.1:{Math.Clamp(_config.HealthEndpointPort, 1024, 65535)}/health"
-                : "Disabled"
+                : "Disabled",
+            ConfigSchemaVersion =
+                _config.SchemaVersion,
+            ConfigSchemaCurrentVersion =
+                ConfigSchema.CurrentVersion
         };
+
+        try
+        {
+            var migration =
+                new ConfigMigrationService()
+                    .ReadStatus();
+
+            if (migration is not null)
+            {
+                snapshot.ConfigMigrationRequired =
+                    migration.MigrationRequired;
+                snapshot.ConfigMigrationPersisted =
+                    !migration.MigrationRequired ||
+                    migration.Migrated;
+                snapshot.ConfigMigrationError =
+                    migration.Error;
+
+                if (!string.IsNullOrWhiteSpace(
+                        migration.Error))
+                {
+                    snapshot.Warnings.Add(
+                        "Configuration migration: " +
+                        migration.Error);
+                }
+            }
+            else
+            {
+                snapshot.ConfigMigrationPersisted =
+                    _config.SchemaVersion ==
+                    ConfigSchema.CurrentVersion;
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Warnings.Add(
+                "Configuration migration status: " +
+                ex.Message);
+        }
 
         try
         {
