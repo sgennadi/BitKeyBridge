@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.0
+
+- Added verification of metadata-only recovery incident bundles against retained tamper-evident audit entries.
+- Incident verification validates the audit chain, stable audit snapshot, exact AuditEntryHash anchors, recovery-session CorrelationId, action/result/source/auth metadata, operator/host/device/recovery ID, ticket/reference, reason, and rotation state.
+- Incident verification distinguishes a genuinely missing/mismatched audit anchor from `NotFullyRetained`, where an incident action is older than the currently retained audit window.
+- Incident verification explicitly detects accidental 48-digit BitLocker recovery-password patterns inside incident JSON.
+- Added `--incident-verify <session-id>` with JSON output and distinct exit behavior for valid, not-fully-retained, and failed verification.
+- Added **Incident...** to the Audit tab with recent-session selection, verification details, Open Bundle, and Open Incident Folder actions.
+- Added a secret-free Prometheus text formatter and loopback-only `/metrics` endpoint on the existing local health listener.
+- Prometheus metrics expose operational, Coverage, RBAC, audit-integrity/signing, certificate-lifetime, and Remote API posture gauges without user/computer/ticket/recovery identifiers, token hashes, or recovery secrets.
+- Added explicit application configuration schema versioning. Current schema is v1.
+- Legacy pre-versioned `appsettings.json` files are upgraded atomically after an exact backup copy is written under the machine Backups directory.
+- Read-only/non-admin clients can continue with the effective migrated configuration when migration cannot be persisted; migration is retried later and surfaced through health.
+- Configuration files with a future unsupported schema are rejected without modification instead of being silently interpreted with older defaults.
+- Added configuration migration status to health and sanitized diagnostics bundles.
+- Avoided repeated migration-status writes once the current schema has been recorded.
+- Added offline self-tests for incident verification/tamper detection, secret-free metrics, legacy configuration migration/backup, and future-schema refusal.
+
 ## 0.13.0
 
 - Added recovery-session correlation IDs across local AD reveal/copy, Entra get/reveal/copy, and Intune rotation workflows.
