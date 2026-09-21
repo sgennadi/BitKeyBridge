@@ -102,6 +102,9 @@ public sealed class RemoteApiSetupService
         config.RemoteApiEnabled = false;
         config.RemoteApiAllowManagement = false;
         config.RemoteApiTokenSha256 = string.Empty;
+        config.RemoteApiReadTokenSha256 = string.Empty;
+        config.RemoteApiCoverageRunTokenSha256 = string.Empty;
+        config.RemoteApiExportTokenSha256 = string.Empty;
         ConfigService.SaveAppConfig(config);
         WindowsFirewallService.RemoveRemoteApiRule();
 
@@ -110,6 +113,126 @@ public sealed class RemoteApiSetupService
             EventLogSeverity.Information,
             4301,
             "RemoteAPI");
+    }
+
+    public RemoteApiScopedTokenResult GenerateScopedToken(
+        AppConfig config,
+        string scope)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException(
+                "Remote API setup is only supported on Windows.");
+        if (!SecurityContext.IsAdministrator())
+            throw new InvalidOperationException(
+                "Administrator rights are required to configure Remote API tokens.");
+        if (!config.RemoteApiEnabled)
+            throw new InvalidOperationException(
+                "Remote API is not enabled.");
+
+        var normalized = NormalizeScope(scope);
+
+        var tokenBytes =
+            RandomNumberGenerator.GetBytes(32);
+        try
+        {
+            var hash = Convert.ToHexString(
+                    SHA256.HashData(tokenBytes))
+                .ToLowerInvariant();
+
+            SetScopeHash(
+                config,
+                normalized,
+                hash);
+            ConfigService.SaveAppConfig(config);
+
+            WindowsEventLogService.TryWrite(
+                $"Remote API scoped token generated. Scope={normalized}.",
+                EventLogSeverity.Warning,
+                4305,
+                "RemoteAPI");
+
+            return new RemoteApiScopedTokenResult
+            {
+                Scope = normalized,
+                Token =
+                    Convert.ToBase64String(
+                        tokenBytes),
+                Port = config.RemoteApiPort
+            };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(
+                tokenBytes);
+        }
+    }
+
+    public void RevokeScopedToken(
+        AppConfig config,
+        string scope)
+    {
+        if (!SecurityContext.IsAdministrator())
+            throw new InvalidOperationException(
+                "Administrator rights are required to revoke Remote API tokens.");
+
+        var normalized = NormalizeScope(scope);
+        SetScopeHash(
+            config,
+            normalized,
+            string.Empty);
+        ConfigService.SaveAppConfig(config);
+
+        WindowsEventLogService.TryWrite(
+            $"Remote API scoped token revoked. Scope={normalized}.",
+            EventLogSeverity.Warning,
+            4306,
+            "RemoteAPI");
+    }
+
+    public static string NormalizeScope(
+        string scope)
+    {
+        var value =
+            (scope ?? string.Empty)
+            .Trim()
+            .ToLowerInvariant();
+
+        return value switch
+        {
+            "read" or "readonly" or "read-only" =>
+                "read",
+            "coverage" or "coverage-run" =>
+                "coverage-run",
+            "export" =>
+                "export",
+            _ => throw new ArgumentException(
+                "Remote API scope must be read, coverage-run, or export.")
+        };
+    }
+
+    private static void SetScopeHash(
+        AppConfig config,
+        string scope,
+        string hash)
+    {
+        switch (scope)
+        {
+            case "read":
+                config.RemoteApiReadTokenSha256 =
+                    hash;
+                break;
+            case "coverage-run":
+                config.RemoteApiCoverageRunTokenSha256 =
+                    hash;
+                break;
+            case "export":
+                config.RemoteApiExportTokenSha256 =
+                    hash;
+                break;
+            default:
+                throw new ArgumentException(
+                    "Unsupported Remote API scope.");
+        }
     }
 
     public RemoteApiSetupResult RegenerateToken(AppConfig config)
