@@ -106,6 +106,21 @@ public sealed class AuditSigningService
                 "Audit signing certificate is not configured.");
         }
 
+        if (File.Exists(AppPaths.AuditSigningCheckpointFile))
+        {
+            var previous = VerifyCheckpoint(auditPath);
+            if (!previous.Valid)
+            {
+                throw new InvalidOperationException(
+                    "Existing signed audit checkpoint verification failed. " +
+                    "Refusing to overwrite the trust anchor. Status=" +
+                    previous.Status +
+                    (string.IsNullOrWhiteSpace(previous.Error)
+                        ? string.Empty
+                        : "; Error=" + previous.Error));
+            }
+        }
+
         var integrity = AuditIntegrityService.Verify(auditPath);
         if (!integrity.Valid)
         {
