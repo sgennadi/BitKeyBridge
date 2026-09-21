@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.0
+
+- Added cryptographically signed audit checkpoints on top of the existing SHA-256 audit hash chain.
+- Added a dedicated RSA-3072 LocalMachine audit-signing certificate, separate from Entra and Remote API certificates.
+- Audit-signing private keys are persisted as machine keys without the Exportable flag.
+- Signed checkpoints include the audit head hash, entry counts, chain version, machine identity, signer thumbprint, timestamp, and RSA-SHA256-PKCS1 signature.
+- Existing signed checkpoints must verify successfully and their signed hash must still exist in the current valid audit chain before BitKeyBridge can overwrite the trust anchor.
+- This continuity guard prevents the Windows Service from silently signing an already rewritten audit chain during the next scheduled verification.
+- Added audit-signing CLI commands: `--audit-signing-status`, `--audit-signing-setup`, `--audit-signing-sign`, `--audit-signing-verify`, `--audit-signing-disable`, and `--audit-signing-years`.
+- Added Audit-tab controls for setup, immediate signing, signature verification, disabling new checkpoints, and signer/checkpoint status.
+- Windows Service identity changes now preflight private-key access for the audit-signing certificate in addition to the Entra certificate.
+- The Windows Service signs the verified audit head during its daily integrity cycle when audit signing is enabled.
+- Health output now exposes signed-checkpoint state, signer-certificate expiry, signature validity, checkpoint age/count, and whether the current audit head is signed.
+- Added configurable warning horizon for audit-signing certificate expiry.
+- Added offline self-tests for RSA signed-checkpoint round-trip and signed-payload tamper detection.
+- Updated the public appsettings example with audit-signing settings.
+
 ## 0.11.0
 
 - Added optional Windows user/group RBAC for privileged recovery workflows while preserving backward-compatible behavior when RBAC is disabled.
