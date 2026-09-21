@@ -51,7 +51,8 @@ public sealed class HealthService
             if (migration is not null)
             {
                 snapshot.ConfigMigrationRequired =
-                    migration.MigrationRequired;
+                    migration.MigrationRequired &&
+                    !migration.Migrated;
                 snapshot.ConfigMigrationPersisted =
                     !migration.MigrationRequired ||
                     migration.Migrated;
