@@ -204,6 +204,93 @@ public static class AuditIntegrityService
         return result;
     }
 
+    public static Dictionary<string, AuditEntry> ReadEntriesByHash(
+        string path,
+        IEnumerable<string> entryHashes,
+        out DateTime? earliestRetainedUtc,
+        out DateTime? latestRetainedUtc)
+    {
+        var wanted =
+            new HashSet<string>(
+                entryHashes
+                    .Where(x => !string.IsNullOrWhiteSpace(x)),
+                StringComparer.OrdinalIgnoreCase);
+
+        var result =
+            new Dictionary<string, AuditEntry>(
+                StringComparer.OrdinalIgnoreCase);
+
+        earliestRetainedUtc = null;
+        latestRetainedUtc = null;
+
+        if (wanted.Count == 0)
+            return result;
+
+        using var processLock = AcquireInterprocessLock(path);
+        if (processLock is null)
+        {
+            throw new IOException(
+                "Could not acquire the audit interprocess lock.");
+        }
+
+        foreach (var file in new[]
+                 {
+                     path + ".old",
+                     path
+                 }
+                 .Where(File.Exists))
+        {
+            foreach (var line in File.ReadLines(file))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                AuditEntry? entry;
+                try
+                {
+                    entry =
+                        JsonSerializer.Deserialize<AuditEntry>(line);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (entry is null)
+                    continue;
+
+                if (entry.TimestampUtc != default)
+                {
+                    var timestamp =
+                        entry.TimestampUtc.ToUniversalTime();
+
+                    if (earliestRetainedUtc is null ||
+                        timestamp < earliestRetainedUtc)
+                    {
+                        earliestRetainedUtc = timestamp;
+                    }
+
+                    if (latestRetainedUtc is null ||
+                        timestamp > latestRetainedUtc)
+                    {
+                        latestRetainedUtc = timestamp;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(entry.EntryHash) &&
+                    wanted.Contains(entry.EntryHash))
+                {
+                    result[entry.EntryHash] = entry;
+
+                    if (result.Count == wanted.Count)
+                        return result;
+                }
+            }
+        }
+
+        return result;
+    }
+
     public static bool ContainsEntryHash(
         string path,
         string entryHash)
