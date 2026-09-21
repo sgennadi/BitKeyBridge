@@ -414,3 +414,29 @@ BitKeyBridge.exe --diagnostics-bundle C:\Temp\BitKeyBridge-Diagnostics.zip
 - `/health/security` показывает Remote API scopes, TLS expiry/status и key ACL без раскрытия hashes.
 - Self-test расширен проверками mixed audit v1→v2, CorrelationId, metadata-only incident bundle, dual-sign transition tamper detection, Remote API scope normalization и config validation.
 
+## Новое в 0.14.0
+
+- Добавлена проверка recovery incident bundle по retained tamper-evident audit:
+
+```text
+BitKeyBridge.exe --incident-verify <session-id>
+```
+
+- Проверяются audit chain, стабильность snapshot, точные `AuditEntryHash`, `CorrelationId`, action/result/source/auth, operator/host/device/Recovery ID, ticket/reference, reason и rotation state.
+- В Audit tab появилась кнопка **Incident...**: можно выбрать recent Session ID, выполнить verification, открыть JSON bundle или папку Incidents.
+- Статус `NotFullyRetained` отделён от tamper/mismatch: он означает, что incident старше текущего окна хранения `audit.jsonl` + `.old`.
+- Отдельно обнаруживаются missing anchor в retained window, metadata mismatch, invalid audit chain и случайное появление 48-digit recovery password в incident JSON.
+- На существующем loopback health listener добавлен Prometheus endpoint:
+
+```text
+http://127.0.0.1:8750/metrics
+```
+
+- Metrics содержат только числовые operational/security gauges. В них нет computer/user/OU/ticket/Recovery ID, recovery password, bearer token или token hash.
+- `appsettings.json` получил явный `SchemaVersion`; текущая schema — v1.
+- Старый pre-versioned config перед atomic migration сначала копируется в machine Backups directory.
+- Config с более новой неизвестной schema не перезаписывается и не интерпретируется через старые defaults.
+- Если read-only/non-admin process не может сохранить migration, effective config продолжает работать в памяти, а migration будет повторена позже; состояние видно в health.
+- Migration status включён в sanitized diagnostics bundle.
+- Self-test дополнен incident verification/tamper detection, metrics secret-leak check, legacy config migration/backup и future-schema refusal.
+
