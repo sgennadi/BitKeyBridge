@@ -77,6 +77,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release v'))
     needs: build
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -102,7 +103,23 @@ jobs:
             $tag = "v$version"
           }
 
-          if ($tag -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?
+          if ($tag -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+            throw "Resolved release tag is invalid: $tag"
+          }
+
+          $exists = $false
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            $exists = $true
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "Release tag: $tag"
+          Write-Host "Existing release: $exists"
+
+      - name: Download x64
+        if: steps.release_meta.outputs.exists != 'true'
         uses: actions/download-artifact@v8
         with:
           name: BitKeyBridge-win-x64
@@ -160,81 +177,9 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.release_meta.outputs.exists != 'true'
-        shell: cmd
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: pwsh
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
           gh release create $tag release/BitKeyBridge-win-x64.zip release/BitKeyBridge-win-x86.zip release/BitKeyBridge-win-arm64.zip release/BitKeyBridge.cdx.json release/SHA256SUMS.txt --repo "${{ github.repository }}" --target "${{ github.sha }}" --generate-notes --title "BitKeyBridge $tag"
-) {
-            throw "Resolved release tag is invalid: $tag"
-          }
-
-          $exists = $false
-          gh release view $tag --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
-            $exists = $true
-          }
-
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          Write-Host "Release tag: $tag"
-          Write-Host "Existing release: $exists"
-
-      - name: Download x64
-        if: steps.release_meta.outputs.exists != 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-x64
-          path: release
-
-      - name: Download x86
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-x86
-          path: release
-
-      - name: Download ARM64
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-arm64
-          path: release
-
-      - name: Generate CycloneDX SBOM
-        shell: pwsh
-        run: |
-          dotnet tool install --tool-path .tools CycloneDX --version 6.2.0
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -spv 1.7 -sn BitKeyBridge -sv $version -st Application
-
-      - name: Generate SHA256SUMS
-        shell: bash
-        run: |
-          cd release
-          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json > SHA256SUMS.txt
-
-      - name: Attest release provenance
-        uses: actions/attest@v4
-        with:
-          subject-path: |
-            release/BitKeyBridge-win-x64.zip
-            release/BitKeyBridge-win-x86.zip
-            release/BitKeyBridge-win-arm64.zip
-            release/BitKeyBridge.cdx.json
-            release/SHA256SUMS.txt
-
-      - name: Attest release SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: |
-            release/BitKeyBridge-win-x64.zip
-            release/BitKeyBridge-win-x86.zip
-            release/BitKeyBridge-win-arm64.zip
-          sbom-path: release/BitKeyBridge.cdx.json
-
-      - name: Create GitHub Release
-        shell: cmd
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "%GITHUB_REF_NAME%" release\BitKeyBridge-win-x64.zip release\BitKeyBridge-win-x86.zip release\BitKeyBridge-win-arm64.zip release\BitKeyBridge.cdx.json release\SHA256SUMS.txt --repo "%GITHUB_REPOSITORY%" --generate-notes --title "%GITHUB_REF_NAME%"
