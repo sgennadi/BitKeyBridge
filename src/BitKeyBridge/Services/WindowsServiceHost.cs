@@ -312,8 +312,27 @@ public static class WindowsServiceHost
         if (wasRunning)
             Stop();
 
+        var storageAclPrepared = false;
+
         try
         {
+            if (appConfig.StorageAclHardeningEnabled)
+            {
+                var storage =
+                    new StorageSecurityService(
+                        serviceIdentityOverride:
+                            serviceAccount)
+                        .Repair();
+
+                if (!storage.RepairSucceeded)
+                {
+                    throw new InvalidOperationException(
+                        "Protected storage ACLs could not be prepared for the new Windows Service identity.");
+                }
+
+                storageAclPrepared = true;
+            }
+
             using var scm = OpenScManager(ScManagerConnect);
             using var service = OpenServiceRequired(
                 scm.DangerousGetHandle(),
@@ -341,11 +360,59 @@ public static class WindowsServiceHost
                     "Failed to change the BitKeyBridge Windows Service identity.");
             }
 
+            if (appConfig.StorageAclHardeningEnabled)
+            {
+                var verification =
+                    new StorageSecurityService(
+                        serviceIdentityOverride:
+                            serviceAccount)
+                        .Check();
+
+                if (!verification.Valid)
+                {
+                    throw new InvalidOperationException(
+                        "Windows Service identity changed, but protected storage ACL verification failed.");
+                }
+            }
+
             WindowsEventLogService.TryWrite(
                 $"BitKeyBridge Windows Service identity changed to {serviceAccount}.",
                 EventLogSeverity.Warning,
                 4005,
                 "Service");
+        }
+        catch
+        {
+            if (storageAclPrepared &&
+                !string.IsNullOrWhiteSpace(
+                    before.Identity))
+            {
+                try
+                {
+                    _ =
+                        new StorageSecurityService(
+                            serviceIdentityOverride:
+                                before.Identity)
+                            .Repair();
+
+                    WindowsEventLogService.TryWrite(
+                        $"Protected storage ACLs were restored for the previous Windows Service identity {before.Identity}.",
+                        EventLogSeverity.Warning,
+                        4622,
+                        "StorageSecurity");
+                }
+                catch (Exception rollbackEx)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Protected storage ACL rollback failed after service-identity change failure: " +
+                        rollbackEx.Message,
+                        EventLogSeverity.Error,
+                        4623,
+                        "StorageSecurity");
+                }
+            }
+
+            throw;
         }
         finally
         {
