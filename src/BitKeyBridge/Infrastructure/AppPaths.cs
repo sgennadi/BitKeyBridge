@@ -41,6 +41,15 @@ public static class AppPaths
     public static string BackupsDirectory => Path.Combine(MachineConfigDirectory, "Backups");
     public static string HousekeepingStatusFile => Path.Combine(MachineConfigDirectory, "housekeeping_status.json");
     public static string StorageSecurityStatusFile => Path.Combine(MachineConfigDirectory, "storage_security_status.json");
+    public static string AccessControlDirectory => Path.Combine(MachineConfigDirectory, "AccessControl");
+    public static string JitGrantsDirectory => Path.Combine(AccessControlDirectory, "JitGrants");
+    public static string ApprovalRequestsDirectory => Path.Combine(AccessControlDirectory, "ApprovalRequests");
+    public static string ApprovalDecisionsDirectory => Path.Combine(AccessControlDirectory, "ApprovalDecisions");
+    public static string PrivilegedAccessStatusFile => Path.Combine(AccessControlDirectory, "privileged_access_status.json");
+    public static string SiemDirectory => Path.Combine(MachineConfigDirectory, "SIEM");
+    public static string SiemOutboxDirectory => Path.Combine(SiemDirectory, "Outbox");
+    public static string SiemStatusFile => Path.Combine(SiemDirectory, "siem_status.json");
+    public static string DefaultSiemJsonlFile => Path.Combine(SiemDirectory, "bitkeybridge-siem.jsonl");
     public static string ServiceInstallDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BitKeyBridge");
     public static string ServiceExecutable => Path.Combine(ServiceInstallDirectory, "BitKeyBridge.exe");
