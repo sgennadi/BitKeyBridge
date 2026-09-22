@@ -183,7 +183,8 @@ public sealed class HealthService
             {
                 var storage =
                     new StorageSecurityService()
-                        .Check();
+                        .Check(
+                            persist: false);
 
                 snapshot.StorageAclInvalidDirectories =
                     storage.Directories
