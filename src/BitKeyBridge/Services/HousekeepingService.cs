@@ -224,22 +224,21 @@ public sealed class HousekeepingService
                     ComputeFileSha256(
                         path);
 
-                File.Delete(path);
+                var audit =
+                    new AuditService(
+                        _auditPath,
+                        10);
 
-                result.IncidentDeleted++;
-                result.BytesFreed +=
-                    Math.Max(
-                        0,
-                        size);
-
+                AuditEntry? deletionIntent;
                 try
                 {
-                    _ = new AuditService(
-                            _auditPath,
-                            10)
-                        .Write(
-                            "HousekeepingDeleteIncident",
-                            source: "Local",
+                    deletionIntent =
+                        audit.Write(
+                            "HousekeepingDeleteIncidentPlan",
+                            result:
+                                "Authorized",
+                            source:
+                                "Local",
                             details:
                                 $"BundleSha256={bundleHash}; Actions={bundle.Actions.Count}; UpdatedAtUtc={effectiveUtc:O}; Verification=Valid",
                             reference:
@@ -251,8 +250,69 @@ public sealed class HousekeepingService
                 }
                 catch (Exception ex)
                 {
+                    deletionIntent = null;
                     result.Warnings.Add(
-                        $"Incident {sessionId} was deleted but the retention audit record could not be written: {ex.Message}");
+                        $"Incident {sessionId} was preserved because the retention audit intent could not be written: {ex.Message}");
+                }
+
+                if (deletionIntent is null)
+                {
+                    result.IncidentPreserved++;
+                    result.IncidentErrors++;
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(path);
+
+                    result.IncidentDeleted++;
+                    result.BytesFreed +=
+                        Math.Max(
+                            0,
+                            size);
+
+                    _ = audit.Write(
+                        "HousekeepingDeleteIncident",
+                        result:
+                            "Success",
+                        source:
+                            "Local",
+                        details:
+                            $"BundleSha256={bundleHash}; Actions={bundle.Actions.Count}; UpdatedAtUtc={effectiveUtc:O}; Verification=Valid; IntentHash={deletionIntent.EntryHash}",
+                        reference:
+                            bundle.Reference,
+                        reason:
+                            "Retention policy",
+                        correlationId:
+                            sessionId);
+                }
+                catch (Exception ex)
+                {
+                    result.IncidentErrors++;
+                    result.Errors.Add(
+                        $"Incident {sessionId} retention deletion failed after authorization: {ex.Message}");
+
+                    try
+                    {
+                        _ = audit.Write(
+                            "HousekeepingDeleteIncident",
+                            result:
+                                "Failed",
+                            source:
+                                "Local",
+                            details:
+                                $"BundleSha256={bundleHash}; IntentHash={deletionIntent.EntryHash}; Error={ex.Message}",
+                            reference:
+                                bundle.Reference,
+                            reason:
+                                "Retention policy",
+                            correlationId:
+                                sessionId);
+                    }
+                    catch
+                    {
+                    }
                 }
             }
             catch (Exception ex)
