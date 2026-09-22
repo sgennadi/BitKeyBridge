@@ -240,6 +240,85 @@ public static class MetricsService
 
         Gauge(
             builder,
+            "bitkeybridge_housekeeping_enabled",
+            "1 when scheduled housekeeping is enabled.",
+            snapshot.HousekeepingEnabled ? 1 : 0);
+
+        Gauge(
+            builder,
+            "bitkeybridge_housekeeping_last_success",
+            "1 when the last housekeeping run succeeded, 0 when it failed, -1 when unknown.",
+            TriState(snapshot.LastHousekeepingSuccess));
+
+        GaugeOptional(
+            builder,
+            "bitkeybridge_housekeeping_age_hours",
+            "Age of the last completed housekeeping run in hours.",
+            snapshot.LastHousekeepingAgeHours);
+
+        Gauge(
+            builder,
+            "bitkeybridge_housekeeping_incidents_deleted",
+            "Incident bundles deleted by the last housekeeping run.",
+            snapshot.HousekeepingIncidentDeleted);
+
+        Gauge(
+            builder,
+            "bitkeybridge_housekeeping_incidents_preserved",
+            "Incident bundles preserved by the last housekeeping run.",
+            snapshot.HousekeepingIncidentPreserved);
+
+        Gauge(
+            builder,
+            "bitkeybridge_housekeeping_incidents_preserved_not_fully_retained",
+            "Incident bundles preserved because their audit anchors are no longer fully retained.",
+            snapshot.HousekeepingIncidentPreservedNotFullyRetained);
+
+        Gauge(
+            builder,
+            "bitkeybridge_housekeeping_backups_deleted",
+            "Configuration backups deleted by the last housekeeping run.",
+            snapshot.HousekeepingBackupDeleted);
+
+        Gauge(
+            builder,
+            "bitkeybridge_housekeeping_errors",
+            "Housekeeping errors reported by the last run.",
+            snapshot.HousekeepingErrorCount);
+
+        Gauge(
+            builder,
+            "bitkeybridge_storage_acl_hardening_enabled",
+            "1 when protected storage ACL health enforcement is enabled.",
+            snapshot.StorageAclHardeningEnabled ? 1 : 0);
+
+        Gauge(
+            builder,
+            "bitkeybridge_storage_acl_valid",
+            "1 when protected storage ACLs validate successfully, 0 when invalid, -1 when enforcement is disabled or unknown.",
+            snapshot.StorageAclHardeningEnabled
+                ? string.Equals(
+                    snapshot.StorageAclStatus,
+                    "Valid",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? 1
+                    : 0
+                : -1);
+
+        Gauge(
+            builder,
+            "bitkeybridge_storage_acl_invalid_directories",
+            "Protected storage directories with invalid ACL policy.",
+            snapshot.StorageAclInvalidDirectories);
+
+        Gauge(
+            builder,
+            "bitkeybridge_storage_acl_unexpected_allow_rules",
+            "Unexpected allow ACE count across protected storage directories.",
+            snapshot.StorageAclUnexpectedAllowRules);
+
+        Gauge(
+            builder,
             "bitkeybridge_remote_api_enabled",
             "1 when the TLS Remote API is enabled.",
             snapshot.RemoteApiEnabled ? 1 : 0);
