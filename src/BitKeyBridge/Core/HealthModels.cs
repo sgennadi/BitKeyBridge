@@ -50,6 +50,24 @@ public sealed class HealthSnapshot
     public bool ConfigMigrationPersisted { get; set; }
     public string ConfigMigrationError { get; set; } = string.Empty;
 
+    public bool HousekeepingEnabled { get; set; }
+    public int HousekeepingIntervalHours { get; set; }
+    public bool? LastHousekeepingSuccess { get; set; }
+    public DateTime? LastHousekeepingFinishedUtc { get; set; }
+    public double? LastHousekeepingAgeHours { get; set; }
+    public int HousekeepingIncidentDeleted { get; set; }
+    public int HousekeepingIncidentPreserved { get; set; }
+    public int HousekeepingIncidentPreservedNotFullyRetained { get; set; }
+    public int HousekeepingBackupDeleted { get; set; }
+    public int HousekeepingTemporaryFilesDeleted { get; set; }
+    public long HousekeepingBytesFreed { get; set; }
+    public int HousekeepingErrorCount { get; set; }
+
+    public bool StorageAclHardeningEnabled { get; set; }
+    public string StorageAclStatus { get; set; } = "Disabled";
+    public int StorageAclInvalidDirectories { get; set; }
+    public int StorageAclUnexpectedAllowRules { get; set; }
+
     public string OutputDirectory { get; set; } = string.Empty;
     public bool OutputDirectoryExists { get; set; }
     public bool CsvExists { get; set; }
