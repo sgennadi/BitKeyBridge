@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.15.0
+
+- Added evidence-aware housekeeping for recovery incidents, configuration backups, and stale atomic temporary files.
+- Incident retention is opt-in: `IncidentRetentionDays = 0` keeps incident bundles forever by default.
+- Incident deletion is allowed only when the bundle verifies as `Valid` against the currently retained tamper-evident audit chain.
+- Incidents with `NotFullyRetained`, metadata mismatch, missing retained audit anchors, invalid audit state, or other verification failures are preserved.
+- Before deleting a verified incident, BitKeyBridge writes a tamper-evident `HousekeepingDeleteIncidentPlan` audit entry containing the bundle SHA-256 digest and correlation/session ID.
+- Incident deletion is refused if the authorization audit entry cannot be written.
+- After successful deletion, BitKeyBridge writes a completion audit entry referencing the authorization EntryHash; completion-audit failures are surfaced in housekeeping health.
+- Backup retention defaults to 90 days while preserving at least the five newest backup JSON files; setting retention to 0 keeps backups forever.
+- Added cleanup of stale `.tmp` files left by interrupted atomic writes; default retention is 7 days and 0 disables this cleanup.
+- Housekeeping directory-enumeration failures are no longer treated as empty directories; access/I/O problems fail the housekeeping run and surface through health/Event Log.
+- Added scheduled housekeeping to the native Windows Service with an independent interval and optional run-on-start behavior.
+- Added CLI controls for housekeeping status/run/dry-run, retention settings, minimum backup count, and temporary-file retention.
+- Added a Housekeeping / Protected Storage GUI for retention policy, dry run, immediate cleanup, ACL status/repair, and quick access to Incidents/Backups.
+- Added protected-storage ACL validation and repair for Incidents, Backups, and AuditSigningTransitions.
+- Protected storage ACL repair removes inheritance and unexpected Allow ACEs, keeps FullControl for SYSTEM/local Administrators, grants the installed service identity only the directory-specific access it needs, and keeps audit-signing transition history read-only to the service.
+- ACL hardening is explicit/admin-triggered; Windows Service health checks validate the policy but never silently repair ACLs.
+- Changing the Windows Service identity now synchronizes protected-storage ACLs with LocalSystem, gMSA, or domain service accounts and avoids restoring stale ACLs after a successful SCM identity switch.
+- Added housekeeping/storage-ACL state to `/health/security`, Prometheus `/metrics`, sanitized diagnostics, and Windows Event Log.
+- Added application configuration schema v2 for the new housekeeping/storage policy. Existing v1 configuration is migrated with the existing versioned backup/migration mechanism.
+- Added offline self-tests for evidence-aware incident deletion, retention preservation, backup minimum retention, temporary-file cleanup, ACL repair/validation, and housekeeping authorization/completion audit records.
+
 ## 0.14.0
 
 - Added verification of metadata-only recovery incident bundles against retained tamper-evident audit entries.
