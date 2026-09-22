@@ -714,7 +714,7 @@ public sealed class MainForm : Form
 
         var maintenanceGroup = new GroupBox
         {
-            Text = "Configuration / Diagnostics",
+            Text = "Configuration / Diagnostics / Storage",
             Left = 20,
             Top = 680,
             Width = 1145,
@@ -755,12 +755,21 @@ public sealed class MainForm : Form
             Width = 140,
             Height = 34
         };
+        var housekeeping = new Button
+        {
+            Text = "Housekeeping...",
+            Left = 621,
+            Top = 30,
+            Width = 150,
+            Height = 34
+        };
 
         maintenanceGroup.Controls.AddRange([
             backupConfig,
             restoreConfig,
             diagnostics,
-            openIncidents
+            openIncidents,
+            housekeeping
         ]);
 
         backupConfig.Click += (_, _) =>
@@ -771,6 +780,8 @@ public sealed class MainForm : Form
             CreateDiagnosticsBundleGui();
         openIncidents.Click += (_, _) =>
             OpenPath(AppPaths.IncidentsDirectory);
+        housekeeping.Click += (_, _) =>
+            ConfigureStorageMaintenanceGui();
 
         var note = new Label
         {
@@ -3179,6 +3190,16 @@ public sealed class MainForm : Form
               $"Management: {_config.RemoteApiAllowManagement}    Certificate: {_config.RemoteApiCertificateThumbprint}{Environment.NewLine}" +
               $"Tokens: Admin={Configured(_config.RemoteApiTokenSha256)}  Read={Configured(_config.RemoteApiReadTokenSha256)}  CoverageRun={Configured(_config.RemoteApiCoverageRunTokenSha256)}  Export={Configured(_config.RemoteApiExportTokenSha256)}"
             : "DISABLED. Remote API does not listen on the network until explicitly enabled.";
+    }
+
+    private void ConfigureStorageMaintenanceGui()
+    {
+        using var dialog =
+            new StorageMaintenanceDialog(
+                _config);
+
+        dialog.ShowDialog(this);
+        RefreshDashboard();
     }
 
     private void BackupConfigurationGui()
