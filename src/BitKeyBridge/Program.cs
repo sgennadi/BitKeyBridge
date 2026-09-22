@@ -1699,6 +1699,278 @@ internal static class Program
                     }
                 }
 
+                var housekeepingRoot =
+                    Path.Combine(
+                        tempDirectory,
+                        "Housekeeping");
+                var housekeepingIncidents =
+                    Path.Combine(
+                        housekeepingRoot,
+                        "Incidents");
+                var housekeepingBackups =
+                    Path.Combine(
+                        housekeepingRoot,
+                        "Backups");
+                var housekeepingTransitions =
+                    Path.Combine(
+                        housekeepingRoot,
+                        "Transitions");
+                var housekeepingAudit =
+                    Path.Combine(
+                        housekeepingRoot,
+                        "audit.jsonl");
+                var housekeepingStatus =
+                    Path.Combine(
+                        housekeepingRoot,
+                        "housekeeping-status.json");
+
+                Directory.CreateDirectory(
+                    housekeepingIncidents);
+                Directory.CreateDirectory(
+                    housekeepingBackups);
+                Directory.CreateDirectory(
+                    housekeepingTransitions);
+
+                var housekeepingAuditService =
+                    new AuditService(
+                        housekeepingAudit,
+                        1);
+
+                var housekeepingSession =
+                    "11223344556677889900aabbccddeeff";
+                var housekeepingContext =
+                    new RecoveryAccessContext
+                    {
+                        SessionId =
+                            housekeepingSession,
+                        Reference =
+                            "INC-HOUSEKEEPING",
+                        Reason =
+                            "Retention self-test"
+                    };
+
+                var housekeepingEntry =
+                    housekeepingAuditService.Write(
+                        "GetCloudRecoveryKey",
+                        computerName:
+                            "PC-HOUSEKEEPING",
+                        recoveryId:
+                            "{HK-SELFTEST}",
+                        source:
+                            "Entra",
+                        authMode:
+                            "Certificate",
+                        reference:
+                            housekeepingContext.Reference,
+                        reason:
+                            housekeepingContext.Reason,
+                        correlationId:
+                            housekeepingContext.SessionId);
+
+                var housekeepingBundle =
+                    new RecoveryIncidentService(
+                        housekeepingIncidents)
+                        .Append(
+                            housekeepingContext,
+                            housekeepingEntry);
+
+                if (housekeepingBundle is null)
+                {
+                    failures.Add(
+                        "Housekeeping incident setup failed.");
+                }
+                else
+                {
+                    housekeepingBundle.UpdatedAtUtc =
+                        DateTime.UtcNow.AddDays(-10);
+
+                    JsonStore.WriteAtomic(
+                        Path.Combine(
+                            housekeepingIncidents,
+                            housekeepingSession +
+                            ".json"),
+                        housekeepingBundle);
+                }
+
+                var preservedSession =
+                    "ffeeddccbbaa00998877665544332211";
+                var preservedBundle =
+                    new RecoveryIncidentBundle
+                    {
+                        SessionId =
+                            preservedSession,
+                        CreatedAtUtc =
+                            DateTime.UtcNow.AddDays(-20),
+                        UpdatedAtUtc =
+                            DateTime.UtcNow.AddDays(-10),
+                        Operator =
+                            "SELFTEST\\Operator",
+                        Host =
+                            "SELFTEST",
+                        ComputerName =
+                            "PC-OLD",
+                        RecoveryId =
+                            "{OLD-SELFTEST}",
+                        Reference =
+                            "INC-OLD",
+                        Reason =
+                            "Retention evidence",
+                        Actions =
+                        [
+                            new RecoveryIncidentAction
+                            {
+                                TimestampUtc =
+                                    DateTime.UtcNow.AddDays(-20),
+                                Action =
+                                    "GetCloudRecoveryKey",
+                                Result =
+                                    "Success",
+                                Source =
+                                    "Entra",
+                                AuthMode =
+                                    "Certificate",
+                                AuditEntryHash =
+                                    new string('A', 64)
+                            }
+                        ]
+                    };
+
+                var preservedPath =
+                    Path.Combine(
+                        housekeepingIncidents,
+                        preservedSession +
+                        ".json");
+
+                JsonStore.WriteAtomic(
+                    preservedPath,
+                    preservedBundle);
+
+                for (var backupIndex = 0;
+                     backupIndex < 4;
+                     backupIndex++)
+                {
+                    var backupPath =
+                        Path.Combine(
+                            housekeepingBackups,
+                            $"backup-{backupIndex}.json");
+
+                    File.WriteAllText(
+                        backupPath,
+                        "{}");
+
+                    File.SetLastWriteTimeUtc(
+                        backupPath,
+                        DateTime.UtcNow.AddDays(
+                            -10 + backupIndex));
+                }
+
+                var oldTemp =
+                    Path.Combine(
+                        housekeepingRoot,
+                        "orphan.tmp");
+                File.WriteAllText(
+                    oldTemp,
+                    "temporary");
+                File.SetLastWriteTimeUtc(
+                    oldTemp,
+                    DateTime.UtcNow.AddDays(-10));
+
+                var housekeepingConfig =
+                    new AppConfig
+                    {
+                        IncidentRetentionDays = 1,
+                        BackupRetentionDays = 1,
+                        BackupMinimumFiles = 2,
+                        TemporaryFileRetentionDays = 1
+                    };
+
+                var housekeepingResult =
+                    new HousekeepingService(
+                        housekeepingIncidents,
+                        housekeepingBackups,
+                        housekeepingRoot,
+                        housekeepingAudit,
+                        housekeepingStatus)
+                        .Run(
+                            housekeepingConfig);
+
+                var housekeepingAuditEntries =
+                    housekeepingAuditService
+                        .ReadRecent(20);
+
+                if (!housekeepingResult.Success ||
+                    housekeepingResult.IncidentDeleted != 1 ||
+                    housekeepingResult.IncidentPreservedNotFullyRetained != 1 ||
+                    housekeepingResult.BackupDeleted != 2 ||
+                    housekeepingResult.BackupPreservedMinimum != 2 ||
+                    housekeepingResult.TemporaryFilesDeleted < 1 ||
+                    File.Exists(
+                        Path.Combine(
+                            housekeepingIncidents,
+                            housekeepingSession +
+                            ".json")) ||
+                    !File.Exists(
+                        preservedPath) ||
+                    housekeepingAuditEntries.All(x =>
+                        x.Action !=
+                        "HousekeepingDeleteIncident"))
+                {
+                    failures.Add(
+                        "Evidence-aware housekeeping retention failed.");
+                }
+
+                if (OperatingSystem.IsWindows() &&
+                    SecurityContext.IsAdministrator())
+                {
+                    var aclRoot =
+                        Path.Combine(
+                            tempDirectory,
+                            "StorageAcl");
+                    var aclIncidents =
+                        Path.Combine(
+                            aclRoot,
+                            "Incidents");
+                    var aclBackups =
+                        Path.Combine(
+                            aclRoot,
+                            "Backups");
+                    var aclTransitions =
+                        Path.Combine(
+                            aclRoot,
+                            "Transitions");
+                    var aclStatus =
+                        Path.Combine(
+                            aclRoot,
+                            "status.json");
+
+                    var storageService =
+                        new StorageSecurityService(
+                            aclIncidents,
+                            aclBackups,
+                            aclTransitions,
+                            serviceIdentityOverride:
+                                string.Empty,
+                            statusPath:
+                                aclStatus);
+
+                    var repaired =
+                        storageService.Repair();
+                    var checkedStorage =
+                        storageService.Check();
+
+                    if (!repaired.RepairSucceeded ||
+                        !checkedStorage.Valid ||
+                        checkedStorage.Directories.Count != 3 ||
+                        checkedStorage.Directories.Any(x =>
+                            !x.InheritanceProtected ||
+                            !x.SystemFullControl ||
+                            !x.AdministratorsFullControl))
+                    {
+                        failures.Add(
+                            "Protected storage ACL repair/validation failed.");
+                    }
+                }
+
                 using (var signingRsa = RSA.Create(2048))
                 {
                     var checkpoint = new AuditSigningCheckpoint
