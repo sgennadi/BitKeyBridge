@@ -1276,6 +1276,58 @@ Metrics contain numeric operational/security state only. They do not include com
 
 Application configuration is explicitly versioned with `SchemaVersion` (current schema: v1). Pre-versioned `appsettings.json` is backed up before atomic migration. An appsettings file created by a newer unsupported schema is rejected without modification. Migration state is available in the health snapshot and sanitized diagnostics bundle.
 
+## Housekeeping and protected storage
+
+Starting with 0.15, BitKeyBridge can maintain local operational storage without silently discarding recovery evidence.
+
+Incident retention is disabled by default:
+
+```json
+"IncidentRetentionDays": 0
+```
+
+A value of `0` means **keep incident bundles forever**. If incident retention is explicitly enabled, BitKeyBridge deletes an old incident only when its bundle verifies as `Valid` against the retained tamper-evident audit chain. `NotFullyRetained`, mismatched, unreadable, or otherwise unverifiable incidents are preserved.
+
+Before a verified incident is deleted, BitKeyBridge writes a `HousekeepingDeleteIncidentPlan` audit entry containing the bundle SHA-256 digest and Session/Correlation ID. If that authorization entry cannot be written, deletion is refused. A successful deletion then writes a completion audit entry referencing the authorization EntryHash.
+
+Configuration backups default to 90-day retention while preserving at least the five newest backup files. Stale atomic-write `.tmp` files default to 7-day retention.
+
+CLI examples:
+
+```text
+BitKeyBridge.exe --housekeeping-status
+BitKeyBridge.exe --housekeeping-dry-run
+BitKeyBridge.exe --housekeeping-run
+BitKeyBridge.exe --incident-retention-days 0
+BitKeyBridge.exe --backup-retention-days 90 --backup-minimum-files 5
+BitKeyBridge.exe --temp-retention-days 7
+```
+
+The **Operations → Housekeeping...** dialog provides the same policy controls plus immediate dry-run/run actions.
+
+### Protected storage ACLs
+
+BitKeyBridge can explicitly harden these directories:
+
+- `%ProgramData%\BitKeyBridge\Incidents`
+- `%ProgramData%\BitKeyBridge\Backups`
+- `%ProgramData%\BitKeyBridge\AuditSigningTransitions`
+
+Use:
+
+```text
+BitKeyBridge.exe --storage-acl-status
+BitKeyBridge.exe --storage-acl-repair
+```
+
+Repair requires Administrator rights, disables inherited ACLs, retains FullControl for SYSTEM and local Administrators, and grants the installed Windows Service identity only the directory-specific access it needs. Audit-signing transition history is read-only to the service. Automatic health checks validate the ACL policy but never repair it silently.
+
+If the Windows Service identity changes between LocalSystem, gMSA, or a domain account, BitKeyBridge synchronizes the protected-storage ACLs with the new identity.
+
+Housekeeping and storage-ACL posture are exposed through `/health/security`, loopback Prometheus `/metrics`, sanitized diagnostics, and Windows Event Log without publishing incident metadata, SIDs, account names, or recovery secrets.
+
+Application configuration schema is now **v2**.
+
 ## Build
 
 Install the .NET 10 SDK and run:
