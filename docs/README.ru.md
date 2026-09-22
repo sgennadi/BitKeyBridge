@@ -440,3 +440,72 @@ http://127.0.0.1:8750/metrics
 - Migration status включён в sanitized diagnostics bundle.
 - Self-test дополнен incident verification/tamper detection, metrics secret-leak check, legacy config migration/backup и future-schema refusal.
 
+## Новое в 0.15.0
+
+Добавлен **evidence-aware housekeeping** для Incidents, Backups и старых временных `.tmp` файлов.
+
+По умолчанию incident bundles автоматически **не удаляются вообще**:
+
+```json
+"IncidentRetentionDays": 0
+```
+
+`0` означает хранить всегда. Если retention для incidents включить явно, старый bundle удаляется только когда его verification даёт `Valid` и все нужные audit anchors ещё подтверждаются retained audit chain.
+
+`NotFullyRetained`, metadata mismatch, missing anchor, invalid audit или unreadable incident **сохраняются**, а housekeeping сообщает об этом в status/health.
+
+Перед удалением verified incident BitKeyBridge сначала пишет tamper-evident audit entry `HousekeepingDeleteIncidentPlan` с SHA-256 самого bundle и Session/Correlation ID. Если этот authorization audit entry записать не удалось, incident не удаляется. После успешного удаления пишется completion entry с ссылкой на EntryHash authorization record.
+
+Для backups по умолчанию:
+- retention — 90 дней;
+- всегда сохраняются минимум 5 самых новых backup JSON.
+
+Для stale atomic-write `.tmp` файлов retention по умолчанию 7 дней.
+
+CLI:
+
+```text
+BitKeyBridge.exe --housekeeping-status
+BitKeyBridge.exe --housekeeping-dry-run
+BitKeyBridge.exe --housekeeping-run
+BitKeyBridge.exe --housekeeping-enable
+BitKeyBridge.exe --housekeeping-disable
+BitKeyBridge.exe --housekeeping-interval-hours 24
+BitKeyBridge.exe --incident-retention-days 0
+BitKeyBridge.exe --backup-retention-days 90
+BitKeyBridge.exe --backup-minimum-files 5
+BitKeyBridge.exe --temp-retention-days 7
+```
+
+В **Operations → Housekeeping...** есть настройка policy, Dry Run, Run Now, открытие Incidents/Backups и управление protected storage.
+
+### Protected Storage ACL
+
+Добавлена проверка и явное hardening для:
+
+- `%ProgramData%\BitKeyBridge\Incidents`
+- `%ProgramData%\BitKeyBridge\Backups`
+- `%ProgramData%\BitKeyBridge\AuditSigningTransitions`
+
+CLI:
+
+```text
+BitKeyBridge.exe --storage-acl-status
+BitKeyBridge.exe --storage-acl-repair
+```
+
+Repair:
+- отключает inherited ACL;
+- оставляет SYSTEM и local Administrators с FullControl;
+- service identity получает только необходимый доступ;
+- для AuditSigningTransitions службе даётся только Read;
+- неожиданные Allow ACE считаются нарушением policy.
+
+Автоматического ACL repair у Windows Service нет: service/health только проверяет policy. Repair выполняется явно администратором.
+
+При смене service identity между LocalSystem / gMSA / domain account protected-storage ACL синхронизируется с новым account.
+
+Housekeeping и ACL status доступны в `/health/security`, `/metrics`, sanitized diagnostics и Windows Event Log без публикации recovery secrets, incident metadata, SID или service-account names.
+
+Application config теперь имеет **SchemaVersion 2**.
+
