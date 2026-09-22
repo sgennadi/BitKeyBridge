@@ -313,6 +313,7 @@ public static class WindowsServiceHost
             Stop();
 
         var storageAclPrepared = false;
+        var serviceIdentityChanged = false;
 
         try
         {
@@ -360,6 +361,8 @@ public static class WindowsServiceHost
                     "Failed to change the BitKeyBridge Windows Service identity.");
             }
 
+            serviceIdentityChanged = true;
+
             if (appConfig.StorageAclHardeningEnabled)
             {
                 var verification =
@@ -384,6 +387,7 @@ public static class WindowsServiceHost
         catch
         {
             if (storageAclPrepared &&
+                !serviceIdentityChanged &&
                 !string.IsNullOrWhiteSpace(
                     before.Identity))
             {
