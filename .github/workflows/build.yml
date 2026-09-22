@@ -74,7 +74,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release v'))
     needs: build
     runs-on: windows-latest
     steps:
@@ -86,7 +86,104 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Resolve release tag
+        id: release_meta
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+            $tag = "${{ github.ref_name }}"
+          }
+          else {
+            [xml]$project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
+            $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+            if (-not $version) { throw "Project version was not found." }
+            $tag = "v$version"
+          }
+
+          if ($tag -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: release
+
+      - name: Download x86
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: release
+
+      - name: Download ARM64
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: release
+
+      - name: Generate CycloneDX SBOM
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          dotnet tool install --tool-path .tools CycloneDX --version 6.2.0
+          $version = "${{ steps.release_meta.outputs.tag }}".TrimStart("v")
+          .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -spv 1.7 -sn BitKeyBridge -sv $version -st Application
+
+      - name: Generate SHA256SUMS
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: bash
+        run: |
+          cd release
+          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json > SHA256SUMS.txt
+
+      - name: Attest release provenance
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/BitKeyBridge-win-x64.zip
+            release/BitKeyBridge-win-x86.zip
+            release/BitKeyBridge-win-arm64.zip
+            release/BitKeyBridge.cdx.json
+            release/SHA256SUMS.txt
+
+      - name: Attest release SBOM
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/BitKeyBridge-win-x64.zip
+            release/BitKeyBridge-win-x86.zip
+            release/BitKeyBridge-win-arm64.zip
+          sbom-path: release/BitKeyBridge.cdx.json
+
+      - name: Create GitHub Release
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: cmd
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          gh release create $tag release/BitKeyBridge-win-x64.zip release/BitKeyBridge-win-x86.zip release/BitKeyBridge-win-arm64.zip release/BitKeyBridge.cdx.json release/SHA256SUMS.txt --repo "${{ github.repository }}" --target "${{ github.sha }}" --generate-notes --title "BitKeyBridge $tag"
+) {
+            throw "Resolved release tag is invalid: $tag"
+          }
+
+          $exists = $false
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            $exists = $true
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "Release tag: $tag"
+          Write-Host "Existing release: $exists"
+
       - name: Download x64
+        if: steps.release_meta.outputs.exists != 'true'
         uses: actions/download-artifact@v8
         with:
           name: BitKeyBridge-win-x64
