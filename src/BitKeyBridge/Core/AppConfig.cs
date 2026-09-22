@@ -2,7 +2,7 @@ namespace BitKeyBridge;
 
 public static class ConfigSchema
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 }
 
 public sealed class AppConfig
@@ -71,6 +71,15 @@ public sealed class AppConfig
     public bool AuditSigningEnabled { get; set; } = false;
     public string AuditSigningCertificateThumbprint { get; set; } = string.Empty;
     public int AuditSigningCertificateWarningDays { get; set; } = 90;
+
+    public bool HousekeepingEnabled { get; set; } = true;
+    public bool HousekeepingRunOnStart { get; set; } = true;
+    public int HousekeepingIntervalHours { get; set; } = 24;
+    public int IncidentRetentionDays { get; set; } = 0;
+    public int BackupRetentionDays { get; set; } = 90;
+    public int BackupMinimumFiles { get; set; } = 5;
+    public int TemporaryFileRetentionDays { get; set; } = 7;
+    public bool StorageAclHardeningEnabled { get; set; } = false;
 
     public int CoverageStaleIntuneDays { get; set; } = 30;
     public int CoverageOldCloudKeyDays { get; set; } = 365;
