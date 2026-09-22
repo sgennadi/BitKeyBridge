@@ -13,6 +13,7 @@ public sealed class StorageSecurityService
     private readonly string _transitionsDirectory;
     private readonly bool _serviceIdentityOverrideSpecified;
     private readonly string _serviceIdentityOverride;
+    private readonly string _statusPath;
 
     private sealed record DirectoryPolicy(
         string Name,
@@ -24,7 +25,8 @@ public sealed class StorageSecurityService
         string? incidentsDirectory = null,
         string? backupsDirectory = null,
         string? transitionsDirectory = null,
-        string? serviceIdentityOverride = null)
+        string? serviceIdentityOverride = null,
+        string? statusPath = null)
     {
         _incidentsDirectory =
             Path.GetFullPath(
@@ -43,6 +45,10 @@ public sealed class StorageSecurityService
             serviceIdentityOverride is not null;
         _serviceIdentityOverride =
             serviceIdentityOverride ?? string.Empty;
+        _statusPath =
+            Path.GetFullPath(
+                statusPath ??
+                AppPaths.StorageSecurityStatusFile);
     }
 
     public StorageSecurityStatus Check(
@@ -476,13 +482,13 @@ public sealed class StorageSecurityService
             value,
             StringComparison.OrdinalIgnoreCase);
 
-    private static void TryPersist(
+    private void TryPersist(
         StorageSecurityStatus status)
     {
         try
         {
             JsonStore.WriteAtomic(
-                AppPaths.StorageSecurityStatusFile,
+                _statusPath,
                 status);
         }
         catch
