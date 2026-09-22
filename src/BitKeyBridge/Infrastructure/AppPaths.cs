@@ -39,6 +39,8 @@ public static class AppPaths
     public static string AppSettingsFile => Path.Combine(MachineConfigDirectory, "appsettings.json");
     public static string ConfigMigrationStatusFile => Path.Combine(MachineConfigDirectory, "config_migration_status.json");
     public static string BackupsDirectory => Path.Combine(MachineConfigDirectory, "Backups");
+    public static string HousekeepingStatusFile => Path.Combine(MachineConfigDirectory, "housekeeping_status.json");
+    public static string StorageSecurityStatusFile => Path.Combine(MachineConfigDirectory, "storage_security_status.json");
     public static string ServiceInstallDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BitKeyBridge");
     public static string ServiceExecutable => Path.Combine(ServiceInstallDirectory, "BitKeyBridge.exe");
