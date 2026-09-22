@@ -39,7 +39,13 @@ public sealed class HealthService
             ConfigSchemaVersion =
                 _config.SchemaVersion,
             ConfigSchemaCurrentVersion =
-                ConfigSchema.CurrentVersion
+                ConfigSchema.CurrentVersion,
+            HousekeepingEnabled =
+                _config.HousekeepingEnabled,
+            HousekeepingIntervalHours =
+                _config.HousekeepingIntervalHours,
+            StorageAclHardeningEnabled =
+                _config.StorageAclHardeningEnabled
         };
 
         try
@@ -91,6 +97,135 @@ public sealed class HealthService
         catch (Exception ex)
         {
             snapshot.Warnings.Add("Service status: " + ex.Message);
+        }
+
+        try
+        {
+            var housekeeping =
+                new HousekeepingService()
+                    .ReadLastStatus();
+
+            if (housekeeping is not null)
+            {
+                snapshot.LastHousekeepingSuccess =
+                    housekeeping.Success;
+                snapshot.LastHousekeepingFinishedUtc =
+                    housekeeping.FinishedAtUtc;
+                snapshot.HousekeepingIncidentDeleted =
+                    housekeeping.IncidentDeleted;
+                snapshot.HousekeepingIncidentPreserved =
+                    housekeeping.IncidentPreserved;
+                snapshot.HousekeepingIncidentPreservedNotFullyRetained =
+                    housekeeping.IncidentPreservedNotFullyRetained;
+                snapshot.HousekeepingBackupDeleted =
+                    housekeeping.BackupDeleted;
+                snapshot.HousekeepingTemporaryFilesDeleted =
+                    housekeeping.TemporaryFilesDeleted;
+                snapshot.HousekeepingBytesFreed =
+                    housekeeping.BytesFreed;
+                snapshot.HousekeepingErrorCount =
+                    housekeeping.Errors.Count +
+                    housekeeping.IncidentErrors +
+                    housekeeping.BackupErrors +
+                    housekeeping.TemporaryFileErrors;
+
+                if (housekeeping.FinishedAtUtc != default)
+                {
+                    snapshot.LastHousekeepingAgeHours =
+                        Math.Max(
+                            0,
+                            (DateTime.UtcNow -
+                             housekeeping.FinishedAtUtc.ToUniversalTime())
+                            .TotalHours);
+                }
+
+                if (_config.HousekeepingEnabled &&
+                    !housekeeping.Success)
+                {
+                    snapshot.Warnings.Add(
+                        $"The last housekeeping run completed with {snapshot.HousekeepingErrorCount} error(s).");
+                }
+
+                var staleHours =
+                    Math.Max(
+                        2,
+                        Math.Clamp(
+                            _config.HousekeepingIntervalHours,
+                            1,
+                            168) * 2);
+
+                if (_config.HousekeepingEnabled &&
+                    snapshot.LastHousekeepingAgeHours is not null &&
+                    snapshot.LastHousekeepingAgeHours >
+                    staleHours)
+                {
+                    snapshot.Warnings.Add(
+                        $"Housekeeping status is stale ({snapshot.LastHousekeepingAgeHours:0.0} hours old).");
+                }
+            }
+            else if (_config.HousekeepingEnabled &&
+                     snapshot.ServiceInstalled)
+            {
+                snapshot.Warnings.Add(
+                    "Housekeeping is enabled but no completed housekeeping run is recorded yet.");
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.Warnings.Add(
+                "Housekeeping status: " +
+                ex.Message);
+        }
+
+        try
+        {
+            if (_config.StorageAclHardeningEnabled)
+            {
+                var storage =
+                    new StorageSecurityService()
+                        .Check();
+
+                snapshot.StorageAclInvalidDirectories =
+                    storage.Directories
+                        .Count(x => !x.Valid);
+                snapshot.StorageAclUnexpectedAllowRules =
+                    storage.Directories
+                        .Sum(x => x.UnexpectedAllowRules);
+
+                snapshot.StorageAclStatus =
+                    storage.Valid
+                        ? "Valid"
+                        : "Invalid";
+
+                if (!storage.Valid)
+                {
+                    snapshot.Errors.Add(
+                        $"Protected storage ACL validation failed. InvalidDirectories={snapshot.StorageAclInvalidDirectories}; UnexpectedAllowRules={snapshot.StorageAclUnexpectedAllowRules}; Errors={storage.Errors.Count}.");
+                }
+            }
+            else
+            {
+                snapshot.StorageAclStatus =
+                    "Disabled";
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.StorageAclStatus =
+                "Error";
+
+            if (_config.StorageAclHardeningEnabled)
+            {
+                snapshot.Errors.Add(
+                    "Protected storage ACL validation: " +
+                    ex.Message);
+            }
+            else
+            {
+                snapshot.Warnings.Add(
+                    "Protected storage ACL status: " +
+                    ex.Message);
+            }
         }
 
         try
