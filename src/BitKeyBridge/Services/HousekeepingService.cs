@@ -122,7 +122,7 @@ public sealed class HousekeepingService
         bool dryRun)
     {
         var files =
-            SafeEnumerateFiles(
+            EnumerateFilesOrThrow(
                 _incidentsDirectory,
                 "*.json")
                 .ToArray();
@@ -272,20 +272,28 @@ public sealed class HousekeepingService
                             0,
                             size);
 
-                    _ = audit.Write(
-                        "HousekeepingDeleteIncident",
-                        result:
-                            "Success",
-                        source:
-                            "Local",
-                        details:
-                            $"BundleSha256={bundleHash}; Actions={bundle.Actions.Count}; UpdatedAtUtc={effectiveUtc:O}; Verification=Valid; IntentHash={deletionIntent.EntryHash}",
-                        reference:
-                            bundle.Reference,
-                        reason:
-                            "Retention policy",
-                        correlationId:
-                            sessionId);
+                    var completion =
+                        audit.Write(
+                            "HousekeepingDeleteIncident",
+                            result:
+                                "Success",
+                            source:
+                                "Local",
+                            details:
+                                $"BundleSha256={bundleHash}; Actions={bundle.Actions.Count}; UpdatedAtUtc={effectiveUtc:O}; Verification=Valid; IntentHash={deletionIntent.EntryHash}",
+                            reference:
+                                bundle.Reference,
+                            reason:
+                                "Retention policy",
+                            correlationId:
+                                sessionId);
+
+                    if (completion is null)
+                    {
+                        result.IncidentErrors++;
+                        result.Warnings.Add(
+                            $"Incident {sessionId} was deleted after an authorized retention intent, but the completion audit record could not be written. IntentHash={deletionIntent.EntryHash}.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -330,7 +338,7 @@ public sealed class HousekeepingService
         bool dryRun)
     {
         var files =
-            SafeEnumerateFiles(
+            EnumerateFilesOrThrow(
                 _backupsDirectory,
                 "*.json")
                 .Select(path =>
@@ -457,7 +465,7 @@ public sealed class HousekeepingService
         foreach (var root in roots)
         {
             foreach (var path in
-                     SafeEnumerateFiles(
+                     EnumerateFilesOrThrow(
                          root,
                          "*.tmp"))
             {
@@ -500,7 +508,7 @@ public sealed class HousekeepingService
         }
     }
 
-    private static IEnumerable<string> SafeEnumerateFiles(
+    private static IEnumerable<string> EnumerateFilesOrThrow(
         string directory,
         string pattern)
     {
@@ -510,19 +518,12 @@ public sealed class HousekeepingService
             return [];
         }
 
-        try
-        {
-            return Directory
-                .EnumerateFiles(
-                    directory,
-                    pattern,
-                    SearchOption.TopDirectoryOnly)
-                .ToArray();
-        }
-        catch
-        {
-            return [];
-        }
+        return Directory
+            .EnumerateFiles(
+                directory,
+                pattern,
+                SearchOption.TopDirectoryOnly)
+            .ToArray();
     }
 
     private static string ComputeFileSha256(
