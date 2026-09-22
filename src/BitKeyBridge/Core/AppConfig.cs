@@ -84,7 +84,6 @@ public sealed class AppConfig
     // Optional privileged-access controls. All are disabled by default.
     public bool JitRecoveryEnabled { get; set; } = false;
     public int JitRecoveryGrantMinutes { get; set; } = 15;
-    public int JitRecoveryMaxUses { get; set; } = 10;
     public List<string> RbacJitGrantors { get; set; } = [];
 
     public bool TwoPersonApprovalEnabled { get; set; } = false;
