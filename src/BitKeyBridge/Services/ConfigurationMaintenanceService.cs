@@ -290,6 +290,18 @@ public sealed class ConfigurationMaintenanceService
 
             WriteStatusFile(
                 tempDirectory,
+                AppPaths.HousekeepingStatusFile,
+                "housekeeping-status.json",
+                result);
+
+            WriteStatusFile(
+                tempDirectory,
+                AppPaths.StorageSecurityStatusFile,
+                "storage-security-status.json",
+                result);
+
+            WriteStatusFile(
+                tempDirectory,
                 AppPaths.UpdateStatusFile,
                 "update-status.json",
                 result);
@@ -395,6 +407,36 @@ public sealed class ConfigurationMaintenanceService
         {
             throw new InvalidOperationException(
                 "MinimumRowsForDropGuard cannot be negative.");
+        }
+
+        if (config.HousekeepingIntervalHours is < 1 or > 168)
+        {
+            throw new InvalidOperationException(
+                "HousekeepingIntervalHours must be between 1 and 168.");
+        }
+
+        if (config.IncidentRetentionDays is < 0 or > 36500)
+        {
+            throw new InvalidOperationException(
+                "IncidentRetentionDays must be between 0 and 36500.");
+        }
+
+        if (config.BackupRetentionDays is < 0 or > 36500)
+        {
+            throw new InvalidOperationException(
+                "BackupRetentionDays must be between 0 and 36500.");
+        }
+
+        if (config.BackupMinimumFiles is < 0 or > 1000)
+        {
+            throw new InvalidOperationException(
+                "BackupMinimumFiles must be between 0 and 1000.");
+        }
+
+        if (config.TemporaryFileRetentionDays is < 0 or > 3650)
+        {
+            throw new InvalidOperationException(
+                "TemporaryFileRetentionDays must be between 0 and 3650.");
         }
 
         if (config.DefaultScopes.Any(x =>
