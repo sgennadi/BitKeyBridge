@@ -73,6 +73,20 @@ internal static class Program
             x.Equals("--config-restore", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--incident-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-run", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-dry-run", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-no-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-interval-hours", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--incident-retention-days", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--backup-retention-days", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--backup-minimum-files", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--temp-retention-days", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--storage-acl-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--storage-acl-repair", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--entra-cert-rollover", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -135,6 +149,9 @@ internal static class Program
             x.Equals("--config-backup", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--diagnostics-bundle", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--incident-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--housekeeping-dry-run", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--storage-acl-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -421,6 +438,64 @@ internal static class Program
 
             return RecoveryIncidentCliService.Verify(
                 incidentSessionId);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--housekeeping-status",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return HousekeepingCliService.ShowStatus(
+                config);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--housekeeping-dry-run",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return HousekeepingCliService.Run(
+                config,
+                dryRun: true);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--housekeeping-run",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return HousekeepingCliService.Run(
+                config,
+                dryRun: false);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--storage-acl-status",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return HousekeepingCliService.ShowStorageAclStatus(
+                config);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--storage-acl-repair",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return HousekeepingCliService.RepairStorageAcl(
+                config);
+        }
+
+        if (args.Any(x =>
+                x.Equals("--housekeeping-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--housekeeping-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--housekeeping-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--housekeeping-no-run-on-start", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--housekeeping-interval-hours", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--incident-retention-days", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--backup-retention-days", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--backup-minimum-files", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--temp-retention-days", StringComparison.OrdinalIgnoreCase)))
+        {
+            return HousekeepingCliService.ApplySettings(
+                config,
+                args);
         }
 
         if (args.Any(x => x.Equals(
@@ -1875,6 +1950,18 @@ internal static class Program
         Console.WriteLine("  --config-restore <path>    Validate and restore config; creates rollback backup");
         Console.WriteLine("  --diagnostics-bundle <zip> Create sanitized troubleshooting ZIP");
         Console.WriteLine("  --incident-verify <session-id> Verify incident bundle against retained audit hashes");
+        Console.WriteLine("  --housekeeping-status    Show housekeeping policy and last result");
+        Console.WriteLine("  --housekeeping-run       Run retention cleanup now");
+        Console.WriteLine("  --housekeeping-dry-run   Preview retention cleanup without deleting");
+        Console.WriteLine("  --housekeeping-enable|--housekeeping-disable");
+        Console.WriteLine("  --housekeeping-run-on-start|--housekeeping-no-run-on-start");
+        Console.WriteLine("  --housekeeping-interval-hours <1-168>");
+        Console.WriteLine("  --incident-retention-days <0-36500>  0 keeps incidents forever");
+        Console.WriteLine("  --backup-retention-days <0-36500>    0 keeps backups forever");
+        Console.WriteLine("  --backup-minimum-files <0-1000>");
+        Console.WriteLine("  --temp-retention-days <0-3650>       0 disables temp cleanup");
+        Console.WriteLine("  --storage-acl-status   Check Incidents/Backups/transition-history ACLs");
+        Console.WriteLine("  --storage-acl-repair   Harden storage ACLs and enable ACL health enforcement");
         Console.WriteLine("  --entra-cert-rollover    Add/test/switch Entra certificate; retain previous credential");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
