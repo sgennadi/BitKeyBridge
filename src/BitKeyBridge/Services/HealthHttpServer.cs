@@ -182,6 +182,32 @@ public sealed class HealthHttpServer : IDisposable
                         snapshot.RemoteApiCertificateDaysRemaining,
                     remoteApiKeyAccessStatus =
                         snapshot.RemoteApiKeyAccessStatus,
+                    housekeepingEnabled =
+                        snapshot.HousekeepingEnabled,
+                    housekeepingLastSuccess =
+                        snapshot.LastHousekeepingSuccess,
+                    housekeepingFinishedUtc =
+                        snapshot.LastHousekeepingFinishedUtc,
+                    housekeepingAgeHours =
+                        snapshot.LastHousekeepingAgeHours,
+                    housekeepingIncidentDeleted =
+                        snapshot.HousekeepingIncidentDeleted,
+                    housekeepingIncidentPreserved =
+                        snapshot.HousekeepingIncidentPreserved,
+                    housekeepingIncidentPreservedNotFullyRetained =
+                        snapshot.HousekeepingIncidentPreservedNotFullyRetained,
+                    housekeepingBackupDeleted =
+                        snapshot.HousekeepingBackupDeleted,
+                    housekeepingErrorCount =
+                        snapshot.HousekeepingErrorCount,
+                    storageAclHardeningEnabled =
+                        snapshot.StorageAclHardeningEnabled,
+                    storageAclStatus =
+                        snapshot.StorageAclStatus,
+                    storageAclInvalidDirectories =
+                        snapshot.StorageAclInvalidDirectories,
+                    storageAclUnexpectedAllowRules =
+                        snapshot.StorageAclUnexpectedAllowRules,
                     certificateStatus =
                         snapshot.CertificateStatus,
                     certificateExpires =
@@ -240,7 +266,9 @@ public sealed class HealthHttpServer : IDisposable
                     : path is "/health/security"
                         ? snapshot.AuditIntegrityStatus == "Invalid" ||
                           (_config.AuditSigningEnabled &&
-                           snapshot.AuditSigningStatus is not "Valid" and not "ValidCheckpointStale")
+                           snapshot.AuditSigningStatus is not "Valid" and not "ValidCheckpointStale") ||
+                          (_config.StorageAclHardeningEnabled &&
+                           snapshot.StorageAclStatus != "Valid")
                         : false;
 
             await WriteResponseAsync(
