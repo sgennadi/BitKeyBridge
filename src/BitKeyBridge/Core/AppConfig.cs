@@ -2,7 +2,7 @@ namespace BitKeyBridge;
 
 public static class ConfigSchema
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 }
 
 public sealed class AppConfig
@@ -80,6 +80,26 @@ public sealed class AppConfig
     public int BackupMinimumFiles { get; set; } = 5;
     public int TemporaryFileRetentionDays { get; set; } = 7;
     public bool StorageAclHardeningEnabled { get; set; } = false;
+
+    // Optional privileged-access controls. All are disabled by default.
+    public bool JitRecoveryEnabled { get; set; } = false;
+    public int JitRecoveryGrantMinutes { get; set; } = 15;
+    public int JitRecoveryMaxUses { get; set; } = 10;
+    public List<string> RbacJitGrantors { get; set; } = [];
+
+    public bool TwoPersonApprovalEnabled { get; set; } = false;
+    public int TwoPersonApprovalMinutes { get; set; } = 15;
+    public List<string> RbacRecoveryApprovers { get; set; } = [];
+
+    public bool SiemEnabled { get; set; } = false;
+    public string SiemMode { get; set; } = "FileJsonl";
+    public string SiemFilePath { get; set; } = string.Empty;
+    public string SiemWebhookUrl { get; set; } = string.Empty;
+    public string SiemClientCertificateThumbprint { get; set; } = string.Empty;
+    public int SiemWebhookTimeoutSeconds { get; set; } = 10;
+    public int SiemFlushIntervalMinutes { get; set; } = 1;
+    public int SiemMaxOutboxEvents { get; set; } = 5000;
+    public bool SiemFailClosed { get; set; } = false;
 
     public int CoverageStaleIntuneDays { get; set; } = 30;
     public int CoverageOldCloudKeyDays { get; set; } = 365;
