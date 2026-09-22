@@ -302,6 +302,18 @@ public sealed class ConfigurationMaintenanceService
 
             WriteStatusFile(
                 tempDirectory,
+                AppPaths.PrivilegedAccessStatusFile,
+                "privileged-access-status.json",
+                result);
+
+            WriteStatusFile(
+                tempDirectory,
+                AppPaths.SiemStatusFile,
+                "siem-status.json",
+                result);
+
+            WriteStatusFile(
+                tempDirectory,
                 AppPaths.UpdateStatusFile,
                 "update-status.json",
                 result);
@@ -437,6 +449,65 @@ public sealed class ConfigurationMaintenanceService
         {
             throw new InvalidOperationException(
                 "TemporaryFileRetentionDays must be between 0 and 3650.");
+        }
+
+        if (config.JitRecoveryGrantMinutes is < 1 or > 1440)
+        {
+            throw new InvalidOperationException(
+                "JitRecoveryGrantMinutes must be between 1 and 1440.");
+        }
+
+        if (config.TwoPersonApprovalMinutes is < 1 or > 1440)
+        {
+            throw new InvalidOperationException(
+                "TwoPersonApprovalMinutes must be between 1 and 1440.");
+        }
+
+        if (config.SiemWebhookTimeoutSeconds is < 2 or > 120)
+        {
+            throw new InvalidOperationException(
+                "SiemWebhookTimeoutSeconds must be between 2 and 120.");
+        }
+
+        if (config.SiemFlushIntervalMinutes is < 1 or > 1440)
+        {
+            throw new InvalidOperationException(
+                "SiemFlushIntervalMinutes must be between 1 and 1440.");
+        }
+
+        if (config.SiemMaxOutboxEvents is < 100 or > 100000)
+        {
+            throw new InvalidOperationException(
+                "SiemMaxOutboxEvents must be between 100 and 100000.");
+        }
+
+        if (config.SiemEnabled)
+        {
+            var mode =
+                SiemForwardingService.NormalizeMode(
+                    config.SiemMode);
+
+            if (mode is not "FileJsonl" and not "Webhook")
+            {
+                throw new InvalidOperationException(
+                    "SiemMode must be FileJsonl or Webhook.");
+            }
+
+            if (mode == "Webhook")
+            {
+                if (!Uri.TryCreate(
+                        config.SiemWebhookUrl,
+                        UriKind.Absolute,
+                        out var uri) ||
+                    !string.Equals(
+                        uri.Scheme,
+                        Uri.UriSchemeHttps,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "Enabled SIEM webhook mode requires a valid HTTPS SiemWebhookUrl.");
+                }
+            }
         }
 
         if (config.DefaultScopes.Any(x =>
