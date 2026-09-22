@@ -72,6 +72,10 @@ public sealed class AuditService
                     JsonSerializer.Serialize(entry) +
                     Environment.NewLine);
 
+                SiemForwardingService
+                    .TryQueueFromAudit(
+                        entry);
+
                 return entry;
             }
             catch
