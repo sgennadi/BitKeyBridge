@@ -87,6 +87,35 @@ internal static class Program
             x.Equals("--temp-retention-days", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--storage-acl-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--storage-acl-repair", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--privileged-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-grant", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-revoke", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-minutes", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-grantor-add", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-grantor-remove", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-approve", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-deny", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-minutes", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approver-add", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approver-remove", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-flush", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-mode", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-file", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-webhook", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-client-cert", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-timeout-seconds", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-flush-minutes", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-max-outbox", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-fail-closed", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-fail-open", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--entra-cert-rollover", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
@@ -152,13 +181,23 @@ internal static class Program
             x.Equals("--housekeeping-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--housekeeping-dry-run", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--storage-acl-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--privileged-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-status", StringComparison.OrdinalIgnoreCase));
         var currentUserVaultCommand = args.Any(x =>
             x.Equals("--vault-save-user", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--vault-delete-user", StringComparison.OrdinalIgnoreCase));
+        var identityBoundCommand = args.Any(x =>
+            x.Equals("--jit-grant", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--jit-revoke", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-approve", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--approval-deny", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--siem-flush", StringComparison.OrdinalIgnoreCase));
         if (!noElevation &&
             !readOnlyStatusCommand &&
             !currentUserVaultCommand &&
+            !identityBoundCommand &&
             !SecurityContext.IsAdministrator())
         {
             if (!Environment.UserInteractive)
@@ -438,6 +477,180 @@ internal static class Program
 
             return RecoveryIncidentCliService.Verify(
                 incidentSessionId);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--privileged-status",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return PrivilegedAccessCliService.ShowStatus(
+                config);
+        }
+
+        var jitSubject =
+            GetOptionValue(
+                args,
+                "--jit-grant");
+        if (args.Any(x => x.Equals(
+                "--jit-grant",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    jitSubject))
+            {
+                Console.Error.WriteLine(
+                    "--jit-grant requires <DOMAIN\\user|group|SID>.");
+                return 2;
+            }
+
+            return PrivilegedAccessCliService.GrantJit(
+                config,
+                jitSubject,
+                GetOptionValue(
+                    args,
+                    "--jit-reason"));
+        }
+
+        var jitGrantId =
+            GetOptionValue(
+                args,
+                "--jit-revoke");
+        if (args.Any(x => x.Equals(
+                "--jit-revoke",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    jitGrantId))
+            {
+                Console.Error.WriteLine(
+                    "--jit-revoke requires <grant-id>.");
+                return 2;
+            }
+
+            return PrivilegedAccessCliService.RevokeJit(
+                config,
+                jitGrantId,
+                GetOptionValue(
+                    args,
+                    "--jit-reason"));
+        }
+
+        var approvalStatusSession =
+            GetOptionValue(
+                args,
+                "--approval-status");
+        if (args.Any(x => x.Equals(
+                "--approval-status",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    approvalStatusSession))
+            {
+                Console.Error.WriteLine(
+                    "--approval-status requires <session-id>.");
+                return 2;
+            }
+
+            return PrivilegedAccessCliService.ShowApproval(
+                config,
+                approvalStatusSession);
+        }
+
+        var approvalApproveSession =
+            GetOptionValue(
+                args,
+                "--approval-approve");
+        if (args.Any(x => x.Equals(
+                "--approval-approve",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    approvalApproveSession))
+            {
+                Console.Error.WriteLine(
+                    "--approval-approve requires <session-id>.");
+                return 2;
+            }
+
+            return PrivilegedAccessCliService.DecideApproval(
+                config,
+                approvalApproveSession,
+                approved: true,
+                GetOptionValue(
+                    args,
+                    "--approval-comment"));
+        }
+
+        var approvalDenySession =
+            GetOptionValue(
+                args,
+                "--approval-deny");
+        if (args.Any(x => x.Equals(
+                "--approval-deny",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    approvalDenySession))
+            {
+                Console.Error.WriteLine(
+                    "--approval-deny requires <session-id>.");
+                return 2;
+            }
+
+            return PrivilegedAccessCliService.DecideApproval(
+                config,
+                approvalDenySession,
+                approved: false,
+                GetOptionValue(
+                    args,
+                    "--approval-comment"));
+        }
+
+        if (args.Any(x => x.Equals(
+                "--siem-status",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return PrivilegedAccessCliService.ShowSiemStatus(
+                config);
+        }
+
+        if (args.Any(x => x.Equals(
+                "--siem-flush",
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return PrivilegedAccessCliService
+                .FlushSiemAsync(
+                    config)
+                .GetAwaiter()
+                .GetResult();
+        }
+
+        if (args.Any(x =>
+                x.Equals("--jit-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--jit-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--jit-minutes", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--jit-grantor-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--jit-grantor-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--approval-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--approval-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--approval-minutes", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--approver-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--approver-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-enable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-disable", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-mode", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-file", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-webhook", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-client-cert", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-timeout-seconds", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-flush-minutes", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-max-outbox", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-fail-closed", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--siem-fail-open", StringComparison.OrdinalIgnoreCase)))
+        {
+            return PrivilegedAccessCliService.ApplySettings(
+                config,
+                args);
         }
 
         if (args.Any(x => x.Equals(
@@ -2241,6 +2454,29 @@ internal static class Program
         Console.WriteLine("  --temp-retention-days <0-3650>       0 disables temp cleanup");
         Console.WriteLine("  --storage-acl-status   Check Incidents/Backups/transition-history ACLs");
         Console.WriteLine("  --storage-acl-repair   Harden storage ACLs and enable ACL health enforcement");
+        Console.WriteLine("  --privileged-status    Show JIT / two-person approval / SIEM status");
+        Console.WriteLine("  --jit-enable|--jit-disable");
+        Console.WriteLine("  --jit-minutes <1-1440> Time-limited recovery grant lifetime");
+        Console.WriteLine("  --jit-grantor-add <principal>|--jit-grantor-remove <principal>");
+        Console.WriteLine("  --jit-grant <principal> [--jit-reason <text>]");
+        Console.WriteLine("  --jit-revoke <grant-id> [--jit-reason <text>]");
+        Console.WriteLine("  --approval-enable|--approval-disable");
+        Console.WriteLine("  --approval-minutes <1-1440> Approval request lifetime");
+        Console.WriteLine("  --approver-add <principal>|--approver-remove <principal>");
+        Console.WriteLine("  --approval-status <session-id>");
+        Console.WriteLine("  --approval-approve <session-id> [--approval-comment <text>]");
+        Console.WriteLine("  --approval-deny <session-id> [--approval-comment <text>]");
+        Console.WriteLine("  --siem-enable|--siem-disable");
+        Console.WriteLine("  --siem-mode <FileJsonl|Webhook>");
+        Console.WriteLine("  --siem-file <path>");
+        Console.WriteLine("  --siem-webhook <https-url>");
+        Console.WriteLine("  --siem-client-cert <thumbprint>");
+        Console.WriteLine("  --siem-timeout-seconds <2-120>");
+        Console.WriteLine("  --siem-flush-minutes <1-1440>");
+        Console.WriteLine("  --siem-max-outbox <100-100000>");
+        Console.WriteLine("  --siem-fail-closed|--siem-fail-open");
+        Console.WriteLine("  --siem-status");
+        Console.WriteLine("  --siem-flush");
         Console.WriteLine("  --entra-cert-rollover    Add/test/switch Entra certificate; retain previous credential");
         Console.WriteLine("  --ad-auto             Use domain-joined workstation/DC auto discovery");
         Console.WriteLine("  --ad-server <host>    Use an explicit DC (standalone/workstation mode)");
