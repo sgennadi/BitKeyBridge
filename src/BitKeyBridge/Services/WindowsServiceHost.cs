@@ -524,6 +524,9 @@ public static class WindowsServiceHost
             if (config.ServiceCoverageEnabled)
                 workers.Add(RunCoverageWorkerAsync(config, ct));
 
+            if (config.HousekeepingEnabled)
+                workers.Add(RunHousekeepingWorkerAsync(config, ct));
+
             await Task.WhenAll(workers);
         }
         finally
@@ -702,6 +705,103 @@ public static class WindowsServiceHost
 
             await Task.Delay(
                 TimeSpan.FromHours(24),
+                ct);
+        }
+    }
+
+    private static async Task RunHousekeepingWorkerAsync(
+        AppConfig config,
+        CancellationToken ct)
+    {
+        var first = true;
+
+        while (!ct.IsCancellationRequested)
+        {
+            if (!first ||
+                config.HousekeepingRunOnStart)
+            {
+                try
+                {
+                    if (config.StorageAclHardeningEnabled)
+                    {
+                        var storage =
+                            new StorageSecurityService()
+                                .Check();
+
+                        if (!storage.Valid)
+                        {
+                            var invalid =
+                                storage.Directories
+                                    .Count(x => !x.Valid);
+
+                            _serviceLog?.Error(
+                                $"Storage ACL validation failed. InvalidDirectories={invalid}; Errors={storage.Errors.Count}.");
+
+                            WindowsEventLogService.TryWrite(
+                                $"Storage ACL validation failed. InvalidDirectories={invalid}; Errors={storage.Errors.Count}. " +
+                                "Run --storage-acl-status or --storage-acl-repair as administrator.",
+                                EventLogSeverity.Warning,
+                                4621,
+                                "StorageSecurity");
+                        }
+                    }
+
+                    var status =
+                        new HousekeepingService()
+                            .Run(
+                                config,
+                                dryRun: false);
+
+                    if (status.Success)
+                    {
+                        _serviceLog?.Info(
+                            $"Scheduled housekeeping completed. " +
+                            $"IncidentsDeleted={status.IncidentDeleted}; " +
+                            $"IncidentsPreserved={status.IncidentPreserved}; " +
+                            $"BackupsDeleted={status.BackupDeleted}; " +
+                            $"TempDeleted={status.TemporaryFilesDeleted}; " +
+                            $"BytesFreed={status.BytesFreed}.");
+                    }
+                    else
+                    {
+                        _serviceLog?.Error(
+                            $"Scheduled housekeeping completed with errors. " +
+                            $"IncidentErrors={status.IncidentErrors}; " +
+                            $"BackupErrors={status.BackupErrors}; " +
+                            $"TempErrors={status.TemporaryFileErrors}; " +
+                            $"Errors={status.Errors.Count}.");
+                    }
+                }
+                catch (OperationCanceledException)
+                    when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _serviceLog?.Error(
+                        "Scheduled housekeeping exception: " +
+                        ex);
+
+                    WindowsEventLogService.TryWrite(
+                        "Scheduled housekeeping exception: " +
+                        ex.Message,
+                        EventLogSeverity.Error,
+                        4639,
+                        "Housekeeping");
+                }
+            }
+
+            first = false;
+
+            var hours =
+                Math.Clamp(
+                    config.HousekeepingIntervalHours,
+                    1,
+                    168);
+
+            await Task.Delay(
+                TimeSpan.FromHours(hours),
                 ct);
         }
     }
