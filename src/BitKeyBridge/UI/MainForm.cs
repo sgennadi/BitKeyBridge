@@ -970,6 +970,16 @@ public sealed class MainForm : Form
                 allowRotationReminder: false);
             if (context is null) return;
 
+            if (!AuthorizePrivilegedRecoveryAccess(
+                    context,
+                    "RevealLocalRecoveryKey",
+                    row.ComputerName,
+                    row.BitLockerId,
+                    "AD"))
+            {
+                return;
+            }
+
             ToggleKey(_localKey, _localShow);
             WriteRecoveryAudit(
                 "RevealLocalRecoveryKey",
@@ -1000,6 +1010,16 @@ public sealed class MainForm : Form
                 row.ComputerName,
                 allowRotationReminder: false);
             if (context is null) return;
+
+            if (!AuthorizePrivilegedRecoveryAccess(
+                    context,
+                    "CopyLocalRecoveryKey",
+                    row.ComputerName,
+                    row.BitLockerId,
+                    "AD"))
+            {
+                return;
+            }
 
             WriteRecoveryAudit(
                 "CopyLocalRecoveryKey",
@@ -1300,6 +1320,16 @@ public sealed class MainForm : Form
                 allowRotationReminder: true);
             if (context is null) return;
 
+            if (!AuthorizePrivilegedRecoveryAccess(
+                    context,
+                    "RevealCloudRecoveryKey",
+                    row.ComputerName,
+                    row.RecoveryId,
+                    "Entra"))
+            {
+                return;
+            }
+
             ToggleKey(_cloudKey, _cloudShow);
             WriteRecoveryAudit(
                 "RevealCloudRecoveryKey",
@@ -1332,6 +1362,16 @@ public sealed class MainForm : Form
                 row.ComputerName,
                 allowRotationReminder: true);
             if (context is null) return;
+
+            if (!AuthorizePrivilegedRecoveryAccess(
+                    context,
+                    "CopyCloudRecoveryKey",
+                    row.ComputerName,
+                    row.RecoveryId,
+                    "Entra"))
+            {
+                return;
+            }
 
             WriteRecoveryAudit(
                 "CopyCloudRecoveryKey",
@@ -1861,6 +1901,16 @@ public sealed class MainForm : Form
             row.ComputerName,
             allowRotationReminder: true);
         if (context is null) return;
+
+        if (!AuthorizePrivilegedRecoveryAccess(
+                context,
+                "GetCloudRecoveryKey",
+                row.ComputerName,
+                row.RecoveryId,
+                "Entra"))
+        {
+            return;
+        }
 
         if (!await EnsureCloudTokenAsync()) return;
 
@@ -4524,6 +4574,96 @@ public sealed class MainForm : Form
             "BitKeyBridge RBAC",
             MessageBoxButtons.OK,
             MessageBoxIcon.Warning);
+
+        return false;
+    }
+
+    private bool AuthorizePrivilegedRecoveryAccess(
+        RecoveryAccessContext context,
+        string action,
+        string computerName,
+        string recoveryId,
+        string source)
+    {
+        PrivilegedAccessDecision decision;
+
+        try
+        {
+            decision =
+                new PrivilegedAccessPolicyService(
+                    _config)
+                    .EvaluateRecoveryAccess(
+                        context,
+                        computerName,
+                        recoveryId,
+                        source,
+                        _audit);
+        }
+        catch (Exception ex)
+        {
+            decision =
+                new PrivilegedAccessDecision
+                {
+                    Allowed = false,
+                    Status =
+                        "PolicyError",
+                    Message =
+                        ex.Message
+                };
+        }
+
+        if (decision.Allowed)
+            return true;
+
+        WriteRecoveryAudit(
+            action,
+            context,
+            result:
+                "Denied",
+            computerName:
+                computerName,
+            recoveryId:
+                recoveryId,
+            source:
+                source,
+            details:
+                $"PrivilegedPolicy={decision.Status}; JIT={decision.Jit.Status}; Approval={decision.Approval.Status}; SIEM={decision.SiemStatus}; Message={decision.Message}");
+
+        WindowsEventLogService.TryWrite(
+            $"Privileged recovery policy denied {action}. Status={decision.Status}; " +
+            $"Computer={computerName}; RecoveryId={recoveryId}; Source={source}; " +
+            $"Session={context.SessionId}.",
+            EventLogSeverity.Warning,
+            4651,
+            "PrivilegedAccess");
+
+        var message =
+            decision.Message;
+
+        if (decision.Status ==
+            "ApprovalPending")
+        {
+            message +=
+                Environment.NewLine +
+                Environment.NewLine +
+                "Session ID:" +
+                Environment.NewLine +
+                context.SessionId +
+                Environment.NewLine +
+                Environment.NewLine +
+                "A second authorized Windows user can approve this session from BitKeyBridge Privileged Access settings or with --approval-approve.";
+        }
+
+        MessageBox.Show(
+            this,
+            message,
+            "Privileged Recovery Access",
+            MessageBoxButtons.OK,
+            decision.Status is
+                "ApprovalPending" or
+                "JitRequired"
+                ? MessageBoxIcon.Information
+                : MessageBoxIcon.Warning);
 
         return false;
     }
