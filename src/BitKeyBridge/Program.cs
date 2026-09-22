@@ -1913,7 +1913,14 @@ internal static class Program
                         preservedPath) ||
                     housekeepingAuditEntries.All(x =>
                         x.Action !=
-                        "HousekeepingDeleteIncident"))
+                        "HousekeepingDeleteIncidentPlan") ||
+                    housekeepingAuditEntries.All(x =>
+                        x.Action !=
+                        "HousekeepingDeleteIncident" ||
+                        !string.Equals(
+                            x.Result,
+                            "Success",
+                            StringComparison.OrdinalIgnoreCase)))
                 {
                     failures.Add(
                         "Evidence-aware housekeeping retention failed.");
