@@ -598,6 +598,9 @@ public static class WindowsServiceHost
             if (config.HousekeepingEnabled)
                 workers.Add(RunHousekeepingWorkerAsync(config, ct));
 
+            if (config.SiemEnabled)
+                workers.Add(RunSiemWorkerAsync(config, ct));
+
             await Task.WhenAll(workers);
         }
         finally
@@ -776,6 +779,75 @@ public static class WindowsServiceHost
 
             await Task.Delay(
                 TimeSpan.FromHours(24),
+                ct);
+        }
+    }
+
+    private static async Task RunSiemWorkerAsync(
+        AppConfig config,
+        CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var status =
+                    await new SiemForwardingService(
+                            config)
+                        .FlushAsync(
+                            ct);
+
+                if (status.Ready &&
+                    string.IsNullOrWhiteSpace(
+                        status.LastError))
+                {
+                    _serviceLog?.Info(
+                        $"SIEM flush completed. Mode={status.Mode}; Batch={status.LastBatchCount}; Pending={status.PendingEvents}.");
+                }
+                else
+                {
+                    _serviceLog?.Error(
+                        $"SIEM flush not ready. Mode={status.Mode}; Pending={status.PendingEvents}; Error={status.LastError}");
+
+                    WindowsEventLogService.TryWrite(
+                        $"SIEM flush not ready. Mode={status.Mode}; Pending={status.PendingEvents}; Error={status.LastError}",
+                        config.SiemFailClosed
+                            ? EventLogSeverity.Error
+                            : EventLogSeverity.Warning,
+                        4649,
+                        "SIEM");
+                }
+            }
+            catch (OperationCanceledException)
+                when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _serviceLog?.Error(
+                    "SIEM flush exception: " +
+                    ex);
+
+                WindowsEventLogService.TryWrite(
+                    "SIEM flush exception: " +
+                    ex.Message,
+                    config.SiemFailClosed
+                        ? EventLogSeverity.Error
+                        : EventLogSeverity.Warning,
+                    4648,
+                    "SIEM");
+            }
+
+            var minutes =
+                Math.Clamp(
+                    config.SiemFlushIntervalMinutes,
+                    1,
+                    1440);
+
+            await Task.Delay(
+                TimeSpan.FromMinutes(
+                    minutes),
                 ct);
         }
     }
