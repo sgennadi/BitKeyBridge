@@ -109,7 +109,10 @@ jobs:
 
           $exists = $false
           gh release view $tag --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseViewExitCode = $LASTEXITCODE
+          $global:LASTEXITCODE = 0
+
+          if ($releaseViewExitCode -eq 0) {
             $exists = $true
           }
 
