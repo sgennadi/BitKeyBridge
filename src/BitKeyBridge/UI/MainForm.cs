@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BitKeyBridge;
 
-public sealed class MainForm : Form
+public sealed class MainForm : DpiAwareForm
 {
     private readonly AppConfig _config;
     private readonly ActiveDirectoryService _ad;
@@ -112,7 +112,8 @@ public sealed class MainForm : Form
                 WindowsEventLogService.EnsureSource();
         }
         catch { }
-        Text = "BitKeyBridge 0.15.0 (.NET)";
+        var assemblyVersion = GetType().Assembly.GetName().Version;
+        Text = $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
@@ -129,6 +130,8 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(BuildUnifiedTab());
         tabs.TabPages.Add(BuildCloudTab());
         tabs.TabPages.Add(BuildAuditTab());
+        foreach (TabPage tabPage in tabs.TabPages)
+            tabPage.AutoScroll = true;
         Controls.Add(tabs);
 
         LoadDirectorySettings();
@@ -695,21 +698,34 @@ public sealed class MainForm : Form
         var configureRbac = new Button
         {
             Text = "RBAC...",
-            Left = 735,
+            Left = 620,
             Top = 43,
-            Width = 150,
+            Width = 120,
+            Height = 34
+        };
+        var privilegedAccess = new Button
+        {
+            Text = "Privileged Access...",
+            Left = 750,
+            Top = 43,
+            Width = 160,
             Height = 34
         };
         var saveHelpdesk = new Button
         {
             Text = "Save Helpdesk Settings",
-            Left = 905,
+            Left = 920,
             Top = 43,
-            Width = 205,
+            Width = 190,
             Height = 34
         };
-        helpdeskGroup.Controls.AddRange([configureRbac, saveHelpdesk]);
+        helpdeskGroup.Controls.AddRange([
+            configureRbac,
+            privilegedAccess,
+            saveHelpdesk
+        ]);
         configureRbac.Click += (_, _) => ConfigureRbacFromGui();
+        privilegedAccess.Click += (_, _) => ConfigurePrivilegedAccessFromGui();
         saveHelpdesk.Click += (_, _) => SaveOperationsSettings();
 
         var maintenanceGroup = new GroupBox
@@ -2305,7 +2321,7 @@ public sealed class MainForm : Form
 
     private void ConfigureCoveragePolicyFromGui()
     {
-        using var dialog = new Form
+        using var dialog = new DpiAwareForm
         {
             Text = "Coverage Policy",
             StartPosition = FormStartPosition.CenterParent,
@@ -2929,6 +2945,21 @@ public sealed class MainForm : Form
             "BitKeyBridge RBAC",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
+    }
+
+    private void ConfigurePrivilegedAccessFromGui()
+    {
+        using var dialog =
+            new PrivilegedAccessSettingsDialog(
+                _config);
+
+        if (dialog.ShowDialog(this) !=
+            DialogResult.OK)
+        {
+            return;
+        }
+
+        RefreshDashboard();
     }
 
     private void LoadOperationsSettings()
