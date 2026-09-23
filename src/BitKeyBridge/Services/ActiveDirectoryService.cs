@@ -467,6 +467,104 @@ public sealed class ActiveDirectoryService
         return rows;
     }
 
+    public List<RecoverySearchResult> SearchRecoveryMetadataInScope(
+        string server,
+        BitLockerScope scope,
+        string recoveryIdQuery,
+        int maximumItems = 200)
+    {
+        var query =
+            (recoveryIdQuery ?? string.Empty)
+                .Trim()
+                .Trim('{', '}');
+
+        if (string.IsNullOrWhiteSpace(query))
+            return [];
+
+        var escaped =
+            EscapeLdapFilter(query);
+
+        using var connection =
+            CreateConnection(server);
+
+        // msFVE-RecoveryInformation object CNs include the recovery GUID.
+        // Searching the CN server-side avoids enumerating every recovery
+        // object in a large OU just to match a partial Recovery ID.
+        var request =
+            new SearchRequest(
+                scope.SearchBase,
+                $"(&(objectClass=msFVE-RecoveryInformation)(name=*{escaped}*))",
+                SearchScope.Subtree,
+                "msFVE-RecoveryGuid",
+                "whenCreated");
+
+        var rows =
+            new List<RecoverySearchResult>();
+
+        foreach (var entry in
+                 SendPaged(
+                     connection,
+                     request))
+        {
+            var guidBytes =
+                entry.Attributes["msFVE-RecoveryGuid"] is
+                    { Count: > 0 } guidAttr
+                    ? guidAttr[0] as byte[]
+                    : null;
+
+            if (guidBytes is not { Length: 16 })
+                continue;
+
+            var recoveryId =
+                new Guid(
+                    guidBytes)
+                    .ToString("D");
+
+            if (!recoveryId.Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            rows.Add(
+                new RecoverySearchResult
+                {
+                    ComputerName =
+                        GetParentComputerName(
+                            entry.DistinguishedName),
+                    RecoveryId =
+                        recoveryId,
+                    CreatedDateTime =
+                        ParseLdapDateTime(
+                            GetString(
+                                entry,
+                                "whenCreated")),
+                    Source =
+                        "AD Live",
+                    ComputerDistinguishedName =
+                        GetParentDistinguishedName(
+                            entry.DistinguishedName),
+                    RecoveryDistinguishedName =
+                        entry.DistinguishedName
+                });
+
+            if (rows.Count >=
+                Math.Clamp(
+                    maximumItems,
+                    1,
+                    5000))
+            {
+                break;
+            }
+        }
+
+        return rows
+            .OrderByDescending(
+                x => x.CreatedDateTime)
+            .ToList();
+    }
+
     public List<AdRecoveryMetadata> GetRecoveryMetadata(
         string server,
         BitLockerScope scope,
