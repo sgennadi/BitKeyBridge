@@ -1,1417 +1,531 @@
 # BitKeyBridge
 
-Native Windows BitLocker recovery utility for helpdesk and administrators. The GUI is intentionally helpdesk-first: **Recovery** finds BitLocker recovery information, **Devices** combines AD/Entra/Intune inventory, and administrative/service/security functions stay out of the way unless the current Windows identity is authorized for the Administration UI.
+BitKeyBridge is a native Windows BitLocker recovery utility for helpdesk and administrators. It searches recovery metadata in on-premises Active Directory and Microsoft Entra ID / Intune, retrieves the actual recovery password only when the operator explicitly requests it, and keeps recovery access auditable.
 
-The application is written in **C# / .NET 10 LTS / WinForms**. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
+The application is written in **C# / .NET 10 / WinForms**. Runtime operation does not use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
 
-The release is a **self-contained .NET single-file Windows executable**, not NativeAOT. "Native" here means the application calls Windows/LDAP/Graph APIs directly instead of shelling out to PowerShell. This keeps WinForms, DirectoryServices, and enterprise debugging/support straightforward.
+Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## Highlights
+## What changed in 0.17.0
 
-- Self-contained single-file Windows builds for x64, x86, and ARM64 (`BitKeyBridge.exe` in each architecture package).
-- GUI, native Windows Service host, and non-interactive CLI in the same executable.
-- Reads `msFVE-RecoveryInformation` directly over LDAP v3 using the current Windows credentials.
-- No destructive AD operations. The exporter never deletes or changes BitLocker objects.
-- Dynamic domain-controller discovery; no hard-coded DC names.
-- AD replication-health view and recovery-object count comparison across current DCs.
-- Configurable OU scopes with a GUI OU browser.
-- Atomic verified CSV publishing with partial-export, empty-export, row-drop, and scope-change safety guards.
-- Last-success and status JSON files for monitoring.
-- Unified Recovery workspace with **Live AD** and **Local cache** sources.
-- Live AD and local-cache search are metadata-only; recovery passwords are read only for the exact selected record after an explicit **Reveal Recovery Key** or **Copy Key** action.
-- Single-result recovery card with Computer, OU/scope, Recovery ID, timestamp, source, and audited on-demand key access.
-- Automatic AD connection on GUI start plus remembered recovery OU/source.
-- Microsoft Graph BitLocker metadata search.
-- Recovery password requested from Entra only on explicit **Get Key** action.
-- Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
-- Zero-registration first-run Entra setup using Microsoft's first-party Device Code bootstrap; no pre-created App Registration, PowerShell, or Graph SDK is required.
-- Unified **Devices** search across on-prem AD, Entra BitLocker metadata, and Intune managed devices; AD-only search still works when Graph is not configured or unavailable.
-- Role-aware navigation: helpdesk gets Recovery + Devices; authorized BitKeyBridge administrators also get Administration + Health & Audit.
-- Responsive core WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, and text-scaling resilience.
-- Intune BitLocker recovery-key rotation with explicit confirmation.
-- Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
-- Certificate rolling preserves active credentials when the previously managed private certificate is available.
-- Health Dashboard with service/export/replication/certificate status.
-- Native Windows Service mode with scheduled exports and no PowerShell dependency.
-- Loopback-only JSON health endpoint for monitoring systems.
-- Secure Output Wizard for protected NTFS recovery storage and optional restricted SMB shares.
-- Verified self-update from GitHub Releases with architecture matching, SHA-256 verification, staged `--self-test`, rollback, and GUI/service replacement.
-- Windows Event Log integration for service, export, update, and Remote API lifecycle events.
-- Optional TLS Remote API with one-time bearer-token provisioning and Windows Firewall integration for Domain/Private profiles only.
-- Native Windows Service failure-recovery policy with automatic restart after transient crashes.
-- Optional helpdesk recovery workflow with ticket/reference, reason, structured audit, and post-recovery Intune rotation reminder.
-- CodeQL scanning, Dependabot, CycloneDX SBOM generation, and GitHub build/SBOM attestations for tagged releases.
+The GUI is intentionally simplified around the real helpdesk workflow.
 
-## Platform
-
-- Primary Windows Server / domain-controller build: **win-x64**. Additional **win-x86** and **win-arm64** packages are produced for Windows devices that need those architectures.
-- .NET is not required on the destination machine when using the self-contained release build.
-- AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
-- Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
-
-## First run
-
-Run `BitKeyBridge.exe`. Administrative rights are requested only for operations that require them.
-
-The default helpdesk workflow is intentionally short:
-
-1. Open **Recovery**. With **Live AD** selected, BitKeyBridge automatically attempts to connect to a writable domain controller on startup.
-2. On the first run, choose **Select / Change OU...** and select a specific OU or **Entire domain**. BitKeyBridge remembers the selected scope.
-3. Enter a computer name or BitLocker Recovery ID and click **Search BitLocker**.
-4. Search returns metadata only. If exactly one record is found, BitKeyBridge opens the selected-record card directly.
-5. Click **Reveal Recovery Key** or **Copy Key** only when needed. The exact recovery password is then retrieved on demand after RBAC, JIT and two-person-approval policy checks.
-
-Use the **Source** selector to switch from **Live AD** to **Local cache**. Local cache uses the recovery export CSV as an offline fallback but still searches metadata first and reads only the selected password on demand.
-
-Most helpdesk users never need connection internals. **Advanced connection settings...** contains explicit DC/FQDN, LDAP/LDAPS, standalone/workgroup credentials, protected credential storage, and the Auto-connect setting.
-
-### GUI sections
-
-- **Recovery** — BitLocker recovery lookup and on-demand key reveal/copy.
-- **Devices** — AD device search with optional Entra/Intune enrichment, Entra recovery-key retrieval, and Intune key rotation.
-- **Administration** — visible only to local Windows Administrators or principals configured in `RbacAdministrators`; contains Cloud configuration, security/settings, export and automation.
-- **Health & Audit** — visible to the same administrator role; contains service/health, domain-controller comparison, and audit controls.
+- **Recovery** — search BitLocker metadata by computer name or Recovery ID and retrieve the selected password only on Reveal/Copy.
+- **Devices** — one AD device search with optional Entra/Intune enrichment, Entra recovery-key retrieval, and Intune key rotation.
+- **Administration** — Cloud, security/settings, export, and automation. Visible only to authorized BitKeyBridge administrators.
+- **Health & Audit** — service/health, domain-controller comparison, and security audit. Visible to the same administrator role.
 - **Tools** — consolidated shortcuts for export files/logs/folders, Windows Event Log, and the latest GitHub release.
 
-Machine configuration is stored at:
-
-```text
-%ProgramData%\BitKeyBridge\appsettings.json
-```
-
-Per-user Entra authentication metadata is stored at:
-
-```text
-%LOCALAPPDATA%\BitKeyBridge\cloud_auth_config.json
-```
-
-Passwords and recovery passwords are never written to the cloud-auth config.
-
-## CLI
-
-Normal export for Task Scheduler:
-
-```text
-BitKeyBridge.exe --cli
-```
-
-Dry run:
-
-```text
-BitKeyBridge.exe --dry-run
-```
-
-Intentional publish after reviewing a scope change or large row-count reduction:
-
-```text
-BitKeyBridge.exe --cli --force-publish
-```
-
-Metadata-only BitLocker coverage report:
-
-```text
-BitKeyBridge.exe --coverage
-```
-
-For unattended Task Scheduler or monitoring jobs, certificate authentication can be selected explicitly. Tenant ID, Client ID, and certificate thumbprint are identifiers rather than passwords, so they may be supplied per run when the scheduled identity does not use the same per-user cloud config:
-
-```text
-BitKeyBridge.exe --coverage --cloud-auth Certificate --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
-```
-
-Coverage writes `bitlocker_coverage.csv` and `bitlocker_coverage.json` by default under the configured BitKeyBridge output directory. Override them with `--coverage-output`, `--coverage-csv`, or `--coverage-json`.
-
-Monitoring policies can turn detected gaps into process exit codes:
-
-```text
-BitKeyBridge.exe --coverage --cloud-auth Certificate --coverage-fail-no-key --coverage-fail-unencrypted --coverage-fail-stale
-```
-
-Exit code 20 means at least one device has no recovery metadata, 21 means Intune reports at least one managed device as not encrypted, and 22 means at least one Intune device is stale. General execution/configuration failures continue to use exit code 1 or 2. These reports contain metadata only and never request the 48-digit recovery password.
-
-For Windows Service / LocalSystem / gMSA scenarios, copy only the non-secret Entra identifiers into the machine configuration after the LocalMachine certificate exists:
-
-```text
-BitKeyBridge.exe --cloud-machine-save --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
-BitKeyBridge.exe --cloud-machine-status
-```
-
-This creates:
-
-```text
-%ProgramData%\BitKeyBridge\cloud_auth_machine.json
-```
-
-The machine cloud file contains Tenant ID, Client ID, certificate thumbprint, and `Certificate` auth mode only. It does not contain a password, access token, refresh token, or certificate private key. The referenced certificate must exist with a private key in `LocalMachine\My`.
-
-Use it explicitly from CLI:
-
-```text
-BitKeyBridge.exe --coverage --coverage-machine-config
-```
-
-Enable native Windows Service coverage scheduling after the machine cloud config is ready:
-
-```text
-BitKeyBridge.exe --service-coverage-enable --service-coverage-interval 1440 --service-coverage-run-on-start
-```
-
-Scheduled Coverage has its own interval and does not change the normal AD recovery export interval. It writes metadata-only reports under the configured output directory's `Coverage` subdirectory and publishes its latest machine-readable status to `%ProgramData%\BitKeyBridge\coverage_status.json`.
-
-Run offline smoke tests (no AD/Graph access):
-
-```text
-BitKeyBridge.exe --self-test
-```
-
-Test all currently discovered domain controllers:
-
-```text
-BitKeyBridge.exe --dc-test
-```
-
-Show the local health snapshot as JSON:
-
-```text
-BitKeyBridge.exe --health
-```
-
-Install/update and start the native Windows Service:
-
-```text
-BitKeyBridge.exe --install-service
-```
-
-Service lifecycle commands:
-
-```text
-BitKeyBridge.exe --service-status
-BitKeyBridge.exe --start-service
-BitKeyBridge.exe --stop-service
-BitKeyBridge.exe --uninstall-service
-```
-
-Update commands:
-
-```text
-BitKeyBridge.exe --check-update
-BitKeyBridge.exe --update
-```
-
-`--check-update` is read-only and does not require elevation. `--update` downloads the matching architecture package, verifies SHA-256, extracts the new executable, runs its offline self-test, and then launches an elevated temporary update helper.
-
-Override the saved scopes for one run (repeat the option for multiple OUs):
-
-```text
-BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
-```
-
-## Workstation and standalone operation
-
-BitKeyBridge separates the **computer that runs the application** from the **domain controller and output location**.
-
-In **Recovery → Advanced connection settings...**:
-
-- **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
-- **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
-- Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
-- LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
-- The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
-- **Connect to AD** validates LDAP/RootDSE before live recovery and device operations.
-- Export storage is configured separately under **Administration → Export & Automation**. The output root can be local or UNC; leaving `OutputRoot` empty uses `%ProgramData%\\BitKeyBridge\\RecoveryExport`.
-
-Standalone CLI example:
-
-```text
-BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --ad-ldaps
-```
-
-Standalone export example:
-
-```text
-BitKeyBridge.exe --cli --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --output-root "\\fileserver\secure\BitLocker"
-```
-
-There is intentionally no plaintext `--ad-password` option because command-line arguments can be exposed through process inspection and logs.
-
-The native Windows Service does not persist a session-only AD password. For unattended service operation, use a Windows service identity that already has the required AD permissions; the default installer currently registers the service as LocalSystem.
-
-## Credential Vault and Windows Service identity
-
-BitKeyBridge supports three explicit AD credential storage modes:
-
-- **Session only** — the password exists only in the current BitKeyBridge process and is cleared when the process exits.
-- **Current User - Credential Manager** — the credential is stored by Windows Credential Manager for the current Windows user. This mode is intended for interactive GUI/CLI use.
-- **Machine / Service - DPAPI** — the credential is encrypted with Windows DPAPI using machine scope and stored at `%ProgramData%\BitKeyBridge\Secrets\ad-machine.cred`. The directory/file ACL is protected so only LocalSystem and local Administrators have access by default.
-
-The machine vault uses both DPAPI machine binding and a restrictive NTFS ACL. Moving the encrypted blob to another computer does not make it usable there.
-
-BitKeyBridge never writes the plaintext AD password to `appsettings.json`, JSONL audit, Windows Event Log, release assets, or command-line arguments.
-
-The native Windows Service can run as:
-
-- **LocalSystem** — useful with integrated machine credentials or the Machine / Service DPAPI vault.
-- **gMSA / managed service account** — configured without a password. The account name must normally end in `# BitKeyBridge
-
-Native Windows administration utility for BitLocker recovery information in on-premises Active Directory and Microsoft Entra ID / Intune.
-
-The application is written in **C# / .NET 10 LTS / WinForms**. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
-
-The release is a **self-contained .NET single-file Windows executable**, not NativeAOT. "Native" here means the application calls Windows/LDAP/Graph APIs directly instead of shelling out to PowerShell. This keeps WinForms, DirectoryServices, and enterprise debugging/support straightforward.
+The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / Unified Devices pages are no longer part of the active UI.
 
 ## Highlights
 
-- Self-contained single-file Windows builds for x64, x86, and ARM64 (`BitKeyBridge.exe` in each architecture package).
-- GUI, native Windows Service host, and non-interactive CLI in the same executable.
-- Reads `msFVE-RecoveryInformation` directly over LDAP v3 using the current Windows credentials.
-- No destructive AD operations. The exporter never deletes or changes BitLocker objects.
-- Dynamic domain-controller discovery; no hard-coded DC names.
-- AD replication-health view and recovery-object count comparison across current DCs.
-- Configurable OU scopes with a GUI OU browser.
-- Atomic verified CSV publishing with partial-export, empty-export, row-drop, and scope-change safety guards.
-- Last-success and status JSON files for monitoring.
-- Local recovery search with masked key display and timed clipboard clearing.
-- Microsoft Graph BitLocker metadata search.
-- Recovery password requested from Entra only on explicit **Get Key** action.
-- Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
-- Zero-registration first-run Entra setup using Microsoft's first-party Device Code bootstrap; no pre-created App Registration, PowerShell, or Graph SDK is required.
-- Unified device search across on-prem AD, Entra BitLocker metadata, and Intune managed devices.
-- Intune BitLocker recovery-key rotation with explicit confirmation.
-- Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
-- Certificate rolling preserves active credentials when the previously managed private certificate is available.
-- Health Dashboard with service/export/replication/certificate status.
-- Native Windows Service mode with scheduled exports and no PowerShell dependency.
-- Loopback-only JSON health endpoint for monitoring systems.
-- Secure Output Wizard for protected NTFS recovery storage and optional restricted SMB shares.
-- Verified self-update from GitHub Releases with architecture matching, SHA-256 verification, staged `--self-test`, rollback, and GUI/service replacement.
-- Windows Event Log integration for service, export, update, and Remote API lifecycle events.
-- Optional TLS Remote API with one-time bearer-token provisioning and Windows Firewall integration for Domain/Private profiles only.
-- Native Windows Service failure-recovery policy with automatic restart after transient crashes.
-- Optional helpdesk recovery workflow with ticket/reference, reason, structured audit, and post-recovery Intune rotation reminder.
-- CodeQL scanning, Dependabot, CycloneDX SBOM generation, and GitHub build/SBOM attestations for tagged releases.
+- Live Active Directory recovery lookup over LDAP v3.
+- Dynamic writable-DC discovery; no hard-coded DC names.
+- Explicit DC / standalone / workgroup operation with optional protected AD credentials.
+- Configurable OU scope with remembered last OU and **Entire domain** support.
+- **Live AD** and **Local cache** in the same Recovery workspace.
+- Metadata-only search: normal search does not read or retain the 48-digit recovery password.
+- Exact on-demand password retrieval only after RBAC/JIT/approval checks.
+- Single-result recovery card with computer, scope, Recovery ID, timestamp, source, and explicit Reveal/Copy actions.
+- Automatic AD connection on GUI startup, enabled by default.
+- AD-only Devices search works even when Microsoft Graph is not configured or temporarily unavailable.
+- Optional Entra/Intune enrichment and recovery-key rotation.
+- Device Code, legacy ROPC, and app-registration + certificate Graph authentication.
+- Zero-registration first-run Entra setup with native Graph calls.
+- Role-aware GUI navigation.
+- Responsive WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, text scaling, and smaller displays.
+- Native Windows Service for scheduled export / coverage.
+- Metadata-only AD + Entra + Intune BitLocker Coverage reporting.
+- Tamper-evident JSONL recovery audit with optional signed checkpoints.
+- Optional JIT recovery, two-person approval, and SIEM forwarding — all disabled by default.
+- Optional TLS Remote API with scoped bearer tokens.
+- Credential storage using Current User Credential Manager or machine-scope DPAPI with restricted ACL.
+- Verified self-update from GitHub Releases with SHA-256 checks, self-test, rollback, SBOM, and attestations.
+- Release automation removes stale `release/*` branches only after preserving any unmerged branch tip under an `archive/*` tag.
 
 ## Platform
 
-- Primary Windows Server / domain-controller build: **win-x64**. Additional **win-x86** and **win-arm64** packages are produced for Windows devices that need those architectures.
-- .NET is not required on the destination machine when using the self-contained release build.
-- AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
-- Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
+- Windows 11 / Windows Server environments supported by .NET 10 WinForms.
+- Primary server/domain-controller release: **win-x64**.
+- Additional **win-x86** and **win-arm64** packages are published.
+- Destination machines do not need a separate .NET installation when using the self-contained release package.
+- AD features work on a domain controller, domain-joined workstation, or standalone/workgroup Windows computer.
+- Entra / Intune features do not require domain membership.
 
 ## First run
 
-Run `BitKeyBridge.exe` as an administrator. The app self-elevates through UAC when required.
-
-On a clean public build, no organization-specific OU is embedded. In the **Export** tab:
-
-1. Click **Add OU...**.
-2. Select one or more OUs.
-3. Click **Save defaults**.
-4. Run **Dry Run** first.
-5. Review the DC comparison and security warning before publishing.
-
-Machine configuration is stored at:
+Run:
 
 ```text
-%ProgramData%\BitKeyBridge\appsettings.json
+BitKeyBridge.exe
 ```
 
-Per-user Entra authentication metadata is stored at:
+The normal helpdesk workflow is:
+
+1. Open **Recovery**.
+2. Keep **Live AD** selected. BitKeyBridge attempts to connect to a writable DC automatically.
+3. On first use, choose **Select / Change OU...** and select an OU or **Entire domain**.
+4. Enter a computer name or Recovery ID.
+5. Click **Search BitLocker**.
+6. Search returns metadata only.
+7. Select the result. If exactly one result is found, BitKeyBridge goes directly to the selected-record card.
+8. Use **Reveal Recovery Key** or **Copy Key** only when the password is actually required.
+
+The selected recovery password is fetched only after the authorization / privileged-access checks pass.
+
+### Local cache fallback
+
+Change **Source** from **Live AD** to **Local cache**.
+
+Local cache uses the administrative recovery-export CSV, but the GUI still searches metadata first and reads only the exact selected password on demand.
+
+The default export location is:
 
 ```text
-%LOCALAPPDATA%\BitKeyBridge\cloud_auth_config.json
+%ProgramData%\BitKeyBridge\RecoveryExport
 ```
 
-Passwords and recovery passwords are never written to the cloud-auth config.
+There is no SYSVOL or forced `BL` subdirectory default.
 
-## CLI
+## GUI sections
 
-Normal export for Task Scheduler:
+### Recovery
+
+The main helpdesk screen contains only the normal recovery workflow.
+
+**Advanced connection settings...** contains:
+
+- Auto or Explicit DC mode
+- DC/FQDN
+- domain
+- LDAP / LDAPS port
+- explicit AD credentials
+- Credential Manager / machine DPAPI storage selection
+- Auto-connect on startup
+
+Export paths are intentionally not on the Recovery screen.
+
+### Devices
+
+Search by:
+
+- computer name
+- serial number
+- user / UPN
+- Entra device ID
+- Intune managed-device ID
+
+When Microsoft Graph is connected, results merge AD, Entra BitLocker metadata, and Intune inventory.
+
+When Graph is unavailable, the same page continues with AD-only results.
+
+For Entra recovery access, choose a Recovery ID and explicitly retrieve the key. Intune rotation always requires a separate confirmed action.
+
+### Administration
+
+Visible to:
+
+- local Windows Administrators, or
+- users/groups listed in `RbacAdministrators`.
+
+Contains:
+
+- **Cloud** — Entra / Intune authentication and App Registration management
+- **Security & Settings** — verified updates, Remote API, RBAC, privileged-access policy, diagnostics
+- **Export & Automation** — output storage, export scopes, offline cache export
+
+### Health & Audit
+
+Contains:
+
+- Windows Service / health configuration
+- domain-controller comparison and replication diagnostics
+- tamper-evident recovery audit controls
+
+### Tools
+
+The Tools menu consolidates shortcuts that used to occupy separate buttons:
+
+- recovery export CSV
+- export log
+- export folder
+- Windows Event Log
+- latest GitHub release
+
+## Active Directory connection
+
+For domain-joined machines, Auto mode discovers a writable domain controller and normally uses the current Windows identity.
+
+For standalone/workgroup operation, open **Recovery → Advanced connection settings...** and configure an explicit DC.
+
+Supported credential modes:
+
+- **Session only** — password exists only in the current BitKeyBridge process.
+- **Current User - Credential Manager** — interactive-user storage.
+- **Machine / Service - DPAPI** — machine-bound DPAPI blob under ProgramData with restricted ACL.
+
+BitKeyBridge does not provide a plaintext `--ad-password` CLI argument.
+
+Secure interactive CLI example:
 
 ```text
-BitKeyBridge.exe --cli
+BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\admin --ad-password-prompt --ad-ldaps
 ```
 
-Dry run:
-
-```text
-BitKeyBridge.exe --dry-run
-```
-
-Intentional publish after reviewing a scope change or large row-count reduction:
-
-```text
-BitKeyBridge.exe --cli --force-publish
-```
-
-Run offline smoke tests (no AD/Graph access):
-
-```text
-BitKeyBridge.exe --self-test
-```
-
-Test all currently discovered domain controllers:
-
-```text
-BitKeyBridge.exe --dc-test
-```
-
-Show the local health snapshot as JSON:
-
-```text
-BitKeyBridge.exe --health
-```
-
-Install/update and start the native Windows Service:
-
-```text
-BitKeyBridge.exe --install-service
-```
-
-Service lifecycle commands:
-
-```text
-BitKeyBridge.exe --service-status
-BitKeyBridge.exe --start-service
-BitKeyBridge.exe --stop-service
-BitKeyBridge.exe --uninstall-service
-```
-
-Update commands:
-
-```text
-BitKeyBridge.exe --check-update
-BitKeyBridge.exe --update
-```
-
-`--check-update` is read-only and does not require elevation. `--update` downloads the matching architecture package, verifies SHA-256, extracts the new executable, runs its offline self-test, and then launches an elevated temporary update helper.
-
-Override the saved scopes for one run (repeat the option for multiple OUs):
-
-```text
-BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
-```
-
-## Workstation and standalone operation
-
-BitKeyBridge separates the **computer that runs the application** from the **domain controller and output location**.
-
-In **Directory Connection**:
-
-- **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
-- **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
-- Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
-- LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
-- The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
-- **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
-
-Standalone CLI example:
-
-```text
-BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --ad-ldaps
-```
-
-Standalone export example:
-
-```text
-BitKeyBridge.exe --cli --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --output-root "\\fileserver\secure\BitLocker"
-```
-
-There is intentionally no plaintext `--ad-password` option because command-line arguments can be exposed through process inspection and logs.
-
-The native Windows Service does not persist a session-only AD password. For unattended service operation, use a Windows service identity that already has the required AD permissions; the default installer currently registers the service as LocalSystem.
-
-- **gMSA / managed service account** — configured without a password. The account name must normally end in `# BitKeyBridge
-
-Native Windows administration utility for BitLocker recovery information in on-premises Active Directory and Microsoft Entra ID / Intune.
-
-The application is written in **C# / .NET 10 LTS / WinForms**. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
-
-The release is a **self-contained .NET single-file Windows executable**, not NativeAOT. "Native" here means the application calls Windows/LDAP/Graph APIs directly instead of shelling out to PowerShell. This keeps WinForms, DirectoryServices, and enterprise debugging/support straightforward.
-
-## Highlights
-
-- Self-contained single-file Windows builds for x64, x86, and ARM64 (`BitKeyBridge.exe` in each architecture package).
-- GUI, native Windows Service host, and non-interactive CLI in the same executable.
-- Reads `msFVE-RecoveryInformation` directly over LDAP v3 using the current Windows credentials.
-- No destructive AD operations. The exporter never deletes or changes BitLocker objects.
-- Dynamic domain-controller discovery; no hard-coded DC names.
-- AD replication-health view and recovery-object count comparison across current DCs.
-- Configurable OU scopes with a GUI OU browser.
-- Atomic verified CSV publishing with partial-export, empty-export, row-drop, and scope-change safety guards.
-- Last-success and status JSON files for monitoring.
-- Local recovery search with masked key display and timed clipboard clearing.
-- Microsoft Graph BitLocker metadata search.
-- Recovery password requested from Entra only on explicit **Get Key** action.
-- Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
-- Zero-registration first-run Entra setup using Microsoft's first-party Device Code bootstrap; no pre-created App Registration, PowerShell, or Graph SDK is required.
-- Unified device search across on-prem AD, Entra BitLocker metadata, and Intune managed devices.
-- Intune BitLocker recovery-key rotation with explicit confirmation.
-- Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
-- Certificate rolling preserves active credentials when the previously managed private certificate is available.
-- Health Dashboard with service/export/replication/certificate status.
-- Native Windows Service mode with scheduled exports and no PowerShell dependency.
-- Loopback-only JSON health endpoint for monitoring systems.
-- Secure Output Wizard for protected NTFS recovery storage and optional restricted SMB shares.
-- Verified self-update from GitHub Releases with architecture matching, SHA-256 verification, staged `--self-test`, rollback, and GUI/service replacement.
-- Windows Event Log integration for service, export, update, and Remote API lifecycle events.
-- Optional TLS Remote API with one-time bearer-token provisioning and Windows Firewall integration for Domain/Private profiles only.
-- Native Windows Service failure-recovery policy with automatic restart after transient crashes.
-- Optional helpdesk recovery workflow with ticket/reference, reason, structured audit, and post-recovery Intune rotation reminder.
-- CodeQL scanning, Dependabot, CycloneDX SBOM generation, and GitHub build/SBOM attestations for tagged releases.
-
-## Platform
-
-- Primary Windows Server / domain-controller build: **win-x64**. Additional **win-x86** and **win-arm64** packages are produced for Windows devices that need those architectures.
-- .NET is not required on the destination machine when using the self-contained release build.
-- AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
-- Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
-
-## First run
-
-Run `BitKeyBridge.exe` as an administrator. The app self-elevates through UAC when required.
-
-On a clean public build, no organization-specific OU is embedded. In the **Export** tab:
-
-1. Click **Add OU...**.
-2. Select one or more OUs.
-3. Click **Save defaults**.
-4. Run **Dry Run** first.
-5. Review the DC comparison and security warning before publishing.
-
-Machine configuration is stored at:
-
-```text
-%ProgramData%\BitKeyBridge\appsettings.json
-```
-
-Per-user Entra authentication metadata is stored at:
-
-```text
-%LOCALAPPDATA%\BitKeyBridge\cloud_auth_config.json
-```
-
-Passwords and recovery passwords are never written to the cloud-auth config.
-
-## CLI
-
-Normal export for Task Scheduler:
-
-```text
-BitKeyBridge.exe --cli
-```
-
-Dry run:
-
-```text
-BitKeyBridge.exe --dry-run
-```
-
-Intentional publish after reviewing a scope change or large row-count reduction:
-
-```text
-BitKeyBridge.exe --cli --force-publish
-```
-
-Metadata-only BitLocker coverage report:
-
-```text
-BitKeyBridge.exe --coverage
-```
-
-For unattended Task Scheduler or monitoring jobs, certificate authentication can be selected explicitly. Tenant ID, Client ID, and certificate thumbprint are identifiers rather than passwords, so they may be supplied per run when the scheduled identity does not use the same per-user cloud config:
-
-```text
-BitKeyBridge.exe --coverage --cloud-auth Certificate --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
-```
-
-Coverage writes `bitlocker_coverage.csv` and `bitlocker_coverage.json` by default under the configured BitKeyBridge output directory. Override them with `--coverage-output`, `--coverage-csv`, or `--coverage-json`.
-
-Monitoring policies can turn detected gaps into process exit codes:
-
-```text
-BitKeyBridge.exe --coverage --cloud-auth Certificate --coverage-fail-no-key --coverage-fail-unencrypted --coverage-fail-stale
-```
-
-Exit code 20 means at least one device has no recovery metadata, 21 means Intune reports at least one managed device as not encrypted, and 22 means at least one Intune device is stale. General execution/configuration failures continue to use exit code 1 or 2. These reports contain metadata only and never request the 48-digit recovery password.
-
-Run offline smoke tests (no AD/Graph access):
-
-```text
-BitKeyBridge.exe --self-test
-```
-
-Test all currently discovered domain controllers:
-
-```text
-BitKeyBridge.exe --dc-test
-```
-
-Show the local health snapshot as JSON:
-
-```text
-BitKeyBridge.exe --health
-```
-
-Install/update and start the native Windows Service:
-
-```text
-BitKeyBridge.exe --install-service
-```
-
-Service lifecycle commands:
-
-```text
-BitKeyBridge.exe --service-status
-BitKeyBridge.exe --start-service
-BitKeyBridge.exe --stop-service
-BitKeyBridge.exe --uninstall-service
-```
-
-Update commands:
-
-```text
-BitKeyBridge.exe --check-update
-BitKeyBridge.exe --update
-```
-
-`--check-update` is read-only and does not require elevation. `--update` downloads the matching architecture package, verifies SHA-256, extracts the new executable, runs its offline self-test, and then launches an elevated temporary update helper.
-
-Override the saved scopes for one run (repeat the option for multiple OUs):
-
-```text
-BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
-```
-
-## Workstation and standalone operation
-
-BitKeyBridge separates the **computer that runs the application** from the **domain controller and output location**.
-
-In **Directory Connection**:
-
-- **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
-- **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
-- Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
-- LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
-- The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
-- **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
-
-Standalone CLI example:
-
-```text
-BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --ad-ldaps
-```
-
-Standalone export example:
-
-```text
-BitKeyBridge.exe --cli --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --output-root "\\fileserver\secure\BitLocker"
-```
-
-There is intentionally no plaintext `--ad-password` option because command-line arguments can be exposed through process inspection and logs.
-
-The native Windows Service does not persist a session-only AD password. For unattended service operation, use a Windows service identity that already has the required AD permissions; the default installer currently registers the service as LocalSystem.
-
-## Credential Vault and Windows Service identity
-
-BitKeyBridge supports three explicit AD credential storage modes:
-
-- **Session only** — the password exists only in the current BitKeyBridge process and is cleared when the process exits.
-- **Current User - Credential Manager** — the credential is stored by Windows Credential Manager for the current Windows user. This mode is intended for interactive GUI/CLI use.
-- **Machine / Service - DPAPI** — the credential is encrypted with Windows DPAPI using machine scope and stored at `%ProgramData%\BitKeyBridge\Secrets\ad-machine.cred`. The directory/file ACL is protected so only LocalSystem and local Administrators have access by default.
-
-The machine vault uses both DPAPI machine binding and a restrictive NTFS ACL. Moving the encrypted blob to another computer does not make it usable there.
-
-BitKeyBridge never writes the plaintext AD password to `appsettings.json`, JSONL audit, Windows Event Log, release assets, or command-line arguments.
-
-The native Windows Service can run as:
-
-- **LocalSystem** — useful with integrated machine credentials or the Machine / Service DPAPI vault.
-- **gMSA / managed service account** — configured without a password. The account name must normally end in `# BitKeyBridge
-
-Native Windows administration utility for BitLocker recovery information in on-premises Active Directory and Microsoft Entra ID / Intune.
-
-The application is written in **C# / .NET 10 LTS / WinForms**. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
-
-The release is a **self-contained .NET single-file Windows executable**, not NativeAOT. "Native" here means the application calls Windows/LDAP/Graph APIs directly instead of shelling out to PowerShell. This keeps WinForms, DirectoryServices, and enterprise debugging/support straightforward.
-
-## Highlights
-
-- Self-contained single-file Windows builds for x64, x86, and ARM64 (`BitKeyBridge.exe` in each architecture package).
-- GUI, native Windows Service host, and non-interactive CLI in the same executable.
-- Reads `msFVE-RecoveryInformation` directly over LDAP v3 using the current Windows credentials.
-- No destructive AD operations. The exporter never deletes or changes BitLocker objects.
-- Dynamic domain-controller discovery; no hard-coded DC names.
-- AD replication-health view and recovery-object count comparison across current DCs.
-- Configurable OU scopes with a GUI OU browser.
-- Atomic verified CSV publishing with partial-export, empty-export, row-drop, and scope-change safety guards.
-- Last-success and status JSON files for monitoring.
-- Local recovery search with masked key display and timed clipboard clearing.
-- Microsoft Graph BitLocker metadata search.
-- Recovery password requested from Entra only on explicit **Get Key** action.
-- Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
-- Zero-registration first-run Entra setup using Microsoft's first-party Device Code bootstrap; no pre-created App Registration, PowerShell, or Graph SDK is required.
-- Unified device search across on-prem AD, Entra BitLocker metadata, and Intune managed devices.
-- Intune BitLocker recovery-key rotation with explicit confirmation.
-- Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
-- Certificate rolling preserves active credentials when the previously managed private certificate is available.
-- Health Dashboard with service/export/replication/certificate status.
-- Native Windows Service mode with scheduled exports and no PowerShell dependency.
-- Loopback-only JSON health endpoint for monitoring systems.
-- Secure Output Wizard for protected NTFS recovery storage and optional restricted SMB shares.
-- Verified self-update from GitHub Releases with architecture matching, SHA-256 verification, staged `--self-test`, rollback, and GUI/service replacement.
-- Windows Event Log integration for service, export, update, and Remote API lifecycle events.
-- Optional TLS Remote API with one-time bearer-token provisioning and Windows Firewall integration for Domain/Private profiles only.
-- Native Windows Service failure-recovery policy with automatic restart after transient crashes.
-- Optional helpdesk recovery workflow with ticket/reference, reason, structured audit, and post-recovery Intune rotation reminder.
-- CodeQL scanning, Dependabot, CycloneDX SBOM generation, and GitHub build/SBOM attestations for tagged releases.
-
-## Platform
-
-- Primary Windows Server / domain-controller build: **win-x64**. Additional **win-x86** and **win-arm64** packages are produced for Windows devices that need those architectures.
-- .NET is not required on the destination machine when using the self-contained release build.
-- AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
-- Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
-
-## First run
-
-Run `BitKeyBridge.exe` as an administrator. The app self-elevates through UAC when required.
-
-On a clean public build, no organization-specific OU is embedded. In the **Export** tab:
-
-1. Click **Add OU...**.
-2. Select one or more OUs.
-3. Click **Save defaults**.
-4. Run **Dry Run** first.
-5. Review the DC comparison and security warning before publishing.
-
-Machine configuration is stored at:
-
-```text
-%ProgramData%\BitKeyBridge\appsettings.json
-```
-
-Per-user Entra authentication metadata is stored at:
-
-```text
-%LOCALAPPDATA%\BitKeyBridge\cloud_auth_config.json
-```
-
-Passwords and recovery passwords are never written to the cloud-auth config.
-
-## CLI
-
-Normal export for Task Scheduler:
-
-```text
-BitKeyBridge.exe --cli
-```
-
-Dry run:
-
-```text
-BitKeyBridge.exe --dry-run
-```
-
-Intentional publish after reviewing a scope change or large row-count reduction:
-
-```text
-BitKeyBridge.exe --cli --force-publish
-```
-
-Run offline smoke tests (no AD/Graph access):
-
-```text
-BitKeyBridge.exe --self-test
-```
-
-Test all currently discovered domain controllers:
-
-```text
-BitKeyBridge.exe --dc-test
-```
-
-Show the local health snapshot as JSON:
-
-```text
-BitKeyBridge.exe --health
-```
-
-Install/update and start the native Windows Service:
-
-```text
-BitKeyBridge.exe --install-service
-```
-
-Service lifecycle commands:
-
-```text
-BitKeyBridge.exe --service-status
-BitKeyBridge.exe --start-service
-BitKeyBridge.exe --stop-service
-BitKeyBridge.exe --uninstall-service
-```
-
-Update commands:
-
-```text
-BitKeyBridge.exe --check-update
-BitKeyBridge.exe --update
-```
-
-`--check-update` is read-only and does not require elevation. `--update` downloads the matching architecture package, verifies SHA-256, extracts the new executable, runs its offline self-test, and then launches an elevated temporary update helper.
-
-Override the saved scopes for one run (repeat the option for multiple OUs):
-
-```text
-BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
-```
-
-## Workstation and standalone operation
-
-BitKeyBridge separates the **computer that runs the application** from the **domain controller and output location**.
-
-In **Directory Connection**:
-
-- **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
-- **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
-- Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
-- LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
-- The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
-- **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
-
-Standalone CLI example:
-
-```text
-BitKeyBridge.exe --ad-test --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --ad-ldaps
-```
-
-Standalone export example:
-
-```text
-BitKeyBridge.exe --cli --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\\admin --ad-password-prompt --output-root "\\fileserver\secure\BitLocker"
-```
-
-There is intentionally no plaintext `--ad-password` option because command-line arguments can be exposed through process inspection and logs.
-
-, and the host must already be authorized in Active Directory to retrieve the managed password.
-- **Regular domain service account** — BitKeyBridge prompts for the password only while changing the SCM configuration. The password is handed directly to Windows Service Control Manager and is not saved by BitKeyBridge.
-
-The interactive Current User vault is intentionally blocked for unattended service operation. Use the Machine / Service vault, or run the service under a domain/gMSA identity and use integrated AD credentials.
-
-CLI examples:
-
-```text
-BitKeyBridge.exe --ad-user EXAMPLE\admin --vault-save-user
-BitKeyBridge.exe --ad-user EXAMPLE\svc-bitlocker --vault-save-machine
-BitKeyBridge.exe --vault-status
-BitKeyBridge.exe --service-identity-gmsa EXAMPLE\BitKeyBridgeSvc$
-BitKeyBridge.exe --service-identity-local-system
-```
-
-There is no plaintext password command-line option.
+A non-admin helpdesk session can still use connection settings in memory even when it cannot persist machine-wide appsettings.
 
 ## Microsoft Entra / Intune
 
-**Administration → Cloud** supports:
+Configure Microsoft Graph under **Administration → Cloud**.
 
-- recommended interactive Device Code authentication with MFA / Conditional Access;
-- legacy ROPC/manual authentication;
-- certificate authentication for unattended use;
-- delegated `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All`;
-- application `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All` for certificate mode.
+Authentication modes:
 
-The actual 48-digit recovery password is not downloaded during search. In **Devices**, select a device and Recovery ID, then use **Get Key** only when the password is actually needed.
+- **Device Code** — recommended interactive mode for MFA / Conditional Access.
+- **Username + Password** — legacy ROPC mode.
+- **App registration + certificate** — recommended unattended/service mode.
 
-### First-Run / Repair Entra Setup
+Runtime Graph permissions are limited to the permissions required by the tool, including BitLocker metadata/key access, device reads, and Intune managed-device rotation.
 
-A pre-created App Registration is **not required**.
+### First-Run / Repair
 
-On a completely clean tenant-side setup:
+A pre-created BitKeyBridge App Registration is not required.
 
 1. Open **Administration → Cloud**.
-2. Leave **Client ID** empty.
-3. Click **First-Run / Repair Setup**.
-4. BitKeyBridge uses Microsoft's first-party **Microsoft Graph Command Line Tools** public client only for the temporary Device Code bootstrap.
-5. Sign in with an Entra administrator account and approve the requested management permissions.
-6. BitKeyBridge creates or repairs its own dedicated **BitKeyBridge** App Registration, Enterprise Application, Graph permissions, delegated admin-consent grant, and local certificate.
-7. The generated Client ID, tenant ID, and certificate thumbprint are saved automatically. Administrator passwords and access tokens are not stored.
+2. Click **First-Run / Repair**.
+3. Complete the Device Code sign-in with an Entra administrator.
+4. BitKeyBridge creates or repairs its dedicated app registration / service principal, required Graph permissions, local certificate, and saved identifiers.
+5. Administrator passwords, access tokens, and certificate private keys are not written to configuration.
 
-The temporary bootstrap requests `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All`, and `DelegatedPermissionGrant.ReadWrite.All` only for the interactive setup session. These management permissions are **not** granted to the BitKeyBridge application itself.
+Certificate rollover adds and verifies the new credential before switching configuration and retains the previous credential for rollback/grace.
 
-The runtime BitKeyBridge application receives only the Graph permissions required by the tool: `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All`.
+## Recovery-secret security model
 
-If Conditional Access blocks Microsoft's first-party bootstrap in a specific tenant, use the advanced **Bootstrap...** button to specify a tenant-approved public-client Application ID. The normal case requires no manual Application ID.
+BitKeyBridge treats the recovery password differently from ordinary metadata.
 
-Graph permission identifiers are resolved dynamically from the tenant's Microsoft Graph service principal rather than being hard-coded. The setup also retries transient Graph throttling/service errors and allows for new service-principal propagation.
+Normal Live AD search requests:
 
-Use a dedicated application for this tool. The setup merges API permissions instead of replacing unrelated permissions. Certificate rotation uses Graph key-rolling semantics when an existing managed valid certificate is present.
+- computer information
+- Recovery ID
+- recovery-object timestamp
+- recovery-object DN
 
+It does **not** request `msFVE-RecoveryPassword`.
 
+The password is requested only for the selected recovery object after the explicit Reveal/Copy workflow passes configured controls.
 
-## Certificate private-key access for Windows Service identities
+Local-cache search follows the same model: metadata is scanned first, then the exact selected CSV row is reread only when the password is requested.
 
-When unattended Coverage uses certificate authentication, the configured certificate must be in `LocalMachine\My` and the Windows Service identity must be able to read its private key.
+Recovery passwords are never intentionally written to:
 
-BitKeyBridge 0.10 can manage that access directly without PowerShell or `certutil`. It resolves both modern CNG keys and legacy CAPI keys and adds only a narrow explicit Read ACE for the selected account; it does not replace the existing key ACL.
+- appsettings
+- cloud-auth configuration
+- JSONL audit
+- Windows Event Log
+- incident bundles
+- diagnostics bundles
+- SIEM events
+- GitHub Actions artifacts
 
-Useful commands:
+Clipboard content is automatically cleared when the configured timed-clear logic still finds the copied key on the clipboard.
 
-```text
-BitKeyBridge.exe --cert-key-status
-BitKeyBridge.exe --cert-key-grant
-BitKeyBridge.exe --cert-key-revoke
-BitKeyBridge.exe --cert-key-status --cert-account EXAMPLE\BitKeyBridgeSvc$
-```
+## Windows RBAC
 
-By default the commands use the certificate from the machine cloud config and the installed BitKeyBridge service identity. `--cert-thumbprint` and `--cert-account` can override those values.
+RBAC is disabled by default for backward compatibility.
 
-When changing the service identity to a gMSA or regular domain account, BitKeyBridge prepares certificate access before changing SCM configuration if scheduled Coverage requires it. The Dashboard also provides **Repair Cert Access**.
+Permissions include:
 
-The health snapshot exposes the service account, key provider, and access state. LocalSystem is reported as `NotRequired`; gMSA/domain accounts should normally report `Allowed`.
-
-## Coverage Policy
-
-Coverage Policy turns metadata counts into a stable monitoring contract. The default policy is enabled with maximum 0 for each monitored condition and Warning severity, preserving non-blocking behavior unless stricter severity is configured.
-
-Policy metrics:
-
-- devices with no recovery metadata;
-- Intune-managed devices reported not encrypted;
-- stale Intune devices;
-- old Entra recovery-key metadata.
-
-Use **Coverage → Policy...** in the GUI, or CLI:
-
-```text
-BitKeyBridge.exe --coverage-policy-status
-BitKeyBridge.exe --coverage-policy-enable
-BitKeyBridge.exe --coverage-policy-max-no-key 0
-BitKeyBridge.exe --coverage-policy-max-unencrypted 0
-BitKeyBridge.exe --coverage-policy-max-stale 5
-BitKeyBridge.exe --coverage-policy-max-old-key 10
-BitKeyBridge.exe --coverage-policy-severity-no-key Error
-BitKeyBridge.exe --coverage-policy-severity-unencrypted Error
-BitKeyBridge.exe --coverage-policy-severity-stale Warning
-BitKeyBridge.exe --coverage-policy-severity-old-key Warning
-```
-
-For monitoring wrappers:
-
-```text
-BitKeyBridge.exe --coverage --coverage-machine-config --coverage-fail-policy
-```
-
-Exit code **23** means the configured Coverage Policy is violated. The existing specific exit codes 20/21/22 remain available.
-
-Policy results are persisted inside `%ProgramData%\BitKeyBridge\coverage_status.json` as structured violations with code, severity, actual value, and allowed maximum.
-
-
-## Security notes
-
-BitLocker recovery passwords are secrets.
-
-- Do not publish recovery CSV files to source control.
-- Review ACLs on the output directory. The application warns about broad read access granted to Everyone, Authenticated Users, BUILTIN\\Users, or Domain Users.
-- SYSVOL/NETLOGON is convenient for legacy WinPE workflows but should not be broadly readable when it contains recovery passwords. A dedicated restricted share is preferred.
-- Device Code is the preferred interactive mode because it can satisfy MFA and Conditional Access. ROPC is legacy only. Certificate authentication is the intended unattended mode.
-- The local security audit is stored at `%ProgramData%\BitKeyBridge\audit.jsonl` and never stores a BitLocker recovery password.
-- The default monitoring endpoint is loopback-only and never returns recovery passwords or authentication secrets.
-- The optional Remote API is disabled by default, requires TLS + a 256-bit bearer token, and never exposes recovery passwords.
-- Remote API firewall exposure is limited by BitKeyBridge to Windows Domain/Private profiles; Public profile is not enabled.
-- The Windows Service executable is installed under `%ProgramFiles%\BitKeyBridge`; configuration and service logs remain under `%ProgramData%\BitKeyBridge`.
-- Cloud recovery-key reads are auditable in Microsoft Entra.
-
-## Dashboard, Windows Service and monitoring
-
-BitKeyBridge can run its AD export engine as a native Windows Service. **Install / Update** from the Dashboard copies the current single-file executable to:
-
-```text
-%ProgramFiles%\BitKeyBridge\BitKeyBridge.exe
-```
-
-and registers the **BitKeyBridge** service with Windows Service Control Manager. The service runs as LocalSystem, uses the same machine configuration in `%ProgramData%\BitKeyBridge\appsettings.json`, and performs published exports on the configured interval. By default it also performs an export immediately when the service starts.
-
-The Dashboard can:
-
-- install/update, start, stop, and uninstall the service;
-- change the export interval;
-- enable optional scheduled metadata-only Coverage with its own interval and run-on-start setting;
-- save/delete the machine cloud certificate configuration used by the service;
-- enable/disable the health endpoint and select its port;
-- show last export status, row count, DC, replication health, Coverage status, output state, and certificate expiry;
-- open the local monitoring endpoint;
-- launch Secure Output Wizard.
-
-### Local health endpoint
-
-When enabled, the service exposes:
-
-```text
-http://127.0.0.1:8750/health
-http://127.0.0.1:8750/health/live
-http://127.0.0.1:8750/health/ready
-http://127.0.0.1:8750/health/security
-http://127.0.0.1:8750/health/coverage
-```
-
-`/health/ready` is a compact readiness view. `/health/security` exposes security posture such as RBAC validation, audit/signing state, certificate expiry/private-key ACL state, and Remote API scope configuration without returning token hashes. `/health/coverage` exposes only coverage/policy summary state.
-
-The listener is bound to **127.0.0.1 only**. It is not exposed to the LAN and does not require an HTTP URL reservation. The JSON response intentionally excludes recovery passwords, Graph access tokens, passwords, and certificate private-key material.
-
-`/health` returns HTTP 200 for Healthy/Warning states and HTTP 503 when the snapshot contains a health error. This makes it suitable for local agents such as PRTG, Zabbix, Nagios/NRPE-style wrappers, SCOM agents, or custom monitoring scripts.
-
-The same snapshot can be retrieved without HTTP:
-
-```text
-BitKeyBridge.exe --health
-```
-
-### Secure Output Wizard
-
-The Dashboard's **Secure Output...** action can create a dedicated local recovery directory with protected NTFS permissions.
-
-The wizard:
-
-- disables inherited NTFS permissions;
-- grants Full Control to LocalSystem, local Administrators, and the administrator creating the directory;
-- grants configured reader accounts/groups **Read & Execute** only;
-- can optionally create an SMB share with a matching restricted share ACL using the native Windows `NetShareAdd` API;
-- can update BitKeyBridge's export configuration to use the new protected directory.
-
-Existing SMB shares are never overwritten automatically. If the requested share name already exists, the wizard stops instead of modifying it.
-
-If a legacy WinPE workflow currently reads recovery data from SYSVOL/NETLOGON, update that consumer before changing the production export path.
-
-## Operations: verified updates, Event Log, and Remote API
-
-The **Operations** tab contains update and remote-management controls.
-
-### Verified self-update
-
-BitKeyBridge can check the configured public GitHub repository for the latest release. Stable releases are used by default; prerelease updates must be enabled explicitly.
-
-Before an update is applied, BitKeyBridge:
-
-1. selects the package matching the running architecture (`win-x64`, `win-x86`, or `win-arm64`);
-2. downloads the release ZIP;
-3. verifies its SHA-256 against `SHA256SUMS.txt`;
-4. also compares GitHub's release-asset SHA-256 digest when that metadata is available;
-5. extracts `BitKeyBridge.exe`;
-6. verifies that the staged file version matches the release;
-7. runs the staged executable with `--self-test`;
-8. launches a temporary elevated copy of BitKeyBridge to replace the active GUI executable and installed service executable;
-9. stops/restarts the Windows Service when necessary and rolls back from `.bak` files if replacement fails.
-
-Automatic update checking may be enabled, but **installation is never silent from the GUI**. The administrator must select **Install Verified Update**.
-
-SHA-256 verification protects against corruption or an unexpected asset. It does not replace Authenticode code signing. Until signed releases are enabled, the update trust boundary still includes the GitHub repository/release publishing path.
-
-### Windows Event Log
-
-BitKeyBridge registers the **BitKeyBridge** event source in the Windows **Application** log when running elevated or installing the service. Events include:
-
-- service install/update/start/stop and service-runtime failures;
-- scheduled export success/failure;
-- update availability, installation, and rollback failures;
-- Remote API enable/disable/start and remote export requests.
-
-Recovery passwords are sanitized before Event Log writes.
-
-### Optional Remote API
-
-The Remote API is **disabled by default** and is never enabled by an upgrade.
-
-When an administrator enables it from **Operations**, BitKeyBridge:
-
-- creates or reuses a dedicated TLS server certificate in `LocalMachine\My`;
-- generates a cryptographically random bearer token;
-- stores only the token's SHA-256 hash in `appsettings.json`;
-- displays the plaintext token only once;
-- creates a Windows Firewall inbound rule for **Domain and Private** profiles only;
-- hosts the API from the Windows Service using TLS 1.2/1.3.
-
-Read-only endpoints:
-
-```text
-GET https://server:8751/api/v1/health
-GET https://server:8751/api/v1/service
-GET https://server:8751/api/v1/version
-GET https://server:8751/api/v1/coverage
-GET https://server:8751/api/v1/coverage/policy
-```
-
-All Remote API requests require:
-
-```text
-Authorization: Bearer <one-time-generated-token>
-```
-
-The original token remains the backward-compatible **Admin** token. BitKeyBridge can additionally issue independent least-privilege tokens from **Operations → Scoped Tokens...** or CLI:
-
-```text
-BitKeyBridge.exe --remote-token-status
-BitKeyBridge.exe --remote-token-generate read
-BitKeyBridge.exe --remote-token-generate coverage-run
-BitKeyBridge.exe --remote-token-generate export
-BitKeyBridge.exe --remote-token-revoke read
-```
-
-- `read` — GET endpoints only.
-- `coverage-run` — GET endpoints plus `POST /api/v1/coverage/run`.
-- `export` — GET endpoints plus `POST /api/v1/export`.
-- Admin — all configured endpoints.
-
-POST scopes still require the global **Allow remote export + Coverage run** switch. All token types are displayed only once and only SHA-256 hashes are persisted.
-
-Remote management is a separate opt-in setting. When enabled, management endpoints include:
-
-```text
-POST https://server:8751/api/v1/export
-POST https://server:8751/api/v1/coverage/run
-```
-
-Coverage endpoints return summary/policy metadata only. The Remote API has **no endpoint that returns a BitLocker recovery password**.
-
-The generated server certificate is self-signed. Monitoring clients should explicitly trust or pin the displayed certificate thumbprint, or replace the configured certificate with an organization-managed certificate suitable for TLS server authentication.
-
-### Configuration maintenance and sanitized diagnostics
-
-Operations includes **Backup Config**, **Restore Config**, **Diagnostics ZIP**, and **Open Incidents**. CLI equivalents:
-
-```text
-BitKeyBridge.exe --config-backup C:\Backup\BitKeyBridge.json
-BitKeyBridge.exe --config-restore C:\Backup\BitKeyBridge.json
-BitKeyBridge.exe --diagnostics-bundle C:\Temp\BitKeyBridge-Diagnostics.zip
-```
-
-Restore validates the configuration and creates a pre-restore rollback backup first. Configuration backup excludes Credential Manager/DPAPI password material, Graph access/refresh tokens, certificate private keys, and BitLocker recovery passwords.
-
-The diagnostics ZIP is more restrictive: it excludes recovery CSV/passwords, audit contents, credential blobs, bearer tokens **and token hashes**, Graph tokens, and certificate private keys. It contains sanitized health/service/config/status/log/certificate metadata useful for troubleshooting.
-
-### Entra certificate rollover
-
-The Cloud tab provides **Rollover Certificate...** and CLI provides `--entra-cert-rollover`. BitKeyBridge uses the existing managed certificate to add a new credential without deleting active credentials, verifies app-only Graph authentication with the new certificate, prepares the Windows Service private-key ACL, and only then switches matching user/machine cloud configuration.
-
-The previous Graph credential and local certificate are deliberately retained for rollback/grace; 0.13 does not automatically delete them.
-
-## Helpdesk recovery workflow
-
-BitKeyBridge can attach a helpdesk ticket/reference and reason to every recovery-secret access without ever writing the recovery password itself to the audit.
-
-In **Operations → Helpdesk Recovery Workflow**:
-
-- **Require a ticket/reference before recovery-key access** blocks Local AD reveal/copy and Entra recovery-key retrieval until a reference is entered.
-- **Suggest Intune key rotation after a cloud recovery password is retrieved** records a recovery session and reminds the operator to rotate the exposed recovery key only after the recovery operation is complete and the device is able to process the Intune action.
-
-The same in-memory access context is reused for reveal/copy/rotate operations on that recovery ID during the GUI session. It is cleared when BitKeyBridge closes.
-
-Starting with 0.13, every recovery access context also has a random `SessionId`. Recovery actions are written to audit chain v2 with that `CorrelationId`, and BitKeyBridge maintains a metadata-only incident bundle at:
-
-```text
-%ProgramData%\BitKeyBridge\Incidents\<SessionId>.json
-```
-
-The incident bundle contains operator/host/device/recovery ID/reference/reason/timestamps/action results/audit entry hashes and rotation state. It never contains the 48-digit recovery password.
-
-Audit records contain separate structured `Reference` and `Reason` fields. The 48-digit BitLocker recovery password is never written to JSONL or Windows Event Log.
-
-Rotation is never automatic: the operator must explicitly confirm **Rotate Key in Intune** after recovery is complete.
-
-
-### Windows RBAC for recovery and rotation
-
-RBAC is disabled by default so existing deployments keep their current behavior after upgrading. When enabled, BitKeyBridge authorizes privileged actions against the current Windows identity and group membership.
-
-Two permissions are independent:
-
-- **RecoveryRead** — local recovery CSV search, AD recovery reveal/copy, and Entra recovery-password retrieval/reveal/copy.
-- **Rotate** — Intune BitLocker recovery-key rotation.
-
-Configure RBAC from **Operations → Helpdesk Recovery Workflow → RBAC...** or from CLI. Principals may be Windows users, groups, or SIDs. A configurable local Administrators bypass is available.
+- **RecoveryRead** — reveal/copy/retrieve recovery passwords.
+- **Rotate** — submit Intune BitLocker rotation.
+- **Administrator** — display Administration and Health & Audit sections.
+- **JitGrant** — grant time-limited recovery access when JIT is enabled.
+- **RecoveryApprove** — approve another operator's recovery session when two-person approval is enabled.
 
 Example:
 
 ```text
 BitKeyBridge.exe --rbac-reader-add "DOMAIN\BitLocker Helpdesk"
 BitKeyBridge.exe --rbac-rotator-add "DOMAIN\BitLocker Rotation Operators"
-BitKeyBridge.exe --rbac-admin-bypass off
+BitKeyBridge.exe --rbac-ui-admin-add "DOMAIN\BitKeyBridge Admins"
 BitKeyBridge.exe --rbac-enable
 BitKeyBridge.exe --rbac-status
-BitKeyBridge.exe --rbac-ui-admin-add "DOMAIN\\BitKeyBridge Admins"
-BitKeyBridge.exe --rbac-ui-admin-remove "DOMAIN\\BitKeyBridge Admins"
 ```
 
-Denied actions are recorded in both the local security audit and Windows Application Event Log. Recovery passwords are never included in those denial records.
+The navigation role is evaluated when the GUI starts.
 
 ## Optional privileged recovery controls
 
-BitKeyBridge provides three independent privileged-access controls. **All three are disabled by default and upgrades never enable them automatically.**
+These features are **off by default** and upgrades do not enable them:
 
-- **JIT recovery** requires the current Windows identity to hold a valid, time-limited recovery grant before recovery-key access.
-- **Two-person approval** requires a different authorized Windows user to approve the recovery session. A requester cannot approve their own session.
-- **SIEM forwarding** forwards metadata-only audit events through a durable local outbox to JSONL or an HTTPS webhook. Recovery passwords are never forwarded.
+- **JIT Recovery** — time-limited recovery grants.
+- **Two-person approval** — a distinct authorized approver must approve the recovery session.
+- **SIEM forwarding** — metadata-only JSONL or HTTPS webhook delivery with durable local outbox.
 
-Configure them from **Operations → Privileged Access...** or CLI. Enabling JIT or two-person approval requires appropriate grantor/approver Windows principals. SIEM supports explicit fail-open or fail-closed behavior; fail-closed blocks recovery access if the delivery pipeline is not ready.
+GUI configuration:
 
-Examples:
-
-```text
-BitKeyBridge.exe --privileged-status
-BitKeyBridge.exe --jit-enable --jit-minutes 15
-BitKeyBridge.exe --jit-grant "DOMAIN\\BitLocker Helpdesk" --jit-reason "Change 12345"
-BitKeyBridge.exe --approval-enable --approval-minutes 15
-BitKeyBridge.exe --approval-approve <session-id> --approval-comment "Approved by helpdesk lead"
-BitKeyBridge.exe --siem-enable --siem-mode file --siem-file "D:\\SIEM\\BitKeyBridge.jsonl"
-BitKeyBridge.exe --siem-status
-BitKeyBridge.exe --siem-flush
-```
-
-JIT grants, approval requests, and decisions are bound to the local tamper-evident audit chain. If the required audit evidence is invalid or unavailable, BitKeyBridge does not treat the privileged artifact as valid.
-
-## Supply-chain security
-
-Tagged releases are built with additional supply-chain artifacts and GitHub-native verification:
-
-- weekly and pull-request **CodeQL** analysis for C#;
-- weekly **Dependabot** updates for NuGet and GitHub Actions;
-- a pinned **CycloneDX JSON SBOM** (`BitKeyBridge.cdx.json`);
-- `SHA256SUMS.txt` covering all architecture ZIPs and the SBOM;
-- GitHub artifact provenance attestation for release packages;
-- GitHub SBOM attestation binding the release ZIPs to the generated CycloneDX SBOM.
-
-The Actions used by these workflows are Node 24 generations.
-
-## BitLocker Coverage Dashboard
-
-The **Coverage** tab correlates Active Directory, Microsoft Entra ID, and Intune metadata to identify BitLocker coverage gaps without reading recovery passwords.
-
-The coverage engine intentionally uses:
-
-- AD computer attributes plus `msFVE-RecoveryGuid` and `whenCreated`;
-- Entra BitLocker recovery-key metadata such as recovery ID, device ID, volume type, and creation time;
-- Intune managed-device inventory including encryption state, compliance, last sync, user, serial number, manufacturer, model, and OS.
-
-It does **not** request `msFVE-RecoveryPassword` for the report and does not call the Microsoft Graph recovery-key value endpoint.
-
-Coverage states:
-
-- **AD + Entra**
-- **AD only**
-- **Entra only**
-- **No recovery key**
-
-Additional flags include:
-
-- multiple recovery objects;
-- Intune-managed but not encrypted;
-- stale Intune sync;
-- old Entra recovery-key metadata.
-
-The thresholds are configurable through `CoverageStaleIntuneDays` and `CoverageOldCloudKeyDays`.
-
-The GUI can filter results and export the currently visible rows to CSV. Coverage CSV files contain metadata only and never contain the 48-digit BitLocker recovery password.
-
-The same engine is available from CLI with `--coverage`. It can write machine-readable JSON and CSV for Task Scheduler, PRTG/Zabbix/SCOM wrappers, or other monitoring agents. Certificate authentication is the recommended unattended mode; Device Code remains available for interactive CLI runs.
-
-
-## Unified Devices and key rotation
-
-The **Devices** tab can search by device name, serial number, user/UPN, Entra device ID, or Intune managed-device ID. Results merge AD computer data, Intune inventory, and Entra BitLocker metadata. If the device is Intune-managed, an administrator can submit a BitLocker recovery-key rotation request after explicit confirmation.
-
-The rotation action uses Microsoft Graph `deviceManagement/managedDevices/{id}/rotateBitLockerKeys`. Intune applies the action asynchronously on the managed device; the recovery key shown in the current session is not assumed to change immediately.
-
-## Audit
-
-The **Audit** tab records local administrative actions such as recovery-key reveal/copy, cloud key retrieval, unified searches, rotation requests, and RBAC denials. Audit records contain IDs and metadata only. Any string matching the 48-digit BitLocker recovery-password format is automatically replaced with `[REDACTED-BITLOCKER-KEY]` before being written.
-
-New audit entries are SHA-256 hash chained. BitKeyBridge serializes audit writes across GUI/service processes so concurrent writes cannot fork the chain. Existing pre-0.11 records remain readable and are reported as legacy/unhashed entries.
-
-Verify the current audit plus its rotated `.old` file from the **Verify Chain** button or CLI:
-
-```text
-BitKeyBridge.exe --audit-verify
-```
-
-The native Windows Service verifies the audit chain when it starts and every 24 hours. The latest verification is cached in `%ProgramData%\BitKeyBridge\audit_integrity_status.json`; the health endpoint reports `Valid`, `Invalid`, `Stale`, or `NeverVerified`, and a failed verification is also written to Windows Event Log.
-
-### Signed audit checkpoints
-
-BitKeyBridge can optionally add a cryptographic trust anchor on top of the local SHA-256 audit hash chain. Audit signing uses a dedicated RSA-3072 certificate in `LocalMachine\My`; it is separate from the Entra and Remote API certificates, and its private key is persisted without the Exportable flag.
-
-Enable signing:
-
-```text
-BitKeyBridge.exe --audit-signing-setup
-```
-
-Optional certificate lifetime:
-
-```text
-BitKeyBridge.exe --audit-signing-setup --audit-signing-years 5
-```
-
-Inspect, sign, and verify:
-
-```text
-BitKeyBridge.exe --audit-signing-status
-BitKeyBridge.exe --audit-signing-sign
-BitKeyBridge.exe --audit-signing-verify
-```
-
-Disable creation of new signed checkpoints while retaining the existing certificate and checkpoint:
-
-```text
-BitKeyBridge.exe --audit-signing-disable
-```
-
-The signed checkpoint records the current audit head hash, entry counts, chain version, machine name, signer certificate thumbprint, timestamp, and an RSA-SHA256-PKCS1 signature. Before replacing an existing checkpoint, BitKeyBridge first verifies the old signature and confirms that its signed hash still exists in the current valid audit chain. If that trust anchor is missing or invalid, BitKeyBridge refuses to overwrite it.
-
-When enabled, the native Windows Service signs the verified audit head during its daily integrity cycle. The Audit tab also provides **Setup Signing**, **Sign Now**, **Verify Signature**, and **Disable Signing** controls.
-
-The health snapshot exposes signer-certificate expiry, signature validity, signed-checkpoint state, and whether the current audit head is already signed. Certificate expiry warnings use `AuditSigningCertificateWarningDays`.
-
-Audit signing does not make the local machine immutable. Protecting the host, certificate private key, and BitKeyBridge configuration remains necessary.
-
-### Audit-signing certificate rollover
-
-Audit-signing trust-anchor replacement is explicit. **Rollover Signing** / `--audit-signing-rollover` first verifies and signs the current audit head, creates a new non-exportable machine certificate, and writes a transition signed by **both** the previous and new private keys. Transition history is retained under:
-
-```text
-%ProgramData%\BitKeyBridge\AuditSigningTransitions
-```
-
-The previous certificate is retained for historical verification. On a normal rollover failure BitKeyBridge restores the previous configured thumbprint and checkpoint.
-
-BitKeyBridge verifies every archived transition in order. Both old/new signatures must validate, both certificates must still be available, and each transition's previous thumbprint must match the prior transition's new thumbprint. The result is exposed in the Audit tab, audit-signing CLI status/verify output, and `/health/security`.
-
-```text
-BitKeyBridge.exe --audit-signing-rollover
-BitKeyBridge.exe --audit-signing-rollover --audit-signing-rollover-years 5
-```
-
-The hash chain is tamper-evident, not a replacement for an external immutable/SIEM archive: a sufficiently privileged attacker who can rewrite the whole local audit can also recompute an unkeyed hash chain. Forwarding BitKeyBridge events/audit to protected central storage is recommended for high-assurance environments.
-
-## Recovery incident verification, metrics, and config schema
-
-Starting with 0.14, recovery incident bundles can be verified against the retained tamper-evident audit chain:
-
-```text
-BitKeyBridge.exe --incident-verify <session-id>
-```
-
-The verifier checks the audit chain, a stable audit snapshot, exact `AuditEntryHash` anchors, `CorrelationId`, action/result/source/auth metadata, operator/host/device/recovery ID, ticket/reference, reason, and rotation state. The **Audit → Incident...** dialog can verify recent sessions and open the metadata-only bundle.
-
-A result of `NotFullyRetained` means the incident refers to audit entries older than the currently retained `audit.jsonl` / `.old` window. Missing anchors inside the retained window, metadata mismatches, invalid audit chains, or a 48-digit recovery-password pattern in the incident bundle are reported separately.
-
-The loopback health listener now also exposes Prometheus text metrics:
-
-```text
-http://127.0.0.1:8750/metrics
-```
-
-Metrics contain numeric operational/security state only. They do not include computer names, users, OU names, tickets/references, recovery IDs/passwords, bearer tokens, or token hashes.
-
-Application configuration is explicitly versioned with `SchemaVersion` (current schema: v1). Pre-versioned `appsettings.json` is backed up before atomic migration. An appsettings file created by a newer unsupported schema is rejected without modification. Migration state is available in the health snapshot and sanitized diagnostics bundle.
-
-## Housekeeping and protected storage
-
-Starting with 0.15, BitKeyBridge can maintain local operational storage without silently discarding recovery evidence.
-
-Incident retention is disabled by default:
-
-```json
-"IncidentRetentionDays": 0
-```
-
-A value of `0` means **keep incident bundles forever**. If incident retention is explicitly enabled, BitKeyBridge deletes an old incident only when its bundle verifies as `Valid` against the retained tamper-evident audit chain. `NotFullyRetained`, mismatched, unreadable, or otherwise unverifiable incidents are preserved.
-
-Before a verified incident is deleted, BitKeyBridge writes a `HousekeepingDeleteIncidentPlan` audit entry containing the bundle SHA-256 digest and Session/Correlation ID. If that authorization entry cannot be written, deletion is refused. A successful deletion then writes a completion audit entry referencing the authorization EntryHash.
-
-Configuration backups default to 90-day retention while preserving at least the five newest backup files. Stale atomic-write `.tmp` files default to 7-day retention.
+**Administration → Security & Settings → Privileged Access...**
 
 CLI examples:
 
 ```text
-BitKeyBridge.exe --housekeeping-status
-BitKeyBridge.exe --housekeeping-dry-run
-BitKeyBridge.exe --housekeeping-run
-BitKeyBridge.exe --incident-retention-days 0
-BitKeyBridge.exe --backup-retention-days 90 --backup-minimum-files 5
-BitKeyBridge.exe --temp-retention-days 7
+BitKeyBridge.exe --privileged-status
+BitKeyBridge.exe --jit-enable --jit-minutes 15
+BitKeyBridge.exe --approval-enable --approval-minutes 15
+BitKeyBridge.exe --siem-status
 ```
 
-The **Operations → Housekeeping...** dialog provides the same policy controls plus immediate dry-run/run actions.
+Use `BitKeyBridge.exe --help` for the full command set.
 
-### Protected storage ACLs
+## Recovery export / offline cache
 
-BitKeyBridge can explicitly harden these directories:
+Administrative export is separate from live recovery lookup.
 
-- `%ProgramData%\BitKeyBridge\Incidents`
-- `%ProgramData%\BitKeyBridge\Backups`
-- `%ProgramData%\BitKeyBridge\AuditSigningTransitions`
+GUI:
 
-Use:
+**Administration → Export & Automation**
+
+Normal CLI export:
 
 ```text
-BitKeyBridge.exe --storage-acl-status
-BitKeyBridge.exe --storage-acl-repair
+BitKeyBridge.exe --cli
 ```
 
-Repair requires Administrator rights, disables inherited ACLs, retains FullControl for SYSTEM and local Administrators, and grants the installed Windows Service identity only the directory-specific access it needs. Audit-signing transition history is read-only to the service. Automatic health checks validate the ACL policy but never repair it silently.
+Dry run:
 
-If the Windows Service identity changes between LocalSystem, gMSA, or a domain account, BitKeyBridge synchronizes the protected-storage ACLs with the new identity.
+```text
+BitKeyBridge.exe --dry-run
+```
 
-Housekeeping and storage-ACL posture are exposed through `/health/security`, loopback Prometheus `/metrics`, sanitized diagnostics, and Windows Event Log without publishing incident metadata, SIDs, account names, or recovery secrets.
+Intentional publish after reviewing row/scope safety guards:
 
-Application configuration schema is now **v3**.
+```text
+BitKeyBridge.exe --cli --force-publish
+```
+
+Standalone export example:
+
+```text
+BitKeyBridge.exe --cli --ad-server dc01.example.com --ad-domain example.com --ad-user EXAMPLE\admin --ad-password-prompt --output-root "\\fileserver\secure\BitLocker"
+```
+
+## BitLocker Coverage
+
+Coverage is metadata-only and never requests the recovery password.
+
+GUI:
+
+**Devices → Coverage** (administrator role)
+
+CLI:
+
+```text
+BitKeyBridge.exe --coverage
+```
+
+Useful policy flags include:
+
+```text
+--coverage-fail-no-key
+--coverage-fail-unencrypted
+--coverage-fail-stale
+--coverage-fail-policy
+```
+
+For unattended runs, certificate authentication is recommended:
+
+```text
+BitKeyBridge.exe --coverage --cloud-auth Certificate --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
+```
+
+## Windows Service and health
+
+Install/update the service:
+
+```text
+BitKeyBridge.exe --install-service
+```
+
+Service lifecycle:
+
+```text
+BitKeyBridge.exe --service-status
+BitKeyBridge.exe --start-service
+BitKeyBridge.exe --stop-service
+BitKeyBridge.exe --uninstall-service
+```
+
+The optional loopback health endpoint is intended for local monitoring integrations.
+
+The service can run as:
+
+- LocalSystem
+- gMSA / managed account
+- regular domain account
+
+For unattended Graph access, use machine cloud configuration with a LocalMachine certificate.
+
+## Remote API
+
+The Remote API is disabled by default.
+
+When enabled it requires TLS and bearer-token authentication. Scoped tokens are available for:
+
+- read
+- coverage-run
+- export
+- admin
+
+The Remote API does not expose BitLocker recovery passwords.
+
+## Audit and incident evidence
+
+Recovery actions are recorded in local JSONL security audit.
+
+Audit entries are SHA-256 chained. Optional LocalMachine certificate checkpoints can sign the current chain head.
+
+Recovery sessions can also create metadata-only incident bundles keyed by Session/Correlation ID.
+
+The audit / incident subsystems redact strings matching the 48-digit BitLocker password format.
+
+Useful commands:
+
+```text
+BitKeyBridge.exe --audit-verify
+BitKeyBridge.exe --audit-signing-status
+BitKeyBridge.exe --incident-verify <session-id>
+```
+
+## Housekeeping and protected storage
+
+Housekeeping can manage:
+
+- verified incident retention
+- configuration-backup retention
+- stale atomic-write temporary files
+
+Incident retention defaults to **keep forever** unless explicitly configured.
+
+Protected storage ACL checks/repair are available for incident, backup, and signing-transition directories.
+
+```text
+BitKeyBridge.exe --housekeeping-status
+BitKeyBridge.exe --housekeeping-dry-run
+BitKeyBridge.exe --storage-acl-status
+```
+
+## Configuration
+
+Machine configuration:
+
+```text
+%ProgramData%\BitKeyBridge\appsettings.json
+```
+
+Per-user cloud metadata:
+
+```text
+%LOCALAPPDATA%\BitKeyBridge\cloud_auth_config.json
+```
+
+Machine/service cloud metadata:
+
+```text
+%ProgramData%\BitKeyBridge\cloud_auth_machine.json
+```
+
+Schema **v4** adds:
+
+- `AutoConnectOnStart`
+- `RecoverySearchSource`
+- remembered Recovery OU
+- `RbacAdministrators`
+
+Older configurations are migrated using the existing backup-and-migrate mechanism.
+
+## Verified updates and supply-chain security
+
+BitKeyBridge can check and install verified releases from the configured GitHub repository.
+
+Release CI builds:
+
+- win-x64
+- win-x86
+- win-arm64
+
+Release metadata includes:
+
+- SHA256SUMS
+- CycloneDX SBOM
+- GitHub provenance attestation
+- SBOM attestation
+
+The updater verifies architecture and SHA-256, stages the new executable, runs `--self-test`, and supports rollback.
+
+After a successful release, stale `release/*` branches are cleaned automatically. An unmerged branch is first preserved as an `archive/*` tag before its branch ref is deleted.
+
+## CLI quick reference
+
+Full help:
+
+```text
+BitKeyBridge.exe --help
+```
+
+Common commands:
+
+```text
+BitKeyBridge.exe --version
+BitKeyBridge.exe --self-test
+BitKeyBridge.exe --ad-test
+BitKeyBridge.exe --dc-test
+BitKeyBridge.exe --health
+BitKeyBridge.exe --coverage
+BitKeyBridge.exe --rbac-status
+BitKeyBridge.exe --privileged-status
+BitKeyBridge.exe --check-update
+BitKeyBridge.exe --update
+```
 
 ## Build
 
-Install the .NET 10 SDK and run:
+Requirements:
+
+- .NET 10 SDK
+- Windows targeting enabled
+
+Build:
 
 ```text
-build-release.cmd
+dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
+dotnet build src\BitKeyBridge\BitKeyBridge.csproj -c Release
 ```
 
-The self-contained single-file executable is written to:
+Publish x64:
 
 ```text
-artifacts\win-x64\BitKeyBridge.exe
-artifacts\win-x86\BitKeyBridge.exe
-artifacts\win-arm64\BitKeyBridge.exe
+dotnet publish src\BitKeyBridge\BitKeyBridge.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 ```
 
-The build script publishes `win-x64`, `win-x86`, and `win-arm64`. The x64 equivalent command is:
-
-```text
-dotnet publish src\BitKeyBridge\BitKeyBridge.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o artifacts\win-x64
-```
-
-GitHub Actions performs restore/build/publish on `windows-latest` for `win-x64`, `win-x86`, and `win-arm64`. The x64 package runs the built-in `--self-test` in CI; ARM64 is cross-published and packaged because the standard runner is x64. Version tags publish all three ZIPs plus `SHA256SUMS.txt`.
+The GitHub workflow also publishes win-x86 and win-arm64.
 
 ## Repository layout
 
 ```text
 src/BitKeyBridge/
-  Core/             Configuration and models
-  Infrastructure/   JSON, CSV, logging, elevation, paths
-  Services/         LDAP, replication, Graph, certificate, export logic
-  UI/               WinForms GUI
-config/              Public configuration example only
-.github/workflows/   Windows build/publish workflow
+  Core/
+  Infrastructure/
+  Services/
+  UI/
+.github/workflows/
+config/
 ```
 
 ## Privacy / deployment configuration
 
-Organization names, internal domain names, DC names, and production OU distinguished names are intentionally not embedded in this public source tree. Keep environment-specific configuration outside the repository or in ignored local files.
+Do not commit real domain names, OU distinguished names, usernames, tenant IDs, certificate thumbprints, recovery IDs, recovery passwords, bearer tokens, or internal UNC paths.
+
+Use `config/appsettings.example.json` as a template and keep environment-specific values outside the repository.
 
 ## License
 
-MIT.
+See the repository license file.
