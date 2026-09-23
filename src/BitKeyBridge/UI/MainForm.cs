@@ -328,8 +328,8 @@ public sealed class MainForm : DpiAwareForm
             _adCredentialStorage,
             500,
             144,
-            105,
-            220);
+            125,
+            200);
 
         _adCredentialStorage.DropDownStyle =
             ComboBoxStyle.DropDownList;
@@ -4181,6 +4181,17 @@ public sealed class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
+            _startScope = null;
+            _startDomainDn = string.Empty;
+            _startSelectOu.Enabled = false;
+            _startSearch.Enabled = false;
+            _startResults.Items.Clear();
+            _startCurrentKey = null;
+            _startKey.Clear();
+            _startOuStatus.Text =
+                "Connection failed. Connect to Active Directory before selecting an OU.";
+            _startPurposeStatus.Text =
+                "Step 1 of 3 — Active Directory connection failed. Check the settings and connect again.";
             _adConnectionStatus.Text = "FAILED: " + ex.Message;
             MessageBox.Show(
                 this,
