@@ -491,12 +491,18 @@ public sealed class ActiveDirectoryService
             if (guidBytes is not { Length: 16 })
                 continue;
 
+            var computerDn =
+                GetParentDistinguishedName(
+                    entry.DistinguishedName);
+
             rows.Add(new AdRecoveryMetadata
             {
                 ComputerName = GetParentComputerName(entry.DistinguishedName),
                 RecoveryId = new Guid(guidBytes).ToString("D"),
                 CreatedDateTime = ParseLdapDateTime(
-                    GetString(entry, "whenCreated"))
+                    GetString(entry, "whenCreated")),
+                ComputerDistinguishedName = computerDn,
+                RecoveryDistinguishedName = entry.DistinguishedName
             });
 
             if (rows.Count >= Math.Clamp(maximumItems, 1, 200000))
@@ -699,6 +705,18 @@ public sealed class ActiveDirectoryService
         if (attr is null || attr.Count == 0) return null;
         if (attr[0] is byte[] bytes) return Encoding.UTF8.GetString(bytes);
         return Convert.ToString(attr[0]);
+    }
+
+    private static string GetParentDistinguishedName(
+        string distinguishedName)
+    {
+        if (string.IsNullOrWhiteSpace(distinguishedName))
+            return string.Empty;
+
+        var comma = distinguishedName.IndexOf(',');
+        return comma >= 0 && comma + 1 < distinguishedName.Length
+            ? distinguishedName[(comma + 1)..]
+            : string.Empty;
     }
 
     public static string GetParentComputerName(string distinguishedName)
