@@ -6,6 +6,7 @@
 - Helpdesk users see only Recovery and Devices; local Windows Administrators and principals in the new `RbacAdministrators` list also see Administration and Health & Audit.
 - Added `--rbac-ui-admin-add` and `--rbac-ui-admin-remove` for assigning the Administration UI role from CLI.
 - Reworked live AD recovery search to be metadata-only. Normal search no longer reads or holds `msFVE-RecoveryPassword`; the selected recovery object is read only after an explicit Reveal or Copy action passes RBAC/JIT/approval checks.
+- Added server-side LDAP filtering for partial Recovery ID lookup so large OU searches no longer enumerate all recovery metadata client-side.
 - Added metadata-only local-cache search and exact on-demand CSV recovery-password retrieval, so Live AD and Local cache are now two sources in the same Recovery workspace.
 - Removed the separate top-level Recovery Search page and its duplicate key-handling code.
 - Added a selected-recovery card. Single-result searches collapse directly to the card with Computer, scope/OU, Recovery ID, time, source, and an explicit **Reveal Recovery Key** action.
