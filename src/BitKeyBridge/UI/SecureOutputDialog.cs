@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class SecureOutputDialog : Form
+public sealed class SecureOutputDialog : DpiAwareForm
 {
     private readonly TextBox _directory = new();
     private readonly TextBox _share = new();
