@@ -3302,12 +3302,14 @@ public sealed partial class MainForm : DpiAwareForm
             dialog.AllowLocalAdministrators;
         _config.RbacRecoveryReaders = dialog.RecoveryReaders;
         _config.RbacRotationOperators = dialog.RotationOperators;
+        _config.RbacAdministrators = dialog.Administrators;
 
         ConfigService.SaveAppConfig(_config);
 
         var auth = new AuthorizationService(_config);
         var read = auth.Check(BitKeyBridgePermission.RecoveryRead);
         var rotate = auth.Check(BitKeyBridgePermission.Rotate);
+        var admin = auth.Check(BitKeyBridgePermission.Administrator);
 
         _audit.Write(
             "SaveRbacSettings",
@@ -3316,15 +3318,18 @@ public sealed partial class MainForm : DpiAwareForm
                 $"Enabled={_config.RbacEnabled}; AdminBypass={_config.RbacAllowLocalAdministrators}; " +
                 $"Readers={string.Join("|", _config.RbacRecoveryReaders)}; " +
                 $"Rotators={string.Join("|", _config.RbacRotationOperators)}; " +
+                $"Administrators={string.Join("|", _config.RbacAdministrators)}; " +
                 $"CurrentIdentity={AuthorizationService.CurrentIdentityName()}; " +
-                $"CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}");
+                $"CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}; CurrentAdminUI={admin.Allowed}");
 
         MessageBox.Show(
             this,
             $"RBAC settings saved.{Environment.NewLine}{Environment.NewLine}" +
             $"Current identity: {AuthorizationService.CurrentIdentityName()}{Environment.NewLine}" +
             $"RecoveryRead: {(read.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
-            $"Rotate: {(rotate.Allowed ? "Allowed" : "Denied")}",
+            $"Rotate: {(rotate.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
+            $"Administration UI: {(admin.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}{Environment.NewLine}" +
+            "Navigation roles are evaluated when the GUI starts.",
             "BitKeyBridge RBAC",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
