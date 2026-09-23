@@ -43,7 +43,7 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - .NET is not required on the destination machine when using the self-contained release build.
 - AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
 - Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- The legacy output root is `C:\Windows\SYSVOL\domain\scripts`, but `OutputRoot` can point to any writable local or UNC directory.
+- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
 
 ## First run
 
@@ -283,7 +283,7 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - .NET is not required on the destination machine when using the self-contained release build.
 - AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
 - Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- The legacy output root is `C:\Windows\SYSVOL\domain\scripts`, but `OutputRoot` can point to any writable local or UNC directory.
+- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
 
 ## First run
 
@@ -454,7 +454,7 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - .NET is not required on the destination machine when using the self-contained release build.
 - AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
 - Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- The legacy output root is `C:\Windows\SYSVOL\domain\scripts`, but `OutputRoot` can point to any writable local or UNC directory.
+- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
 
 ## First run
 
@@ -662,7 +662,7 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - .NET is not required on the destination machine when using the self-contained release build.
 - AD features can run on a domain controller, a domain-joined workstation, or a standalone/workgroup Windows computer. Auto mode uses the current Windows credentials; Explicit DC mode can use session-only AD credentials.
 - Microsoft 365 / Entra / Intune features do not require Windows domain membership.
-- The legacy output root is `C:\Windows\SYSVOL\domain\scripts`, but `OutputRoot` can point to any writable local or UNC directory.
+- Recovery export storage is separate from live recovery search. New installations use `%ProgramData%\\BitKeyBridge\\RecoveryExport` by default; `OutputRoot` can point to another writable local or UNC directory.
 
 ## First run
 
