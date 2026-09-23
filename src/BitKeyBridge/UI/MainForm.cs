@@ -4378,7 +4378,7 @@ public sealed class MainForm : DpiAwareForm
                                     DateTime.Now));
                         }
 
-                        if (found.Count == 0)
+                        if (computers.Count == 0)
                         {
                             var idQuery =
                                 query
@@ -4389,19 +4389,46 @@ public sealed class MainForm : DpiAwareForm
 
                             if (idQuery.Length >= 4)
                             {
-                                found =
-                                    service.GetRecoveryRecords(
+                                var metadataMatches =
+                                    service.GetRecoveryMetadata(
                                             dc,
-                                            scope,
-                                            DateTime.Now)
+                                            scope)
                                         .Where(
                                             x =>
-                                                x.BitLockerId.Contains(
+                                                x.RecoveryId.Contains(
                                                     idQuery,
                                                     StringComparison.OrdinalIgnoreCase))
                                         .Take(
-                                            200)
+                                            100)
                                         .ToList();
+
+                                foreach (var computerName in
+                                         metadataMatches
+                                             .Select(
+                                                 x =>
+                                                     x.ComputerName)
+                                             .Distinct(
+                                                 StringComparer.OrdinalIgnoreCase))
+                                {
+                                    var computer =
+                                        service.FindComputerByName(
+                                            dc,
+                                            computerName);
+
+                                    if (computer is null)
+                                        continue;
+
+                                    found.AddRange(
+                                        service.GetRecoveryRecordsForComputer(
+                                            dc,
+                                            computer.DistinguishedName,
+                                            DateTime.Now)
+                                            .Where(
+                                                x =>
+                                                    x.BitLockerId.Contains(
+                                                        idQuery,
+                                                        StringComparison.OrdinalIgnoreCase)));
+                                }
                             }
                         }
 
