@@ -13,6 +13,9 @@
 - Added shared DPI-aware WinForms behavior across the main window and dialogs, including working-area constraints and scroll fallback for high display scaling, large text, RDP, and smaller screens.
 - All main tabs now permit scrolling when DPI/text scaling makes content larger than the visible client area.
 - Main GUI title now reads the assembly version instead of a hard-coded version string.
+- Reworked the first GUI tab into a guided **BitLocker Recovery Search** workflow: connect to AD, automatically open the OU selector, then search live AD by computer name or Recovery ID.
+- Added live scoped AD recovery lookup so the first screen can retrieve matching BitLocker recovery records directly from the selected OU without requiring a prior CSV export.
+- Removed legacy SYSVOL and `BL` defaults. New installations use `%ProgramData%\BitKeyBridge\RecoveryExport` as the internal default export root with no forced subdirectory.
 - Application configuration schema remains v3 for the optional privileged-access/SIEM settings.
 
 ## 0.15.0
