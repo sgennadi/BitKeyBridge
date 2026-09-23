@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class RemoteApiScopedTokenDialog : Form
+public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
 {
     private readonly AppConfig _config;
     private readonly Label _readStatus = new();
