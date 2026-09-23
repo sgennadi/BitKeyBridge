@@ -18,7 +18,6 @@ public sealed partial class MainForm
 
     private readonly ComboBox _deviceRecoveryIds = new();
     private readonly TextBox _deviceRecoveryKey = new();
-    private readonly Button _deviceGetKey = new();
     private readonly Button _deviceShowKey = new();
     private readonly Button _deviceCopyKey = new();
     private string? _deviceCurrentKey;
@@ -666,21 +665,17 @@ public sealed partial class MainForm
         _deviceRecoveryIds.Width = 330;
         keyPanel.Controls.Add(_deviceRecoveryIds);
 
-        _deviceGetKey.Text = "Get Key";
-        _deviceGetKey.AutoSize = true;
-        keyPanel.Controls.Add(_deviceGetKey);
-
         _deviceRecoveryKey.Width = 410;
         _deviceRecoveryKey.ReadOnly = true;
         _deviceRecoveryKey.UseSystemPasswordChar = true;
         _deviceRecoveryKey.Font = new Font("Consolas", 9.5F);
         keyPanel.Controls.Add(_deviceRecoveryKey);
 
-        _deviceShowKey.Text = "Show";
+        _deviceShowKey.Text = "Reveal Key";
         _deviceShowKey.AutoSize = true;
         keyPanel.Controls.Add(_deviceShowKey);
 
-        _deviceCopyKey.Text = "Copy";
+        _deviceCopyKey.Text = "Copy Key";
         _deviceCopyKey.AutoSize = true;
         keyPanel.Controls.Add(_deviceCopyKey);
 
@@ -716,16 +711,23 @@ public sealed partial class MainForm
                 PopulateDeviceRecoveryIds();
             };
 
-        _deviceGetKey.Click +=
-            async (_, _) => await GetSelectedDeviceCloudKeyAsync();
+        _deviceRecoveryIds.SelectedIndexChanged +=
+            (_, _) =>
+            {
+                _deviceCurrentKey = null;
+                _deviceRecoveryContext = null;
+                _deviceRecoveryKey.Clear();
+                _deviceRecoveryKey.UseSystemPasswordChar = true;
+                _deviceShowKey.Text = "Reveal Key";
+            };
 
         _deviceShowKey.Click +=
-            (_, _) =>
-                RevealSelectedDeviceCloudKey();
+            async (_, _) =>
+                await RevealSelectedDeviceCloudKeyAsync();
 
         _deviceCopyKey.Click +=
-            (_, _) =>
-                CopySelectedDeviceCloudKey();
+            async (_, _) =>
+                await CopySelectedDeviceCloudKeyAsync();
 
         rotate.Click +=
             async (_, _) => await RotateSelectedUnifiedDeviceAsync();
@@ -1008,13 +1010,35 @@ public sealed partial class MainForm
             _deviceRecoveryIds.SelectedIndex = 0;
     }
 
-    private async Task GetSelectedDeviceCloudKeyAsync()
+    private bool TryGetSelectedDeviceRecovery(
+        out UnifiedDeviceInfo? row,
+        out string recoveryId)
     {
+        row = null;
+        recoveryId = string.Empty;
+
         if (_unifiedResults.SelectedItems.Count == 0 ||
             _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo row ||
+                UnifiedDeviceInfo selected ||
             _deviceRecoveryIds.SelectedItem is not
-                string recoveryId)
+                string selectedRecoveryId)
+        {
+            return false;
+        }
+
+        row = selected;
+        recoveryId = selectedRecoveryId;
+        return true;
+    }
+
+    private async Task<(string Key, RecoveryAccessContext Context)?>
+        EnsureSelectedDeviceCloudKeyAsync(
+            string action)
+    {
+        if (!TryGetSelectedDeviceRecovery(
+                out var row,
+                out var recoveryId) ||
+            row is null)
         {
             MessageBox.Show(
                 this,
@@ -1022,17 +1046,17 @@ public sealed partial class MainForm
                 "Devices",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
-            return;
+            return null;
         }
 
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
-                "GetUnifiedCloudRecoveryKey",
+                action,
                 row.ComputerName,
                 recoveryId,
                 "Entra"))
         {
-            return;
+            return null;
         }
 
         var context =
@@ -1041,53 +1065,52 @@ public sealed partial class MainForm
                 recoveryId,
                 row.ComputerName,
                 allowRotationReminder: true);
+
         if (context is null)
-            return;
+            return null;
 
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
-                "GetUnifiedCloudRecoveryKey",
+                action,
                 row.ComputerName,
                 recoveryId,
                 "Entra"))
         {
-            return;
+            return null;
         }
-
-        if (!await EnsureCloudTokenAsync())
-            return;
 
         try
         {
-            using var graph =
-                new CloudGraphService();
+            if (string.IsNullOrWhiteSpace(
+                    _deviceCurrentKey))
+            {
+                if (!await EnsureCloudTokenAsync())
+                    return null;
 
-            _deviceCurrentKey =
-                await graph.GetRecoveryKeyValueAsync(
-                    _cloudToken!.AccessToken,
-                    recoveryId);
+                using var graph =
+                    new CloudGraphService();
+
+                _deviceCurrentKey =
+                    await graph.GetRecoveryKeyValueAsync(
+                        _cloudToken!.AccessToken,
+                        recoveryId);
+            }
+
             _deviceRecoveryContext =
                 context;
-
             _deviceRecoveryKey.Text =
                 _deviceCurrentKey;
             _deviceRecoveryKey.UseSystemPasswordChar =
                 true;
-            _deviceShowKey.Text =
-                "Show";
 
-            WriteRecoveryAudit(
-                "GetUnifiedCloudRecoveryKey",
-                context,
-                computerName: row.ComputerName,
-                recoveryId: recoveryId,
-                source: "Entra",
-                authMode: _cloudToken.AuthMode);
+            return (
+                _deviceCurrentKey!,
+                context);
         }
         catch (Exception ex)
         {
             WriteRecoveryAudit(
-                "GetUnifiedCloudRecoveryKey",
+                action,
                 context,
                 result: "Failed",
                 computerName: row.ComputerName,
@@ -1102,77 +1125,78 @@ public sealed partial class MainForm
                 "Devices",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+
+            return null;
         }
     }
-    private void RevealSelectedDeviceCloudKey()
+
+    private async Task RevealSelectedDeviceCloudKeyAsync()
     {
-        if (string.IsNullOrWhiteSpace(_deviceCurrentKey) ||
-            _deviceRecoveryContext is null ||
-            _unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo row ||
-            _deviceRecoveryIds.SelectedItem is not
-                string recoveryId)
+        if (!_deviceRecoveryKey.UseSystemPasswordChar &&
+            !string.IsNullOrWhiteSpace(
+                _deviceCurrentKey))
+        {
+            _deviceRecoveryKey.UseSystemPasswordChar =
+                true;
+            _deviceShowKey.Text =
+                "Reveal Key";
+            return;
+        }
+
+        var access =
+            await EnsureSelectedDeviceCloudKeyAsync(
+                "RevealUnifiedCloudRecoveryKey");
+
+        if (access is null ||
+            !TryGetSelectedDeviceRecovery(
+                out var row,
+                out var recoveryId) ||
+            row is null)
         {
             return;
         }
 
-        if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
-                "RevealUnifiedCloudRecoveryKey",
-                row.ComputerName,
-                recoveryId,
-                "Entra"))
-        {
-            return;
-        }
-
-        ToggleKey(
-            _deviceRecoveryKey,
-            _deviceShowKey);
+        _deviceRecoveryKey.Text =
+            access.Value.Key;
+        _deviceRecoveryKey.UseSystemPasswordChar =
+            false;
+        _deviceShowKey.Text =
+            "Hide Key";
 
         WriteRecoveryAudit(
             "RevealUnifiedCloudRecoveryKey",
-            _deviceRecoveryContext,
+            access.Value.Context,
             computerName: row.ComputerName,
             recoveryId: recoveryId,
             source: "Entra",
             authMode: _cloudToken?.AuthMode);
     }
 
-    private void CopySelectedDeviceCloudKey()
+    private async Task CopySelectedDeviceCloudKeyAsync()
     {
-        if (string.IsNullOrWhiteSpace(_deviceCurrentKey) ||
-            _deviceRecoveryContext is null ||
-            _unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo row ||
-            _deviceRecoveryIds.SelectedItem is not
-                string recoveryId)
-        {
-            return;
-        }
+        var access =
+            await EnsureSelectedDeviceCloudKeyAsync(
+                "CopyUnifiedCloudRecoveryKey");
 
-        if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
-                "CopyUnifiedCloudRecoveryKey",
-                row.ComputerName,
-                recoveryId,
-                "Entra"))
+        if (access is null ||
+            !TryGetSelectedDeviceRecovery(
+                out var row,
+                out var recoveryId) ||
+            row is null)
         {
             return;
         }
 
         WriteRecoveryAudit(
             "CopyUnifiedCloudRecoveryKey",
-            _deviceRecoveryContext,
+            access.Value.Context,
             computerName: row.ComputerName,
             recoveryId: recoveryId,
             source: "Entra",
             authMode: _cloudToken?.AuthMode);
 
         CopyKeyWithAutoClear(
-            _deviceCurrentKey);
+            access.Value.Key);
     }
 
 }
