@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BitKeyBridge;
 
-public sealed class MainForm : DpiAwareForm
+public sealed partial class MainForm : DpiAwareForm
 {
     private readonly AppConfig _config;
     private readonly ActiveDirectoryService _ad;
@@ -131,20 +131,7 @@ public sealed class MainForm : DpiAwareForm
         MinimumSize = new Size(1000, 700);
         Font = new Font("Segoe UI", 9F);
 
-        var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(BuildDirectoryConnectionTab());
-        tabs.TabPages.Add(BuildDashboardTab());
-        tabs.TabPages.Add(BuildOperationsTab());
-        tabs.TabPages.Add(BuildExportTab());
-        tabs.TabPages.Add(BuildDcTab());
-        tabs.TabPages.Add(BuildLocalSearchTab());
-        tabs.TabPages.Add(BuildCoverageTab());
-        tabs.TabPages.Add(BuildUnifiedTab());
-        tabs.TabPages.Add(BuildCloudTab());
-        tabs.TabPages.Add(BuildAuditTab());
-        foreach (TabPage tabPage in tabs.TabPages)
-            tabPage.AutoScroll = true;
-        Controls.Add(tabs);
+        Controls.Add(BuildMainShell());
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -156,8 +143,14 @@ public sealed class MainForm : DpiAwareForm
         FormClosing += (_, _) => ClearSensitiveState();
         Shown += async (_, _) =>
         {
-            if (_config.CheckForUpdatesOnStart)
-                await CheckForUpdatesGuiAsync(silentWhenCurrent: true);
+            await InitializeRecoveryWorkspaceAsync();
+
+            if (_config.CheckForUpdatesOnStart &&
+                AdministrationAllowed)
+            {
+                await CheckForUpdatesGuiAsync(
+                    silentWhenCurrent: true);
+            }
         };
     }
 
