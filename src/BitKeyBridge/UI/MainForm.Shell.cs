@@ -21,7 +21,6 @@ public sealed partial class MainForm
     private readonly Button _deviceShowKey = new();
     private readonly Button _deviceCopyKey = new();
     private string? _deviceCurrentKey;
-    private RecoveryAccessContext? _deviceRecoveryContext;
 
     private bool AdministrationAllowed =>
         new AuthorizationService(_config)
@@ -715,7 +714,6 @@ public sealed partial class MainForm
             (_, _) =>
             {
                 _deviceCurrentKey = null;
-                _deviceRecoveryContext = null;
                 _deviceRecoveryKey.Clear();
                 _deviceRecoveryKey.UseSystemPasswordChar = true;
                 _deviceShowKey.Text = "Reveal Key";
@@ -993,7 +991,6 @@ public sealed partial class MainForm
     {
         _deviceRecoveryIds.Items.Clear();
         _deviceCurrentKey = null;
-        _deviceRecoveryContext = null;
         _deviceRecoveryKey.Clear();
 
         if (_unifiedResults.SelectedItems.Count == 0 ||
@@ -1095,9 +1092,6 @@ public sealed partial class MainForm
                         _cloudToken!.AccessToken,
                         recoveryId);
             }
-
-            _deviceRecoveryContext =
-                context;
             _deviceRecoveryKey.Text =
                 _deviceCurrentKey;
             _deviceRecoveryKey.UseSystemPasswordChar =
