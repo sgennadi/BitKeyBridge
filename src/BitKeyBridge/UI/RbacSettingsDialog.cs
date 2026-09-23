@@ -6,19 +6,21 @@ public sealed class RbacSettingsDialog : DpiAwareForm
     private readonly CheckBox _adminBypass = new();
     private readonly TextBox _readers = new();
     private readonly TextBox _rotators = new();
+    private readonly TextBox _administrators = new();
     private readonly Label _status = new();
 
     public bool RbacEnabled => _enabled.Checked;
     public bool AllowLocalAdministrators => _adminBypass.Checked;
     public List<string> RecoveryReaders => ParsePrincipals(_readers.Text);
     public List<string> RotationOperators => ParsePrincipals(_rotators.Text);
+    public List<string> Administrators => ParsePrincipals(_administrators.Text);
 
     public RbacSettingsDialog(AppConfig config)
     {
         Text = "BitKeyBridge RBAC";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(760, 620);
-        MinimumSize = new Size(700, 560);
+        Size = new Size(780, 760);
+        MinimumSize = new Size(720, 680);
         Font = new Font("Segoe UI", 9F);
 
         var title = new Label
@@ -110,7 +112,35 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             config.RbacRotationOperators);
         Controls.Add(_rotators);
 
-        _status.SetBounds(20, 492, 700, 45);
+        Controls.Add(new Label
+        {
+            Text = "BitKeyBridge Administrators",
+            Left = 20,
+            Top = 492,
+            Width = 240,
+            Height = 24,
+            Font = new Font("Segoe UI Semibold", 10F)
+        });
+
+        Controls.Add(new Label
+        {
+            Text =
+                "May see Administration and Health & Audit sections without being a local Windows Administrator.",
+            Left = 20,
+            Top = 517,
+            Width = 710,
+            Height = 24
+        });
+
+        _administrators.Multiline = true;
+        _administrators.ScrollBars = ScrollBars.Vertical;
+        _administrators.SetBounds(20, 546, 710, 90);
+        _administrators.Text = string.Join(
+            Environment.NewLine,
+            config.RbacAdministrators);
+        Controls.Add(_administrators);
+
+        _status.SetBounds(20, 646, 710, 45);
         _status.Text =
             "Current identity: " + AuthorizationService.CurrentIdentityName();
         Controls.Add(_status);
@@ -119,7 +149,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         {
             Text = "Validate",
             Left = 20,
-            Top = 542,
+            Top = 696,
             Width = 110,
             Height = 34
         };
@@ -127,7 +157,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         {
             Text = "Save",
             Left = 495,
-            Top = 542,
+            Top = 696,
             Width = 105,
             Height = 34
         };
@@ -135,7 +165,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         {
             Text = "Cancel",
             Left = 615,
-            Top = 542,
+            Top = 696,
             Width = 105,
             Height = 34
         };
@@ -164,13 +194,15 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             RbacEnabled = _enabled.Checked,
             RbacAllowLocalAdministrators = _adminBypass.Checked,
             RbacRecoveryReaders = RecoveryReaders,
-            RbacRotationOperators = RotationOperators
+            RbacRotationOperators = RotationOperators,
+            RbacAdministrators = Administrators
         };
 
         if (config.RbacEnabled &&
             !config.RbacAllowLocalAdministrators &&
             config.RbacRecoveryReaders.Count == 0 &&
-            config.RbacRotationOperators.Count == 0)
+            config.RbacRotationOperators.Count == 0 &&
+            config.RbacAdministrators.Count == 0)
         {
             _status.Text =
                 "Invalid: RBAC would deny all privileged actions.";
@@ -202,11 +234,13 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         var auth = new AuthorizationService(config);
         var read = auth.Check(BitKeyBridgePermission.RecoveryRead);
         var rotate = auth.Check(BitKeyBridgePermission.Rotate);
+        var admin = auth.Check(BitKeyBridgePermission.Administrator);
 
         _status.Text =
             $"Current identity: {AuthorizationService.CurrentIdentityName()} | " +
             $"RecoveryRead={(read.Allowed ? "Allowed" : "Denied")} | " +
-            $"Rotate={(rotate.Allowed ? "Allowed" : "Denied")}";
+            $"Rotate={(rotate.Allowed ? "Allowed" : "Denied")} | " +
+            $"AdminUI={(admin.Allowed ? "Allowed" : "Denied")}";
 
         if (showSuccess)
         {
