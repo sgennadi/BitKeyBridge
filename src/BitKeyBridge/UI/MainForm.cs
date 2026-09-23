@@ -5997,6 +5997,9 @@ public sealed partial class MainForm : DpiAwareForm
 
         _localCurrentKey = null;
         _cloudCurrentKey = null;
+        _deviceCurrentKey = null;
+        _deviceRecoveryContext = null;
+        _deviceRecoveryKey.Clear();
         _cloudToken = null;
         AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
