@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class RbacSettingsDialog : Form
+public sealed class RbacSettingsDialog : DpiAwareForm
 {
     private readonly CheckBox _enabled = new();
     private readonly CheckBox _adminBypass = new();
