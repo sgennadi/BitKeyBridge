@@ -2087,7 +2087,9 @@ public sealed partial class MainForm : DpiAwareForm
         _adCredentialStorage.Enabled = _adExplicitCredentials.Checked;
     }
 
-    private void SaveDirectorySettings(bool showConfirmation)
+    private void SaveDirectorySettings(
+        bool showConfirmation,
+        bool allowInMemoryFallback = false)
     {
         _config.AdConnectionMode =
             _adMode.SelectedIndex == 1
@@ -2166,8 +2168,27 @@ public sealed partial class MainForm : DpiAwareForm
         _config.OutputSubdirectory =
             _outputSubdirectory.Text.Trim();
 
-        ConfigService.SaveAppConfig(
-            _config);
+        var persisted = true;
+        try
+        {
+            ConfigService.SaveAppConfig(
+                _config);
+        }
+        catch (Exception ex)
+        {
+            persisted = false;
+
+            if (!allowInMemoryFallback)
+                throw;
+
+            _audit.Write(
+                "SaveDirectorySettings",
+                "SessionOnly",
+                source: "Local",
+                details:
+                    "Machine configuration was not writable; current controls remain active in memory. " +
+                    ex.Message);
+        }
 
         _audit.Write(
             "SaveDirectorySettings",
@@ -2186,10 +2207,14 @@ public sealed partial class MainForm : DpiAwareForm
         {
             MessageBox.Show(
                 this,
-                "Active Directory and recovery-search settings saved.",
+                persisted
+                    ? "Active Directory and recovery-search settings saved."
+                    : "Settings are active for this BitKeyBridge session, but the machine configuration could not be updated.",
                 "BitKeyBridge",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                persisted
+                    ? MessageBoxIcon.Information
+                    : MessageBoxIcon.Warning);
         }
     }
 
@@ -2229,7 +2254,9 @@ public sealed partial class MainForm : DpiAwareForm
 
         try
         {
-            SaveDirectorySettings(showConfirmation: false);
+            SaveDirectorySettings(
+                showConfirmation: false,
+                allowInMemoryFallback: true);
             var mode = GetSelectedCredentialStorageMode();
             var vault = new CredentialVaultService();
 
@@ -2393,7 +2420,8 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             SaveDirectorySettings(
-                showConfirmation: false);
+                showConfirmation: false,
+                allowInMemoryFallback: true);
 
             _adConnectionStatus.Text =
                 "Connecting to Active Directory...";
