@@ -663,8 +663,16 @@ public sealed class MainForm : DpiAwareForm
                         : "Advanced connection settings...";
 
                 if (advancedGroup.Visible)
+                {
+                    RefreshCredentialVaultStatus();
                     tab.ScrollControlIntoView(
                         advancedGroup);
+                }
+                else
+                {
+                    tab.ScrollControlIntoView(
+                        connectionGroup);
+                }
             };
 
         connect.Click +=
@@ -4255,10 +4263,7 @@ public sealed class MainForm : DpiAwareForm
             });
 
             _adConnectionStatus.Text =
-                $"OK: {result.Server}:{_config.AdPort}    " +
-                $"Protocol: {(_config.AdUseLdaps || _config.AdPort == 636 ? "LDAPS" : "LDAP signed/sealed")}    " +
-                $"Domain DN: {result.Root.GetValueOrDefault("defaultNamingContext", "-")}    " +
-                $"RODC: {result.Root.GetValueOrDefault("isRODC", "Unknown")}";
+                $"Connected to {result.Server}. Ready to select an OU and search BitLocker.";
 
             _startDomainDn =
                 result.Root.GetValueOrDefault(
