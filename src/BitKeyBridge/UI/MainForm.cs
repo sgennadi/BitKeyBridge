@@ -2161,6 +2161,17 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadCloudFields()
     {
+        if (_cloudAuthMode.Items.Count == 0)
+        {
+            _cloudAuthMode.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+            _cloudAuthMode.Items.AddRange([
+                "Device Code (MFA / Conditional Access)",
+                "Username + Password (ROPC legacy)",
+                "App registration + certificate"
+            ]);
+        }
+
         _cloudConfig = ConfigService.LoadCloudConfig();
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
