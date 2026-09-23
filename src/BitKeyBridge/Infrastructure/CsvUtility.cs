@@ -50,6 +50,95 @@ public static class CsvUtility
         return count;
     }
 
+    public static List<RecoverySearchResult> ReadRecoveryMetadata(
+        string path,
+        string query = "",
+        int maximumItems = 1000)
+    {
+        var result = new List<RecoverySearchResult>();
+        if (!File.Exists(path))
+            return result;
+
+        query = query?.Trim() ?? string.Empty;
+        using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        _ = reader.ReadLine();
+
+        while (reader.ReadLine() is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            var fields = ParseLine(line);
+            if (fields.Count < 4)
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(query) &&
+                !fields[0].Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                !fields[1].Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            DateTime.TryParse(fields[3], out var checkedAt);
+            result.Add(new RecoverySearchResult
+            {
+                ComputerName = fields[0],
+                RecoveryId = fields[1],
+                LastChecked = checkedAt == default ? null : checkedAt,
+                Source = "Local cache"
+            });
+
+            if (result.Count >= Math.Clamp(maximumItems, 1, 10000))
+                break;
+        }
+
+        return result;
+    }
+
+    public static string GetRecoveryPassword(
+        string path,
+        string computerName,
+        string recoveryId)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException(
+                "The local recovery cache was not found.",
+                path);
+
+        using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        _ = reader.ReadLine();
+
+        while (reader.ReadLine() is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            var fields = ParseLine(line);
+            if (fields.Count < 4)
+                continue;
+
+            if (!string.Equals(fields[0], computerName, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(fields[1], recoveryId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var password = fields[2];
+            if (!System.Text.RegularExpressions.Regex.IsMatch(
+                    password,
+                    @"^\d{6}(?:-\d{6}){7}$"))
+            {
+                throw new InvalidDataException(
+                    "The selected cached BitLocker recovery password has an unexpected format.");
+            }
+
+            return password;
+        }
+
+        throw new KeyNotFoundException(
+            "The selected recovery record no longer exists in the local cache.");
+    }
+
     public static List<RecoveryRecord> ReadRecoveryCsv(string path)
     {
         var result = new List<RecoveryRecord>();
