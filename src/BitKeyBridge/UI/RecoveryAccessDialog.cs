@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class RecoveryAccessDialog : Form
+public sealed class RecoveryAccessDialog : DpiAwareForm
 {
     private readonly TextBox _reference = new();
     private readonly TextBox _reason = new();
