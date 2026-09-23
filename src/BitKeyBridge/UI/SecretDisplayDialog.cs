@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class SecretDisplayDialog : Form
+public sealed class SecretDisplayDialog : DpiAwareForm
 {
     private readonly TextBox _secret = new();
 
