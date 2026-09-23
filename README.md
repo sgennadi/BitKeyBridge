@@ -211,15 +211,15 @@ BitKeyBridge.exe --dry-run --search-base "OU=Workstations,DC=example,DC=com"
 
 BitKeyBridge separates the **computer that runs the application** from the **domain controller and output location**.
 
-In **Directory Connection**:
+In **Recovery → Advanced connection settings...**:
 
 - **Auto - domain workstation / DC** discovers the current domain and uses the current Windows credentials.
 - **Explicit DC - standalone / workstation** connects to a specified DC/FQDN.
 - Optional explicit AD credentials accept `DOMAIN\\user` or `user@domain`.
 - LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
 - The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
-- **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
+- **Connect to AD** validates LDAP/RootDSE before live recovery and device operations.
+- Export storage is configured separately under **Administration → Export & Automation**. The output root can be local or UNC; leaving `OutputRoot` empty uses `%ProgramData%\\BitKeyBridge\\RecoveryExport`.
 
 Standalone CLI example:
 
@@ -819,7 +819,7 @@ There is no plaintext password command-line option.
 
 ## Microsoft Entra / Intune
 
-The **Entra / Intune Cloud** tab supports:
+**Administration → Cloud** supports:
 
 - recommended interactive Device Code authentication with MFA / Conditional Access;
 - legacy ROPC/manual authentication;
@@ -827,7 +827,7 @@ The **Entra / Intune Cloud** tab supports:
 - delegated `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All`;
 - application `BitlockerKey.Read.All`, `Device.Read.All`, and `DeviceManagementManagedDevices.ReadWrite.All` for certificate mode.
 
-The actual 48-digit recovery password is not downloaded during search. It is requested only after selecting a result and clicking **Get Key from Entra**.
+The actual 48-digit recovery password is not downloaded during search. In **Devices**, select a device and Recovery ID, then use **Get Key** only when the password is actually needed.
 
 ### First-Run / Repair Entra Setup
 
@@ -835,7 +835,7 @@ A pre-created App Registration is **not required**.
 
 On a completely clean tenant-side setup:
 
-1. Open **Entra / Intune Cloud**.
+1. Open **Administration → Cloud**.
 2. Leave **Client ID** empty.
 3. Click **First-Run / Repair Setup**.
 4. BitKeyBridge uses Microsoft's first-party **Microsoft Graph Command Line Tools** public client only for the temporary Device Code bootstrap.
@@ -1223,7 +1223,7 @@ The same engine is available from CLI with `--coverage`. It can write machine-re
 
 ## Unified Devices and key rotation
 
-The **Unified Devices** tab can search by device name, serial number, user/UPN, Entra device ID, or Intune managed-device ID. Results merge AD computer data, Intune inventory, and Entra BitLocker metadata. If the device is Intune-managed, an administrator can submit a BitLocker recovery-key rotation request after explicit confirmation.
+The **Devices** tab can search by device name, serial number, user/UPN, Entra device ID, or Intune managed-device ID. Results merge AD computer data, Intune inventory, and Entra BitLocker metadata. If the device is Intune-managed, an administrator can submit a BitLocker recovery-key rotation request after explicit confirmation.
 
 The rotation action uses Microsoft Graph `deviceManagement/managedDevices/{id}/rotateBitLockerKeys`. Intune applies the action asynchronously on the managed device; the recovery key shown in the current session is not assumed to change immediately.
 
