@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.1
+
+- Simplified the first GUI tab into a helpdesk-focused BitLocker recovery workflow.
+- The normal first-screen flow is now **Connect to AD → Select OU → Search BitLocker → Show/Copy Key**.
+- Moved DC/FQDN, domain, LDAP/LDAPS, explicit credentials, credential storage, and vault controls into **Advanced connection settings...**, hidden by default.
+- Added a larger computer name / Recovery ID search field and clearer recovery-purpose/status text.
+- The first screen no longer looks like a connection/configuration utility; it now presents BitLocker recovery as the primary task.
+- Existing advanced AD settings, standalone/workgroup connectivity, protected credential storage, RBAC, JIT recovery, two-person approval, and auditing behavior are preserved.
+
 ## 0.16.0
 
 - Added optional time-limited JIT recovery grants. JIT is disabled by default and must be explicitly enabled by an administrator.
