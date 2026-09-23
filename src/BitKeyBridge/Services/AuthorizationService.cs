@@ -101,7 +101,8 @@ public sealed class AuthorizationService
             };
         }
 
-        if (!privilegedControl &&
+        if (!administrativeControl &&
+            !privilegedControl &&
             !_config.RbacEnabled)
         {
             return new AuthorizationDecision
@@ -126,7 +127,9 @@ public sealed class AuthorizationService
                 MatchedPrincipal =
                     "BUILTIN\\Administrators",
                 Reason =
-                    "Local Administrators bypass is enabled."
+                    administrativeControl
+                        ? "Current identity is a local Windows Administrator."
+                        : "Local Administrators bypass is enabled."
             };
         }
 
