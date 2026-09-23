@@ -114,7 +114,7 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 8
+            RowCount = 9
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -563,7 +563,7 @@ public sealed partial class MainForm
         nested.TabPages.Add(BuildDeviceSearchPage());
 
         if (AdministrationAllowed)
-            nested.TabPages.Add(BuildCoverageTab());
+            nested.TabPages.Add(BuildCoverageResponsiveTab());
 
         tab.Controls.Add(nested);
         return tab;
@@ -742,23 +742,8 @@ public sealed partial class MainForm
         };
 
         nested.TabPages.Add(BuildCloudAdministrationTab());
-
-        var operations = BuildOperationsTab();
-        HideToolButtons(
-            operations,
-            "Open Release",
-            "Event Log");
-        operations.Text = "Security & Settings";
-        nested.TabPages.Add(operations);
-
-        var export = BuildExportTab();
-        HideToolButtons(
-            export,
-            "Open CSV",
-            "Open Log",
-            "Open Folder");
-        export.Text = "Export & Automation";
-        nested.TabPages.Add(export);
+        nested.TabPages.Add(BuildSecuritySettingsResponsiveTab());
+        nested.TabPages.Add(BuildExportAutomationResponsiveTab());
 
         tab.Controls.Add(nested);
         return tab;
@@ -772,15 +757,10 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill
         };
 
-        var dashboard = BuildDashboardTab();
-        dashboard.Text = "Service & Health";
-        nested.TabPages.Add(dashboard);
+        nested.TabPages.Add(BuildServiceHealthResponsiveTab());
+        nested.TabPages.Add(BuildDomainControllersResponsiveTab());
+        nested.TabPages.Add(BuildAuditResponsiveTab());
 
-        var dc = BuildDcTab();
-        dc.Text = "Domain Controllers";
-        nested.TabPages.Add(dc);
-
-        nested.TabPages.Add(BuildAuditTab());
         tab.Controls.Add(nested);
         return tab;
     }
