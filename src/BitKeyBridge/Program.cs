@@ -1553,6 +1553,43 @@ internal static class Program
                         "Schema v4 helpdesk UI defaults are invalid.");
                 }
 
+                if (OperatingSystem.IsWindows())
+                {
+                    using var currentIdentity =
+                        System.Security.Principal.WindowsIdentity.GetCurrent();
+                    var currentPrincipal =
+                        new System.Security.Principal.WindowsPrincipal(
+                            currentIdentity);
+                    var isLocalAdministrator =
+                        currentPrincipal.IsInRole(
+                            System.Security.Principal.WindowsBuiltInRole.Administrator);
+
+                    var adminDecision =
+                        new AuthorizationService(
+                            uiDefaults)
+                            .Check(
+                                BitKeyBridgePermission.Administrator);
+
+                    if (adminDecision.Allowed !=
+                        isLocalAdministrator)
+                    {
+                        failures.Add(
+                            "Administration UI default authorization is not restricted to local Administrators.");
+                    }
+
+                    var recoveryDecision =
+                        new AuthorizationService(
+                            uiDefaults)
+                            .Check(
+                                BitKeyBridgePermission.RecoveryRead);
+
+                    if (!recoveryDecision.Allowed)
+                    {
+                        failures.Add(
+                            "RBAC-disabled RecoveryRead backward compatibility was broken.");
+                    }
+                }
+
                 var metadataCsv =
                     Path.Combine(
                         tempDirectory,
