@@ -2722,32 +2722,11 @@ public sealed partial class MainForm : DpiAwareForm
                                 if (idQuery.Length >= 4)
                                 {
                                     found.AddRange(
-                                        service.GetRecoveryMetadata(
-                                                dc,
-                                                scope)
-                                            .Where(
-                                                x =>
-                                                    x.RecoveryId.Contains(
-                                                        idQuery,
-                                                        StringComparison.OrdinalIgnoreCase))
-                                            .Take(200)
-                                            .Select(
-                                                x =>
-                                                    new RecoverySearchResult
-                                                    {
-                                                        ComputerName =
-                                                            x.ComputerName,
-                                                        RecoveryId =
-                                                            x.RecoveryId,
-                                                        CreatedDateTime =
-                                                            x.CreatedDateTime,
-                                                        Source =
-                                                            "AD Live",
-                                                        ComputerDistinguishedName =
-                                                            x.ComputerDistinguishedName,
-                                                        RecoveryDistinguishedName =
-                                                            x.RecoveryDistinguishedName
-                                                    }));
+                                        service.SearchRecoveryMetadataInScope(
+                                            dc,
+                                            scope,
+                                            idQuery,
+                                            200));
                                 }
                             }
 
