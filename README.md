@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-Native Windows BitLocker recovery utility for helpdesk and administrators. The primary GUI workflow connects to Active Directory, lets the operator select an OU, and searches for BitLocker recovery information by computer name or Recovery ID. Entra ID / Intune recovery and administration features are available in separate tabs.
+Native Windows BitLocker recovery utility for helpdesk and administrators. The GUI is intentionally helpdesk-first: **Recovery** finds BitLocker recovery information, **Devices** combines AD/Entra/Intune inventory, and administrative/service/security functions stay out of the way unless the current Windows identity is authorized for the Administration UI.
 
 The application is written in **C# / .NET 10 LTS / WinForms**. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
 
@@ -17,12 +17,17 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 - Configurable OU scopes with a GUI OU browser.
 - Atomic verified CSV publishing with partial-export, empty-export, row-drop, and scope-change safety guards.
 - Last-success and status JSON files for monitoring.
-- Local recovery search with masked key display and timed clipboard clearing.
+- Unified Recovery workspace with **Live AD** and **Local cache** sources.
+- Live AD and local-cache search are metadata-only; recovery passwords are read only for the exact selected record after an explicit **Reveal Recovery Key** or **Copy Key** action.
+- Single-result recovery card with Computer, OU/scope, Recovery ID, timestamp, source, and audited on-demand key access.
+- Automatic AD connection on GUI start plus remembered recovery OU/source.
 - Microsoft Graph BitLocker metadata search.
 - Recovery password requested from Entra only on explicit **Get Key** action.
 - Graph authentication by Device Code (MFA / Conditional Access), legacy username/password (ROPC), or app registration + certificate.
 - Zero-registration first-run Entra setup using Microsoft's first-party Device Code bootstrap; no pre-created App Registration, PowerShell, or Graph SDK is required.
-- Unified device search across on-prem AD, Entra BitLocker metadata, and Intune managed devices.
+- Unified **Devices** search across on-prem AD, Entra BitLocker metadata, and Intune managed devices; AD-only search still works when Graph is not configured or unavailable.
+- Role-aware navigation: helpdesk gets Recovery + Devices; authorized BitKeyBridge administrators also get Administration + Health & Audit.
+- Responsive core WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, and text-scaling resilience.
 - Intune BitLocker recovery-key rotation with explicit confirmation.
 - Local JSONL security audit for key reveal/copy/retrieval/rotation events; recovery passwords are redacted and never written to the audit log.
 - Certificate rolling preserves active credentials when the previously managed private certificate is available.
@@ -49,17 +54,25 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 
 Run `BitKeyBridge.exe`. Administrative rights are requested only for operations that require them.
 
-The first tab is **BitLocker Recovery** and shows the intended workflow directly:
+The default helpdesk workflow is intentionally short:
 
-1. Click **Connect to AD**. By default BitKeyBridge auto-discovers a writable DC and uses the current Windows identity.
-2. After a successful connection, the OU selector opens automatically. Choose a specific OU or **Entire domain**.
-3. Enter the computer name or BitLocker Recovery ID in the large search field.
-4. Click **Search BitLocker**.
-5. Select a result, then use **Show Key** or **Copy Key**. Reveal/copy operations are audited and respect configured RBAC, JIT recovery, and two-person approval controls.
+1. Open **Recovery**. With **Live AD** selected, BitKeyBridge automatically attempts to connect to a writable domain controller on startup.
+2. On the first run, choose **Select / Change OU...** and select a specific OU or **Entire domain**. BitKeyBridge remembers the selected scope.
+3. Enter a computer name or BitLocker Recovery ID and click **Search BitLocker**.
+4. Search returns metadata only. If exactly one record is found, BitKeyBridge opens the selected-record card directly.
+5. Click **Reveal Recovery Key** or **Copy Key** only when needed. The exact recovery password is then retrieved on demand after RBAC, JIT and two-person-approval policy checks.
 
-Most helpdesk users do not need to see connection internals. Click **Advanced connection settings...** only when you need an explicit DC/FQDN, custom LDAP/LDAPS port, standalone/workgroup credentials, or protected credential storage.
+Use the **Source** selector to switch from **Live AD** to **Local cache**. Local cache uses the recovery export CSV as an offline fallback but still searches metadata first and reads only the selected password on demand.
 
-A prior CSV export is **not required** for this live AD recovery workflow. The separate **Export** and **Recovery Search** tabs remain available for scheduled/exported recovery datasets and offline/local-cache workflows.
+Most helpdesk users never need connection internals. **Advanced connection settings...** contains explicit DC/FQDN, LDAP/LDAPS, standalone/workgroup credentials, protected credential storage, and the Auto-connect setting.
+
+### GUI sections
+
+- **Recovery** — BitLocker recovery lookup and on-demand key reveal/copy.
+- **Devices** — AD device search with optional Entra/Intune enrichment, Entra recovery-key retrieval, and Intune key rotation.
+- **Administration** — visible only to local Windows Administrators or principals configured in `RbacAdministrators`; contains Cloud configuration, security/settings, export and automation.
+- **Health & Audit** — visible to the same administrator role; contains service/health, domain-controller comparison, and audit controls.
+- **Tools** — consolidated shortcuts for export files/logs/folders, Windows Event Log, and the latest GitHub release.
 
 Machine configuration is stored at:
 
@@ -1131,6 +1144,8 @@ BitKeyBridge.exe --rbac-rotator-add "DOMAIN\BitLocker Rotation Operators"
 BitKeyBridge.exe --rbac-admin-bypass off
 BitKeyBridge.exe --rbac-enable
 BitKeyBridge.exe --rbac-status
+BitKeyBridge.exe --rbac-ui-admin-add "DOMAIN\\BitKeyBridge Admins"
+BitKeyBridge.exe --rbac-ui-admin-remove "DOMAIN\\BitKeyBridge Admins"
 ```
 
 Denied actions are recorded in both the local security audit and Windows Application Event Log. Recovery passwords are never included in those denial records.
