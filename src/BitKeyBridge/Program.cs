@@ -1497,6 +1497,38 @@ internal static class Program
 
             try
             {
+                var exportDefaults =
+                    new AppConfig();
+
+                if (!string.IsNullOrWhiteSpace(
+                        exportDefaults.SysvolScriptsRoot) ||
+                    !string.IsNullOrWhiteSpace(
+                        exportDefaults.OutputSubdirectory) ||
+                    !string.Equals(
+                        exportDefaults.EffectiveOutputRoot,
+                        AppConfig.DefaultOutputRoot,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        exportDefaults.OutputDirectory,
+                        AppConfig.DefaultOutputRoot,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    exportDefaults.EffectiveOutputRoot.Contains(
+                        "SYSVOL",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add(
+                        "Default recovery export path unexpectedly uses SYSVOL or a forced subdirectory.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Recovery export defaults: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var privilegedDefaults =
                     new AppConfig();
 
