@@ -9,6 +9,50 @@ public sealed class UnifiedDeviceService
         _ad = new ActiveDirectoryService(config);
     }
 
+    public async Task<List<UnifiedDeviceInfo>> SearchAdOnlyAsync(
+        string query,
+        int maximumItems = 250,
+        CancellationToken ct = default)
+    {
+        query = query?.Trim() ?? string.Empty;
+        var dc = _ad.GetPreferredWritableDc();
+
+        var rows =
+            await Task.Run(
+                () =>
+                    _ad.SearchComputers(
+                        dc,
+                        query,
+                        maximumItems),
+                ct);
+
+        return rows
+            .Select(
+                ad =>
+                    new UnifiedDeviceInfo
+                    {
+                        ComputerName = ad.ComputerName,
+                        FoundInAd = true,
+                        AdDistinguishedName =
+                            ad.DistinguishedName,
+                        OperatingSystem =
+                            ad.OperatingSystem,
+                        OsVersion =
+                            ad.OperatingSystemVersion,
+                        AdLastLogonTimestamp =
+                            ad.LastLogonTimestamp
+                    })
+            .OrderBy(
+                x => x.ComputerName,
+                StringComparer.OrdinalIgnoreCase)
+            .Take(
+                Math.Clamp(
+                    maximumItems,
+                    1,
+                    1000))
+            .ToList();
+    }
+
     public async Task<List<UnifiedDeviceInfo>> SearchAsync(
         string accessToken,
         string query,
