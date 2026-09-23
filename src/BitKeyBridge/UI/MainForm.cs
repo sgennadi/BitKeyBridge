@@ -3938,17 +3938,48 @@ public sealed partial class MainForm : DpiAwareForm
         _adUsername.Text = _config.AdUsername;
         _adPassword.Clear();
         _adPort.Value = Math.Clamp(_config.AdPort, 1, 65535);
-        _adUseLdaps.Checked = _config.AdUseLdaps || _config.AdPort == 636;
-        _adExplicitCredentials.Checked = _config.AdUseExplicitCredentials;
+        _adUseLdaps.Checked =
+            _config.AdUseLdaps ||
+            _config.AdPort == 636;
+        _adExplicitCredentials.Checked =
+            _config.AdUseExplicitCredentials;
         _adCredentialStorage.SelectedIndex =
-            _config.AdCredentialStorageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase)
+            _config.AdCredentialStorageMode.Equals(
+                "CurrentUser",
+                StringComparison.OrdinalIgnoreCase)
                 ? 1
-                : _config.AdCredentialStorageMode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase)
+                : _config.AdCredentialStorageMode.Equals(
+                    "LocalMachine",
+                    StringComparison.OrdinalIgnoreCase)
                     ? 2
                     : 0;
-        _outputRoot.Text = _config.EffectiveOutputRoot;
+
+        _outputRoot.Text =
+            _config.EffectiveOutputRoot;
         _outputSubdirectory.Text =
             _config.OutputSubdirectory;
+
+        _autoConnectOnStart.Checked =
+            _config.AutoConnectOnStart;
+
+        _recoverySource.SelectedIndex =
+            _config.RecoverySearchSource.Equals(
+                "LocalCache",
+                StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
+
+        if (!string.IsNullOrWhiteSpace(
+                _config.LastRecoveryScopeSearchBase))
+        {
+            _startScope =
+                new BitLockerScope(
+                    string.IsNullOrWhiteSpace(
+                        _config.LastRecoveryScopeName)
+                        ? "Last OU"
+                        : _config.LastRecoveryScopeName,
+                    _config.LastRecoveryScopeSearchBase);
+        }
 
         UpdateDirectoryConnectionUi();
         RefreshCredentialVaultStatus();
@@ -3957,11 +3988,13 @@ public sealed partial class MainForm : DpiAwareForm
             _adMode.SelectedIndex == 1 &&
             !string.IsNullOrWhiteSpace(
                 _adServer.Text)
-                ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}. Advanced settings are configured."
-                : "Ready to auto-discover a writable domain controller using the current Windows identity.";
+                ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}."
+                : "Ready to auto-discover a writable domain controller.";
 
         _startPurposeStatus.Text =
-            "Ready — connect to Active Directory, choose an OU, then search for the BitLocker recovery key.";
+            "Search loads metadata only. Recovery passwords are read on demand.";
+
+        UpdateRecoverySourceUi();
     }
 
     private void UpdateDirectoryConnectionUi()
@@ -3977,23 +4010,52 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void SaveDirectorySettings(bool showConfirmation)
     {
-        _config.AdConnectionMode = _adMode.SelectedIndex == 1
-            ? "Explicit"
-            : "Auto";
-        _config.AdServer = _adServer.Text.Trim();
-        _config.AdDomain = _adDomain.Text.Trim();
-        _config.AdUsername = _adUsername.Text.Trim();
-        _config.AdPort = (int)_adPort.Value;
-        _config.AdUseLdaps = _adUseLdaps.Checked;
-        _config.AdUseExplicitCredentials = _adExplicitCredentials.Checked;
-        _config.AdCredentialStorageMode = GetSelectedCredentialStorageMode();
+        _config.AdConnectionMode =
+            _adMode.SelectedIndex == 1
+                ? "Explicit"
+                : "Auto";
+        _config.AdServer =
+            _adServer.Text.Trim();
+        _config.AdDomain =
+            _adDomain.Text.Trim();
+        _config.AdUsername =
+            _adUsername.Text.Trim();
+        _config.AdPort =
+            (int)_adPort.Value;
+        _config.AdUseLdaps =
+            _adUseLdaps.Checked;
+        _config.AdUseExplicitCredentials =
+            _adExplicitCredentials.Checked;
+        _config.AdCredentialStorageMode =
+            GetSelectedCredentialStorageMode();
+
+        _config.AutoConnectOnStart =
+            _autoConnectOnStart.Checked;
+        _config.RecoverySearchSource =
+            _recoverySource.SelectedIndex == 1
+                ? "LocalCache"
+                : "LiveAD";
+
+        if (_startScope is not null)
+        {
+            _config.LastRecoveryScopeName =
+                _startScope.Name;
+            _config.LastRecoveryScopeSearchBase =
+                _startScope.SearchBase;
+        }
 
         if (_config.AdUseExplicitCredentials)
         {
-            if (_config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase))
+            if (_config.AdCredentialStorageMode.Equals(
+                    "Session",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrEmpty(_adPassword.Text))
-                    AdSessionCredentials.SetPassword(_adPassword.Text);
+                if (!string.IsNullOrEmpty(
+                        _adPassword.Text))
+                {
+                    AdSessionCredentials.SetPassword(
+                        _adPassword.Text);
+                }
             }
             else
             {
@@ -4025,21 +4087,28 @@ public sealed partial class MainForm : DpiAwareForm
         _config.OutputSubdirectory =
             _outputSubdirectory.Text.Trim();
 
-        ConfigService.SaveAppConfig(_config);
+        ConfigService.SaveAppConfig(
+            _config);
+
         _audit.Write(
             "SaveDirectorySettings",
             source: "Local",
             details:
-                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; CredentialStorage={_config.AdCredentialStorageMode}; LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
+                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; " +
+                $"Domain={_config.AdDomain}; User={_config.AdUsername}; " +
+                $"ExplicitCredentials={_config.AdUseExplicitCredentials}; " +
+                $"CredentialStorage={_config.AdCredentialStorageMode}; " +
+                $"LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; " +
+                $"AutoConnect={_config.AutoConnectOnStart}; " +
+                $"RecoverySource={_config.RecoverySearchSource}; " +
+                $"RecoveryScope={_config.LastRecoveryScopeSearchBase}");
 
         if (showConfirmation)
         {
             MessageBox.Show(
                 this,
-                _config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase)
-                    ? "Active Directory connection settings saved. Session-mode AD password remains only in this process memory."
-                    : "Active Directory connection settings saved. Stored credentials remain protected by the selected Windows vault; no plaintext password is written to appsettings.",
-                "Directory Connection",
+                "Active Directory and recovery-search settings saved.",
+                "BitKeyBridge",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
@@ -4239,24 +4308,37 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private async Task TestDirectoryConnectionAsync()
+    private async Task TestDirectoryConnectionAsync(
+        bool promptForOu = true)
     {
         try
         {
-            SaveDirectorySettings(showConfirmation: false);
-            _adConnectionStatus.Text = "Testing Active Directory connection...";
-            UseWaitCursor = true;
-
-            var result = await Task.Run(() =>
-            {
-                var service = new ActiveDirectoryService(_config);
-                var server = service.GetPreferredWritableDc();
-                var root = service.TestConnection(server);
-                return (Server: server, Root: root);
-            });
+            SaveDirectorySettings(
+                showConfirmation: false);
 
             _adConnectionStatus.Text =
-                $"Connected to {result.Server}. Ready to select an OU and search BitLocker.";
+                "Connecting to Active Directory...";
+            UseWaitCursor = true;
+
+            var result =
+                await Task.Run(
+                    () =>
+                    {
+                        var service =
+                            new ActiveDirectoryService(
+                                _config);
+                        var server =
+                            service.GetPreferredWritableDc();
+                        var root =
+                            service.TestConnection(
+                                server);
+                        return (
+                            Server: server,
+                            Root: root);
+                    });
+
+            _adConnectionStatus.Text =
+                $"Connected to {result.Server}. Ready to search BitLocker.";
 
             _startDomainDn =
                 result.Root.GetValueOrDefault(
@@ -4264,35 +4346,54 @@ public sealed partial class MainForm : DpiAwareForm
                     string.Empty);
 
             _startSelectOu.Enabled = true;
-            _startPurposeStatus.Text =
-                "Connected. Step 2 of 3 — Select the OU that contains the target computer.";
-            _startOuStatus.Text =
-                "Connected to " +
-                result.Server +
-                ". Select an OU to limit the BitLocker search.";
 
-            await SelectStartOuAsync();
+            if (_startScope is not null)
+            {
+                _startOuStatus.Text =
+                    $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
+                _startSearch.Enabled = true;
+                _startPurposeStatus.Text =
+                    "Connected. Enter a computer name or Recovery ID.";
+            }
+            else if (promptForOu)
+            {
+                _startPurposeStatus.Text =
+                    "Connected. Select the OU that contains the target computer.";
+                await SelectStartOuAsync();
+            }
+            else
+            {
+                _startPurposeStatus.Text =
+                    "Connected. Select an OU before searching.";
+            }
         }
         catch (Exception ex)
         {
-            _startScope = null;
-            _startDomainDn = string.Empty;
-            _startSelectOu.Enabled = false;
-            _startSearch.Enabled = false;
+            _startDomainDn =
+                string.Empty;
+            _startSelectOu.Enabled =
+                false;
+            _startSearch.Enabled =
+                false;
             _startResults.Items.Clear();
-            _startCurrentKey = null;
+            _startCurrentKey =
+                null;
             _startKey.Clear();
-            _startOuStatus.Text =
-                "Connection failed. Connect to Active Directory before selecting an OU.";
+            _adConnectionStatus.Text =
+                "Connection failed: " +
+                ex.Message;
             _startPurposeStatus.Text =
-                "Step 1 of 3 — Active Directory connection failed. Check the settings and connect again.";
-            _adConnectionStatus.Text = "FAILED: " + ex.Message;
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Directory Connection",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+                "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.";
+
+            if (promptForOu)
+            {
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Active Directory Connection",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
         finally
         {
@@ -4309,7 +4410,6 @@ public sealed partial class MainForm : DpiAwareForm
             var service =
                 new ActiveDirectoryService(
                     _config);
-
             var dc =
                 service.GetPreferredWritableDc();
 
@@ -4319,7 +4419,6 @@ public sealed partial class MainForm : DpiAwareForm
                 var root =
                     service.GetRootDse(
                         dc);
-
                 _startDomainDn =
                     root.GetValueOrDefault(
                         "defaultNamingContext",
@@ -4367,10 +4466,12 @@ public sealed partial class MainForm : DpiAwareForm
             _startOuStatus.Text =
                 $"Selected: {selected.Name}    {selected.SearchBase}";
 
-            _startSearch.Enabled = true;
+            _startSearch.Enabled =
+                true;
             _startPurposeStatus.Text =
-                "Ready. Step 3 of 3 — Enter a computer name or Recovery ID and click Search BitLocker.";
+                "Ready — enter a computer name or Recovery ID.";
 
+            TrySaveRecoveryUiState();
             _startQuery.Focus();
         }
         catch (Exception ex)
@@ -4394,12 +4495,16 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task SearchStartRecoveryAsync()
     {
-        if (_startScope is null)
+        var localCache =
+            _recoverySource.SelectedIndex == 1;
+
+        if (!localCache &&
+            _startScope is null)
         {
             MessageBox.Show(
                 this,
-                "Select an Active Directory OU first.",
-                "BitLocker Recovery Search",
+                "Connect to Active Directory and select an OU first.",
+                "BitLocker Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             return;
@@ -4414,17 +4519,21 @@ public sealed partial class MainForm : DpiAwareForm
             MessageBox.Show(
                 this,
                 "Enter a computer name or Recovery ID.",
-                "BitLocker Recovery Search",
+                "BitLocker Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             return;
         }
 
+        var searchSource =
+            localCache
+                ? "LocalCSV"
+                : "AD";
+
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
-                "SearchLiveRecoveryKeys",
-                source:
-                    "AD"))
+                "SearchRecoveryMetadata",
+                source: searchSource))
         {
             return;
         }
@@ -4433,114 +4542,126 @@ public sealed partial class MainForm : DpiAwareForm
         {
             _startSearch.Enabled = false;
             _startResults.Items.Clear();
+            _startResults.Visible = true;
             _startCurrentKey = null;
             _startKey.Clear();
+            _startKey.UseSystemPasswordChar = true;
+            _startShow.Text =
+                "Reveal Recovery Key";
+            ClearRecoveryCard();
+
             _startPurposeStatus.Text =
-                "Searching Active Directory for BitLocker recovery information...";
+                localCache
+                    ? "Searching local recovery metadata..."
+                    : "Searching Active Directory recovery metadata...";
+
             UseWaitCursor = true;
 
-            var scope =
-                _startScope;
+            List<RecoverySearchResult> rows;
 
-            var rows =
-                await Task.Run(
-                    () =>
-                    {
-                        var service =
-                            new ActiveDirectoryService(
-                                _config);
-
-                        var dc =
-                            service.GetPreferredWritableDc();
-
-                        var computers =
-                            service.SearchComputersInScope(
-                                dc,
-                                scope,
+            if (localCache)
+            {
+                rows =
+                    await Task.Run(
+                        () =>
+                            CsvUtility.ReadRecoveryMetadata(
+                                _config.OutputCsv,
                                 query,
-                                100);
+                                200));
+            }
+            else
+            {
+                var scope =
+                    _startScope!;
 
-                        var found =
-                            new List<RecoveryRecord>();
-
-                        foreach (var computer in
-                                 computers)
+                rows =
+                    await Task.Run(
+                        () =>
                         {
-                            found.AddRange(
-                                service.GetRecoveryRecordsForComputer(
+                            var service =
+                                new ActiveDirectoryService(
+                                    _config);
+                            var dc =
+                                service.GetPreferredWritableDc();
+
+                            var computers =
+                                service.SearchComputersInScope(
                                     dc,
-                                    computer.DistinguishedName,
-                                    DateTime.Now));
-                        }
+                                    scope,
+                                    query,
+                                    100);
 
-                        if (computers.Count == 0)
-                        {
-                            var idQuery =
-                                query
-                                    .Trim()
-                                    .Trim(
-                                        '{',
-                                        '}');
+                            var found =
+                                new List<RecoverySearchResult>();
 
-                            if (idQuery.Length >= 4)
+                            foreach (var computer in
+                                     computers)
                             {
-                                var metadataMatches =
-                                    service.GetRecoveryMetadata(
-                                            dc,
-                                            scope)
-                                        .Where(
-                                            x =>
-                                                x.RecoveryId.Contains(
-                                                    idQuery,
-                                                    StringComparison.OrdinalIgnoreCase))
-                                        .Take(
-                                            100)
-                                        .ToList();
+                                found.AddRange(
+                                    service.GetRecoveryMetadataForComputer(
+                                        dc,
+                                        computer.DistinguishedName));
+                            }
 
-                                foreach (var computerName in
-                                         metadataMatches
-                                             .Select(
-                                                 x =>
-                                                     x.ComputerName)
-                                             .Distinct(
-                                                 StringComparer.OrdinalIgnoreCase))
+                            if (computers.Count == 0)
+                            {
+                                var idQuery =
+                                    query
+                                        .Trim()
+                                        .Trim(
+                                            '{',
+                                            '}');
+
+                                if (idQuery.Length >= 4)
                                 {
-                                    var computer =
-                                        service.FindComputerByName(
-                                            dc,
-                                            computerName);
-
-                                    if (computer is null)
-                                        continue;
-
                                     found.AddRange(
-                                        service.GetRecoveryRecordsForComputer(
-                                            dc,
-                                            computer.DistinguishedName,
-                                            DateTime.Now)
+                                        service.GetRecoveryMetadata(
+                                                dc,
+                                                scope)
                                             .Where(
                                                 x =>
-                                                    x.BitLockerId.Contains(
+                                                    x.RecoveryId.Contains(
                                                         idQuery,
-                                                        StringComparison.OrdinalIgnoreCase)));
+                                                        StringComparison.OrdinalIgnoreCase))
+                                            .Take(200)
+                                            .Select(
+                                                x =>
+                                                    new RecoverySearchResult
+                                                    {
+                                                        ComputerName =
+                                                            x.ComputerName,
+                                                        RecoveryId =
+                                                            x.RecoveryId,
+                                                        CreatedDateTime =
+                                                            x.CreatedDateTime,
+                                                        Source =
+                                                            "AD Live",
+                                                        ComputerDistinguishedName =
+                                                            x.ComputerDistinguishedName,
+                                                        RecoveryDistinguishedName =
+                                                            x.RecoveryDistinguishedName
+                                                    }));
                                 }
                             }
-                        }
 
-                        return found
-                            .GroupBy(
-                                x =>
-                                    x.ComputerName +
-                                    "|" +
-                                    x.BitLockerId,
-                                StringComparer.OrdinalIgnoreCase)
-                            .Select(
-                                x =>
-                                    x.First())
-                            .Take(
-                                200)
-                            .ToList();
-                    });
+                            return found
+                                .GroupBy(
+                                    x =>
+                                        x.ComputerName +
+                                        "|" +
+                                        x.RecoveryId,
+                                    StringComparer.OrdinalIgnoreCase)
+                                .Select(
+                                    x =>
+                                        x.First())
+                                .OrderByDescending(
+                                    x =>
+                                        x.CreatedDateTime ??
+                                        x.LastChecked)
+                                .Take(200)
+                                .ToList();
+                        });
+            }
 
             foreach (var row in rows)
             {
@@ -4549,12 +4670,15 @@ public sealed partial class MainForm : DpiAwareForm
                         row.ComputerName);
 
                 item.SubItems.Add(
-                    row.BitLockerId);
+                    row.RecoveryId);
                 item.SubItems.Add(
                     row.Source);
                 item.SubItems.Add(
-                    row.LastChecked.ToString(
-                        "yyyy-MM-dd HH:mm:ss"));
+                    (row.CreatedDateTime ??
+                     row.LastChecked)?
+                        .ToString(
+                            "yyyy-MM-dd HH:mm:ss") ??
+                    "-");
                 item.Tag =
                     row;
 
@@ -4562,10 +4686,32 @@ public sealed partial class MainForm : DpiAwareForm
                     item);
             }
 
+            if (rows.Count == 1)
+            {
+                _startResults.Items[0].Selected =
+                    true;
+                _startResults.Items[0].Focused =
+                    true;
+                _startResults.Visible =
+                    false;
+                SelectStartRecoveryRecord();
+            }
+
+            var scopeLabel =
+                localCache
+                    ? "local cache"
+                    : _startScope!.Name;
+
             _startPurposeStatus.Text =
-                rows.Count == 0
-                    ? $"No BitLocker recovery information found in {_startScope.Name}."
-                    : $"Found {rows.Count} BitLocker recovery record(s) in {_startScope.Name}. Select a row to reveal or copy the key.";
+                rows.Count switch
+                {
+                    0 =>
+                        $"No BitLocker recovery metadata found in {scopeLabel}.",
+                    1 =>
+                        "One recovery record found. Review the card below and reveal/copy only when needed.",
+                    _ =>
+                        $"Found {rows.Count} recovery records in {scopeLabel}. Select a row."
+                };
         }
         catch (Exception ex)
         {
@@ -4576,13 +4722,14 @@ public sealed partial class MainForm : DpiAwareForm
             MessageBox.Show(
                 this,
                 ex.Message,
-                "BitLocker Recovery Search",
+                "BitLocker Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
         finally
         {
             _startSearch.Enabled =
+                localCache ||
                 _startScope is not null;
             UseWaitCursor = false;
         }
@@ -4592,142 +4739,277 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (_startResults.SelectedItems.Count == 0 ||
             _startResults.SelectedItems[0].Tag is not
-                RecoveryRecord row)
+                RecoverySearchResult row)
         {
-            _startCurrentKey = null;
+            _startCurrentKey =
+                null;
             _startKey.Clear();
+            ClearRecoveryCard();
             return;
         }
 
         _startCurrentKey =
-            row.RecoveryKey;
-
-        _startKey.Text =
-            row.RecoveryKey;
+            null;
+        _startKey.Clear();
         _startKey.UseSystemPasswordChar =
             true;
         _startShow.Text =
-            "Show Key";
+            "Reveal Recovery Key";
+
+        _recoveryCardComputer.Text =
+            row.ComputerName;
+        _recoveryCardOu.Text =
+            row.Source.Equals(
+                "Local cache",
+                StringComparison.OrdinalIgnoreCase)
+                ? "Local cache"
+                : _startScope?.SearchBase ??
+                  row.ComputerDistinguishedName;
+        _recoveryCardId.Text =
+            row.RecoveryId;
+        _recoveryCardTime.Text =
+            (row.CreatedDateTime ??
+             row.LastChecked)?
+                .ToString(
+                    "yyyy-MM-dd HH:mm:ss") ??
+            "-";
+        _recoveryCardSource.Text =
+            row.Source;
+
+        _startShow.Enabled =
+            true;
+        _startCopy.Enabled =
+            true;
     }
 
-    private void RevealStartRecoveryKey()
+    private void ClearRecoveryCard()
     {
-        if (!_startKey.UseSystemPasswordChar)
-        {
-            ToggleKey(
-                _startKey,
-                _startShow);
-            return;
-        }
-
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
-                RecoveryRecord row)
-        {
-            return;
-        }
-
-        if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
-                "RevealLiveAdRecoveryKey",
-                row.ComputerName,
-                row.BitLockerId,
-                "AD"))
-        {
-            return;
-        }
-
-        var context =
-            GetOrRequestRecoveryAccessContext(
-                "AD",
-                row.BitLockerId,
-                row.ComputerName,
-                allowRotationReminder:
-                    false);
-
-        if (context is null)
-            return;
-
-        if (!AuthorizePrivilegedRecoveryAccess(
-                context,
-                "RevealLiveAdRecoveryKey",
-                row.ComputerName,
-                row.BitLockerId,
-                "AD"))
-        {
-            return;
-        }
-
-        ToggleKey(
-            _startKey,
-            _startShow);
-
-        WriteRecoveryAudit(
-            "RevealLiveAdRecoveryKey",
-            context,
-            computerName:
-                row.ComputerName,
-            recoveryId:
-                row.BitLockerId,
-            source:
-                "AD");
+        _recoveryCardComputer.Text = "-";
+        _recoveryCardOu.Text = "-";
+        _recoveryCardId.Text = "-";
+        _recoveryCardTime.Text = "-";
+        _recoveryCardSource.Text = "-";
+        _startShow.Enabled = false;
+        _startCopy.Enabled = false;
     }
 
-    private void CopyStartRecoveryKey()
+    private async Task<string?> EnsureStartRecoveryKeyAsync(
+        RecoverySearchResult row)
     {
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
-                RecoveryRecord row ||
-            string.IsNullOrWhiteSpace(
+        if (!string.IsNullOrWhiteSpace(
                 _startCurrentKey))
         {
+            return _startCurrentKey;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+
+            if (row.Source.Equals(
+                    "Local cache",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _startCurrentKey =
+                    await Task.Run(
+                        () =>
+                            CsvUtility.GetRecoveryPassword(
+                                _config.OutputCsv,
+                                row.ComputerName,
+                                row.RecoveryId));
+            }
+            else
+            {
+                _startCurrentKey =
+                    await Task.Run(
+                        () =>
+                        {
+                            var service =
+                                new ActiveDirectoryService(
+                                    _config);
+                            var dc =
+                                service.GetPreferredWritableDc();
+
+                            return service
+                                .GetRecoveryPasswordByDistinguishedName(
+                                    dc,
+                                    row.RecoveryDistinguishedName,
+                                    row.RecoveryId);
+                        });
+            }
+
+            return _startCurrentKey;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Recovery Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return null;
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task RevealStartRecoveryKeyAsync()
+    {
+        if (!_startKey.UseSystemPasswordChar &&
+            !string.IsNullOrWhiteSpace(
+                _startCurrentKey))
+        {
+            _startKey.UseSystemPasswordChar =
+                true;
+            _startShow.Text =
+                "Reveal Recovery Key";
             return;
         }
 
+        if (_startResults.SelectedItems.Count == 0 ||
+            _startResults.SelectedItems[0].Tag is not
+                RecoverySearchResult row)
+        {
+            return;
+        }
+
+        var auditSource =
+            row.Source.Equals(
+                "Local cache",
+                StringComparison.OrdinalIgnoreCase)
+                ? "LocalCSV"
+                : "AD";
+
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
-                "CopyLiveAdRecoveryKey",
+                "RevealRecoveryKey",
                 row.ComputerName,
-                row.BitLockerId,
-                "AD"))
+                row.RecoveryId,
+                auditSource))
         {
             return;
         }
 
         var context =
             GetOrRequestRecoveryAccessContext(
-                "AD",
-                row.BitLockerId,
+                auditSource,
+                row.RecoveryId,
                 row.ComputerName,
-                allowRotationReminder:
-                    false);
+                allowRotationReminder: false);
 
         if (context is null)
             return;
 
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
-                "CopyLiveAdRecoveryKey",
+                "RevealRecoveryKey",
                 row.ComputerName,
-                row.BitLockerId,
-                "AD"))
+                row.RecoveryId,
+                auditSource))
+        {
+            return;
+        }
+
+        var key =
+            await EnsureStartRecoveryKeyAsync(
+                row);
+
+        if (string.IsNullOrWhiteSpace(
+                key))
+        {
+            return;
+        }
+
+        _startKey.Text =
+            key;
+        _startKey.UseSystemPasswordChar =
+            false;
+        _startShow.Text =
+            "Hide Key";
+
+        WriteRecoveryAudit(
+            "RevealRecoveryKey",
+            context,
+            computerName: row.ComputerName,
+            recoveryId: row.RecoveryId,
+            source: auditSource);
+    }
+
+    private async Task CopyStartRecoveryKeyAsync()
+    {
+        if (_startResults.SelectedItems.Count == 0 ||
+            _startResults.SelectedItems[0].Tag is not
+                RecoverySearchResult row)
+        {
+            return;
+        }
+
+        var auditSource =
+            row.Source.Equals(
+                "Local cache",
+                StringComparison.OrdinalIgnoreCase)
+                ? "LocalCSV"
+                : "AD";
+
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                "CopyRecoveryKey",
+                row.ComputerName,
+                row.RecoveryId,
+                auditSource))
+        {
+            return;
+        }
+
+        var context =
+            GetOrRequestRecoveryAccessContext(
+                auditSource,
+                row.RecoveryId,
+                row.ComputerName,
+                allowRotationReminder: false);
+
+        if (context is null)
+            return;
+
+        if (!AuthorizePrivilegedRecoveryAccess(
+                context,
+                "CopyRecoveryKey",
+                row.ComputerName,
+                row.RecoveryId,
+                auditSource))
+        {
+            return;
+        }
+
+        var key =
+            await EnsureStartRecoveryKeyAsync(
+                row);
+
+        if (string.IsNullOrWhiteSpace(
+                key))
         {
             return;
         }
 
         WriteRecoveryAudit(
-            "CopyLiveAdRecoveryKey",
+            "CopyRecoveryKey",
             context,
-            computerName:
-                row.ComputerName,
-            recoveryId:
-                row.BitLockerId,
-            source:
-                "AD");
+            computerName: row.ComputerName,
+            recoveryId: row.RecoveryId,
+            source: auditSource);
 
         CopyKeyWithAutoClear(
-            _startCurrentKey);
+            key);
     }
+
+    private async void RevealStartRecoveryKey() =>
+        await RevealStartRecoveryKeyAsync();
+
+    private async void CopyStartRecoveryKey() =>
+        await CopyStartRecoveryKeyAsync();
 
     private void LoadDashboardSettings()
     {
