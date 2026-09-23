@@ -50,8 +50,8 @@ public sealed class ReplicationService
 
                 result.Partners.Add(new ReplicationPartnerInfo
                 {
-                    SourceServer = neighbor.SourceServer,
-                    Partition = neighbor.PartitionName,
+                    SourceServer = neighbor.SourceServer ?? string.Empty,
+                    Partition = neighbor.PartitionName ?? string.Empty,
                     LastAttemptedSync = neighbor.LastAttemptedSync == DateTime.MinValue ? null : neighbor.LastAttemptedSync,
                     LastSuccessfulSync = lastSuccess,
                     LastSyncResult = neighbor.LastSyncResult,
