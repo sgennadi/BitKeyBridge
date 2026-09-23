@@ -1529,6 +1529,93 @@ internal static class Program
 
             try
             {
+                var uiDefaults =
+                    new AppConfig();
+
+                if (!uiDefaults.AutoConnectOnStart ||
+                    !string.Equals(
+                        uiDefaults.RecoverySearchSource,
+                        "LiveAD",
+                        StringComparison.Ordinal) ||
+                    !string.IsNullOrWhiteSpace(
+                        uiDefaults.LastRecoveryScopeName) ||
+                    !string.IsNullOrWhiteSpace(
+                        uiDefaults.LastRecoveryScopeSearchBase) ||
+                    uiDefaults.RbacAdministrators.Count != 0 ||
+                    uiDefaults.SchemaVersion !=
+                        ConfigSchema.CurrentVersion)
+                {
+                    failures.Add(
+                        "Schema v4 helpdesk UI defaults are invalid.");
+                }
+
+                var metadataCsv =
+                    Path.Combine(
+                        tempDirectory,
+                        "metadata-only-recovery.csv");
+
+                const string selfTestKey =
+                    "111111-222222-333333-444444-555555-666666-777777-888888";
+
+                CsvUtility.WriteRecoveryCsvAtomic(
+                    metadataCsv,
+                    [
+                        new RecoveryRecord(
+                            "PC-SELFTEST",
+                            "11111111-2222-3333-4444-555555555555",
+                            selfTestKey,
+                            new DateTime(
+                                2026,
+                                1,
+                                2,
+                                3,
+                                4,
+                                5,
+                                DateTimeKind.Local))
+                    ]);
+
+                var metadataOnly =
+                    CsvUtility.ReadRecoveryMetadata(
+                        metadataCsv,
+                        "PC-SELFTEST",
+                        10);
+
+                if (metadataOnly.Count != 1 ||
+                    metadataOnly[0].ComputerName !=
+                        "PC-SELFTEST" ||
+                    metadataOnly[0].RecoveryId !=
+                        "11111111-2222-3333-4444-555555555555" ||
+                    metadataOnly[0].Source !=
+                        "Local cache")
+                {
+                    failures.Add(
+                        "Metadata-only local recovery search failed.");
+                }
+
+                var onDemandKey =
+                    CsvUtility.GetRecoveryPassword(
+                        metadataCsv,
+                        "PC-SELFTEST",
+                        "11111111-2222-3333-4444-555555555555");
+
+                if (!string.Equals(
+                        onDemandKey,
+                        selfTestKey,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "On-demand local recovery-key read failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Schema v4 recovery UI/cache helpers: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var privilegedDefaults =
                     new AppConfig();
 
