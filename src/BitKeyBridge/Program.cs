@@ -1497,6 +1497,69 @@ internal static class Program
 
             try
             {
+                var privilegedDefaults =
+                    new AppConfig();
+
+                if (privilegedDefaults.JitRecoveryEnabled ||
+                    privilegedDefaults.TwoPersonApprovalEnabled ||
+                    privilegedDefaults.SiemEnabled ||
+                    privilegedDefaults.SiemFailClosed)
+                {
+                    failures.Add(
+                        "Privileged-access features are not opt-in by default.");
+                }
+
+                var disabledDecision =
+                    new PrivilegedAccessPolicyService(
+                        privilegedDefaults,
+                        auditPath:
+                            Path.Combine(
+                                tempDirectory,
+                                "privileged-disabled-audit.jsonl"))
+                        .EvaluateRecoveryAccess(
+                            new RecoveryAccessContext
+                            {
+                                SessionId =
+                                    "1234567890abcdef1234567890abcdef"
+                            },
+                            "PC-SELFTEST",
+                            "{SELFTEST}",
+                            "AD");
+
+                if (!disabledDecision.Allowed ||
+                    disabledDecision.Status !=
+                        "Allowed" ||
+                    disabledDecision.Jit.Status !=
+                        "Disabled" ||
+                    disabledDecision.Approval.Status !=
+                        "Disabled" ||
+                    disabledDecision.SiemStatus !=
+                        "Disabled")
+                {
+                    failures.Add(
+                        "Disabled privileged-access policy changed backward-compatible recovery behavior.");
+                }
+
+                if (SiemForwardingService.NormalizeMode(
+                        "jsonl") !=
+                        "FileJsonl" ||
+                    SiemForwardingService.NormalizeMode(
+                        "https") !=
+                        "Webhook")
+                {
+                    failures.Add(
+                        "SIEM mode normalization failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Privileged-access opt-in defaults: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var normalizedSystem =
                     CertificatePrivateKeyAccessService.NormalizeServiceIdentity(
                         "LocalSystem");
