@@ -10,6 +10,17 @@ public sealed class AdComputerInfo
     public DateTime? LastLogonTimestamp { get; set; }
 }
 
+public sealed class RecoverySearchResult
+{
+    public string ComputerName { get; set; } = string.Empty;
+    public string RecoveryId { get; set; } = string.Empty;
+    public DateTime? CreatedDateTime { get; set; }
+    public DateTime? LastChecked { get; set; }
+    public string Source { get; set; } = "AD";
+    public string ComputerDistinguishedName { get; set; } = string.Empty;
+    public string RecoveryDistinguishedName { get; set; } = string.Empty;
+}
+
 public sealed class ManagedDeviceInfo
 {
     public string ManagedDeviceId { get; set; } = string.Empty;
