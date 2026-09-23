@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BitKeyBridge;
 
-public sealed class RecoveryIncidentVerificationDialog : Form
+public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
 {
     private readonly ComboBox _session = new();
     private readonly TextBox _result = new();
