@@ -3084,12 +3084,6 @@ public sealed partial class MainForm : DpiAwareForm
             key);
     }
 
-    private async void RevealStartRecoveryKey() =>
-        await RevealStartRecoveryKeyAsync();
-
-    private async void CopyStartRecoveryKey() =>
-        await CopyStartRecoveryKeyAsync();
-
     private void LoadDashboardSettings()
     {
         _serviceInterval.Value = Math.Clamp(_config.ServiceIntervalMinutes, 1, 10080);
