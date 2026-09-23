@@ -5,6 +5,8 @@ public sealed class AdRecoveryMetadata
     public string ComputerName { get; set; } = string.Empty;
     public string RecoveryId { get; set; } = string.Empty;
     public DateTime? CreatedDateTime { get; set; }
+    public string ComputerDistinguishedName { get; set; } = string.Empty;
+    public string RecoveryDistinguishedName { get; set; } = string.Empty;
 }
 
 public sealed class CoverageDeviceRow
