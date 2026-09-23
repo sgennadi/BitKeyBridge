@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class InputDialog : Form
+public sealed class InputDialog : DpiAwareForm
 {
     private readonly TextBox _text = new();
     public string Value => _text.Text.Trim();
