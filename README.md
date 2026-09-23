@@ -51,12 +51,13 @@ Run `BitKeyBridge.exe`. Administrative rights are requested only for operations 
 
 The first tab is **BitLocker Recovery** and shows the intended workflow directly:
 
-1. Click **Connect & Load OUs**. Auto mode discovers a writable DC on domain-joined computers; Explicit DC mode is available for standalone/workgroup computers.
-2. After a successful connection, the OU selector opens automatically.
-3. Select the OU containing the target computer (or choose **Entire domain**).
-4. Enter the computer name or BitLocker Recovery ID.
-5. Click **Search BitLocker**.
-6. Select a result, then use **Show Key** or **Copy Key**. Reveal/copy operations are audited and respect configured RBAC, JIT recovery, and two-person approval controls.
+1. Click **Connect to AD**. By default BitKeyBridge auto-discovers a writable DC and uses the current Windows identity.
+2. After a successful connection, the OU selector opens automatically. Choose a specific OU or **Entire domain**.
+3. Enter the computer name or BitLocker Recovery ID in the large search field.
+4. Click **Search BitLocker**.
+5. Select a result, then use **Show Key** or **Copy Key**. Reveal/copy operations are audited and respect configured RBAC, JIT recovery, and two-person approval controls.
+
+Most helpdesk users do not need to see connection internals. Click **Advanced connection settings...** only when you need an explicit DC/FQDN, custom LDAP/LDAPS port, standalone/workgroup credentials, or protected credential storage.
 
 A prior CSV export is **not required** for this live AD recovery workflow. The separate **Export** and **Recovery Search** tabs remain available for scheduled/exported recovery datasets and offline/local-cache workflows.
 
