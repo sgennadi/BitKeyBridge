@@ -3,7 +3,7 @@ using System.Text;
 
 namespace BitKeyBridge;
 
-public sealed class StorageMaintenanceDialog : Form
+public sealed class StorageMaintenanceDialog : DpiAwareForm
 {
     private readonly AppConfig _config;
 
