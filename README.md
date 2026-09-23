@@ -1131,6 +1131,31 @@ BitKeyBridge.exe --rbac-status
 
 Denied actions are recorded in both the local security audit and Windows Application Event Log. Recovery passwords are never included in those denial records.
 
+## Optional privileged recovery controls
+
+BitKeyBridge provides three independent privileged-access controls. **All three are disabled by default and upgrades never enable them automatically.**
+
+- **JIT recovery** requires the current Windows identity to hold a valid, time-limited recovery grant before recovery-key access.
+- **Two-person approval** requires a different authorized Windows user to approve the recovery session. A requester cannot approve their own session.
+- **SIEM forwarding** forwards metadata-only audit events through a durable local outbox to JSONL or an HTTPS webhook. Recovery passwords are never forwarded.
+
+Configure them from **Operations → Privileged Access...** or CLI. Enabling JIT or two-person approval requires appropriate grantor/approver Windows principals. SIEM supports explicit fail-open or fail-closed behavior; fail-closed blocks recovery access if the delivery pipeline is not ready.
+
+Examples:
+
+```text
+BitKeyBridge.exe --privileged-status
+BitKeyBridge.exe --jit-enable --jit-minutes 15
+BitKeyBridge.exe --jit-grant "DOMAIN\\BitLocker Helpdesk" --jit-reason "Change 12345"
+BitKeyBridge.exe --approval-enable --approval-minutes 15
+BitKeyBridge.exe --approval-approve <session-id> --approval-comment "Approved by helpdesk lead"
+BitKeyBridge.exe --siem-enable --siem-mode file --siem-file "D:\\SIEM\\BitKeyBridge.jsonl"
+BitKeyBridge.exe --siem-status
+BitKeyBridge.exe --siem-flush
+```
+
+JIT grants, approval requests, and decisions are bound to the local tamper-evident audit chain. If the required audit evidence is invalid or unavailable, BitKeyBridge does not treat the privileged artifact as valid.
+
 ## Supply-chain security
 
 Tagged releases are built with additional supply-chain artifacts and GitHub-native verification:
@@ -1326,7 +1351,7 @@ If the Windows Service identity changes between LocalSystem, gMSA, or a domain a
 
 Housekeeping and storage-ACL posture are exposed through `/health/security`, loopback Prometheus `/metrics`, sanitized diagnostics, and Windows Event Log without publishing incident metadata, SIDs, account names, or recovery secrets.
 
-Application configuration schema is now **v2**.
+Application configuration schema is now **v3**.
 
 ## Build
 
