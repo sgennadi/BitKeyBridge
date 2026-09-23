@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-Native Windows administration utility for BitLocker recovery information in on-premises Active Directory and Microsoft Entra ID / Intune.
+Native Windows BitLocker recovery utility for helpdesk and administrators. The primary GUI workflow connects to Active Directory, lets the operator select an OU, and searches for BitLocker recovery information by computer name or Recovery ID. Entra ID / Intune recovery and administration features are available in separate tabs.
 
 The application is written in **C# / .NET 10 LTS / WinForms**. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
 
@@ -47,15 +47,18 @@ The release is a **self-contained .NET single-file Windows executable**, not Nat
 
 ## First run
 
-Run `BitKeyBridge.exe` as an administrator. The app self-elevates through UAC when required.
+Run `BitKeyBridge.exe`. Administrative rights are requested only for operations that require them.
 
-On a clean public build, no organization-specific OU is embedded. In the **Export** tab:
+The first tab is **BitLocker Recovery** and shows the intended workflow directly:
 
-1. Click **Add OU...**.
-2. Select one or more OUs.
-3. Click **Save defaults**.
-4. Run **Dry Run** first.
-5. Review the DC comparison and security warning before publishing.
+1. Click **Connect & Load OUs**. Auto mode discovers a writable DC on domain-joined computers; Explicit DC mode is available for standalone/workgroup computers.
+2. After a successful connection, the OU selector opens automatically.
+3. Select the OU containing the target computer (or choose **Entire domain**).
+4. Enter the computer name or BitLocker Recovery ID.
+5. Click **Search BitLocker**.
+6. Select a result, then use **Show Key** or **Copy Key**. Reveal/copy operations are audited and respect configured RBAC, JIT recovery, and two-person approval controls.
+
+A prior CSV export is **not required** for this live AD recovery workflow. The separate **Export** and **Recovery Search** tabs remain available for scheduled/exported recovery datasets and offline/local-cache workflows.
 
 Machine configuration is stored at:
 
@@ -202,7 +205,7 @@ In **Directory Connection**:
 - LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
 - The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
 - **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving the new `OutputRoot` setting empty preserves the legacy `SysvolScriptsRoot` behavior.
+- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
 
 Standalone CLI example:
 
@@ -388,7 +391,7 @@ In **Directory Connection**:
 - LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
 - The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
 - **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving the new `OutputRoot` setting empty preserves the legacy `SysvolScriptsRoot` behavior.
+- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
 
 Standalone CLI example:
 
@@ -581,7 +584,7 @@ In **Directory Connection**:
 - LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
 - The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
 - **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving the new `OutputRoot` setting empty preserves the legacy `SysvolScriptsRoot` behavior.
+- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
 
 Standalone CLI example:
 
@@ -767,7 +770,7 @@ In **Directory Connection**:
 - LDAP 389 uses signing/sealing; LDAPS/TLS is available explicitly and normally uses TCP 636.
 - The explicit AD password is held only in process memory. It is never written to `appsettings.json`, the audit log, Event Log, or GitHub artifacts.
 - **Test DC Connection** validates LDAP/RootDSE before export or unified searches.
-- The output root can be a local folder or UNC path. Leaving the new `OutputRoot` setting empty preserves the legacy `SysvolScriptsRoot` behavior.
+- The output root can be a local folder or UNC path. Leaving `OutputRoot` empty uses the local `%ProgramData%\\BitKeyBridge\\RecoveryExport` default.
 
 Standalone CLI example:
 
