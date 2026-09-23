@@ -7,7 +7,7 @@ namespace BitKeyBridge;
 /// </summary>
 public class DpiAwareForm : Form
 {
-    protected DpiAwareForm()
+    public DpiAwareForm()
     {
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
