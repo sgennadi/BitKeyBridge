@@ -1,6 +1,6 @@
 namespace BitKeyBridge;
 
-public sealed class OuBrowserForm : Form
+public sealed class OuBrowserForm : DpiAwareForm
 {
     private readonly TextBox _filter = new();
     private readonly ListBox _list = new();
