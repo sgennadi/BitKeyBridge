@@ -19,8 +19,13 @@ public sealed class OuBrowserForm : DpiAwareForm
         _list.SetBounds(12, 48, 908, 510);
         _list.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _list.HorizontalScrollbar = true;
-        _list.DisplayMember = nameof(BitLockerScope.SearchBase);
-        var ok = new Button { Text = "Add selected OU", DialogResult = DialogResult.OK, Width = 130, Height = 32 };
+        _list.FormattingEnabled = true;
+        _list.Format += (_, e) =>
+        {
+            if (e.ListItem is BitLockerScope scope)
+                e.Value = $"{scope.Name} — {scope.SearchBase}";
+        };
+        var ok = new Button { Text = "Select OU", DialogResult = DialogResult.OK, Width = 130, Height = 32 };
         ok.SetBounds(650, 570, 130, 32);
         ok.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 130, Height = 32 };
