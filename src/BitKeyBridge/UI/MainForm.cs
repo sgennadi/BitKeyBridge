@@ -3051,38 +3051,145 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task SearchUnifiedDevicesAsync()
     {
-        if (!await EnsureCloudTokenAsync()) return;
         try
         {
-            _unifiedStatus.Text = "Searching Active Directory, Entra and Intune...";
+            _unifiedStatus.Text =
+                "Searching devices...";
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
-            var service = new UnifiedDeviceService(_config);
-            var rows = await service.SearchAsync(_cloudToken!.AccessToken, _unifiedQuery.Text);
+            _deviceRecoveryIds.Items.Clear();
+            _deviceCurrentKey = null;
+            _deviceRecoveryKey.Clear();
+
+            var service =
+                new UnifiedDeviceService(
+                    _config);
+
+            var cloudConfigured =
+                !string.IsNullOrWhiteSpace(
+                    _cloudConfig.TenantId) &&
+                !string.IsNullOrWhiteSpace(
+                    _cloudConfig.ClientId);
+
+            var cloudReady =
+                cloudConfigured &&
+                await EnsureCloudTokenAsync();
+
+            List<UnifiedDeviceInfo> rows;
+
+            if (cloudReady)
+            {
+                _unifiedStatus.Text =
+                    "Searching Active Directory, Entra and Intune...";
+
+                rows =
+                    await service.SearchAsync(
+                        _cloudToken!.AccessToken,
+                        _unifiedQuery.Text);
+            }
+            else
+            {
+                _unifiedStatus.Text =
+                    cloudConfigured
+                        ? "Cloud is unavailable; continuing with Active Directory only..."
+                        : "Cloud is not configured; searching Active Directory only...";
+
+                rows =
+                    await service.SearchAdOnlyAsync(
+                        _unifiedQuery.Text);
+            }
+
             foreach (var row in rows)
             {
-                var item = new ListViewItem(row.ComputerName);
-                item.SubItems.Add(row.FoundInAd ? "Yes" : "No");
-                item.SubItems.Add(row.FoundInEntra ? "Yes" : "No");
-                item.SubItems.Add(row.FoundInIntune ? "Yes" : "No");
-                item.SubItems.Add(row.SerialNumber);
-                item.SubItems.Add(string.IsNullOrWhiteSpace(row.UserPrincipalName) ? row.UserDisplayName : row.UserPrincipalName);
-                item.SubItems.Add((row.Manufacturer + " " + row.Model).Trim());
-                item.SubItems.Add((row.OperatingSystem + " " + row.OsVersion).Trim());
-                item.SubItems.Add(row.ComplianceState);
-                item.SubItems.Add(row.IsEncrypted is null ? "-" : row.IsEncrypted.Value ? "Yes" : "No");
-                item.SubItems.Add(row.LastSyncDateTime?.ToString("yyyy-MM-dd HH:mm") ?? string.Empty);
-                item.SubItems.Add(row.RecoveryKeyCount.ToString());
-                item.Tag = row;
-                _unifiedResults.Items.Add(item);
+                var item =
+                    new ListViewItem(
+                        row.ComputerName);
+
+                item.SubItems.Add(
+                    row.FoundInAd
+                        ? "Yes"
+                        : "No");
+                item.SubItems.Add(
+                    row.FoundInEntra
+                        ? "Yes"
+                        : "No");
+                item.SubItems.Add(
+                    row.FoundInIntune
+                        ? "Yes"
+                        : "No");
+                item.SubItems.Add(
+                    row.SerialNumber);
+                item.SubItems.Add(
+                    string.IsNullOrWhiteSpace(
+                        row.UserPrincipalName)
+                        ? row.UserDisplayName
+                        : row.UserPrincipalName);
+                item.SubItems.Add(
+                    (row.Manufacturer +
+                     " " +
+                     row.Model).Trim());
+                item.SubItems.Add(
+                    (row.OperatingSystem +
+                     " " +
+                     row.OsVersion).Trim());
+                item.SubItems.Add(
+                    row.ComplianceState);
+                item.SubItems.Add(
+                    row.IsEncrypted is null
+                        ? "-"
+                        : row.IsEncrypted.Value
+                            ? "Yes"
+                            : "No");
+                item.SubItems.Add(
+                    row.LastSyncDateTime?
+                        .ToString(
+                            "yyyy-MM-dd HH:mm") ??
+                    string.Empty);
+                item.SubItems.Add(
+                    row.RecoveryKeyCount.ToString());
+                item.Tag =
+                    row;
+                _unifiedResults.Items.Add(
+                    item);
             }
-            _unifiedStatus.Text = $"Unified search returned {rows.Count} device(s). Recovery passwords were not requested.";
-            _audit.Write("UnifiedDeviceSearch", computerName: _unifiedQuery.Text.Trim(), source: "AD+Entra+Intune", authMode: _cloudToken.AuthMode, details: $"Results={rows.Count}");
+
+            var source =
+                cloudReady
+                    ? "AD+Entra+Intune"
+                    : "AD";
+
+            _unifiedStatus.Text =
+                cloudReady
+                    ? $"Unified search returned {rows.Count} device(s). Recovery passwords were not requested."
+                    : $"AD search returned {rows.Count} device(s). Configure Cloud under Administration to add Entra/Intune data.";
+
+            _audit.Write(
+                "UnifiedDeviceSearch",
+                computerName:
+                    _unifiedQuery.Text.Trim(),
+                source:
+                    source,
+                authMode:
+                    cloudReady
+                        ? _cloudToken?.AuthMode
+                        : null,
+                details:
+                    $"Results={rows.Count}; CloudIncluded={cloudReady}");
         }
         catch (Exception ex)
         {
-            _unifiedStatus.Text = "Unified search failed: " + ex.Message;
-            _audit.Write("UnifiedDeviceSearch", "Failed", source: "AD+Entra+Intune", authMode: _cloudToken?.AuthMode, details: ex.Message);
+            _unifiedStatus.Text =
+                "Device search failed: " +
+                ex.Message;
+
+            _audit.Write(
+                "UnifiedDeviceSearch",
+                "Failed",
+                source: "Devices",
+                authMode:
+                    _cloudToken?.AuthMode,
+                details:
+                    ex.Message);
         }
     }
 
