@@ -415,16 +415,6 @@ public sealed class MainForm : DpiAwareForm
         adGroup.Controls.Add(
             _adConnectionStatus);
 
-        _credentialVaultStatus.SetBounds(
-            730,
-            28,
-            360,
-            100);
-        _credentialVaultStatus.Text =
-            "Credential storage: session only.";
-        adGroup.Controls.Add(
-            _credentialVaultStatus);
-
         _adMode.SelectedIndexChanged +=
             (_, _) =>
                 UpdateDirectoryConnectionUi();
