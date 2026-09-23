@@ -329,7 +329,7 @@ public sealed class MainForm : DpiAwareForm
         outputGroup.Controls.Add(new Label
         {
             Text =
-                "Local and UNC paths are supported. If OutputRoot is left on the legacy SYSVOL path, existing DC/WinPE deployments continue to work.",
+                "Local and UNC paths are supported. The default is a local protected BitKeyBridge RecoveryExport folder under ProgramData.",
             Left = 16,
             Top = 118,
             Width = 1085,
@@ -3563,10 +3563,9 @@ public sealed class MainForm : DpiAwareForm
                 : _config.AdCredentialStorageMode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase)
                     ? 2
                     : 0;
-        _outputRoot.Text = string.IsNullOrWhiteSpace(_config.OutputRoot)
-            ? _config.SysvolScriptsRoot
-            : _config.OutputRoot;
-        _outputSubdirectory.Text = _config.OutputSubdirectory;
+        _outputRoot.Text = _config.EffectiveOutputRoot;
+        _outputSubdirectory.Text =
+            _config.OutputSubdirectory;
 
         UpdateDirectoryConnectionUi();
         RefreshCredentialVaultStatus();
@@ -3614,22 +3613,24 @@ public sealed class MainForm : DpiAwareForm
             _adPassword.Clear();
         }
 
-        var outputRoot = _outputRoot.Text.Trim();
-        _config.OutputRoot = string.Equals(
-            outputRoot.TrimEnd(
-                Path.DirectorySeparatorChar,
-                Path.AltDirectorySeparatorChar),
-            _config.SysvolScriptsRoot.TrimEnd(
-                Path.DirectorySeparatorChar,
-                Path.AltDirectorySeparatorChar),
-            StringComparison.OrdinalIgnoreCase)
-            ? string.Empty
-            : outputRoot;
+        var outputRoot =
+            _outputRoot.Text.Trim();
+
+        _config.OutputRoot =
+            string.IsNullOrWhiteSpace(outputRoot) ||
+            string.Equals(
+                outputRoot.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar),
+                AppConfig.DefaultOutputRoot.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : outputRoot;
 
         _config.OutputSubdirectory =
-            string.IsNullOrWhiteSpace(_outputSubdirectory.Text)
-                ? "BL"
-                : _outputSubdirectory.Text.Trim();
+            _outputSubdirectory.Text.Trim();
 
         ConfigService.SaveAppConfig(_config);
         _audit.Write(
