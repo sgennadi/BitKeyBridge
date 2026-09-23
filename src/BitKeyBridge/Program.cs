@@ -59,6 +59,8 @@ internal static class Program
             x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-setup", StringComparison.OrdinalIgnoreCase) ||
@@ -725,7 +727,9 @@ internal static class Program
                 x.Equals("--rbac-reader-add", StringComparison.OrdinalIgnoreCase) ||
                 x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
                 x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
-                x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase)))
+                x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-remove", StringComparison.OrdinalIgnoreCase)))
         {
             return RbacCliService.Apply(config, args);
         }
@@ -2608,6 +2612,8 @@ internal static class Program
         Console.WriteLine("  --rbac-reader-remove <principal>  Remove RecoveryRead principal");
         Console.WriteLine("  --rbac-rotator-add <principal> Add DOMAIN\\group/user or SID to Rotate");
         Console.WriteLine("  --rbac-rotator-remove <principal> Remove Rotate principal");
+        Console.WriteLine("  --rbac-ui-admin-add <principal> Add DOMAIN\\group/user or SID to Administration UI");
+        Console.WriteLine("  --rbac-ui-admin-remove <principal> Remove Administration UI principal");
         Console.WriteLine("  --audit-verify        Verify tamper-evident audit hash chain");
         Console.WriteLine("  --audit-signing-status  Show signed-checkpoint and certificate state");
         Console.WriteLine("  --audit-signing-setup   Create/reuse non-exportable machine signing certificate");
