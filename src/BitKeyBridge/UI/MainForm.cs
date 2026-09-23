@@ -4806,12 +4806,18 @@ public sealed partial class MainForm : DpiAwareForm
             if (Clipboard.ContainsText())
             {
                 var text = Clipboard.GetText();
-                if ((!string.IsNullOrWhiteSpace(_localCurrentKey) && string.Equals(text, _localCurrentKey, StringComparison.Ordinal)) ||
-                    (!string.IsNullOrWhiteSpace(_cloudCurrentKey) && string.Equals(text, _cloudCurrentKey, StringComparison.Ordinal)))
+                if ((!string.IsNullOrWhiteSpace(_startCurrentKey) &&
+                     string.Equals(text, _startCurrentKey, StringComparison.Ordinal)) ||
+                    (!string.IsNullOrWhiteSpace(_deviceCurrentKey) &&
+                     string.Equals(text, _deviceCurrentKey, StringComparison.Ordinal)))
+                {
                     Clipboard.Clear();
+                }
             }
         }
         catch { }
+        _startCurrentKey = null;
+        _startKey.Clear();
         _deviceCurrentKey = null;
         _deviceRecoveryContext = null;
         _deviceRecoveryKey.Clear();
