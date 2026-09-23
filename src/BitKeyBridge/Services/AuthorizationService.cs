@@ -6,6 +6,7 @@ public enum BitKeyBridgePermission
 {
     RecoveryRead,
     Rotate,
+    Administrator,
     JitGrant,
     RecoveryApprove
 }
@@ -32,6 +33,10 @@ public sealed class AuthorizationService
                 BitKeyBridgePermission.JitGrant or
                 BitKeyBridgePermission.RecoveryApprove;
 
+        var administrativeControl =
+            permission ==
+                BitKeyBridgePermission.Administrator;
+
         var policyEnabled =
             permission switch
             {
@@ -39,6 +44,8 @@ public sealed class AuthorizationService
                     _config.JitRecoveryEnabled,
                 BitKeyBridgePermission.RecoveryApprove =>
                     _config.TwoPersonApprovalEnabled,
+                BitKeyBridgePermission.Administrator =>
+                    true,
                 _ => _config.RbacEnabled
             };
 
@@ -47,6 +54,7 @@ public sealed class AuthorizationService
             return new AuthorizationDecision
             {
                 Allowed =
+                    !administrativeControl &&
                     !privilegedControl &&
                     !_config.RbacEnabled,
                 Permission =
@@ -54,9 +62,11 @@ public sealed class AuthorizationService
                 Identity =
                     Environment.UserName,
                 Reason =
-                    privilegedControl
-                        ? "Privileged recovery controls require a Windows identity."
-                        : _config.RbacEnabled
+                    administrativeControl
+                        ? "Administrative UI requires a Windows identity."
+                        : privilegedControl
+                            ? "Privileged recovery controls require a Windows identity."
+                            : _config.RbacEnabled
                             ? "RBAC requires Windows identity/group membership."
                             : "RBAC is disabled."
             };
@@ -103,7 +113,8 @@ public sealed class AuthorizationService
             };
         }
 
-        if (_config.RbacAllowLocalAdministrators &&
+        if ((administrativeControl ||
+             _config.RbacAllowLocalAdministrators) &&
             principal.IsInRole(
                 WindowsBuiltInRole.Administrator))
         {
@@ -126,6 +137,8 @@ public sealed class AuthorizationService
                     _config.RbacRecoveryReaders,
                 BitKeyBridgePermission.Rotate =>
                     _config.RbacRotationOperators,
+                BitKeyBridgePermission.Administrator =>
+                    _config.RbacAdministrators,
                 BitKeyBridgePermission.JitGrant =>
                     _config.RbacJitGrantors,
                 BitKeyBridgePermission.RecoveryApprove =>
@@ -184,6 +197,7 @@ public sealed class AuthorizationService
 
         ValidateList("RecoveryReaders", _config.RbacRecoveryReaders, errors);
         ValidateList("RotationOperators", _config.RbacRotationOperators, errors);
+        ValidateList("Administrators", _config.RbacAdministrators, errors);
         ValidateList("JitGrantors", _config.RbacJitGrantors, errors);
         ValidateList("RecoveryApprovers", _config.RbacRecoveryApprovers, errors);
 
