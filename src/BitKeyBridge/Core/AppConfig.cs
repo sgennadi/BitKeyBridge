@@ -10,9 +10,9 @@ public sealed class AppConfig
     public int SchemaVersion { get; set; } =
         ConfigSchema.CurrentVersion;
 
-    public string SysvolScriptsRoot { get; set; } = @"C:\Windows\SYSVOL\domain\scripts";
+    public string SysvolScriptsRoot { get; set; } = string.Empty;
     public string OutputRoot { get; set; } = string.Empty;
-    public string OutputSubdirectory { get; set; } = "BL";
+    public string OutputSubdirectory { get; set; } = string.Empty;
     public int StaleSuccessHours { get; set; } = 36;
     public int ReplicationStaleHours { get; set; } = 24;
     public bool BlockExportOnReplicationErrors { get; set; } = false;
@@ -115,13 +115,23 @@ public sealed class AppConfig
 
     public List<BitLockerScope> DefaultScopes { get; set; } = [];
 
+    public static string DefaultOutputRoot =>
+        Path.Combine(
+            AppPaths.MachineConfigDirectory,
+            "RecoveryExport");
+
     public string EffectiveOutputRoot =>
         Environment.ExpandEnvironmentVariables(
             string.IsNullOrWhiteSpace(OutputRoot)
-                ? SysvolScriptsRoot
+                ? DefaultOutputRoot
                 : OutputRoot);
 
-    public string OutputDirectory => Path.Combine(EffectiveOutputRoot, OutputSubdirectory);
+    public string OutputDirectory =>
+        string.IsNullOrWhiteSpace(OutputSubdirectory)
+            ? EffectiveOutputRoot
+            : Path.Combine(
+                EffectiveOutputRoot,
+                OutputSubdirectory);
     public string OutputCsv => Path.Combine(OutputDirectory, "bitlocker_recovery_keys.csv");
     public string ErrorLog => Path.Combine(OutputDirectory, "bitlocker_errors.log");
     public string LockFile => Path.Combine(OutputDirectory, "bitlocker_export.lock");
