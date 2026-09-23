@@ -171,13 +171,13 @@ public sealed class MainForm : DpiAwareForm
             new Label
             {
                 Text =
-                    "BitLocker Recovery Search",
+                    "Find BitLocker Recovery Key",
                 Font =
                     new Font(
                         "Segoe UI Semibold",
-                        16F),
+                        18F),
                 AutoSize = true,
-                Left = 18,
+                Left = 20,
                 Top = 14
             };
 
@@ -185,25 +185,25 @@ public sealed class MainForm : DpiAwareForm
             new Label
             {
                 Text =
-                    "BitKeyBridge finds BitLocker recovery passwords stored in Active Directory. " +
-                    "Connect to AD, select the OU that contains the computer, then search by computer name or Recovery ID.",
-                Left = 20,
-                Top = 49,
-                Width = 1135,
+                    "Search BitLocker recovery information stored in Active Directory by computer name or Recovery ID. " +
+                    "The normal helpdesk workflow is: connect to AD, select the OU, search, then reveal or copy the recovery key.",
+                Left = 22,
+                Top = 54,
+                Width = 1120,
                 Height = 40
             };
 
         _startPurposeStatus.SetBounds(
-            20,
-            82,
-            1135,
-            24);
+            22,
+            88,
+            1120,
+            26);
         _startPurposeStatus.Font =
             new Font(
                 "Segoe UI Semibold",
-                9.5F);
+                10F);
         _startPurposeStatus.Text =
-            "Step 1 of 3 — Connect to Active Directory.";
+            "Ready — connect to Active Directory to begin.";
 
         tab.Controls.AddRange([
             header,
@@ -211,32 +211,286 @@ public sealed class MainForm : DpiAwareForm
             _startPurposeStatus
         ]);
 
-        var adGroup =
+        var connectionGroup =
             new GroupBox
             {
                 Text =
-                    "1. Active Directory connection",
+                    "1. Connect to Active Directory",
                 Left = 20,
-                Top = 112,
+                Top = 122,
                 Width = 1145,
-                Height = 245,
+                Height = 100,
                 Anchor =
                     AnchorStyles.Top |
                     AnchorStyles.Left |
                     AnchorStyles.Right
             };
         tab.Controls.Add(
-            adGroup);
+            connectionGroup);
+
+        var connect =
+            new Button
+            {
+                Text =
+                    "Connect to AD",
+                Left = 16,
+                Top = 31,
+                Width = 170,
+                Height = 42,
+                Font =
+                    new Font(
+                        "Segoe UI Semibold",
+                        10F)
+            };
+
+        _adConnectionStatus.SetBounds(
+            205,
+            27,
+            680,
+            54);
+        _adConnectionStatus.Text =
+            "Ready to auto-discover a writable domain controller using the current Windows identity.";
+
+        var advancedButton =
+            new Button
+            {
+                Text =
+                    "Advanced connection settings...",
+                Left = 905,
+                Top = 34,
+                Width = 210,
+                Height = 34,
+                Anchor =
+                    AnchorStyles.Top |
+                    AnchorStyles.Right
+            };
+
+        connectionGroup.Controls.AddRange([
+            connect,
+            _adConnectionStatus,
+            advancedButton
+        ]);
+
+        var ouGroup =
+            new GroupBox
+            {
+                Text =
+                    "2. Select search OU",
+                Left = 20,
+                Top = 234,
+                Width = 1145,
+                Height = 88,
+                Anchor =
+                    AnchorStyles.Top |
+                    AnchorStyles.Left |
+                    AnchorStyles.Right
+            };
+        tab.Controls.Add(
+            ouGroup);
+
+        _startSelectOu.Text =
+            "Select OU...";
+        _startSelectOu.SetBounds(
+            16,
+            29,
+            135,
+            36);
+        _startSelectOu.Enabled = false;
+
+        _startOuStatus.SetBounds(
+            170,
+            28,
+            930,
+            44);
+        _startOuStatus.Text =
+            "After a successful AD connection, the OU selector opens automatically. You can also choose Entire domain.";
+
+        ouGroup.Controls.AddRange([
+            _startSelectOu,
+            _startOuStatus
+        ]);
+
+        var searchGroup =
+            new GroupBox
+            {
+                Text =
+                    "3. Search BitLocker recovery information",
+                Left = 20,
+                Top = 334,
+                Width = 1145,
+                Height = 405,
+                Anchor =
+                    AnchorStyles.Top |
+                    AnchorStyles.Bottom |
+                    AnchorStyles.Left |
+                    AnchorStyles.Right
+            };
+        tab.Controls.Add(
+            searchGroup);
+
+        searchGroup.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Computer name or Recovery ID:",
+                Left = 16,
+                Top = 34,
+                AutoSize = true,
+                Font =
+                    new Font(
+                        "Segoe UI Semibold",
+                        9.5F)
+            });
+
+        _startQuery.SetBounds(
+            210,
+            28,
+            650,
+            32);
+        _startQuery.Font =
+            new Font(
+                "Segoe UI",
+                11F);
+        _startQuery.PlaceholderText =
+            "Example: PC-12345 or 8a1b2c3d...";
+
+        _startSearch.Text =
+            "Search BitLocker";
+        _startSearch.SetBounds(
+            875,
+            27,
+            180,
+            36);
+        _startSearch.Enabled = false;
+        _startSearch.Font =
+            new Font(
+                "Segoe UI Semibold",
+                9.5F);
+
+        searchGroup.Controls.AddRange([
+            _startQuery,
+            _startSearch
+        ]);
+
+        _startResults.View =
+            View.Details;
+        _startResults.FullRowSelect =
+            true;
+        _startResults.GridLines =
+            true;
+        _startResults.HideSelection =
+            false;
+        _startResults.SetBounds(
+            16,
+            78,
+            1095,
+            205);
+        _startResults.Anchor =
+            AnchorStyles.Top |
+            AnchorStyles.Left |
+            AnchorStyles.Right;
+
+        AddColumns(
+            _startResults,
+            ("Computer", 220),
+            ("Recovery ID", 330),
+            ("Source", 110),
+            ("Retrieved", 170));
+
+        searchGroup.Controls.Add(
+            _startResults);
+
+        searchGroup.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Recovery key:",
+                Left = 16,
+                Top = 304,
+                AutoSize = true,
+                Font =
+                    new Font(
+                        "Segoe UI Semibold",
+                        9.5F)
+            });
+
+        _startKey.SetBounds(
+            115,
+            298,
+            545,
+            31);
+        _startKey.ReadOnly = true;
+        _startKey.UseSystemPasswordChar =
+            true;
+        _startKey.Font =
+            new Font(
+                "Consolas",
+                10F);
+
+        _startShow.Text =
+            "Show Key";
+        _startShow.SetBounds(
+            675,
+            296,
+            110,
+            34);
+
+        var copy =
+            new Button
+            {
+                Text =
+                    "Copy Key",
+                Left = 795,
+                Top = 296,
+                Width = 110,
+                Height = 34
+            };
+
+        searchGroup.Controls.AddRange([
+            _startKey,
+            _startShow,
+            copy
+        ]);
+
+        var privacyNote =
+            new Label
+            {
+                Text =
+                    "The recovery password stays masked until you select a result. Show/Copy actions are audited and respect RBAC, JIT recovery and two-person approval when those optional controls are enabled.",
+                Left = 16,
+                Top = 347,
+                Width = 1095,
+                Height = 42
+            };
+        searchGroup.Controls.Add(
+            privacyNote);
+
+        var advancedGroup =
+            new GroupBox
+            {
+                Text =
+                    "Advanced connection settings",
+                Left = 20,
+                Top = 755,
+                Width = 1145,
+                Height = 285,
+                Visible = false,
+                Anchor =
+                    AnchorStyles.Top |
+                    AnchorStyles.Left |
+                    AnchorStyles.Right
+            };
+        tab.Controls.Add(
+            advancedGroup);
 
         AddLabeled(
-            adGroup,
+            advancedGroup,
             "Mode:",
             _adMode,
             16,
             30,
             130,
-            325);
-
+            330);
         _adMode.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _adMode.Items.AddRange([
@@ -245,27 +499,28 @@ public sealed class MainForm : DpiAwareForm
         ]);
 
         AddLabeled(
-            adGroup,
+            advancedGroup,
             "DC host / FQDN:",
             _adServer,
             16,
             68,
             130,
-            325);
+            330);
 
         AddLabeled(
-            adGroup,
+            advancedGroup,
             "Domain:",
             _adDomain,
             16,
             106,
             130,
-            325);
+            330);
 
-        adGroup.Controls.Add(
+        advancedGroup.Controls.Add(
             new Label
             {
-                Text = "LDAP port:",
+                Text =
+                    "LDAP port:",
                 Left = 16,
                 Top = 148,
                 Width = 130,
@@ -279,7 +534,7 @@ public sealed class MainForm : DpiAwareForm
             27);
         _adPort.Minimum = 1;
         _adPort.Maximum = 65535;
-        adGroup.Controls.Add(
+        advancedGroup.Controls.Add(
             _adPort);
 
         _adUseLdaps.Text =
@@ -289,7 +544,7 @@ public sealed class MainForm : DpiAwareForm
             145,
             160,
             25);
-        adGroup.Controls.Add(
+        advancedGroup.Controls.Add(
             _adUseLdaps);
 
         _adExplicitCredentials.Text =
@@ -299,38 +554,37 @@ public sealed class MainForm : DpiAwareForm
             30,
             220,
             26);
-        adGroup.Controls.Add(
+        advancedGroup.Controls.Add(
             _adExplicitCredentials);
 
         AddLabeled(
-            adGroup,
+            advancedGroup,
             "AD user:",
             _adUsername,
             500,
             68,
-            105,
-            350);
+            115,
+            340);
 
         AddLabeled(
-            adGroup,
+            advancedGroup,
             "Password:",
             _adPassword,
             500,
             106,
-            105,
-            350);
+            115,
+            340);
         _adPassword.UseSystemPasswordChar =
             true;
 
         AddLabeled(
-            adGroup,
+            advancedGroup,
             "Credential storage:",
             _adCredentialStorage,
             500,
             144,
             125,
-            200);
-
+            220);
         _adCredentialStorage.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _adCredentialStorage.Items.AddRange([
@@ -344,7 +598,7 @@ public sealed class MainForm : DpiAwareForm
             {
                 Text =
                     "Save Credential",
-                Left = 840,
+                Left = 860,
                 Top = 141,
                 Width = 120,
                 Height = 31
@@ -355,36 +609,20 @@ public sealed class MainForm : DpiAwareForm
             {
                 Text =
                     "Delete Stored",
-                Left = 970,
+                Left = 990,
                 Top = 141,
                 Width = 120,
                 Height = 31
             };
 
-        adGroup.Controls.AddRange([
-            saveCredential,
-            deleteCredential
-        ]);
-
-        var save =
+        var saveSettings =
             new Button
             {
                 Text =
-                    "Save Settings",
+                    "Save Connection Settings",
                 Left = 16,
-                Top = 188,
-                Width = 120,
-                Height = 34
-            };
-
-        var connect =
-            new Button
-            {
-                Text =
-                    "Connect & Load OUs",
-                Left = 146,
-                Top = 188,
-                Width = 160,
+                Top = 201,
+                Width = 180,
                 Height = 34
             };
 
@@ -393,27 +631,75 @@ public sealed class MainForm : DpiAwareForm
             {
                 Text =
                     "Clear Session Password",
-                Left = 316,
-                Top = 188,
+                Left = 206,
+                Top = 201,
                 Width = 170,
                 Height = 34
             };
 
-        adGroup.Controls.AddRange([
-            save,
-            connect,
-            clearPassword
+        _credentialVaultStatus.SetBounds(
+            500,
+            188,
+            610,
+            58);
+
+        advancedGroup.Controls.AddRange([
+            saveCredential,
+            deleteCredential,
+            saveSettings,
+            clearPassword,
+            _credentialVaultStatus
         ]);
 
-        _adConnectionStatus.SetBounds(
-            500,
-            185,
-            590,
-            42);
-        _adConnectionStatus.Text =
-            "Not connected yet.";
-        adGroup.Controls.Add(
-            _adConnectionStatus);
+        advancedButton.Click +=
+            (_, _) =>
+            {
+                advancedGroup.Visible =
+                    !advancedGroup.Visible;
+
+                advancedButton.Text =
+                    advancedGroup.Visible
+                        ? "Hide advanced settings"
+                        : "Advanced connection settings...";
+
+                if (advancedGroup.Visible)
+                    tab.ScrollControlIntoView(
+                        advancedGroup);
+            };
+
+        connect.Click +=
+            async (_, _) =>
+                await TestDirectoryConnectionAsync();
+
+        _startSelectOu.Click +=
+            async (_, _) =>
+                await SelectStartOuAsync();
+
+        _startSearch.Click +=
+            async (_, _) =>
+                await SearchStartRecoveryAsync();
+
+        _startQuery.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode == Keys.Enter &&
+                    _startSearch.Enabled)
+                {
+                    await SearchStartRecoveryAsync();
+                }
+            };
+
+        _startResults.SelectedIndexChanged +=
+            (_, _) =>
+                SelectStartRecoveryRecord();
+
+        _startShow.Click +=
+            (_, _) =>
+                RevealStartRecoveryKey();
+
+        copy.Click +=
+            (_, _) =>
+                CopyStartRecoveryKey();
 
         _adMode.SelectedIndexChanged +=
             (_, _) =>
@@ -445,7 +731,7 @@ public sealed class MainForm : DpiAwareForm
                 }
             };
 
-        save.Click +=
+        saveSettings.Click +=
             (_, _) =>
                 SaveDirectorySettings(
                     showConfirmation: true);
@@ -458,10 +744,6 @@ public sealed class MainForm : DpiAwareForm
             (_, _) =>
                 DeleteSelectedCredential();
 
-        connect.Click +=
-            async (_, _) =>
-                await TestDirectoryConnectionAsync();
-
         clearPassword.Click +=
             (_, _) =>
             {
@@ -469,204 +751,8 @@ public sealed class MainForm : DpiAwareForm
                 AdSessionCredentials.Clear();
                 _adConnectionStatus.Text =
                     "Session AD password cleared.";
+                RefreshCredentialVaultStatus();
             };
-
-        var ouGroup =
-            new GroupBox
-            {
-                Text =
-                    "2. Select search OU",
-                Left = 20,
-                Top = 370,
-                Width = 1145,
-                Height = 92,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Left |
-                    AnchorStyles.Right
-            };
-        tab.Controls.Add(
-            ouGroup);
-
-        _startSelectOu.Text =
-            "Select OU...";
-        _startSelectOu.SetBounds(
-            16,
-            31,
-            120,
-            34);
-        _startSelectOu.Enabled = false;
-
-        _startOuStatus.SetBounds(
-            155,
-            30,
-            950,
-            44);
-        _startOuStatus.Text =
-            "Connect to Active Directory first. The OU browser opens automatically after a successful connection.";
-
-        ouGroup.Controls.AddRange([
-            _startSelectOu,
-            _startOuStatus
-        ]);
-
-        _startSelectOu.Click +=
-            async (_, _) =>
-                await SelectStartOuAsync();
-
-        var searchGroup =
-            new GroupBox
-            {
-                Text =
-                    "3. Search BitLocker recovery information",
-                Left = 20,
-                Top = 476,
-                Width = 1145,
-                Height = 290,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Bottom |
-                    AnchorStyles.Left |
-                    AnchorStyles.Right
-            };
-        tab.Controls.Add(
-            searchGroup);
-
-        searchGroup.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Computer name or Recovery ID:",
-                Left = 16,
-                Top = 31,
-                AutoSize = true
-            });
-
-        _startQuery.SetBounds(
-            205,
-            27,
-            480,
-            27);
-
-        _startSearch.Text =
-            "Search BitLocker";
-        _startSearch.SetBounds(
-            700,
-            25,
-            135,
-            32);
-        _startSearch.Enabled = false;
-
-        searchGroup.Controls.AddRange([
-            _startQuery,
-            _startSearch
-        ]);
-
-        _startResults.View =
-            View.Details;
-        _startResults.FullRowSelect =
-            true;
-        _startResults.GridLines =
-            true;
-        _startResults.SetBounds(
-            16,
-            68,
-            1095,
-            125);
-        _startResults.Anchor =
-            AnchorStyles.Top |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-
-        AddColumns(
-            _startResults,
-            ("Computer", 220),
-            ("Recovery ID", 330),
-            ("Source", 110),
-            ("Retrieved", 170));
-
-        searchGroup.Controls.Add(
-            _startResults);
-
-        searchGroup.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Recovery key:",
-                Left = 16,
-                Top = 211,
-                AutoSize = true
-            });
-
-        _startKey.SetBounds(
-            110,
-            206,
-            510,
-            28);
-        _startKey.ReadOnly = true;
-        _startKey.UseSystemPasswordChar =
-            true;
-
-        _startShow.Text =
-            "Show Key";
-        _startShow.SetBounds(
-            635,
-            204,
-            100,
-            32);
-
-        var copy =
-            new Button
-            {
-                Text =
-                    "Copy Key",
-                Left = 745,
-                Top = 204,
-                Width = 100,
-                Height = 32
-            };
-
-        searchGroup.Controls.AddRange([
-            _startKey,
-            _startShow,
-            copy
-        ]);
-
-        var privacyNote =
-            new Label
-            {
-                Text =
-                    "Recovery passwords stay hidden until selected. Reveal/copy actions are audited and follow configured RBAC, JIT and approval policy.",
-                Left = 16,
-                Top = 247,
-                Width = 1095,
-                Height = 28
-            };
-        searchGroup.Controls.Add(
-            privacyNote);
-
-        _startSearch.Click +=
-            async (_, _) =>
-                await SearchStartRecoveryAsync();
-
-        _startQuery.KeyDown +=
-            async (_, e) =>
-            {
-                if (e.KeyCode == Keys.Enter)
-                    await SearchStartRecoveryAsync();
-            };
-
-        _startResults.SelectedIndexChanged +=
-            (_, _) =>
-                SelectStartRecoveryRecord();
-
-        _startShow.Click +=
-            (_, _) =>
-                RevealStartRecoveryKey();
-
-        copy.Click +=
-            (_, _) =>
-                CopyStartRecoveryKey();
 
         return tab;
     }
@@ -3865,6 +3951,16 @@ public sealed class MainForm : DpiAwareForm
 
         UpdateDirectoryConnectionUi();
         RefreshCredentialVaultStatus();
+
+        _adConnectionStatus.Text =
+            _adMode.SelectedIndex == 1 &&
+            !string.IsNullOrWhiteSpace(
+                _adServer.Text)
+                ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}. Advanced settings are configured."
+                : "Ready to auto-discover a writable domain controller using the current Windows identity.";
+
+        _startPurposeStatus.Text =
+            "Ready — connect to Active Directory, choose an OU, then search for the BitLocker recovery key.";
     }
 
     private void UpdateDirectoryConnectionUi()
@@ -3940,8 +4036,8 @@ public sealed class MainForm : DpiAwareForm
             MessageBox.Show(
                 this,
                 _config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase)
-                    ? "Directory/output settings saved. Session-mode AD password remains only in this process memory."
-                    : "Directory/output settings saved. Stored credentials remain protected by the selected Windows vault; no plaintext password is written to appsettings.",
+                    ? "Active Directory connection settings saved. Session-mode AD password remains only in this process memory."
+                    : "Active Directory connection settings saved. Stored credentials remain protected by the selected Windows vault; no plaintext password is written to appsettings.",
                 "Directory Connection",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
