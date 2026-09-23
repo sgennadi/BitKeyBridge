@@ -269,6 +269,113 @@ public sealed class ActiveDirectoryService
             .ToList();
     }
 
+    public List<AdComputerInfo> SearchComputersInScope(
+        string server,
+        BitLockerScope scope,
+        string query,
+        int maximumItems = 100)
+    {
+        query = query?.Trim() ?? string.Empty;
+        var filter = "(objectCategory=computer)";
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var escaped = EscapeLdapFilter(query);
+            filter =
+                $"(&(objectCategory=computer)(|(name=*{escaped}*)(dNSHostName=*{escaped}*)))";
+        }
+
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            scope.SearchBase,
+            filter,
+            SearchScope.Subtree,
+            "name",
+            "distinguishedName",
+            "dNSHostName",
+            "operatingSystem",
+            "operatingSystemVersion",
+            "lastLogonTimestamp");
+
+        var result = new List<AdComputerInfo>();
+
+        foreach (var entry in SendPaged(connection, request))
+        {
+            result.Add(new AdComputerInfo
+            {
+                ComputerName = GetString(entry, "name") ?? string.Empty,
+                DistinguishedName = entry.DistinguishedName,
+                DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
+                OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
+                LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
+            });
+
+            if (result.Count >= Math.Clamp(maximumItems, 1, 5000))
+                break;
+        }
+
+        return result
+            .OrderBy(x => x.ComputerName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public List<RecoveryRecord> GetRecoveryRecordsForComputer(
+        string server,
+        string computerDistinguishedName,
+        DateTime runTimestamp,
+        Action<string>? warning = null)
+    {
+        if (string.IsNullOrWhiteSpace(computerDistinguishedName))
+            return [];
+
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            computerDistinguishedName,
+            "(objectClass=msFVE-RecoveryInformation)",
+            SearchScope.OneLevel,
+            "msFVE-RecoveryPassword",
+            "msFVE-RecoveryGuid");
+
+        var rows = new List<RecoveryRecord>();
+
+        foreach (var entry in SendPaged(connection, request))
+        {
+            var password = GetString(entry, "msFVE-RecoveryPassword");
+            var guidBytes =
+                entry.Attributes["msFVE-RecoveryGuid"] is { Count: > 0 } guidAttr
+                    ? guidAttr[0] as byte[]
+                    : null;
+
+            if (string.IsNullOrWhiteSpace(password) ||
+                guidBytes is not { Length: 16 })
+            {
+                throw new InvalidDataException(
+                    $"Missing or invalid BitLocker recovery attributes for '{entry.DistinguishedName}'.");
+            }
+
+            var computerName = GetParentComputerName(entry.DistinguishedName);
+            var recoveryGuid = new Guid(guidBytes).ToString("D");
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(
+                    password,
+                    @"^\d{6}(?:-\d{6}){7}$"))
+            {
+                warning?.Invoke(
+                    $"Unexpected recovery password format for {computerName}, recovery ID {recoveryGuid}.");
+            }
+
+            rows.Add(new RecoveryRecord(
+                computerName,
+                recoveryGuid,
+                password,
+                runTimestamp,
+                "AD Live"));
+        }
+
+        return rows;
+    }
+
     public List<AdComputerInfo> GetComputersInScope(
         string server,
         BitLockerScope scope,
