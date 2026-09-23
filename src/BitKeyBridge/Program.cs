@@ -59,6 +59,8 @@ internal static class Program
             x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-setup", StringComparison.OrdinalIgnoreCase) ||
@@ -725,7 +727,9 @@ internal static class Program
                 x.Equals("--rbac-reader-add", StringComparison.OrdinalIgnoreCase) ||
                 x.Equals("--rbac-reader-remove", StringComparison.OrdinalIgnoreCase) ||
                 x.Equals("--rbac-rotator-add", StringComparison.OrdinalIgnoreCase) ||
-                x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase)))
+                x.Equals("--rbac-rotator-remove", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-add", StringComparison.OrdinalIgnoreCase) ||
+                x.Equals("--rbac-ui-admin-remove", StringComparison.OrdinalIgnoreCase)))
         {
             return RbacCliService.Apply(config, args);
         }
@@ -1524,6 +1528,130 @@ internal static class Program
             {
                 failures.Add(
                     "Recovery export defaults: " +
+                    ex.Message);
+            }
+
+            try
+            {
+                var uiDefaults =
+                    new AppConfig();
+
+                if (!uiDefaults.AutoConnectOnStart ||
+                    !string.Equals(
+                        uiDefaults.RecoverySearchSource,
+                        "LiveAD",
+                        StringComparison.Ordinal) ||
+                    !string.IsNullOrWhiteSpace(
+                        uiDefaults.LastRecoveryScopeName) ||
+                    !string.IsNullOrWhiteSpace(
+                        uiDefaults.LastRecoveryScopeSearchBase) ||
+                    uiDefaults.RbacAdministrators.Count != 0 ||
+                    uiDefaults.SchemaVersion !=
+                        ConfigSchema.CurrentVersion)
+                {
+                    failures.Add(
+                        "Schema v4 helpdesk UI defaults are invalid.");
+                }
+
+                if (OperatingSystem.IsWindows())
+                {
+                    using var currentIdentity =
+                        System.Security.Principal.WindowsIdentity.GetCurrent();
+                    var currentPrincipal =
+                        new System.Security.Principal.WindowsPrincipal(
+                            currentIdentity);
+                    var isLocalAdministrator =
+                        currentPrincipal.IsInRole(
+                            System.Security.Principal.WindowsBuiltInRole.Administrator);
+
+                    var adminDecision =
+                        new AuthorizationService(
+                            uiDefaults)
+                            .Check(
+                                BitKeyBridgePermission.Administrator);
+
+                    if (adminDecision.Allowed !=
+                        isLocalAdministrator)
+                    {
+                        failures.Add(
+                            "Administration UI default authorization is not restricted to local Administrators.");
+                    }
+
+                    var recoveryDecision =
+                        new AuthorizationService(
+                            uiDefaults)
+                            .Check(
+                                BitKeyBridgePermission.RecoveryRead);
+
+                    if (!recoveryDecision.Allowed)
+                    {
+                        failures.Add(
+                            "RBAC-disabled RecoveryRead backward compatibility was broken.");
+                    }
+                }
+
+                var metadataCsv =
+                    Path.Combine(
+                        tempDirectory,
+                        "metadata-only-recovery.csv");
+
+                const string selfTestKey =
+                    "111111-222222-333333-444444-555555-666666-777777-888888";
+
+                CsvUtility.WriteRecoveryCsvAtomic(
+                    metadataCsv,
+                    [
+                        new RecoveryRecord(
+                            "PC-SELFTEST",
+                            "11111111-2222-3333-4444-555555555555",
+                            selfTestKey,
+                            new DateTime(
+                                2026,
+                                1,
+                                2,
+                                3,
+                                4,
+                                5,
+                                DateTimeKind.Local))
+                    ]);
+
+                var metadataOnly =
+                    CsvUtility.ReadRecoveryMetadata(
+                        metadataCsv,
+                        "PC-SELFTEST",
+                        10);
+
+                if (metadataOnly.Count != 1 ||
+                    metadataOnly[0].ComputerName !=
+                        "PC-SELFTEST" ||
+                    metadataOnly[0].RecoveryId !=
+                        "11111111-2222-3333-4444-555555555555" ||
+                    metadataOnly[0].Source !=
+                        "Local cache")
+                {
+                    failures.Add(
+                        "Metadata-only local recovery search failed.");
+                }
+
+                var onDemandKey =
+                    CsvUtility.GetRecoveryPassword(
+                        metadataCsv,
+                        "PC-SELFTEST",
+                        "11111111-2222-3333-4444-555555555555");
+
+                if (!string.Equals(
+                        onDemandKey,
+                        selfTestKey,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "On-demand local recovery-key read failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Schema v4 recovery UI/cache helpers: " +
                     ex.Message);
             }
 
@@ -2521,6 +2649,8 @@ internal static class Program
         Console.WriteLine("  --rbac-reader-remove <principal>  Remove RecoveryRead principal");
         Console.WriteLine("  --rbac-rotator-add <principal> Add DOMAIN\\group/user or SID to Rotate");
         Console.WriteLine("  --rbac-rotator-remove <principal> Remove Rotate principal");
+        Console.WriteLine("  --rbac-ui-admin-add <principal> Add DOMAIN\\group/user or SID to Administration UI");
+        Console.WriteLine("  --rbac-ui-admin-remove <principal> Remove Administration UI principal");
         Console.WriteLine("  --audit-verify        Verify tamper-evident audit hash chain");
         Console.WriteLine("  --audit-signing-status  Show signed-checkpoint and certificate state");
         Console.WriteLine("  --audit-signing-setup   Create/reuse non-exportable machine signing certificate");

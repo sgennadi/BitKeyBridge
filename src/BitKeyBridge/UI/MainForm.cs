@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BitKeyBridge;
 
-public sealed class MainForm : DpiAwareForm
+public sealed partial class MainForm : DpiAwareForm
 {
     private readonly AppConfig _config;
     private readonly ActiveDirectoryService _ad;
@@ -20,27 +20,15 @@ public sealed class MainForm : DpiAwareForm
     private readonly RichTextBox _dcDetails = new();
     private readonly Button _dcTest = new();
 
-    private readonly TextBox _localQuery = new();
-    private readonly ListView _localResults = new();
-    private readonly TextBox _localKey = new();
-    private readonly Button _localShow = new();
-    private string? _localCurrentKey;
-
     private readonly TextBox _cloudTenant = new();
     private readonly TextBox _cloudClient = new();
     private readonly TextBox _cloudUsername = new();
     private readonly TextBox _cloudPassword = new();
     private readonly TextBox _cloudThumbprint = new();
     private readonly ComboBox _cloudAuthMode = new();
-    private readonly TextBox _cloudQuery = new();
-    private readonly ListView _cloudResults = new();
-    private readonly TextBox _cloudKey = new();
-    private readonly Button _cloudShow = new();
     private readonly Label _cloudStatus = new();
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
-    private string? _cloudCurrentKey;
-
     private readonly ListView _coverageResults = new();
     private readonly Label _coverageSummary = new();
     private readonly Label _coverageStatus = new();
@@ -131,20 +119,7 @@ public sealed class MainForm : DpiAwareForm
         MinimumSize = new Size(1000, 700);
         Font = new Font("Segoe UI", 9F);
 
-        var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(BuildDirectoryConnectionTab());
-        tabs.TabPages.Add(BuildDashboardTab());
-        tabs.TabPages.Add(BuildOperationsTab());
-        tabs.TabPages.Add(BuildExportTab());
-        tabs.TabPages.Add(BuildDcTab());
-        tabs.TabPages.Add(BuildLocalSearchTab());
-        tabs.TabPages.Add(BuildCoverageTab());
-        tabs.TabPages.Add(BuildUnifiedTab());
-        tabs.TabPages.Add(BuildCloudTab());
-        tabs.TabPages.Add(BuildAuditTab());
-        foreach (TabPage tabPage in tabs.TabPages)
-            tabPage.AutoScroll = true;
-        Controls.Add(tabs);
+        Controls.Add(BuildMainShell());
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -156,1804 +131,15 @@ public sealed class MainForm : DpiAwareForm
         FormClosing += (_, _) => ClearSensitiveState();
         Shown += async (_, _) =>
         {
-            if (_config.CheckForUpdatesOnStart)
-                await CheckForUpdatesGuiAsync(silentWhenCurrent: true);
-        };
-    }
+            await InitializeRecoveryWorkspaceAsync();
 
-    private TabPage BuildDirectoryConnectionTab()
-    {
-        var tab =
-            new TabPage(
-                "BitLocker Recovery");
-
-        var header =
-            new Label
+            if (_config.CheckForUpdatesOnStart &&
+                AdministrationAllowed)
             {
-                Text =
-                    "Find BitLocker Recovery Key",
-                Font =
-                    new Font(
-                        "Segoe UI Semibold",
-                        18F),
-                AutoSize = true,
-                Left = 20,
-                Top = 14
-            };
-
-        var purpose =
-            new Label
-            {
-                Text =
-                    "Search BitLocker recovery information stored in Active Directory by computer name or Recovery ID. " +
-                    "The normal helpdesk workflow is: connect to AD, select the OU, search, then reveal or copy the recovery key.",
-                Left = 22,
-                Top = 54,
-                Width = 1120,
-                Height = 40
-            };
-
-        _startPurposeStatus.SetBounds(
-            22,
-            88,
-            1120,
-            26);
-        _startPurposeStatus.Font =
-            new Font(
-                "Segoe UI Semibold",
-                10F);
-        _startPurposeStatus.Text =
-            "Ready — connect to Active Directory to begin.";
-
-        tab.Controls.AddRange([
-            header,
-            purpose,
-            _startPurposeStatus
-        ]);
-
-        var connectionGroup =
-            new GroupBox
-            {
-                Text =
-                    "1. Connect to Active Directory",
-                Left = 20,
-                Top = 122,
-                Width = 1145,
-                Height = 100,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Left |
-                    AnchorStyles.Right
-            };
-        tab.Controls.Add(
-            connectionGroup);
-
-        var connect =
-            new Button
-            {
-                Text =
-                    "Connect to AD",
-                Left = 16,
-                Top = 31,
-                Width = 170,
-                Height = 42,
-                Font =
-                    new Font(
-                        "Segoe UI Semibold",
-                        10F)
-            };
-
-        _adConnectionStatus.SetBounds(
-            205,
-            27,
-            680,
-            54);
-        _adConnectionStatus.Text =
-            "Ready to auto-discover a writable domain controller using the current Windows identity.";
-
-        var advancedButton =
-            new Button
-            {
-                Text =
-                    "Advanced connection settings...",
-                Left = 905,
-                Top = 34,
-                Width = 210,
-                Height = 34,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Right
-            };
-
-        connectionGroup.Controls.AddRange([
-            connect,
-            _adConnectionStatus,
-            advancedButton
-        ]);
-
-        var ouGroup =
-            new GroupBox
-            {
-                Text =
-                    "2. Select search OU",
-                Left = 20,
-                Top = 234,
-                Width = 1145,
-                Height = 88,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Left |
-                    AnchorStyles.Right
-            };
-        tab.Controls.Add(
-            ouGroup);
-
-        _startSelectOu.Text =
-            "Select OU...";
-        _startSelectOu.SetBounds(
-            16,
-            29,
-            135,
-            36);
-        _startSelectOu.Enabled = false;
-
-        _startOuStatus.SetBounds(
-            170,
-            28,
-            930,
-            44);
-        _startOuStatus.Text =
-            "After a successful AD connection, the OU selector opens automatically. You can also choose Entire domain.";
-
-        ouGroup.Controls.AddRange([
-            _startSelectOu,
-            _startOuStatus
-        ]);
-
-        var searchGroup =
-            new GroupBox
-            {
-                Text =
-                    "3. Search BitLocker recovery information",
-                Left = 20,
-                Top = 334,
-                Width = 1145,
-                Height = 405,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Bottom |
-                    AnchorStyles.Left |
-                    AnchorStyles.Right
-            };
-        tab.Controls.Add(
-            searchGroup);
-
-        searchGroup.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Computer name or Recovery ID:",
-                Left = 16,
-                Top = 34,
-                AutoSize = true,
-                Font =
-                    new Font(
-                        "Segoe UI Semibold",
-                        9.5F)
-            });
-
-        _startQuery.SetBounds(
-            210,
-            28,
-            650,
-            32);
-        _startQuery.Font =
-            new Font(
-                "Segoe UI",
-                11F);
-        _startQuery.PlaceholderText =
-            "Example: PC-12345 or 8a1b2c3d...";
-
-        _startSearch.Text =
-            "Search BitLocker";
-        _startSearch.SetBounds(
-            875,
-            27,
-            180,
-            36);
-        _startSearch.Enabled = false;
-        _startSearch.Font =
-            new Font(
-                "Segoe UI Semibold",
-                9.5F);
-
-        searchGroup.Controls.AddRange([
-            _startQuery,
-            _startSearch
-        ]);
-
-        _startResults.View =
-            View.Details;
-        _startResults.FullRowSelect =
-            true;
-        _startResults.GridLines =
-            true;
-        _startResults.HideSelection =
-            false;
-        _startResults.SetBounds(
-            16,
-            78,
-            1095,
-            205);
-        _startResults.Anchor =
-            AnchorStyles.Top |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-
-        AddColumns(
-            _startResults,
-            ("Computer", 220),
-            ("Recovery ID", 330),
-            ("Source", 110),
-            ("Retrieved", 170));
-
-        searchGroup.Controls.Add(
-            _startResults);
-
-        searchGroup.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Recovery key:",
-                Left = 16,
-                Top = 304,
-                AutoSize = true,
-                Font =
-                    new Font(
-                        "Segoe UI Semibold",
-                        9.5F)
-            });
-
-        _startKey.SetBounds(
-            115,
-            298,
-            545,
-            31);
-        _startKey.ReadOnly = true;
-        _startKey.UseSystemPasswordChar =
-            true;
-        _startKey.Font =
-            new Font(
-                "Consolas",
-                10F);
-
-        _startShow.Text =
-            "Show Key";
-        _startShow.SetBounds(
-            675,
-            296,
-            110,
-            34);
-
-        var copy =
-            new Button
-            {
-                Text =
-                    "Copy Key",
-                Left = 795,
-                Top = 296,
-                Width = 110,
-                Height = 34
-            };
-
-        searchGroup.Controls.AddRange([
-            _startKey,
-            _startShow,
-            copy
-        ]);
-
-        var privacyNote =
-            new Label
-            {
-                Text =
-                    "The recovery password stays masked until you select a result. Show/Copy actions are audited and respect RBAC, JIT recovery and two-person approval when those optional controls are enabled.",
-                Left = 16,
-                Top = 347,
-                Width = 1095,
-                Height = 42
-            };
-        searchGroup.Controls.Add(
-            privacyNote);
-
-        var advancedGroup =
-            new GroupBox
-            {
-                Text =
-                    "Advanced connection settings",
-                Left = 20,
-                Top = 755,
-                Width = 1145,
-                Height = 285,
-                Visible = false,
-                Anchor =
-                    AnchorStyles.Top |
-                    AnchorStyles.Left |
-                    AnchorStyles.Right
-            };
-        tab.Controls.Add(
-            advancedGroup);
-
-        AddLabeled(
-            advancedGroup,
-            "Mode:",
-            _adMode,
-            16,
-            30,
-            130,
-            330);
-        _adMode.DropDownStyle =
-            ComboBoxStyle.DropDownList;
-        _adMode.Items.AddRange([
-            "Auto - domain workstation / DC",
-            "Explicit DC - standalone / workstation"
-        ]);
-
-        AddLabeled(
-            advancedGroup,
-            "DC host / FQDN:",
-            _adServer,
-            16,
-            68,
-            130,
-            330);
-
-        AddLabeled(
-            advancedGroup,
-            "Domain:",
-            _adDomain,
-            16,
-            106,
-            130,
-            330);
-
-        advancedGroup.Controls.Add(
-            new Label
-            {
-                Text =
-                    "LDAP port:",
-                Left = 16,
-                Top = 148,
-                Width = 130,
-                Height = 24
-            });
-
-        _adPort.SetBounds(
-            146,
-            144,
-            90,
-            27);
-        _adPort.Minimum = 1;
-        _adPort.Maximum = 65535;
-        advancedGroup.Controls.Add(
-            _adPort);
-
-        _adUseLdaps.Text =
-            "Use LDAPS / TLS";
-        _adUseLdaps.SetBounds(
-            255,
-            145,
-            160,
-            25);
-        advancedGroup.Controls.Add(
-            _adUseLdaps);
-
-        _adExplicitCredentials.Text =
-            "Use explicit AD credentials";
-        _adExplicitCredentials.SetBounds(
-            500,
-            30,
-            220,
-            26);
-        advancedGroup.Controls.Add(
-            _adExplicitCredentials);
-
-        AddLabeled(
-            advancedGroup,
-            "AD user:",
-            _adUsername,
-            500,
-            68,
-            115,
-            340);
-
-        AddLabeled(
-            advancedGroup,
-            "Password:",
-            _adPassword,
-            500,
-            106,
-            115,
-            340);
-        _adPassword.UseSystemPasswordChar =
-            true;
-
-        AddLabeled(
-            advancedGroup,
-            "Credential storage:",
-            _adCredentialStorage,
-            500,
-            144,
-            125,
-            220);
-        _adCredentialStorage.DropDownStyle =
-            ComboBoxStyle.DropDownList;
-        _adCredentialStorage.Items.AddRange([
-            "Session only",
-            "Current User - Credential Manager",
-            "Machine / Service - DPAPI"
-        ]);
-
-        var saveCredential =
-            new Button
-            {
-                Text =
-                    "Save Credential",
-                Left = 860,
-                Top = 141,
-                Width = 120,
-                Height = 31
-            };
-
-        var deleteCredential =
-            new Button
-            {
-                Text =
-                    "Delete Stored",
-                Left = 990,
-                Top = 141,
-                Width = 120,
-                Height = 31
-            };
-
-        var saveSettings =
-            new Button
-            {
-                Text =
-                    "Save Connection Settings",
-                Left = 16,
-                Top = 201,
-                Width = 180,
-                Height = 34
-            };
-
-        var clearPassword =
-            new Button
-            {
-                Text =
-                    "Clear Session Password",
-                Left = 206,
-                Top = 201,
-                Width = 170,
-                Height = 34
-            };
-
-        _credentialVaultStatus.SetBounds(
-            500,
-            188,
-            610,
-            58);
-
-        advancedGroup.Controls.AddRange([
-            saveCredential,
-            deleteCredential,
-            saveSettings,
-            clearPassword,
-            _credentialVaultStatus
-        ]);
-
-        advancedButton.Click +=
-            (_, _) =>
-            {
-                advancedGroup.Visible =
-                    !advancedGroup.Visible;
-
-                advancedButton.Text =
-                    advancedGroup.Visible
-                        ? "Hide advanced settings"
-                        : "Advanced connection settings...";
-
-                if (advancedGroup.Visible)
-                {
-                    RefreshCredentialVaultStatus();
-                    tab.ScrollControlIntoView(
-                        advancedGroup);
-                }
-                else
-                {
-                    tab.ScrollControlIntoView(
-                        connectionGroup);
-                }
-            };
-
-        connect.Click +=
-            async (_, _) =>
-                await TestDirectoryConnectionAsync();
-
-        _startSelectOu.Click +=
-            async (_, _) =>
-                await SelectStartOuAsync();
-
-        _startSearch.Click +=
-            async (_, _) =>
-                await SearchStartRecoveryAsync();
-
-        _startQuery.KeyDown +=
-            async (_, e) =>
-            {
-                if (e.KeyCode == Keys.Enter &&
-                    _startSearch.Enabled)
-                {
-                    await SearchStartRecoveryAsync();
-                }
-            };
-
-        _startResults.SelectedIndexChanged +=
-            (_, _) =>
-                SelectStartRecoveryRecord();
-
-        _startShow.Click +=
-            (_, _) =>
-                RevealStartRecoveryKey();
-
-        copy.Click +=
-            (_, _) =>
-                CopyStartRecoveryKey();
-
-        _adMode.SelectedIndexChanged +=
-            (_, _) =>
-                UpdateDirectoryConnectionUi();
-
-        _adExplicitCredentials.CheckedChanged +=
-            (_, _) =>
-                UpdateDirectoryConnectionUi();
-
-        _adCredentialStorage.SelectedIndexChanged +=
-            (_, _) =>
-            {
-                UpdateDirectoryConnectionUi();
-                RefreshCredentialVaultStatus();
-            };
-
-        _adUseLdaps.CheckedChanged +=
-            (_, _) =>
-            {
-                if (_adUseLdaps.Checked &&
-                    _adPort.Value == 389)
-                {
-                    _adPort.Value = 636;
-                }
-                else if (!_adUseLdaps.Checked &&
-                         _adPort.Value == 636)
-                {
-                    _adPort.Value = 389;
-                }
-            };
-
-        saveSettings.Click +=
-            (_, _) =>
-                SaveDirectorySettings(
-                    showConfirmation: true);
-
-        saveCredential.Click +=
-            (_, _) =>
-                SaveSelectedCredential();
-
-        deleteCredential.Click +=
-            (_, _) =>
-                DeleteSelectedCredential();
-
-        clearPassword.Click +=
-            (_, _) =>
-            {
-                _adPassword.Clear();
-                AdSessionCredentials.Clear();
-                _adConnectionStatus.Text =
-                    "Session AD password cleared.";
-                RefreshCredentialVaultStatus();
-            };
-
-        return tab;
-    }
-
-    private TabPage BuildDashboardTab()
-    {
-        var tab = new TabPage("Dashboard");
-
-        var header = new Label
-        {
-            Text = "BitKeyBridge Health & Service",
-            Font = new Font("Segoe UI Semibold", 16F),
-            AutoSize = true,
-            Left = 18,
-            Top = 16
-        };
-        tab.Controls.Add(header);
-
-        _dashboardStatus.SetBounds(20, 54, 1145, 30);
-        _dashboardStatus.Font = new Font("Segoe UI Semibold", 11F);
-        _dashboardStatus.Text = "Loading health status...";
-        tab.Controls.Add(_dashboardStatus);
-
-        var serviceGroup = new GroupBox
-        {
-            Text = "Native Windows Service",
-            Left = 20,
-            Top = 90,
-            Width = 1145,
-            Height = 300,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        tab.Controls.Add(serviceGroup);
-
-        var install = new Button { Text = "Install / Update", Left = 16, Top = 28, Width = 125, Height = 32 };
-        var start = new Button { Text = "Start", Left = 151, Top = 28, Width = 80, Height = 32 };
-        var stop = new Button { Text = "Stop", Left = 241, Top = 28, Width = 80, Height = 32 };
-        var uninstall = new Button { Text = "Uninstall", Left = 331, Top = 28, Width = 95, Height = 32 };
-        var refresh = new Button { Text = "Refresh", Left = 436, Top = 28, Width = 90, Height = 32 };
-        var openHealth = new Button { Text = "Open /health", Left = 536, Top = 28, Width = 110, Height = 32 };
-        var secureOutput = new Button { Text = "Secure Output...", Left = 656, Top = 28, Width = 125, Height = 32 };
-        serviceGroup.Controls.AddRange([install, start, stop, uninstall, refresh, openHealth, secureOutput]);
-
-        serviceGroup.Controls.Add(new Label { Text = "Export interval (minutes):", Left = 16, Top = 86, Width = 145, Height = 24 });
-        _serviceInterval.SetBounds(165, 82, 90, 27);
-        _serviceInterval.Minimum = 1;
-        _serviceInterval.Maximum = 10080;
-        serviceGroup.Controls.Add(_serviceInterval);
-
-        _healthEnabled.Text = "Enable loopback health endpoint";
-        _healthEnabled.SetBounds(285, 84, 220, 25);
-        serviceGroup.Controls.Add(_healthEnabled);
-
-        serviceGroup.Controls.Add(new Label { Text = "Port:", Left = 515, Top = 86, Width = 38, Height = 24 });
-        _healthPort.SetBounds(555, 82, 90, 27);
-        _healthPort.Minimum = 1024;
-        _healthPort.Maximum = 65535;
-        serviceGroup.Controls.Add(_healthPort);
-
-        _serviceRunOnStart.Text = "Run export when service starts";
-        _serviceRunOnStart.SetBounds(675, 84, 220, 25);
-        serviceGroup.Controls.Add(_serviceRunOnStart);
-
-        var saveSettings = new Button { Text = "Save Service Settings", Left = 925, Top = 79, Width = 190, Height = 32 };
-        serviceGroup.Controls.Add(saveSettings);
-
-        _serviceCoverageEnabled.Text = "Enable scheduled Coverage";
-        _serviceCoverageEnabled.SetBounds(16, 124, 220, 25);
-        serviceGroup.Controls.Add(_serviceCoverageEnabled);
-
-        serviceGroup.Controls.Add(new Label
-        {
-            Text = "Coverage interval (min):",
-            Left = 255,
-            Top = 126,
-            Width = 140,
-            Height = 24
-        });
-        _serviceCoverageInterval.SetBounds(400, 122, 90, 27);
-        _serviceCoverageInterval.Minimum = 15;
-        _serviceCoverageInterval.Maximum = 10080;
-        serviceGroup.Controls.Add(_serviceCoverageInterval);
-
-        _serviceCoverageRunOnStart.Text = "Run Coverage when service starts";
-        _serviceCoverageRunOnStart.SetBounds(515, 124, 240, 25);
-        serviceGroup.Controls.Add(_serviceCoverageRunOnStart);
-
-        var saveMachineCloud = new Button
-        {
-            Text = "Save Cloud for Service",
-            Left = 775,
-            Top = 117,
-            Width = 160,
-            Height = 32
-        };
-        var deleteMachineCloud = new Button
-        {
-            Text = "Delete Machine Cloud",
-            Left = 945,
-            Top = 117,
-            Width = 170,
-            Height = 32
-        };
-        serviceGroup.Controls.AddRange([saveMachineCloud, deleteMachineCloud]);
-
-        var repairMachineKey = new Button
-        {
-            Text = "Repair Cert Access",
-            Left = 945,
-            Top = 153,
-            Width = 170,
-            Height = 30
-        };
-        serviceGroup.Controls.Add(repairMachineKey);
-
-        _machineCloudStatus.SetBounds(16, 155, 915, 30);
-        _machineCloudStatus.Text = "Machine cloud config has not been checked.";
-        serviceGroup.Controls.Add(_machineCloudStatus);
-
-        serviceGroup.Controls.Add(new Label
-        {
-            Text = "Service identity:",
-            Left = 16,
-            Top = 204,
-            Width = 95,
-            Height = 24
-        });
-        _serviceIdentityMode.SetBounds(115, 199, 215, 27);
-        _serviceIdentityMode.DropDownStyle = ComboBoxStyle.DropDownList;
-        _serviceIdentityMode.Items.AddRange([
-            "LocalSystem",
-            "gMSA / Managed Account",
-            "Domain Account"
-        ]);
-        serviceGroup.Controls.Add(_serviceIdentityMode);
-
-        serviceGroup.Controls.Add(new Label
-        {
-            Text = "Account:",
-            Left = 350,
-            Top = 204,
-            Width = 60,
-            Height = 24
-        });
-        _serviceIdentityAccount.SetBounds(412, 199, 255, 27);
-        serviceGroup.Controls.Add(_serviceIdentityAccount);
-
-        serviceGroup.Controls.Add(new Label
-        {
-            Text = "Password:",
-            Left = 682,
-            Top = 204,
-            Width = 65,
-            Height = 24
-        });
-        _serviceIdentityPassword.SetBounds(750, 199, 205, 27);
-        _serviceIdentityPassword.UseSystemPasswordChar = true;
-        serviceGroup.Controls.Add(_serviceIdentityPassword);
-
-        var applyIdentity = new Button
-        {
-            Text = "Apply Identity",
-            Left = 970,
-            Top = 196,
-            Width = 145,
-            Height = 34
-        };
-        serviceGroup.Controls.Add(applyIdentity);
-
-        _serviceIdentityStatus.SetBounds(16, 236, 1095, 42);
-        _serviceIdentityStatus.Text = "Service identity has not been queried.";
-        serviceGroup.Controls.Add(_serviceIdentityStatus);
-
-        _dashboardDetails.ReadOnly = true;
-        _dashboardDetails.Font = new Font("Consolas", 9.5F);
-        _dashboardDetails.SetBounds(20, 405, 1145, 335);
-        _dashboardDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        tab.Controls.Add(_dashboardDetails);
-
-        refresh.Click += (_, _) => RefreshDashboard();
-        install.Click += (_, _) => InstallOrUpdateService();
-        start.Click += (_, _) => StartServiceFromGui();
-        stop.Click += (_, _) => StopServiceFromGui();
-        uninstall.Click += (_, _) => UninstallServiceFromGui();
-        openHealth.Click += (_, _) => OpenHealthEndpoint();
-        secureOutput.Click += (_, _) => RunSecureOutputWizard();
-        saveSettings.Click += (_, _) => SaveDashboardSettings(restartRunningService: true);
-        saveMachineCloud.Click += (_, _) => SaveMachineCloudFromGui();
-        deleteMachineCloud.Click += (_, _) => DeleteMachineCloudFromGui();
-        repairMachineKey.Click += (_, _) => RepairMachineCertificateAccessFromGui();
-        applyIdentity.Click += (_, _) => ApplyServiceIdentityFromGui();
-        _serviceIdentityMode.SelectedIndexChanged += (_, _) => UpdateServiceIdentityUi();
-
-        return tab;
-    }
-
-    private TabPage BuildOperationsTab()
-    {
-        var tab = new TabPage("Operations")
-        {
-            AutoScroll = true
-        };
-
-        var updateGroup = new GroupBox
-        {
-            Text = "Verified Updates",
-            Left = 20,
-            Top = 20,
-            Width = 1145,
-            Height = 250,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        tab.Controls.Add(updateGroup);
-
-        updateGroup.Controls.Add(new Label
-        {
-            Text = "GitHub repository:",
-            Left = 16,
-            Top = 34,
-            Width = 115,
-            Height = 24
-        });
-        _updateRepository.SetBounds(135, 30, 350, 27);
-        updateGroup.Controls.Add(_updateRepository);
-
-        _checkUpdatesOnStart.Text = "Check for updates when GUI starts";
-        _checkUpdatesOnStart.SetBounds(510, 31, 230, 25);
-        updateGroup.Controls.Add(_checkUpdatesOnStart);
-
-        _allowPrereleaseUpdates.Text = "Allow prerelease versions";
-        _allowPrereleaseUpdates.SetBounds(760, 31, 190, 25);
-        updateGroup.Controls.Add(_allowPrereleaseUpdates);
-
-        var saveUpdateSettings = new Button
-        {
-            Text = "Save Settings",
-            Left = 965,
-            Top = 27,
-            Width = 150,
-            Height = 32
-        };
-        updateGroup.Controls.Add(saveUpdateSettings);
-
-        var check = new Button { Text = "Check Now", Left = 16, Top = 78, Width = 110, Height = 34 };
-        var install = new Button { Text = "Install Verified Update", Left = 136, Top = 78, Width = 170, Height = 34 };
-        var openRelease = new Button { Text = "Open Release", Left = 316, Top = 78, Width = 120, Height = 34 };
-        updateGroup.Controls.AddRange([check, install, openRelease]);
-
-        _updateStatus.SetBounds(16, 128, 1095, 95);
-        _updateStatus.Text = "Update status has not been checked in this GUI session.";
-        updateGroup.Controls.Add(_updateStatus);
-
-        saveUpdateSettings.Click += (_, _) => SaveOperationsSettings();
-        check.Click += async (_, _) => await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
-        install.Click += async (_, _) => await InstallLatestUpdateGuiAsync();
-        openRelease.Click += (_, _) => OpenLatestRelease();
-
-        var remoteGroup = new GroupBox
-        {
-            Text = "Remote Monitoring / Management API (opt-in, TLS + bearer token)",
-            Left = 20,
-            Top = 290,
-            Width = 1145,
-            Height = 220,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        tab.Controls.Add(remoteGroup);
-
-        remoteGroup.Controls.Add(new Label
-        {
-            Text = "TCP port:",
-            Left = 16,
-            Top = 34,
-            Width = 70,
-            Height = 24
-        });
-        _remoteApiPort.SetBounds(90, 30, 100, 27);
-        _remoteApiPort.Minimum = 1024;
-        _remoteApiPort.Maximum = 65535;
-        remoteGroup.Controls.Add(_remoteApiPort);
-
-        _remoteApiManagement.Text = "Allow remote export + Coverage run";
-        _remoteApiManagement.SetBounds(220, 31, 290, 25);
-        remoteGroup.Controls.Add(_remoteApiManagement);
-
-        var enableRemote = new Button { Text = "Enable / Reconfigure", Left = 500, Top = 27, Width = 150, Height = 32 };
-        var rotateToken = new Button { Text = "Rotate Admin", Left = 660, Top = 27, Width = 115, Height = 32 };
-        var scopedTokens = new Button { Text = "Scoped Tokens...", Left = 785, Top = 27, Width = 130, Height = 32 };
-        var disableRemote = new Button { Text = "Disable", Left = 925, Top = 27, Width = 90, Height = 32 };
-        var openEvents = new Button { Text = "Event Log", Left = 1025, Top = 27, Width = 90, Height = 32 };
-        remoteGroup.Controls.AddRange([enableRemote, rotateToken, scopedTokens, disableRemote, openEvents]);
-
-        _remoteApiStatus.SetBounds(16, 78, 1095, 118);
-        _remoteApiStatus.Text =
-            "Remote API is disabled by default. When enabled it requires TLS and bearer-token authentication.";
-        remoteGroup.Controls.Add(_remoteApiStatus);
-
-        enableRemote.Click += (_, _) => EnableOrReconfigureRemoteApi();
-        rotateToken.Click += (_, _) => RotateRemoteApiToken();
-        scopedTokens.Click += (_, _) => ConfigureRemoteApiScopedTokens();
-        disableRemote.Click += (_, _) => DisableRemoteApi();
-        openEvents.Click += (_, _) => OpenWindowsEventLog();
-
-        var helpdeskGroup = new GroupBox
-        {
-            Text = "Helpdesk Recovery Workflow",
-            Left = 20,
-            Top = 530,
-            Width = 1145,
-            Height = 135,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        tab.Controls.Add(helpdeskGroup);
-
-        _requireRecoveryReference.Text =
-            "Require a ticket/reference before recovery-key access";
-        _requireRecoveryReference.SetBounds(16, 30, 390, 26);
-        helpdeskGroup.Controls.Add(_requireRecoveryReference);
-
-        _suggestRotationAfterRecovery.Text =
-            "Suggest Intune key rotation after a cloud recovery password is retrieved";
-        _suggestRotationAfterRecovery.SetBounds(16, 64, 510, 26);
-        helpdeskGroup.Controls.Add(_suggestRotationAfterRecovery);
-
-        var configureRbac = new Button
-        {
-            Text = "RBAC...",
-            Left = 620,
-            Top = 43,
-            Width = 120,
-            Height = 34
-        };
-        var privilegedAccess = new Button
-        {
-            Text = "Privileged Access...",
-            Left = 750,
-            Top = 43,
-            Width = 160,
-            Height = 34
-        };
-        var saveHelpdesk = new Button
-        {
-            Text = "Save Helpdesk Settings",
-            Left = 920,
-            Top = 43,
-            Width = 190,
-            Height = 34
-        };
-        helpdeskGroup.Controls.AddRange([
-            configureRbac,
-            privilegedAccess,
-            saveHelpdesk
-        ]);
-        configureRbac.Click += (_, _) => ConfigureRbacFromGui();
-        privilegedAccess.Click += (_, _) => ConfigurePrivilegedAccessFromGui();
-        saveHelpdesk.Click += (_, _) => SaveOperationsSettings();
-
-        var maintenanceGroup = new GroupBox
-        {
-            Text = "Configuration / Diagnostics / Storage",
-            Left = 20,
-            Top = 680,
-            Width = 1145,
-            Height = 88,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        tab.Controls.Add(maintenanceGroup);
-
-        var backupConfig = new Button
-        {
-            Text = "Backup Config",
-            Left = 16,
-            Top = 30,
-            Width = 140,
-            Height = 34
-        };
-        var restoreConfig = new Button
-        {
-            Text = "Restore Config",
-            Left = 166,
-            Top = 30,
-            Width = 140,
-            Height = 34
-        };
-        var diagnostics = new Button
-        {
-            Text = "Diagnostics ZIP",
-            Left = 316,
-            Top = 30,
-            Width = 145,
-            Height = 34
-        };
-        var openIncidents = new Button
-        {
-            Text = "Open Incidents",
-            Left = 471,
-            Top = 30,
-            Width = 140,
-            Height = 34
-        };
-        var housekeeping = new Button
-        {
-            Text = "Housekeeping...",
-            Left = 621,
-            Top = 30,
-            Width = 150,
-            Height = 34
-        };
-
-        maintenanceGroup.Controls.AddRange([
-            backupConfig,
-            restoreConfig,
-            diagnostics,
-            openIncidents,
-            housekeeping
-        ]);
-
-        backupConfig.Click += (_, _) =>
-            BackupConfigurationGui();
-        restoreConfig.Click += (_, _) =>
-            RestoreConfigurationGui();
-        diagnostics.Click += (_, _) =>
-            CreateDiagnosticsBundleGui();
-        openIncidents.Click += (_, _) =>
-            OpenPath(AppPaths.IncidentsDirectory);
-        housekeeping.Click += (_, _) =>
-            ConfigureStorageMaintenanceGui();
-
-        var note = new Label
-        {
-            Text = "Remote API never exposes BitLocker recovery passwords. RBAC can restrict recovery reads and rotation to Windows users/groups. Recovery sessions create metadata-only incident bundles; recovery passwords are never written to audit or incident files.",
-            Left = 20,
-            Top = 785,
-            Width = 1145,
-            Height = 44
-        };
-        tab.Controls.Add(note);
-
-        return tab;
-    }
-
-    private TabPage BuildExportTab()
-    {
-        var tab = new TabPage("Export");
-        var header = new Label
-        {
-            Text = "BitLocker AD Recovery Export",
-            Font = new Font("Segoe UI Semibold", 16F),
-            AutoSize = true,
-            Left = 18,
-            Top = 16
-        };
-        tab.Controls.Add(header);
-
-        _lastSuccess.SetBounds(20, 52, 1145, 24);
-        tab.Controls.Add(_lastSuccess);
-
-        var scopeGroup = new GroupBox { Text = "Export scopes (no selection = defaults)", Left = 20, Top = 82, Width = 1145, Height = 155, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        _scopes.SetBounds(12, 23, 885, 115);
-        _scopes.CheckOnClick = true;
-        _scopes.HorizontalScrollbar = true;
-        scopeGroup.Controls.Add(_scopes);
-
-        var addOu = new Button { Text = "Add OU...", Left = 910, Top = 25, Width = 105, Height = 31 };
-        var defaults = new Button { Text = "Use defaults", Left = 1025, Top = 25, Width = 105, Height = 31 };
-        var remove = new Button { Text = "Remove", Left = 910, Top = 66, Width = 105, Height = 31 };
-        var checkAll = new Button { Text = "Check all", Left = 1025, Top = 66, Width = 105, Height = 31 };
-        var saveDefaults = new Button { Text = "Save defaults", Left = 910, Top = 107, Width = 220, Height = 31 };
-        scopeGroup.Controls.AddRange([addOu, defaults, remove, checkAll, saveDefaults]);
-        tab.Controls.Add(scopeGroup);
-
-        addOu.Click += async (_, _) => await AddOuAsync();
-        defaults.Click += (_, _) => LoadDefaultScopes();
-        remove.Click += (_, _) => { if (_scopes.SelectedIndex >= 0) _scopes.Items.RemoveAt(_scopes.SelectedIndex); };
-        checkAll.Click += (_, _) => { for (var i = 0; i < _scopes.Items.Count; i++) _scopes.SetItemChecked(i, true); };
-        saveDefaults.Click += (_, _) => SaveSelectedScopesAsDefaults();
-
-        _runExport.Text = "Run Export";
-        _runExport.SetBounds(20, 250, 120, 36);
-        _dryRun.Text = "Dry Run";
-        _dryRun.SetBounds(150, 250, 105, 36);
-        var openCsv = new Button { Text = "Open CSV", Left = 265, Top = 250, Width = 100, Height = 36 };
-        var openLog = new Button { Text = "Open Log", Left = 375, Top = 250, Width = 100, Height = 36 };
-        var openFolder = new Button { Text = "Open Folder", Left = 485, Top = 250, Width = 110, Height = 36 };
-        _forcePublish.Text = "Override publish guards (row drop / scope change)";
-        _forcePublish.AutoSize = true;
-        _forcePublish.SetBounds(620, 260, 400, 24);
-        tab.Controls.AddRange([_runExport, _dryRun, openCsv, openLog, openFolder, _forcePublish]);
-
-        _exportSummary.SetBounds(20, 298, 1145, 42);
-        _exportSummary.Text = "No run in this GUI session yet.";
-        tab.Controls.Add(_exportSummary);
-
-        _scopeResults.View = View.Details;
-        _scopeResults.FullRowSelect = true;
-        _scopeResults.GridLines = true;
-        _scopeResults.SetBounds(20, 345, 1145, 165);
-        _scopeResults.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        AddColumns(_scopeResults, ("Scope", 180), ("Status", 80), ("Objects", 80), ("Valid", 70), ("Duplicates", 85), ("Invalid", 70), ("Error", 520));
-        tab.Controls.Add(_scopeResults);
-
-        _exportLog.ReadOnly = true;
-        _exportLog.WordWrap = false;
-        _exportLog.Font = new Font("Consolas", 9F);
-        _exportLog.SetBounds(20, 522, 1145, 220);
-        _exportLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        tab.Controls.Add(_exportLog);
-
-        _runExport.Click += async (_, _) => await RunExportAsync(false);
-        _dryRun.Click += async (_, _) => await RunExportAsync(true);
-        openCsv.Click += (_, _) => OpenPath(_config.OutputCsv);
-        openLog.Click += (_, _) => OpenPath(_config.ErrorLog, "notepad.exe");
-        openFolder.Click += (_, _) => OpenPath(_config.OutputDirectory);
-        return tab;
-    }
-
-    private TabPage BuildDcTab()
-    {
-        var tab = new TabPage("DC Comparison");
-        _dcTest.Text = "Discover and Test DCs";
-        _dcTest.SetBounds(16, 16, 170, 36);
-        var hint = new Label
-        {
-            Text = "Domain controllers are discovered dynamically from Active Directory. Uses the checked OUs from Export; if none are checked, defaults are used.",
-            AutoSize = true,
-            Left = 205,
-            Top = 26
-        };
-        tab.Controls.AddRange([_dcTest, hint]);
-
-        _dcResults.View = View.Details;
-        _dcResults.FullRowSelect = true;
-        _dcResults.GridLines = true;
-        _dcResults.SetBounds(16, 65, 1155, 315);
-        _dcResults.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        AddColumns(_dcResults,
-            ("DC", 120), ("Site", 140), ("RODC", 60), ("Reachable", 75), ("Status", 80),
-            ("Objects", 75), ("Delta", 60), ("Repl errors", 80), ("Warnings", 75), ("Max age h", 80), ("IPv4", 105), ("OS", 190));
-        tab.Controls.Add(_dcResults);
-
-        _dcDetails.ReadOnly = true;
-        _dcDetails.Font = new Font("Consolas", 9F);
-        _dcDetails.SetBounds(16, 392, 1155, 345);
-        _dcDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        tab.Controls.Add(_dcDetails);
-        _dcTest.Click += async (_, _) => await RunDcTestAsync();
-        return tab;
-    }
-
-    private TabPage BuildLocalSearchTab()
-    {
-        var tab = new TabPage("Recovery Search");
-        var label = new Label { Text = "Computer name or Recovery ID:", Left = 16, Top = 22, AutoSize = true };
-        _localQuery.SetBounds(200, 18, 520, 27);
-        var search = new Button { Text = "Search Local CSV", Left = 735, Top = 16, Width = 135, Height = 32 };
-        tab.Controls.AddRange([label, _localQuery, search]);
-
-        _localResults.View = View.Details;
-        _localResults.FullRowSelect = true;
-        _localResults.GridLines = true;
-        _localResults.SetBounds(16, 62, 1155, 330);
-        _localResults.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        AddColumns(_localResults, ("Computer", 220), ("Recovery ID", 330), ("Last checked", 160), ("Source", 90));
-        tab.Controls.Add(_localResults);
-
-        var keyLabel = new Label { Text = "Recovery key:", Left = 16, Top = 415, AutoSize = true };
-        _localKey.SetBounds(110, 410, 510, 28);
-        _localKey.ReadOnly = true;
-        _localKey.UseSystemPasswordChar = true;
-        _localShow.Text = "Show Key";
-        _localShow.SetBounds(635, 408, 100, 32);
-        var copy = new Button { Text = "Copy Key", Left = 745, Top = 408, Width = 100, Height = 32 };
-        tab.Controls.AddRange([keyLabel, _localKey, _localShow, copy]);
-
-        var note = new Label
-        {
-            Text = "The recovery password is hidden until a row is selected. Clipboard is cleared after 60 seconds if it still contains that key.",
-            Left = 16,
-            Top = 455,
-            AutoSize = true
-        };
-        tab.Controls.Add(note);
-
-        search.Click += (_, _) => SearchLocal();
-        _localQuery.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) SearchLocal(); };
-        _localResults.SelectedIndexChanged += (_, _) => SelectLocalRecord();
-        _localShow.Click += (_, _) =>
-        {
-            if (!_localKey.UseSystemPasswordChar)
-            {
-                ToggleKey(_localKey, _localShow);
-                return;
+                await CheckForUpdatesGuiAsync(
+                    silentWhenCurrent: true);
             }
-
-            if (_localResults.SelectedItems.Count == 0 ||
-                _localResults.SelectedItems[0].Tag is not RecoveryRecord row)
-                return;
-
-            if (!AuthorizeAction(
-                    BitKeyBridgePermission.RecoveryRead,
-                    "RevealLocalRecoveryKey",
-                    row.ComputerName,
-                    row.BitLockerId,
-                    "AD"))
-            {
-                return;
-            }
-
-            var context = GetOrRequestRecoveryAccessContext(
-                "AD",
-                row.BitLockerId,
-                row.ComputerName,
-                allowRotationReminder: false);
-            if (context is null) return;
-
-            if (!AuthorizePrivilegedRecoveryAccess(
-                    context,
-                    "RevealLocalRecoveryKey",
-                    row.ComputerName,
-                    row.BitLockerId,
-                    "AD"))
-            {
-                return;
-            }
-
-            ToggleKey(_localKey, _localShow);
-            WriteRecoveryAudit(
-                "RevealLocalRecoveryKey",
-                context,
-                computerName: row.ComputerName,
-                recoveryId: row.BitLockerId,
-                source: "AD");
         };
-        copy.Click += (_, _) =>
-        {
-            if (_localResults.SelectedItems.Count == 0 ||
-                _localResults.SelectedItems[0].Tag is not RecoveryRecord row)
-                return;
-
-            if (!AuthorizeAction(
-                    BitKeyBridgePermission.RecoveryRead,
-                    "CopyLocalRecoveryKey",
-                    row.ComputerName,
-                    row.BitLockerId,
-                    "AD"))
-            {
-                return;
-            }
-
-            var context = GetOrRequestRecoveryAccessContext(
-                "AD",
-                row.BitLockerId,
-                row.ComputerName,
-                allowRotationReminder: false);
-            if (context is null) return;
-
-            if (!AuthorizePrivilegedRecoveryAccess(
-                    context,
-                    "CopyLocalRecoveryKey",
-                    row.ComputerName,
-                    row.BitLockerId,
-                    "AD"))
-            {
-                return;
-            }
-
-            WriteRecoveryAudit(
-                "CopyLocalRecoveryKey",
-                context,
-                computerName: row.ComputerName,
-                recoveryId: row.BitLockerId,
-                source: "AD");
-            CopyKeyWithAutoClear(_localCurrentKey);
-        };
-        return tab;
-    }
-
-    private TabPage BuildCoverageTab()
-    {
-        var tab = new TabPage("Coverage");
-
-        var title = new Label
-        {
-            Text = "BitLocker Coverage — AD + Entra + Intune metadata",
-            Font = new Font("Segoe UI Semibold", 14F),
-            AutoSize = true,
-            Left = 16,
-            Top = 16
-        };
-        tab.Controls.Add(title);
-
-        var run = new Button
-        {
-            Text = "Run Coverage",
-            Left = 16,
-            Top = 55,
-            Width = 125,
-            Height = 34
-        };
-        var export = new Button
-        {
-            Text = "Export Visible CSV",
-            Left = 151,
-            Top = 55,
-            Width = 145,
-            Height = 34
-        };
-        tab.Controls.AddRange([run, export]);
-
-        tab.Controls.Add(new Label
-        {
-            Text = "Filter:",
-            Left = 320,
-            Top = 63,
-            Width = 45,
-            Height = 24
-        });
-        _coverageFilter.SetBounds(365, 58, 180, 27);
-        _coverageFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _coverageFilter.Items.AddRange([
-            "All devices",
-            "No recovery key",
-            "AD only",
-            "Entra only",
-            "AD + Entra",
-            "Multiple recovery keys",
-            "Intune not encrypted",
-            "Intune stale",
-            "Old cloud key"
-        ]);
-        _coverageFilter.SelectedIndex = 0;
-        tab.Controls.Add(_coverageFilter);
-
-        tab.Controls.Add(new Label
-        {
-            Text = "Intune stale days:",
-            Left = 570,
-            Top = 63,
-            Width = 105,
-            Height = 24
-        });
-        _coverageStaleDays.SetBounds(680, 58, 70, 27);
-        _coverageStaleDays.Minimum = 1;
-        _coverageStaleDays.Maximum = 3650;
-        _coverageStaleDays.Value =
-            Math.Clamp(_config.CoverageStaleIntuneDays, 1, 3650);
-        tab.Controls.Add(_coverageStaleDays);
-
-        tab.Controls.Add(new Label
-        {
-            Text = "Old cloud key days:",
-            Left = 780,
-            Top = 63,
-            Width = 120,
-            Height = 24
-        });
-        _coverageOldKeyDays.SetBounds(905, 58, 80, 27);
-        _coverageOldKeyDays.Minimum = 1;
-        _coverageOldKeyDays.Maximum = 3650;
-        _coverageOldKeyDays.Value =
-            Math.Clamp(_config.CoverageOldCloudKeyDays, 1, 3650);
-        tab.Controls.Add(_coverageOldKeyDays);
-
-        var policyButton = new Button
-        {
-            Text = "Policy...",
-            Left = 1010,
-            Top = 55,
-            Width = 105,
-            Height = 34
-        };
-        tab.Controls.Add(policyButton);
-
-        _coverageSummary.SetBounds(16, 102, 1155, 68);
-        _coverageSummary.Font = new Font("Segoe UI Semibold", 9.5F);
-        _coverageSummary.Text =
-            "Coverage has not been generated yet. No recovery password is requested by this report.";
-        tab.Controls.Add(_coverageSummary);
-
-        _coverageResults.View = View.Details;
-        _coverageResults.FullRowSelect = true;
-        _coverageResults.GridLines = true;
-        _coverageResults.SetBounds(16, 175, 1155, 500);
-        _coverageResults.Anchor =
-            AnchorStyles.Top |
-            AnchorStyles.Bottom |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        AddColumns(
-            _coverageResults,
-            ("Computer", 150),
-            ("Coverage", 95),
-            ("AD Keys", 60),
-            ("Entra Keys", 70),
-            ("Intune", 52),
-            ("Encrypted", 70),
-            ("Compliance", 85),
-            ("Last Sync", 130),
-            ("AD Last Logon", 130),
-            ("Newest Cloud Key", 135),
-            ("Serial", 105),
-            ("User / UPN", 155),
-            ("Model", 125));
-        tab.Controls.Add(_coverageResults);
-
-        _coverageStatus.SetBounds(16, 690, 1155, 45);
-        _coverageStatus.Anchor =
-            AnchorStyles.Bottom |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        _coverageStatus.Text =
-            "Metadata-only report: recovery passwords are never requested.";
-        tab.Controls.Add(_coverageStatus);
-
-        run.Click += async (_, _) => await RunCoverageAsync();
-        export.Click += (_, _) => ExportCoverageCsv();
-        policyButton.Click += (_, _) => ConfigureCoveragePolicyFromGui();
-        _coverageFilter.SelectedIndexChanged += (_, _) =>
-            RenderCoverageRows();
-
-        return tab;
-    }
-
-    private TabPage BuildUnifiedTab()
-    {
-        var tab = new TabPage("Unified Devices");
-        var label = new Label
-        {
-            Text = "Search name, serial, user/UPN or device ID:",
-            Left = 16,
-            Top = 23,
-            AutoSize = true
-        };
-        _unifiedQuery.SetBounds(275, 18, 460, 27);
-        var search = new Button { Text = "Search AD + Cloud", Left = 750, Top = 16, Width = 145, Height = 32 };
-        var rotate = new Button { Text = "Rotate BitLocker Key", Left = 910, Top = 16, Width = 165, Height = 32 };
-        tab.Controls.AddRange([label, _unifiedQuery, search, rotate]);
-
-        _unifiedStatus.SetBounds(16, 58, 1155, 24);
-        _unifiedStatus.Text = "Search combines on-prem AD computer data with Entra/Intune inventory and BitLocker metadata.";
-        tab.Controls.Add(_unifiedStatus);
-
-        _unifiedResults.View = View.Details;
-        _unifiedResults.FullRowSelect = true;
-        _unifiedResults.GridLines = true;
-        _unifiedResults.SetBounds(16, 90, 1155, 390);
-        _unifiedResults.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        AddColumns(_unifiedResults,
-            ("Computer", 150), ("AD", 45), ("Entra", 50), ("Intune", 52), ("Serial", 120),
-            ("User / UPN", 185), ("Model", 135), ("OS", 120), ("Compliance", 90),
-            ("Encrypted", 70), ("Last Sync", 140), ("Keys", 45));
-        tab.Controls.Add(_unifiedResults);
-
-        _unifiedDetails.ReadOnly = true;
-        _unifiedDetails.Font = new Font("Consolas", 9F);
-        _unifiedDetails.SetBounds(16, 492, 1155, 245);
-        _unifiedDetails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        tab.Controls.Add(_unifiedDetails);
-
-        search.Click += async (_, _) => await SearchUnifiedDevicesAsync();
-        _unifiedQuery.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) await SearchUnifiedDevicesAsync(); };
-        rotate.Click += async (_, _) => await RotateSelectedUnifiedDeviceAsync();
-        _unifiedResults.SelectedIndexChanged += (_, _) => ShowUnifiedDeviceDetails();
-        return tab;
-    }
-
-    private TabPage BuildCloudTab()
-    {
-        var tab = new TabPage("Entra / Intune Cloud");
-        var authGroup = new GroupBox { Text = "Microsoft Graph authentication", Left = 16, Top = 14, Width = 1155, Height = 205, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        tab.Controls.Add(authGroup);
-
-        AddLabeled(authGroup, "Tenant ID/domain:", _cloudTenant, 14, 28, 135, 510);
-        AddLabeled(authGroup, "Client ID:", _cloudClient, 14, 62, 135, 510);
-        AddLabeled(authGroup, "Username:", _cloudUsername, 14, 96, 135, 510);
-        AddLabeled(authGroup, "Password:", _cloudPassword, 14, 130, 135, 510);
-        _cloudPassword.UseSystemPasswordChar = true;
-        AddLabeled(authGroup, "Certificate thumbprint:", _cloudThumbprint, 585, 28, 150, 390);
-        AddLabeled(authGroup, "Authentication:", _cloudAuthMode, 585, 62, 150, 390);
-        _cloudAuthMode.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cloudAuthMode.Items.AddRange([
-            "Device Code (MFA / Conditional Access)",
-            "Username + Password (ROPC legacy)",
-            "App registration + certificate"
-        ]);
-
-        var save = new Button { Text = "Save Config", Left = 585, Top = 103, Width = 115, Height = 32 };
-        var connect = new Button { Text = "Connect / Test", Left = 710, Top = 103, Width = 120, Height = 32 };
-        var autoSetup = new Button { Text = "First-Run / Repair", Left = 840, Top = 103, Width = 145, Height = 32 };
-        var bootstrap = new Button { Text = "Bootstrap...", Left = 995, Top = 103, Width = 135, Height = 32 };
-        var rotateCertificate = new Button { Text = "Rollover Certificate...", Left = 585, Top = 146, Width = 165, Height = 32 };
-        authGroup.Controls.AddRange([save, connect, autoSetup, bootstrap, rotateCertificate]);
-        var ropcNote = new Label
-        {
-            Text = "First-Run Setup creates BitKeyBridge's dedicated Entra app. Certificate rollover adds and verifies a new credential before switching config; the previous credential is retained for rollback/grace.",
-            Left = 765,
-            Top = 145,
-            Width = 365,
-            Height = 50
-        };
-        authGroup.Controls.Add(ropcNote);
-
-        _cloudStatus.SetBounds(16, 228, 1155, 24);
-        _cloudStatus.Text = "Not connected.";
-        tab.Controls.Add(_cloudStatus);
-
-        var searchLabel = new Label { Text = "Computer name or Recovery ID:", Left = 16, Top = 267, AutoSize = true };
-        _cloudQuery.SetBounds(205, 262, 515, 27);
-        var search = new Button { Text = "Cloud Search", Left = 735, Top = 260, Width = 115, Height = 32 };
-        tab.Controls.AddRange([searchLabel, _cloudQuery, search]);
-
-        _cloudResults.View = View.Details;
-        _cloudResults.FullRowSelect = true;
-        _cloudResults.GridLines = true;
-        _cloudResults.SetBounds(16, 305, 1155, 280);
-        _cloudResults.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        AddColumns(_cloudResults, ("Computer", 220), ("Recovery ID", 330), ("Device ID", 290), ("Volume", 100), ("Created", 160));
-        tab.Controls.Add(_cloudResults);
-
-        var keyLabel = new Label { Text = "Cloud recovery key:", Left = 16, Top = 607, AutoSize = true };
-        _cloudKey.SetBounds(145, 602, 475, 28);
-        _cloudKey.ReadOnly = true;
-        _cloudKey.UseSystemPasswordChar = true;
-        var getKey = new Button { Text = "Get Key from Entra", Left = 635, Top = 600, Width = 135, Height = 32 };
-        _cloudShow.Text = "Show Key";
-        _cloudShow.SetBounds(780, 600, 95, 32);
-        var copy = new Button { Text = "Copy Key", Left = 885, Top = 600, Width = 95, Height = 32 };
-        var rotate = new Button { Text = "Rotate Key in Intune", Left = 990, Top = 600, Width = 165, Height = 32 };
-        tab.Controls.AddRange([keyLabel, _cloudKey, getKey, _cloudShow, copy, rotate]);
-
-        save.Click += (_, _) => SaveCloudFields();
-        connect.Click += async (_, _) => await ConnectCloudAsync();
-        search.Click += async (_, _) => await SearchCloudAsync();
-        _cloudQuery.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) await SearchCloudAsync(); };
-        getKey.Click += async (_, _) => await GetCloudKeyAsync();
-        _cloudShow.Click += (_, _) =>
-        {
-            if (!_cloudKey.UseSystemPasswordChar)
-            {
-                ToggleKey(_cloudKey, _cloudShow);
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(_cloudCurrentKey) ||
-                _cloudResults.SelectedItems.Count == 0 ||
-                _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
-                return;
-
-            if (!AuthorizeAction(
-                    BitKeyBridgePermission.RecoveryRead,
-                    "RevealCloudRecoveryKey",
-                    row.ComputerName,
-                    row.RecoveryId,
-                    "Entra"))
-            {
-                return;
-            }
-
-            var context = GetOrRequestRecoveryAccessContext(
-                "Entra",
-                row.RecoveryId,
-                row.ComputerName,
-                allowRotationReminder: true);
-            if (context is null) return;
-
-            if (!AuthorizePrivilegedRecoveryAccess(
-                    context,
-                    "RevealCloudRecoveryKey",
-                    row.ComputerName,
-                    row.RecoveryId,
-                    "Entra"))
-            {
-                return;
-            }
-
-            ToggleKey(_cloudKey, _cloudShow);
-            WriteRecoveryAudit(
-                "RevealCloudRecoveryKey",
-                context,
-                computerName: row.ComputerName,
-                recoveryId: row.RecoveryId,
-                source: "Entra",
-                authMode: _cloudToken?.AuthMode);
-        };
-        copy.Click += (_, _) =>
-        {
-            if (string.IsNullOrWhiteSpace(_cloudCurrentKey) ||
-                _cloudResults.SelectedItems.Count == 0 ||
-                _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
-                return;
-
-            if (!AuthorizeAction(
-                    BitKeyBridgePermission.RecoveryRead,
-                    "CopyCloudRecoveryKey",
-                    row.ComputerName,
-                    row.RecoveryId,
-                    "Entra"))
-            {
-                return;
-            }
-
-            var context = GetOrRequestRecoveryAccessContext(
-                "Entra",
-                row.RecoveryId,
-                row.ComputerName,
-                allowRotationReminder: true);
-            if (context is null) return;
-
-            if (!AuthorizePrivilegedRecoveryAccess(
-                    context,
-                    "CopyCloudRecoveryKey",
-                    row.ComputerName,
-                    row.RecoveryId,
-                    "Entra"))
-            {
-                return;
-            }
-
-            WriteRecoveryAudit(
-                "CopyCloudRecoveryKey",
-                context,
-                computerName: row.ComputerName,
-                recoveryId: row.RecoveryId,
-                source: "Entra",
-                authMode: _cloudToken?.AuthMode);
-            CopyKeyWithAutoClear(_cloudCurrentKey);
-        };
-        rotate.Click += async (_, _) => await RotateSelectedCloudKeyAsync();
-        autoSetup.Click += async (_, _) => await RunNativeAutoSetupAsync();
-        bootstrap.Click += (_, _) => ConfigureCustomBootstrap();
-        rotateCertificate.Click += async (_, _) => await RolloverEntraCertificateGuiAsync();
-        _cloudAuthMode.SelectedIndexChanged += (_, _) => UpdateCloudAuthUi();
-        return tab;
-    }
-
-    private TabPage BuildAuditTab()
-    {
-        var tab = new TabPage("Audit");
-
-        var refresh = new Button
-        {
-            Text = "Refresh",
-            Left = 16,
-            Top = 16,
-            Width = 90,
-            Height = 32
-        };
-        var open = new Button
-        {
-            Text = "Open audit.jsonl",
-            Left = 116,
-            Top = 16,
-            Width = 130,
-            Height = 32
-        };
-        var verify = new Button
-        {
-            Text = "Verify Chain",
-            Left = 256,
-            Top = 16,
-            Width = 110,
-            Height = 32
-        };
-        var setupSigning = new Button
-        {
-            Text = "Setup Signing",
-            Left = 386,
-            Top = 16,
-            Width = 125,
-            Height = 32
-        };
-        var signNow = new Button
-        {
-            Text = "Sign Now",
-            Left = 521,
-            Top = 16,
-            Width = 105,
-            Height = 32
-        };
-        var verifySignature = new Button
-        {
-            Text = "Verify Signature",
-            Left = 636,
-            Top = 16,
-            Width = 130,
-            Height = 32
-        };
-        var rolloverSigning = new Button
-        {
-            Text = "Rollover Signing",
-            Left = 776,
-            Top = 16,
-            Width = 145,
-            Height = 32
-        };
-        var disableSigning = new Button
-        {
-            Text = "Disable Signing",
-            Left = 931,
-            Top = 16,
-            Width = 130,
-            Height = 32
-        };
-        var verifyIncident = new Button
-        {
-            Text = "Incident...",
-            Left = 1071,
-            Top = 16,
-            Width = 95,
-            Height = 32
-        };
-
-        var note = new Label
-        {
-            Text =
-                "Recovery passwords are never written to audit. Entries are SHA-256 chained; optional checkpoints are signed by a dedicated LocalMachine certificate.",
-            Left = 16,
-            Top = 58,
-            Width = 1135,
-            Height = 24
-        };
-
-        _auditSigningStatus.SetBounds(16, 84, 1135, 42);
-        _auditSigningStatus.Text =
-            "Audit signing status has not been checked.";
-
-        tab.Controls.AddRange([
-            refresh,
-            open,
-            verify,
-            setupSigning,
-            signNow,
-            verifySignature,
-            rolloverSigning,
-            disableSigning,
-            verifyIncident,
-            note,
-            _auditSigningStatus
-        ]);
-
-        _auditResults.View = View.Details;
-        _auditResults.FullRowSelect = true;
-        _auditResults.GridLines = true;
-        _auditResults.SetBounds(16, 132, 1155, 605);
-        _auditResults.Anchor =
-            AnchorStyles.Top |
-            AnchorStyles.Bottom |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        AddColumns(
-            _auditResults,
-            ("Time (UTC)", 155),
-            ("User", 165),
-            ("Host", 110),
-            ("Action", 175),
-            ("Result", 75),
-            ("Computer", 135),
-            ("Recovery ID", 230),
-            ("Source", 70),
-            ("Auth", 90),
-            ("Reference", 130),
-            ("Session", 230),
-            ("Reason", 180),
-            ("Details", 260));
-        tab.Controls.Add(_auditResults);
-
-        refresh.Click += (_, _) =>
-        {
-            RefreshAudit();
-            RefreshAuditSigningStatus();
-        };
-        open.Click += (_, _) =>
-            OpenPath(
-                AppPaths.AuditLogFile,
-                "notepad.exe");
-        verify.Click += (_, _) =>
-            VerifyAuditIntegrityGui();
-        setupSigning.Click += (_, _) =>
-            SetupAuditSigningGui();
-        signNow.Click += (_, _) =>
-            SignAuditCheckpointGui();
-        verifySignature.Click += (_, _) =>
-            VerifyAuditSignatureGui();
-        rolloverSigning.Click += (_, _) =>
-            RolloverAuditSigningGui();
-        disableSigning.Click += (_, _) =>
-            DisableAuditSigningGui();
-        verifyIncident.Click += (_, _) =>
-            VerifyRecoveryIncidentGui();
-
-        RefreshAudit();
-        RefreshAuditSigningStatus();
-        return tab;
     }
 
     private void LoadDefaultScopes()
@@ -2121,53 +307,19 @@ public sealed class MainForm : DpiAwareForm
         finally { _dcTest.Enabled = true; }
     }
 
-    private void SearchLocal()
-    {
-        if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
-                "SearchLocalRecoveryKeys",
-                source: "LocalCSV"))
-        {
-            return;
-        }
-
-        try
-        {
-            var q = _localQuery.Text.Trim();
-            var rows = CsvUtility.ReadRecoveryCsv(_config.OutputCsv);
-            if (!string.IsNullOrWhiteSpace(q))
-                rows = rows.Where(x => x.ComputerName.Contains(q, StringComparison.OrdinalIgnoreCase) || x.BitLockerId.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
-            rows = rows.Take(1000).ToList();
-            _localResults.Items.Clear();
-            foreach (var row in rows)
-            {
-                var item = new ListViewItem(row.ComputerName);
-                item.SubItems.Add(row.BitLockerId);
-                item.SubItems.Add(row.LastChecked.ToString("yyyy-MM-dd HH:mm:ss"));
-                item.SubItems.Add(row.Source);
-                item.Tag = row;
-                _localResults.Items.Add(item);
-            }
-            _localCurrentKey = null;
-            _localKey.Clear();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Recovery Search", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    private void SelectLocalRecord()
-    {
-        if (_localResults.SelectedItems.Count == 0 || _localResults.SelectedItems[0].Tag is not RecoveryRecord row) return;
-        _localCurrentKey = row.RecoveryKey;
-        _localKey.Text = row.RecoveryKey;
-        _localKey.UseSystemPasswordChar = true;
-        _localShow.Text = "Show Key";
-    }
-
     private void LoadCloudFields()
     {
+        if (_cloudAuthMode.Items.Count == 0)
+        {
+            _cloudAuthMode.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+            _cloudAuthMode.Items.AddRange([
+                "Device Code (MFA / Conditional Access)",
+                "Username + Password (ROPC legacy)",
+                "App registration + certificate"
+            ]);
+        }
+
         _cloudConfig = ConfigService.LoadCloudConfig();
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
@@ -2246,135 +398,6 @@ public sealed class MainForm : DpiAwareForm
     {
         if (_cloudToken is not null && _cloudToken.ExpiresAt > DateTime.Now.AddMinutes(1)) return true;
         return await ConnectCloudAsync();
-    }
-
-    private async Task SearchCloudAsync()
-    {
-        if (!await EnsureCloudTokenAsync()) return;
-        try
-        {
-            _cloudStatus.Text = "Searching cloud BitLocker metadata...";
-            using var graph = new CloudGraphService();
-            var rows = await graph.SearchAsync(_cloudToken!.AccessToken, _cloudQuery.Text);
-            _cloudResults.Items.Clear();
-            foreach (var row in rows)
-            {
-                var item = new ListViewItem(row.ComputerName);
-                item.SubItems.Add(row.RecoveryId);
-                item.SubItems.Add(row.DeviceId);
-                item.SubItems.Add(row.VolumeType);
-                item.SubItems.Add(row.CreatedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty);
-                item.Tag = row;
-                _cloudResults.Items.Add(item);
-            }
-            _cloudCurrentKey = null;
-            _cloudKey.Clear();
-            _cloudStatus.Text = $"Cloud search returned {rows.Count} metadata record(s). Recovery passwords were not requested.";
-        }
-        catch (Exception ex)
-        {
-            _cloudStatus.Text = "Cloud search failed: " + ex.Message;
-        }
-    }
-
-    private async Task GetCloudKeyAsync()
-    {
-        if (_cloudResults.SelectedItems.Count == 0 ||
-            _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
-        {
-            MessageBox.Show(
-                this,
-                "Select a cloud recovery record first.",
-                "Cloud Recovery",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return;
-        }
-
-        if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
-                "GetCloudRecoveryKey",
-                row.ComputerName,
-                row.RecoveryId,
-                "Entra"))
-        {
-            return;
-        }
-
-        var context = GetOrRequestRecoveryAccessContext(
-            "Entra",
-            row.RecoveryId,
-            row.ComputerName,
-            allowRotationReminder: true);
-        if (context is null) return;
-
-        if (!AuthorizePrivilegedRecoveryAccess(
-                context,
-                "GetCloudRecoveryKey",
-                row.ComputerName,
-                row.RecoveryId,
-                "Entra"))
-        {
-            return;
-        }
-
-        if (!await EnsureCloudTokenAsync()) return;
-
-        try
-        {
-            _cloudStatus.Text =
-                "Retrieving recovery password from Entra (this access is audited)...";
-            using var graph = new CloudGraphService();
-            _cloudCurrentKey = await graph.GetRecoveryKeyValueAsync(
-                _cloudToken!.AccessToken,
-                row.RecoveryId);
-            _cloudKey.Text = _cloudCurrentKey;
-            _cloudKey.UseSystemPasswordChar = true;
-            _cloudShow.Text = "Show Key";
-
-            WriteRecoveryAudit(
-                "GetCloudRecoveryKey",
-                context,
-                computerName: row.ComputerName,
-                recoveryId: row.RecoveryId,
-                source: "Entra",
-                authMode: _cloudToken.AuthMode);
-
-            if (context.RemindRotation)
-            {
-                _cloudStatus.Text =
-                    "Recovery password retrieved. Complete recovery first, then use Rotate Key in Intune.";
-                MessageBox.Show(
-                    this,
-                    "Recovery password retrieved." + Environment.NewLine + Environment.NewLine +
-                    "After the recovery operation is complete and the device is back online, use " +
-                    "'Rotate Key in Intune' to invalidate the exposed recovery password." +
-                    (string.IsNullOrWhiteSpace(context.Reference)
-                        ? string.Empty
-                        : Environment.NewLine + Environment.NewLine + "Reference: " + context.Reference),
-                    "Recovery Rotation Reminder",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
-            else
-            {
-                _cloudStatus.Text =
-                    "Recovery password retrieved. This key-read operation is auditable in Microsoft Entra and BitKeyBridge.";
-            }
-        }
-        catch (Exception ex)
-        {
-            WriteRecoveryAudit(
-                "GetCloudRecoveryKey",
-                context,
-                result: "Failed",
-                computerName: row.ComputerName,
-                recoveryId: row.RecoveryId,
-                source: "Entra",
-                authMode: _cloudToken?.AuthMode,
-                details: ex.Message);
-            _cloudStatus.Text = "Key retrieval failed: " + ex.Message;
-        }
     }
 
     private async Task RunNativeAutoSetupAsync()
@@ -3058,38 +1081,145 @@ public sealed class MainForm : DpiAwareForm
 
     private async Task SearchUnifiedDevicesAsync()
     {
-        if (!await EnsureCloudTokenAsync()) return;
         try
         {
-            _unifiedStatus.Text = "Searching Active Directory, Entra and Intune...";
+            _unifiedStatus.Text =
+                "Searching devices...";
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
-            var service = new UnifiedDeviceService(_config);
-            var rows = await service.SearchAsync(_cloudToken!.AccessToken, _unifiedQuery.Text);
+            _deviceRecoveryIds.Items.Clear();
+            _deviceCurrentKey = null;
+            _deviceRecoveryKey.Clear();
+
+            var service =
+                new UnifiedDeviceService(
+                    _config);
+
+            var cloudConfigured =
+                !string.IsNullOrWhiteSpace(
+                    _cloudConfig.TenantId) &&
+                !string.IsNullOrWhiteSpace(
+                    _cloudConfig.ClientId);
+
+            var cloudReady =
+                cloudConfigured &&
+                await EnsureCloudTokenAsync();
+
+            List<UnifiedDeviceInfo> rows;
+
+            if (cloudReady)
+            {
+                _unifiedStatus.Text =
+                    "Searching Active Directory, Entra and Intune...";
+
+                rows =
+                    await service.SearchAsync(
+                        _cloudToken!.AccessToken,
+                        _unifiedQuery.Text);
+            }
+            else
+            {
+                _unifiedStatus.Text =
+                    cloudConfigured
+                        ? "Cloud is unavailable; continuing with Active Directory only..."
+                        : "Cloud is not configured; searching Active Directory only...";
+
+                rows =
+                    await service.SearchAdOnlyAsync(
+                        _unifiedQuery.Text);
+            }
+
             foreach (var row in rows)
             {
-                var item = new ListViewItem(row.ComputerName);
-                item.SubItems.Add(row.FoundInAd ? "Yes" : "No");
-                item.SubItems.Add(row.FoundInEntra ? "Yes" : "No");
-                item.SubItems.Add(row.FoundInIntune ? "Yes" : "No");
-                item.SubItems.Add(row.SerialNumber);
-                item.SubItems.Add(string.IsNullOrWhiteSpace(row.UserPrincipalName) ? row.UserDisplayName : row.UserPrincipalName);
-                item.SubItems.Add((row.Manufacturer + " " + row.Model).Trim());
-                item.SubItems.Add((row.OperatingSystem + " " + row.OsVersion).Trim());
-                item.SubItems.Add(row.ComplianceState);
-                item.SubItems.Add(row.IsEncrypted is null ? "-" : row.IsEncrypted.Value ? "Yes" : "No");
-                item.SubItems.Add(row.LastSyncDateTime?.ToString("yyyy-MM-dd HH:mm") ?? string.Empty);
-                item.SubItems.Add(row.RecoveryKeyCount.ToString());
-                item.Tag = row;
-                _unifiedResults.Items.Add(item);
+                var item =
+                    new ListViewItem(
+                        row.ComputerName);
+
+                item.SubItems.Add(
+                    row.FoundInAd
+                        ? "Yes"
+                        : "No");
+                item.SubItems.Add(
+                    row.FoundInEntra
+                        ? "Yes"
+                        : "No");
+                item.SubItems.Add(
+                    row.FoundInIntune
+                        ? "Yes"
+                        : "No");
+                item.SubItems.Add(
+                    row.SerialNumber);
+                item.SubItems.Add(
+                    string.IsNullOrWhiteSpace(
+                        row.UserPrincipalName)
+                        ? row.UserDisplayName
+                        : row.UserPrincipalName);
+                item.SubItems.Add(
+                    (row.Manufacturer +
+                     " " +
+                     row.Model).Trim());
+                item.SubItems.Add(
+                    (row.OperatingSystem +
+                     " " +
+                     row.OsVersion).Trim());
+                item.SubItems.Add(
+                    row.ComplianceState);
+                item.SubItems.Add(
+                    row.IsEncrypted is null
+                        ? "-"
+                        : row.IsEncrypted.Value
+                            ? "Yes"
+                            : "No");
+                item.SubItems.Add(
+                    row.LastSyncDateTime?
+                        .ToString(
+                            "yyyy-MM-dd HH:mm") ??
+                    string.Empty);
+                item.SubItems.Add(
+                    row.RecoveryKeyCount.ToString());
+                item.Tag =
+                    row;
+                _unifiedResults.Items.Add(
+                    item);
             }
-            _unifiedStatus.Text = $"Unified search returned {rows.Count} device(s). Recovery passwords were not requested.";
-            _audit.Write("UnifiedDeviceSearch", computerName: _unifiedQuery.Text.Trim(), source: "AD+Entra+Intune", authMode: _cloudToken.AuthMode, details: $"Results={rows.Count}");
+
+            var source =
+                cloudReady
+                    ? "AD+Entra+Intune"
+                    : "AD";
+
+            _unifiedStatus.Text =
+                cloudReady
+                    ? $"Unified search returned {rows.Count} device(s). Recovery passwords were not requested."
+                    : $"AD search returned {rows.Count} device(s). Configure Cloud under Administration to add Entra/Intune data.";
+
+            _audit.Write(
+                "UnifiedDeviceSearch",
+                computerName:
+                    _unifiedQuery.Text.Trim(),
+                source:
+                    source,
+                authMode:
+                    cloudReady
+                        ? _cloudToken?.AuthMode
+                        : null,
+                details:
+                    $"Results={rows.Count}; CloudIncluded={cloudReady}");
         }
         catch (Exception ex)
         {
-            _unifiedStatus.Text = "Unified search failed: " + ex.Message;
-            _audit.Write("UnifiedDeviceSearch", "Failed", source: "AD+Entra+Intune", authMode: _cloudToken?.AuthMode, details: ex.Message);
+            _unifiedStatus.Text =
+                "Device search failed: " +
+                ex.Message;
+
+            _audit.Write(
+                "UnifiedDeviceSearch",
+                "Failed",
+                source: "Devices",
+                authMode:
+                    _cloudToken?.AuthMode,
+                details:
+                    ex.Message);
         }
     }
 
@@ -3146,69 +1276,6 @@ public sealed class MainForm : DpiAwareForm
             row.ManagedDeviceId,
             row.ComputerName,
             row.RecoveryIds.FirstOrDefault());
-    }
-
-    private async Task RotateSelectedCloudKeyAsync()
-    {
-        if (_cloudResults.SelectedItems.Count == 0 ||
-            _cloudResults.SelectedItems[0].Tag is not CloudRecoveryMetadata row)
-        {
-            MessageBox.Show(
-                this,
-                "Select a cloud recovery record first.",
-                "Rotate BitLocker Key",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return;
-        }
-
-        var context = GetOrRequestRecoveryAccessContext(
-            "Entra",
-            row.RecoveryId,
-            row.ComputerName,
-            allowRotationReminder: false);
-        if (context is null) return;
-
-        if (!await EnsureCloudTokenAsync()) return;
-
-        try
-        {
-            _cloudStatus.Text = "Resolving Intune managed device...";
-            using var graph = new CloudGraphService();
-            var managed = await graph.FindManagedDeviceByEntraDeviceIdAsync(
-                _cloudToken!.AccessToken,
-                row.DeviceId);
-            if (managed is null)
-                throw new InvalidOperationException(
-                    "No matching Intune managedDevice was found for this Entra device.");
-
-            await RotateManagedDeviceAsync(
-                managed.ManagedDeviceId,
-                row.ComputerName,
-                row.RecoveryId,
-                context);
-        }
-        catch (Exception ex)
-        {
-            _cloudStatus.Text = "Rotation failed: " + ex.Message;
-            WriteRecoveryAudit(
-                "RotateBitLockerKey",
-                context,
-                result: "Failed",
-                computerName: row.ComputerName,
-                recoveryId: row.RecoveryId,
-                source: "Intune",
-                authMode: _cloudToken?.AuthMode,
-                details: ex.Message,
-                rotationRequested: true,
-                rotationSucceeded: false);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Rotate BitLocker Key",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
     }
 
     private async Task RotateManagedDeviceAsync(
@@ -3309,12 +1376,14 @@ public sealed class MainForm : DpiAwareForm
             dialog.AllowLocalAdministrators;
         _config.RbacRecoveryReaders = dialog.RecoveryReaders;
         _config.RbacRotationOperators = dialog.RotationOperators;
+        _config.RbacAdministrators = dialog.Administrators;
 
         ConfigService.SaveAppConfig(_config);
 
         var auth = new AuthorizationService(_config);
         var read = auth.Check(BitKeyBridgePermission.RecoveryRead);
         var rotate = auth.Check(BitKeyBridgePermission.Rotate);
+        var admin = auth.Check(BitKeyBridgePermission.Administrator);
 
         _audit.Write(
             "SaveRbacSettings",
@@ -3323,15 +1392,18 @@ public sealed class MainForm : DpiAwareForm
                 $"Enabled={_config.RbacEnabled}; AdminBypass={_config.RbacAllowLocalAdministrators}; " +
                 $"Readers={string.Join("|", _config.RbacRecoveryReaders)}; " +
                 $"Rotators={string.Join("|", _config.RbacRotationOperators)}; " +
+                $"Administrators={string.Join("|", _config.RbacAdministrators)}; " +
                 $"CurrentIdentity={AuthorizationService.CurrentIdentityName()}; " +
-                $"CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}");
+                $"CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}; CurrentAdminUI={admin.Allowed}");
 
         MessageBox.Show(
             this,
             $"RBAC settings saved.{Environment.NewLine}{Environment.NewLine}" +
             $"Current identity: {AuthorizationService.CurrentIdentityName()}{Environment.NewLine}" +
             $"RecoveryRead: {(read.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
-            $"Rotate: {(rotate.Allowed ? "Allowed" : "Denied")}",
+            $"Rotate: {(rotate.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
+            $"Administration UI: {(admin.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}{Environment.NewLine}" +
+            "Navigation roles are evaluated when the GUI starts.",
             "BitKeyBridge RBAC",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
@@ -3945,17 +2017,48 @@ public sealed class MainForm : DpiAwareForm
         _adUsername.Text = _config.AdUsername;
         _adPassword.Clear();
         _adPort.Value = Math.Clamp(_config.AdPort, 1, 65535);
-        _adUseLdaps.Checked = _config.AdUseLdaps || _config.AdPort == 636;
-        _adExplicitCredentials.Checked = _config.AdUseExplicitCredentials;
+        _adUseLdaps.Checked =
+            _config.AdUseLdaps ||
+            _config.AdPort == 636;
+        _adExplicitCredentials.Checked =
+            _config.AdUseExplicitCredentials;
         _adCredentialStorage.SelectedIndex =
-            _config.AdCredentialStorageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase)
+            _config.AdCredentialStorageMode.Equals(
+                "CurrentUser",
+                StringComparison.OrdinalIgnoreCase)
                 ? 1
-                : _config.AdCredentialStorageMode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase)
+                : _config.AdCredentialStorageMode.Equals(
+                    "LocalMachine",
+                    StringComparison.OrdinalIgnoreCase)
                     ? 2
                     : 0;
-        _outputRoot.Text = _config.EffectiveOutputRoot;
+
+        _outputRoot.Text =
+            _config.EffectiveOutputRoot;
         _outputSubdirectory.Text =
             _config.OutputSubdirectory;
+
+        _autoConnectOnStart.Checked =
+            _config.AutoConnectOnStart;
+
+        _recoverySource.SelectedIndex =
+            _config.RecoverySearchSource.Equals(
+                "LocalCache",
+                StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
+
+        if (!string.IsNullOrWhiteSpace(
+                _config.LastRecoveryScopeSearchBase))
+        {
+            _startScope =
+                new BitLockerScope(
+                    string.IsNullOrWhiteSpace(
+                        _config.LastRecoveryScopeName)
+                        ? "Last OU"
+                        : _config.LastRecoveryScopeName,
+                    _config.LastRecoveryScopeSearchBase);
+        }
 
         UpdateDirectoryConnectionUi();
         RefreshCredentialVaultStatus();
@@ -3964,11 +2067,13 @@ public sealed class MainForm : DpiAwareForm
             _adMode.SelectedIndex == 1 &&
             !string.IsNullOrWhiteSpace(
                 _adServer.Text)
-                ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}. Advanced settings are configured."
-                : "Ready to auto-discover a writable domain controller using the current Windows identity.";
+                ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}."
+                : "Ready to auto-discover a writable domain controller.";
 
         _startPurposeStatus.Text =
-            "Ready — connect to Active Directory, choose an OU, then search for the BitLocker recovery key.";
+            "Search loads metadata only. Recovery passwords are read on demand.";
+
+        UpdateRecoverySourceUi();
     }
 
     private void UpdateDirectoryConnectionUi()
@@ -3982,25 +2087,56 @@ public sealed class MainForm : DpiAwareForm
         _adCredentialStorage.Enabled = _adExplicitCredentials.Checked;
     }
 
-    private void SaveDirectorySettings(bool showConfirmation)
+    private void SaveDirectorySettings(
+        bool showConfirmation,
+        bool allowInMemoryFallback = false)
     {
-        _config.AdConnectionMode = _adMode.SelectedIndex == 1
-            ? "Explicit"
-            : "Auto";
-        _config.AdServer = _adServer.Text.Trim();
-        _config.AdDomain = _adDomain.Text.Trim();
-        _config.AdUsername = _adUsername.Text.Trim();
-        _config.AdPort = (int)_adPort.Value;
-        _config.AdUseLdaps = _adUseLdaps.Checked;
-        _config.AdUseExplicitCredentials = _adExplicitCredentials.Checked;
-        _config.AdCredentialStorageMode = GetSelectedCredentialStorageMode();
+        _config.AdConnectionMode =
+            _adMode.SelectedIndex == 1
+                ? "Explicit"
+                : "Auto";
+        _config.AdServer =
+            _adServer.Text.Trim();
+        _config.AdDomain =
+            _adDomain.Text.Trim();
+        _config.AdUsername =
+            _adUsername.Text.Trim();
+        _config.AdPort =
+            (int)_adPort.Value;
+        _config.AdUseLdaps =
+            _adUseLdaps.Checked;
+        _config.AdUseExplicitCredentials =
+            _adExplicitCredentials.Checked;
+        _config.AdCredentialStorageMode =
+            GetSelectedCredentialStorageMode();
+
+        _config.AutoConnectOnStart =
+            _autoConnectOnStart.Checked;
+        _config.RecoverySearchSource =
+            _recoverySource.SelectedIndex == 1
+                ? "LocalCache"
+                : "LiveAD";
+
+        if (_startScope is not null)
+        {
+            _config.LastRecoveryScopeName =
+                _startScope.Name;
+            _config.LastRecoveryScopeSearchBase =
+                _startScope.SearchBase;
+        }
 
         if (_config.AdUseExplicitCredentials)
         {
-            if (_config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase))
+            if (_config.AdCredentialStorageMode.Equals(
+                    "Session",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrEmpty(_adPassword.Text))
-                    AdSessionCredentials.SetPassword(_adPassword.Text);
+                if (!string.IsNullOrEmpty(
+                        _adPassword.Text))
+                {
+                    AdSessionCredentials.SetPassword(
+                        _adPassword.Text);
+                }
             }
             else
             {
@@ -4032,23 +2168,53 @@ public sealed class MainForm : DpiAwareForm
         _config.OutputSubdirectory =
             _outputSubdirectory.Text.Trim();
 
-        ConfigService.SaveAppConfig(_config);
+        var persisted = true;
+        try
+        {
+            ConfigService.SaveAppConfig(
+                _config);
+        }
+        catch (Exception ex)
+        {
+            persisted = false;
+
+            if (!allowInMemoryFallback)
+                throw;
+
+            _audit.Write(
+                "SaveDirectorySettings",
+                "SessionOnly",
+                source: "Local",
+                details:
+                    "Machine configuration was not writable; current controls remain active in memory. " +
+                    ex.Message);
+        }
+
         _audit.Write(
             "SaveDirectorySettings",
             source: "Local",
             details:
-                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; Domain={_config.AdDomain}; User={_config.AdUsername}; ExplicitCredentials={_config.AdUseExplicitCredentials}; CredentialStorage={_config.AdCredentialStorageMode}; LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; OutputRoot={_config.EffectiveOutputRoot}; OutputSubdirectory={_config.OutputSubdirectory}");
+                $"Mode={_config.AdConnectionMode}; Server={_config.AdServer}; " +
+                $"Domain={_config.AdDomain}; User={_config.AdUsername}; " +
+                $"ExplicitCredentials={_config.AdUseExplicitCredentials}; " +
+                $"CredentialStorage={_config.AdCredentialStorageMode}; " +
+                $"LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; " +
+                $"AutoConnect={_config.AutoConnectOnStart}; " +
+                $"RecoverySource={_config.RecoverySearchSource}; " +
+                $"RecoveryScope={_config.LastRecoveryScopeSearchBase}");
 
         if (showConfirmation)
         {
             MessageBox.Show(
                 this,
-                _config.AdCredentialStorageMode.Equals("Session", StringComparison.OrdinalIgnoreCase)
-                    ? "Active Directory connection settings saved. Session-mode AD password remains only in this process memory."
-                    : "Active Directory connection settings saved. Stored credentials remain protected by the selected Windows vault; no plaintext password is written to appsettings.",
-                "Directory Connection",
+                persisted
+                    ? "Active Directory and recovery-search settings saved."
+                    : "Settings are active for this BitKeyBridge session, but the machine configuration could not be updated.",
+                "BitKeyBridge",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                persisted
+                    ? MessageBoxIcon.Information
+                    : MessageBoxIcon.Warning);
         }
     }
 
@@ -4088,7 +2254,9 @@ public sealed class MainForm : DpiAwareForm
 
         try
         {
-            SaveDirectorySettings(showConfirmation: false);
+            SaveDirectorySettings(
+                showConfirmation: false,
+                allowInMemoryFallback: true);
             var mode = GetSelectedCredentialStorageMode();
             var vault = new CredentialVaultService();
 
@@ -4246,24 +2414,38 @@ public sealed class MainForm : DpiAwareForm
         }
     }
 
-    private async Task TestDirectoryConnectionAsync()
+    private async Task TestDirectoryConnectionAsync(
+        bool promptForOu = true)
     {
         try
         {
-            SaveDirectorySettings(showConfirmation: false);
-            _adConnectionStatus.Text = "Testing Active Directory connection...";
-            UseWaitCursor = true;
-
-            var result = await Task.Run(() =>
-            {
-                var service = new ActiveDirectoryService(_config);
-                var server = service.GetPreferredWritableDc();
-                var root = service.TestConnection(server);
-                return (Server: server, Root: root);
-            });
+            SaveDirectorySettings(
+                showConfirmation: false,
+                allowInMemoryFallback: true);
 
             _adConnectionStatus.Text =
-                $"Connected to {result.Server}. Ready to select an OU and search BitLocker.";
+                "Connecting to Active Directory...";
+            UseWaitCursor = true;
+
+            var result =
+                await Task.Run(
+                    () =>
+                    {
+                        var service =
+                            new ActiveDirectoryService(
+                                _config);
+                        var server =
+                            service.GetPreferredWritableDc();
+                        var root =
+                            service.TestConnection(
+                                server);
+                        return (
+                            Server: server,
+                            Root: root);
+                    });
+
+            _adConnectionStatus.Text =
+                $"Connected to {result.Server}. Ready to search BitLocker.";
 
             _startDomainDn =
                 result.Root.GetValueOrDefault(
@@ -4271,35 +2453,54 @@ public sealed class MainForm : DpiAwareForm
                     string.Empty);
 
             _startSelectOu.Enabled = true;
-            _startPurposeStatus.Text =
-                "Connected. Step 2 of 3 — Select the OU that contains the target computer.";
-            _startOuStatus.Text =
-                "Connected to " +
-                result.Server +
-                ". Select an OU to limit the BitLocker search.";
 
-            await SelectStartOuAsync();
+            if (_startScope is not null)
+            {
+                _startOuStatus.Text =
+                    $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
+                _startSearch.Enabled = true;
+                _startPurposeStatus.Text =
+                    "Connected. Enter a computer name or Recovery ID.";
+            }
+            else if (promptForOu)
+            {
+                _startPurposeStatus.Text =
+                    "Connected. Select the OU that contains the target computer.";
+                await SelectStartOuAsync();
+            }
+            else
+            {
+                _startPurposeStatus.Text =
+                    "Connected. Select an OU before searching.";
+            }
         }
         catch (Exception ex)
         {
-            _startScope = null;
-            _startDomainDn = string.Empty;
-            _startSelectOu.Enabled = false;
-            _startSearch.Enabled = false;
+            _startDomainDn =
+                string.Empty;
+            _startSelectOu.Enabled =
+                false;
+            _startSearch.Enabled =
+                false;
             _startResults.Items.Clear();
-            _startCurrentKey = null;
+            _startCurrentKey =
+                null;
             _startKey.Clear();
-            _startOuStatus.Text =
-                "Connection failed. Connect to Active Directory before selecting an OU.";
+            _adConnectionStatus.Text =
+                "Connection failed: " +
+                ex.Message;
             _startPurposeStatus.Text =
-                "Step 1 of 3 — Active Directory connection failed. Check the settings and connect again.";
-            _adConnectionStatus.Text = "FAILED: " + ex.Message;
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Directory Connection",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+                "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.";
+
+            if (promptForOu)
+            {
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Active Directory Connection",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
         finally
         {
@@ -4316,7 +2517,6 @@ public sealed class MainForm : DpiAwareForm
             var service =
                 new ActiveDirectoryService(
                     _config);
-
             var dc =
                 service.GetPreferredWritableDc();
 
@@ -4326,7 +2526,6 @@ public sealed class MainForm : DpiAwareForm
                 var root =
                     service.GetRootDse(
                         dc);
-
                 _startDomainDn =
                     root.GetValueOrDefault(
                         "defaultNamingContext",
@@ -4374,10 +2573,12 @@ public sealed class MainForm : DpiAwareForm
             _startOuStatus.Text =
                 $"Selected: {selected.Name}    {selected.SearchBase}";
 
-            _startSearch.Enabled = true;
+            _startSearch.Enabled =
+                true;
             _startPurposeStatus.Text =
-                "Ready. Step 3 of 3 — Enter a computer name or Recovery ID and click Search BitLocker.";
+                "Ready — enter a computer name or Recovery ID.";
 
+            TrySaveRecoveryUiState();
             _startQuery.Focus();
         }
         catch (Exception ex)
@@ -4401,12 +2602,16 @@ public sealed class MainForm : DpiAwareForm
 
     private async Task SearchStartRecoveryAsync()
     {
-        if (_startScope is null)
+        var localCache =
+            _recoverySource.SelectedIndex == 1;
+
+        if (!localCache &&
+            _startScope is null)
         {
             MessageBox.Show(
                 this,
-                "Select an Active Directory OU first.",
-                "BitLocker Recovery Search",
+                "Connect to Active Directory and select an OU first.",
+                "BitLocker Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             return;
@@ -4421,17 +2626,21 @@ public sealed class MainForm : DpiAwareForm
             MessageBox.Show(
                 this,
                 "Enter a computer name or Recovery ID.",
-                "BitLocker Recovery Search",
+                "BitLocker Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             return;
         }
 
+        var searchSource =
+            localCache
+                ? "LocalCSV"
+                : "AD";
+
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
-                "SearchLiveRecoveryKeys",
-                source:
-                    "AD"))
+                "SearchRecoveryMetadata",
+                source: searchSource))
         {
             return;
         }
@@ -4440,114 +2649,105 @@ public sealed class MainForm : DpiAwareForm
         {
             _startSearch.Enabled = false;
             _startResults.Items.Clear();
+            _startResults.Visible = true;
             _startCurrentKey = null;
             _startKey.Clear();
+            _startKey.UseSystemPasswordChar = true;
+            _startShow.Text =
+                "Reveal Recovery Key";
+            ClearRecoveryCard();
+
             _startPurposeStatus.Text =
-                "Searching Active Directory for BitLocker recovery information...";
+                localCache
+                    ? "Searching local recovery metadata..."
+                    : "Searching Active Directory recovery metadata...";
+
             UseWaitCursor = true;
 
-            var scope =
-                _startScope;
+            List<RecoverySearchResult> rows;
 
-            var rows =
-                await Task.Run(
-                    () =>
-                    {
-                        var service =
-                            new ActiveDirectoryService(
-                                _config);
-
-                        var dc =
-                            service.GetPreferredWritableDc();
-
-                        var computers =
-                            service.SearchComputersInScope(
-                                dc,
-                                scope,
+            if (localCache)
+            {
+                rows =
+                    await Task.Run(
+                        () =>
+                            CsvUtility.ReadRecoveryMetadata(
+                                _config.OutputCsv,
                                 query,
-                                100);
+                                200));
+            }
+            else
+            {
+                var scope =
+                    _startScope!;
 
-                        var found =
-                            new List<RecoveryRecord>();
-
-                        foreach (var computer in
-                                 computers)
+                rows =
+                    await Task.Run(
+                        () =>
                         {
-                            found.AddRange(
-                                service.GetRecoveryRecordsForComputer(
+                            var service =
+                                new ActiveDirectoryService(
+                                    _config);
+                            var dc =
+                                service.GetPreferredWritableDc();
+
+                            var computers =
+                                service.SearchComputersInScope(
                                     dc,
-                                    computer.DistinguishedName,
-                                    DateTime.Now));
-                        }
+                                    scope,
+                                    query,
+                                    100);
 
-                        if (computers.Count == 0)
-                        {
-                            var idQuery =
-                                query
-                                    .Trim()
-                                    .Trim(
-                                        '{',
-                                        '}');
+                            var found =
+                                new List<RecoverySearchResult>();
 
-                            if (idQuery.Length >= 4)
+                            foreach (var computer in
+                                     computers)
                             {
-                                var metadataMatches =
-                                    service.GetRecoveryMetadata(
-                                            dc,
-                                            scope)
-                                        .Where(
-                                            x =>
-                                                x.RecoveryId.Contains(
-                                                    idQuery,
-                                                    StringComparison.OrdinalIgnoreCase))
-                                        .Take(
-                                            100)
-                                        .ToList();
+                                found.AddRange(
+                                    service.GetRecoveryMetadataForComputer(
+                                        dc,
+                                        computer.DistinguishedName));
+                            }
 
-                                foreach (var computerName in
-                                         metadataMatches
-                                             .Select(
-                                                 x =>
-                                                     x.ComputerName)
-                                             .Distinct(
-                                                 StringComparer.OrdinalIgnoreCase))
+                            if (computers.Count == 0)
+                            {
+                                var idQuery =
+                                    query
+                                        .Trim()
+                                        .Trim(
+                                            '{',
+                                            '}');
+
+                                if (idQuery.Length >= 4)
                                 {
-                                    var computer =
-                                        service.FindComputerByName(
-                                            dc,
-                                            computerName);
-
-                                    if (computer is null)
-                                        continue;
-
                                     found.AddRange(
-                                        service.GetRecoveryRecordsForComputer(
+                                        service.SearchRecoveryMetadataInScope(
                                             dc,
-                                            computer.DistinguishedName,
-                                            DateTime.Now)
-                                            .Where(
-                                                x =>
-                                                    x.BitLockerId.Contains(
-                                                        idQuery,
-                                                        StringComparison.OrdinalIgnoreCase)));
+                                            scope,
+                                            idQuery,
+                                            200));
                                 }
                             }
-                        }
 
-                        return found
-                            .GroupBy(
-                                x =>
-                                    x.ComputerName +
-                                    "|" +
-                                    x.BitLockerId,
-                                StringComparer.OrdinalIgnoreCase)
-                            .Select(
-                                x =>
-                                    x.First())
-                            .Take(
-                                200)
-                            .ToList();
-                    });
+                            return found
+                                .GroupBy(
+                                    x =>
+                                        x.ComputerName +
+                                        "|" +
+                                        x.RecoveryId,
+                                    StringComparer.OrdinalIgnoreCase)
+                                .Select(
+                                    x =>
+                                        x.First())
+                                .OrderByDescending(
+                                    x =>
+                                        x.CreatedDateTime ??
+                                        x.LastChecked)
+                                .Take(200)
+                                .ToList();
+                        });
+            }
 
             foreach (var row in rows)
             {
@@ -4556,12 +2756,15 @@ public sealed class MainForm : DpiAwareForm
                         row.ComputerName);
 
                 item.SubItems.Add(
-                    row.BitLockerId);
+                    row.RecoveryId);
                 item.SubItems.Add(
                     row.Source);
                 item.SubItems.Add(
-                    row.LastChecked.ToString(
-                        "yyyy-MM-dd HH:mm:ss"));
+                    (row.CreatedDateTime ??
+                     row.LastChecked)?
+                        .ToString(
+                            "yyyy-MM-dd HH:mm:ss") ??
+                    "-");
                 item.Tag =
                     row;
 
@@ -4569,10 +2772,32 @@ public sealed class MainForm : DpiAwareForm
                     item);
             }
 
+            if (rows.Count == 1)
+            {
+                _startResults.Items[0].Selected =
+                    true;
+                _startResults.Items[0].Focused =
+                    true;
+                _startResults.Visible =
+                    false;
+                SelectStartRecoveryRecord();
+            }
+
+            var scopeLabel =
+                localCache
+                    ? "local cache"
+                    : _startScope!.Name;
+
             _startPurposeStatus.Text =
-                rows.Count == 0
-                    ? $"No BitLocker recovery information found in {_startScope.Name}."
-                    : $"Found {rows.Count} BitLocker recovery record(s) in {_startScope.Name}. Select a row to reveal or copy the key.";
+                rows.Count switch
+                {
+                    0 =>
+                        $"No BitLocker recovery metadata found in {scopeLabel}.",
+                    1 =>
+                        "One recovery record found. Review the card below and reveal/copy only when needed.",
+                    _ =>
+                        $"Found {rows.Count} recovery records in {scopeLabel}. Select a row."
+                };
         }
         catch (Exception ex)
         {
@@ -4583,13 +2808,14 @@ public sealed class MainForm : DpiAwareForm
             MessageBox.Show(
                 this,
                 ex.Message,
-                "BitLocker Recovery Search",
+                "BitLocker Recovery",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
         finally
         {
             _startSearch.Enabled =
+                localCache ||
                 _startScope is not null;
             UseWaitCursor = false;
         }
@@ -4599,141 +2825,270 @@ public sealed class MainForm : DpiAwareForm
     {
         if (_startResults.SelectedItems.Count == 0 ||
             _startResults.SelectedItems[0].Tag is not
-                RecoveryRecord row)
+                RecoverySearchResult row)
         {
-            _startCurrentKey = null;
+            _startCurrentKey =
+                null;
             _startKey.Clear();
+            ClearRecoveryCard();
             return;
         }
 
         _startCurrentKey =
-            row.RecoveryKey;
-
-        _startKey.Text =
-            row.RecoveryKey;
+            null;
+        _startKey.Clear();
         _startKey.UseSystemPasswordChar =
             true;
         _startShow.Text =
-            "Show Key";
+            "Reveal Recovery Key";
+
+        _recoveryCardComputer.Text =
+            row.ComputerName;
+        _recoveryCardOu.Text =
+            row.Source.Equals(
+                "Local cache",
+                StringComparison.OrdinalIgnoreCase)
+                ? "Local cache"
+                : _startScope?.SearchBase ??
+                  row.ComputerDistinguishedName;
+        _recoveryCardId.Text =
+            row.RecoveryId;
+        _recoveryCardTime.Text =
+            (row.CreatedDateTime ??
+             row.LastChecked)?
+                .ToString(
+                    "yyyy-MM-dd HH:mm:ss") ??
+            "-";
+        _recoveryCardSource.Text =
+            row.Source;
+
+        _startShow.Enabled =
+            true;
+        _startCopy.Enabled =
+            true;
     }
 
-    private void RevealStartRecoveryKey()
+    private void ClearRecoveryCard()
     {
-        if (!_startKey.UseSystemPasswordChar)
-        {
-            ToggleKey(
-                _startKey,
-                _startShow);
-            return;
-        }
-
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
-                RecoveryRecord row)
-        {
-            return;
-        }
-
-        if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
-                "RevealLiveAdRecoveryKey",
-                row.ComputerName,
-                row.BitLockerId,
-                "AD"))
-        {
-            return;
-        }
-
-        var context =
-            GetOrRequestRecoveryAccessContext(
-                "AD",
-                row.BitLockerId,
-                row.ComputerName,
-                allowRotationReminder:
-                    false);
-
-        if (context is null)
-            return;
-
-        if (!AuthorizePrivilegedRecoveryAccess(
-                context,
-                "RevealLiveAdRecoveryKey",
-                row.ComputerName,
-                row.BitLockerId,
-                "AD"))
-        {
-            return;
-        }
-
-        ToggleKey(
-            _startKey,
-            _startShow);
-
-        WriteRecoveryAudit(
-            "RevealLiveAdRecoveryKey",
-            context,
-            computerName:
-                row.ComputerName,
-            recoveryId:
-                row.BitLockerId,
-            source:
-                "AD");
+        _recoveryCardComputer.Text = "-";
+        _recoveryCardOu.Text = "-";
+        _recoveryCardId.Text = "-";
+        _recoveryCardTime.Text = "-";
+        _recoveryCardSource.Text = "-";
+        _startShow.Enabled = false;
+        _startCopy.Enabled = false;
     }
 
-    private void CopyStartRecoveryKey()
+    private async Task<string?> EnsureStartRecoveryKeyAsync(
+        RecoverySearchResult row)
     {
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
-                RecoveryRecord row ||
-            string.IsNullOrWhiteSpace(
+        if (!string.IsNullOrWhiteSpace(
                 _startCurrentKey))
         {
+            return _startCurrentKey;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+
+            if (row.Source.Equals(
+                    "Local cache",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _startCurrentKey =
+                    await Task.Run(
+                        () =>
+                            CsvUtility.GetRecoveryPassword(
+                                _config.OutputCsv,
+                                row.ComputerName,
+                                row.RecoveryId));
+            }
+            else
+            {
+                _startCurrentKey =
+                    await Task.Run(
+                        () =>
+                        {
+                            var service =
+                                new ActiveDirectoryService(
+                                    _config);
+                            var dc =
+                                service.GetPreferredWritableDc();
+
+                            return service
+                                .GetRecoveryPasswordByDistinguishedName(
+                                    dc,
+                                    row.RecoveryDistinguishedName,
+                                    row.RecoveryId);
+                        });
+            }
+
+            return _startCurrentKey;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Recovery Key",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return null;
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task RevealStartRecoveryKeyAsync()
+    {
+        if (!_startKey.UseSystemPasswordChar &&
+            !string.IsNullOrWhiteSpace(
+                _startCurrentKey))
+        {
+            _startKey.UseSystemPasswordChar =
+                true;
+            _startShow.Text =
+                "Reveal Recovery Key";
             return;
         }
 
+        if (_startResults.SelectedItems.Count == 0 ||
+            _startResults.SelectedItems[0].Tag is not
+                RecoverySearchResult row)
+        {
+            return;
+        }
+
+        var auditSource =
+            row.Source.Equals(
+                "Local cache",
+                StringComparison.OrdinalIgnoreCase)
+                ? "LocalCSV"
+                : "AD";
+
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
-                "CopyLiveAdRecoveryKey",
+                "RevealRecoveryKey",
                 row.ComputerName,
-                row.BitLockerId,
-                "AD"))
+                row.RecoveryId,
+                auditSource))
         {
             return;
         }
 
         var context =
             GetOrRequestRecoveryAccessContext(
-                "AD",
-                row.BitLockerId,
+                auditSource,
+                row.RecoveryId,
                 row.ComputerName,
-                allowRotationReminder:
-                    false);
+                allowRotationReminder: false);
 
         if (context is null)
             return;
 
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
-                "CopyLiveAdRecoveryKey",
+                "RevealRecoveryKey",
                 row.ComputerName,
-                row.BitLockerId,
-                "AD"))
+                row.RecoveryId,
+                auditSource))
+        {
+            return;
+        }
+
+        var key =
+            await EnsureStartRecoveryKeyAsync(
+                row);
+
+        if (string.IsNullOrWhiteSpace(
+                key))
+        {
+            return;
+        }
+
+        _startKey.Text =
+            key;
+        _startKey.UseSystemPasswordChar =
+            false;
+        _startShow.Text =
+            "Hide Key";
+
+        WriteRecoveryAudit(
+            "RevealRecoveryKey",
+            context,
+            computerName: row.ComputerName,
+            recoveryId: row.RecoveryId,
+            source: auditSource);
+    }
+
+    private async Task CopyStartRecoveryKeyAsync()
+    {
+        if (_startResults.SelectedItems.Count == 0 ||
+            _startResults.SelectedItems[0].Tag is not
+                RecoverySearchResult row)
+        {
+            return;
+        }
+
+        var auditSource =
+            row.Source.Equals(
+                "Local cache",
+                StringComparison.OrdinalIgnoreCase)
+                ? "LocalCSV"
+                : "AD";
+
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                "CopyRecoveryKey",
+                row.ComputerName,
+                row.RecoveryId,
+                auditSource))
+        {
+            return;
+        }
+
+        var context =
+            GetOrRequestRecoveryAccessContext(
+                auditSource,
+                row.RecoveryId,
+                row.ComputerName,
+                allowRotationReminder: false);
+
+        if (context is null)
+            return;
+
+        if (!AuthorizePrivilegedRecoveryAccess(
+                context,
+                "CopyRecoveryKey",
+                row.ComputerName,
+                row.RecoveryId,
+                auditSource))
+        {
+            return;
+        }
+
+        var key =
+            await EnsureStartRecoveryKeyAsync(
+                row);
+
+        if (string.IsNullOrWhiteSpace(
+                key))
         {
             return;
         }
 
         WriteRecoveryAudit(
-            "CopyLiveAdRecoveryKey",
+            "CopyRecoveryKey",
             context,
-            computerName:
-                row.ComputerName,
-            recoveryId:
-                row.BitLockerId,
-            source:
-                "AD");
+            computerName: row.ComputerName,
+            recoveryId: row.RecoveryId,
+            source: auditSource);
 
         CopyKeyWithAutoClear(
-            _startCurrentKey);
+            key);
     }
 
     private void LoadDashboardSettings()
@@ -5601,20 +3956,23 @@ public sealed class MainForm : DpiAwareForm
             if (Clipboard.ContainsText())
             {
                 var text = Clipboard.GetText();
-                if ((!string.IsNullOrWhiteSpace(_localCurrentKey) && string.Equals(text, _localCurrentKey, StringComparison.Ordinal)) ||
-                    (!string.IsNullOrWhiteSpace(_cloudCurrentKey) && string.Equals(text, _cloudCurrentKey, StringComparison.Ordinal)))
+                if ((!string.IsNullOrWhiteSpace(_startCurrentKey) &&
+                     string.Equals(text, _startCurrentKey, StringComparison.Ordinal)) ||
+                    (!string.IsNullOrWhiteSpace(_deviceCurrentKey) &&
+                     string.Equals(text, _deviceCurrentKey, StringComparison.Ordinal)))
+                {
                     Clipboard.Clear();
+                }
             }
         }
         catch { }
-
-        _localCurrentKey = null;
-        _cloudCurrentKey = null;
+        _startCurrentKey = null;
+        _startKey.Clear();
+        _deviceCurrentKey = null;
+        _deviceRecoveryKey.Clear();
         _cloudToken = null;
         AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
-        _localKey.Clear();
-        _cloudKey.Clear();
         _cloudPassword.Clear();
         _adPassword.Clear();
         _serviceIdentityPassword.Clear();
@@ -6057,12 +4415,6 @@ public sealed class MainForm : DpiAwareForm
         }
     }
 
-    private static void ToggleKey(TextBox box, Button button)
-    {
-        box.UseSystemPasswordChar = !box.UseSystemPasswordChar;
-        button.Text = box.UseSystemPasswordChar ? "Show Key" : "Hide Key";
-    }
-
     private void CopyKeyWithAutoClear(string? key)
     {
         if (string.IsNullOrWhiteSpace(key)) return;
@@ -6084,14 +4436,6 @@ public sealed class MainForm : DpiAwareForm
     private static void AddColumns(ListView view, params (string Name, int Width)[] columns)
     {
         foreach (var (name, width) in columns) view.Columns.Add(name, width);
-    }
-
-    private static void AddLabeled(Control parent, string labelText, Control control, int x, int y, int labelWidth, int controlWidth)
-    {
-        var label = new Label { Text = labelText, Left = x, Top = y + 4, Width = labelWidth, Height = 23 };
-        control.SetBounds(x + labelWidth, y, controlWidth, 27);
-        parent.Controls.Add(label);
-        parent.Controls.Add(control);
     }
 
     private void OpenPath(string path, string? executable = null)

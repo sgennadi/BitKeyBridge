@@ -320,11 +320,9 @@ public sealed class ActiveDirectoryService
             .ToList();
     }
 
-    public List<RecoveryRecord> GetRecoveryRecordsForComputer(
+    public List<RecoverySearchResult> GetRecoveryMetadataForComputer(
         string server,
-        string computerDistinguishedName,
-        DateTime runTimestamp,
-        Action<string>? warning = null)
+        string computerDistinguishedName)
     {
         if (string.IsNullOrWhiteSpace(computerDistinguishedName))
             return [];
@@ -334,46 +332,102 @@ public sealed class ActiveDirectoryService
             computerDistinguishedName,
             "(objectClass=msFVE-RecoveryInformation)",
             SearchScope.OneLevel,
-            "msFVE-RecoveryPassword",
-            "msFVE-RecoveryGuid");
+            "msFVE-RecoveryGuid",
+            "whenCreated");
 
-        var rows = new List<RecoveryRecord>();
+        var rows = new List<RecoverySearchResult>();
 
         foreach (var entry in SendPaged(connection, request))
         {
-            var password = GetString(entry, "msFVE-RecoveryPassword");
             var guidBytes =
                 entry.Attributes["msFVE-RecoveryGuid"] is { Count: > 0 } guidAttr
                     ? guidAttr[0] as byte[]
                     : null;
 
-            if (string.IsNullOrWhiteSpace(password) ||
-                guidBytes is not { Length: 16 })
+            if (guidBytes is not { Length: 16 })
+                continue;
+
+            rows.Add(new RecoverySearchResult
             {
-                throw new InvalidDataException(
-                    $"Missing or invalid BitLocker recovery attributes for '{entry.DistinguishedName}'.");
-            }
-
-            var computerName = GetParentComputerName(entry.DistinguishedName);
-            var recoveryGuid = new Guid(guidBytes).ToString("D");
-
-            if (!System.Text.RegularExpressions.Regex.IsMatch(
-                    password,
-                    @"^\d{6}(?:-\d{6}){7}$"))
-            {
-                warning?.Invoke(
-                    $"Unexpected recovery password format for {computerName}, recovery ID {recoveryGuid}.");
-            }
-
-            rows.Add(new RecoveryRecord(
-                computerName,
-                recoveryGuid,
-                password,
-                runTimestamp,
-                "AD Live"));
+                ComputerName = GetParentComputerName(entry.DistinguishedName),
+                RecoveryId = new Guid(guidBytes).ToString("D"),
+                CreatedDateTime = ParseLdapDateTime(
+                    GetString(entry, "whenCreated")),
+                Source = "AD Live",
+                ComputerDistinguishedName = computerDistinguishedName,
+                RecoveryDistinguishedName = entry.DistinguishedName
+            });
         }
 
-        return rows;
+        return rows
+            .OrderByDescending(x => x.CreatedDateTime)
+            .ToList();
+    }
+
+    public string GetRecoveryPasswordByDistinguishedName(
+        string server,
+        string recoveryDistinguishedName,
+        string expectedRecoveryId)
+    {
+        if (string.IsNullOrWhiteSpace(recoveryDistinguishedName))
+            throw new ArgumentException(
+                "Recovery object distinguished name is required.",
+                nameof(recoveryDistinguishedName));
+
+        using var connection = CreateConnection(server);
+        var request = new SearchRequest(
+            recoveryDistinguishedName,
+            "(objectClass=msFVE-RecoveryInformation)",
+            SearchScope.Base,
+            "msFVE-RecoveryPassword",
+            "msFVE-RecoveryGuid");
+
+        var response =
+            (SearchResponse)connection.SendRequest(
+                request,
+                _timeout);
+
+        if (response.Entries.Count != 1)
+            throw new InvalidDataException(
+                "The selected BitLocker recovery object could not be read.");
+
+        var entry = response.Entries[0];
+        var password = GetString(
+            entry,
+            "msFVE-RecoveryPassword");
+        var guidBytes =
+            entry.Attributes["msFVE-RecoveryGuid"] is { Count: > 0 } guidAttr
+                ? guidAttr[0] as byte[]
+                : null;
+
+        if (string.IsNullOrWhiteSpace(password) ||
+            guidBytes is not { Length: 16 })
+        {
+            throw new InvalidDataException(
+                "The selected BitLocker recovery object is missing required recovery attributes.");
+        }
+
+        var actualRecoveryId =
+            new Guid(guidBytes).ToString("D");
+
+        if (!string.Equals(
+                actualRecoveryId,
+                expectedRecoveryId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "The selected recovery object no longer matches the requested Recovery ID.");
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(
+                password,
+                @"^\d{6}(?:-\d{6}){7}$"))
+        {
+            throw new InvalidDataException(
+                "The selected BitLocker recovery password has an unexpected format.");
+        }
+
+        return password;
     }
 
     public List<AdComputerInfo> GetComputersInScope(
@@ -413,6 +467,104 @@ public sealed class ActiveDirectoryService
         return rows;
     }
 
+    public List<RecoverySearchResult> SearchRecoveryMetadataInScope(
+        string server,
+        BitLockerScope scope,
+        string recoveryIdQuery,
+        int maximumItems = 200)
+    {
+        var query =
+            (recoveryIdQuery ?? string.Empty)
+                .Trim()
+                .Trim('{', '}');
+
+        if (string.IsNullOrWhiteSpace(query))
+            return [];
+
+        var escaped =
+            EscapeLdapFilter(query);
+
+        using var connection =
+            CreateConnection(server);
+
+        // msFVE-RecoveryInformation object CNs include the recovery GUID.
+        // Searching the CN server-side avoids enumerating every recovery
+        // object in a large OU just to match a partial Recovery ID.
+        var request =
+            new SearchRequest(
+                scope.SearchBase,
+                $"(&(objectClass=msFVE-RecoveryInformation)(name=*{escaped}*))",
+                SearchScope.Subtree,
+                "msFVE-RecoveryGuid",
+                "whenCreated");
+
+        var rows =
+            new List<RecoverySearchResult>();
+
+        foreach (var entry in
+                 SendPaged(
+                     connection,
+                     request))
+        {
+            var guidBytes =
+                entry.Attributes["msFVE-RecoveryGuid"] is
+                    { Count: > 0 } guidAttr
+                    ? guidAttr[0] as byte[]
+                    : null;
+
+            if (guidBytes is not { Length: 16 })
+                continue;
+
+            var recoveryId =
+                new Guid(
+                    guidBytes)
+                    .ToString("D");
+
+            if (!recoveryId.Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            rows.Add(
+                new RecoverySearchResult
+                {
+                    ComputerName =
+                        GetParentComputerName(
+                            entry.DistinguishedName),
+                    RecoveryId =
+                        recoveryId,
+                    CreatedDateTime =
+                        ParseLdapDateTime(
+                            GetString(
+                                entry,
+                                "whenCreated")),
+                    Source =
+                        "AD Live",
+                    ComputerDistinguishedName =
+                        GetParentDistinguishedName(
+                            entry.DistinguishedName),
+                    RecoveryDistinguishedName =
+                        entry.DistinguishedName
+                });
+
+            if (rows.Count >=
+                Math.Clamp(
+                    maximumItems,
+                    1,
+                    5000))
+            {
+                break;
+            }
+        }
+
+        return rows
+            .OrderByDescending(
+                x => x.CreatedDateTime)
+            .ToList();
+    }
+
     public List<AdRecoveryMetadata> GetRecoveryMetadata(
         string server,
         BitLockerScope scope,
@@ -437,12 +589,18 @@ public sealed class ActiveDirectoryService
             if (guidBytes is not { Length: 16 })
                 continue;
 
+            var computerDn =
+                GetParentDistinguishedName(
+                    entry.DistinguishedName);
+
             rows.Add(new AdRecoveryMetadata
             {
                 ComputerName = GetParentComputerName(entry.DistinguishedName),
                 RecoveryId = new Guid(guidBytes).ToString("D"),
                 CreatedDateTime = ParseLdapDateTime(
-                    GetString(entry, "whenCreated"))
+                    GetString(entry, "whenCreated")),
+                ComputerDistinguishedName = computerDn,
+                RecoveryDistinguishedName = entry.DistinguishedName
             });
 
             if (rows.Count >= Math.Clamp(maximumItems, 1, 200000))
@@ -645,6 +803,18 @@ public sealed class ActiveDirectoryService
         if (attr is null || attr.Count == 0) return null;
         if (attr[0] is byte[] bytes) return Encoding.UTF8.GetString(bytes);
         return Convert.ToString(attr[0]);
+    }
+
+    private static string GetParentDistinguishedName(
+        string distinguishedName)
+    {
+        if (string.IsNullOrWhiteSpace(distinguishedName))
+            return string.Empty;
+
+        var comma = distinguishedName.IndexOf(',');
+        return comma >= 0 && comma + 1 < distinguishedName.Length
+            ? distinguishedName[(comma + 1)..]
+            : string.Empty;
     }
 
     public static string GetParentComputerName(string distinguishedName)

@@ -186,3 +186,52 @@ jobs:
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
           gh release create $tag release/BitKeyBridge-win-x64.zip release/BitKeyBridge-win-x86.zip release/BitKeyBridge-win-arm64.zip release/BitKeyBridge.cdx.json release/SHA256SUMS.txt --repo "${{ github.repository }}" --target "${{ github.sha }}" --generate-notes --title "BitKeyBridge $tag"
+
+      - name: Archive and remove stale release branches
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $repo = "${{ github.repository }}"
+          git fetch origin "+refs/heads/release/*:refs/remotes/origin/release/*" --prune
+
+          $refs = git for-each-ref --format="%(refname:short)|%(objectname)" refs/remotes/origin/release/
+          foreach ($line in $refs) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+            $parts = $line.Split("|", 2)
+            $remoteName = $parts[0]
+            $sha = $parts[1]
+            $branch = $remoteName -replace "^origin/", ""
+
+            git merge-base --is-ancestor $sha "${{ github.sha }}" *> $null
+            $isMerged = ($LASTEXITCODE -eq 0)
+            $global:LASTEXITCODE = 0
+
+            if (-not $isMerged) {
+              $short = $sha.Substring(0, 12)
+              $safeBranch = $branch.Replace("/", "-")
+              $archiveTag = "archive/$safeBranch-$short"
+
+              gh api "repos/$repo/git/ref/tags/$archiveTag" *> $null
+              $tagExists = ($LASTEXITCODE -eq 0)
+              $global:LASTEXITCODE = 0
+
+              if (-not $tagExists) {
+                gh api --method POST "repos/$repo/git/refs" -f ref="refs/tags/$archiveTag" -f sha="$sha" *> $null
+                if ($LASTEXITCODE -ne 0) {
+                  throw "Could not archive unmerged release branch $branch at $sha"
+                }
+              }
+
+              Write-Host "Archived unmerged branch $branch as $archiveTag"
+            }
+
+            gh api --method DELETE "repos/$repo/git/refs/heads/$branch" *> $null
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not delete stale release branch $branch"
+            }
+
+            Write-Host "Deleted stale release branch $branch"
+          }

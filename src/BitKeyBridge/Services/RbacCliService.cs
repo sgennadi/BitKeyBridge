@@ -11,6 +11,7 @@ public static class RbacCliService
             var auth = new AuthorizationService(config);
             var read = auth.Check(BitKeyBridgePermission.RecoveryRead);
             var rotate = auth.Check(BitKeyBridgePermission.Rotate);
+            var admin = auth.Check(BitKeyBridgePermission.Administrator);
             var validation = auth.ValidateConfiguredPrincipals();
 
             Console.WriteLine($"RBAC enabled: {config.RbacEnabled}");
@@ -25,9 +26,14 @@ public static class RbacCliService
                 "Rotation operators: " +
                 FormatPrincipals(config.RbacRotationOperators));
             Console.WriteLine(
+                "BitKeyBridge administrators: " +
+                FormatPrincipals(config.RbacAdministrators));
+            Console.WriteLine(
                 $"RecoveryRead: Allowed={read.Allowed}; Matched={read.MatchedPrincipal}; Reason={read.Reason}");
             Console.WriteLine(
                 $"Rotate: Allowed={rotate.Allowed}; Matched={rotate.MatchedPrincipal}; Reason={rotate.Reason}");
+            Console.WriteLine(
+                $"Administrator UI: Allowed={admin.Allowed}; Matched={admin.MatchedPrincipal}; Reason={admin.Reason}");
 
             if (validation.Count > 0)
             {
@@ -83,14 +89,23 @@ public static class RbacCliService
                 config.RbacRotationOperators,
                 GetOptionValue(args, "--rbac-rotator-remove"),
                 add: false);
+            MutatePrincipalList(
+                config.RbacAdministrators,
+                GetOptionValue(args, "--rbac-ui-admin-add"),
+                add: true);
+            MutatePrincipalList(
+                config.RbacAdministrators,
+                GetOptionValue(args, "--rbac-ui-admin-remove"),
+                add: false);
 
             if (config.RbacEnabled &&
                 !config.RbacAllowLocalAdministrators &&
                 config.RbacRecoveryReaders.Count == 0 &&
-                config.RbacRotationOperators.Count == 0)
+                config.RbacRotationOperators.Count == 0 &&
+                config.RbacAdministrators.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "RBAC would deny all privileged actions: configure at least one reader/rotator or keep the local Administrators bypass enabled.");
+                    "RBAC would deny all privileged actions: configure at least one reader/rotator/BitKeyBridge administrator or keep the local Administrators bypass enabled.");
             }
 
             var validation =

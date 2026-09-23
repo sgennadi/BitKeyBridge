@@ -2,7 +2,7 @@ namespace BitKeyBridge;
 
 public static class ConfigSchema
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 }
 
 public sealed class AppConfig
@@ -37,6 +37,12 @@ public sealed class AppConfig
     public bool AdUseLdaps { get; set; } = false;
     public int AdPort { get; set; } = 389;
 
+    // Helpdesk-first recovery UI state.
+    public bool AutoConnectOnStart { get; set; } = true;
+    public string RecoverySearchSource { get; set; } = "LiveAD";
+    public string LastRecoveryScopeName { get; set; } = string.Empty;
+    public string LastRecoveryScopeSearchBase { get; set; } = string.Empty;
+
     public bool HealthEndpointEnabled { get; set; } = true;
     public int HealthEndpointPort { get; set; } = 8750;
     public int ServiceIntervalMinutes { get; set; } = 60;
@@ -67,6 +73,7 @@ public sealed class AppConfig
     public bool RbacAllowLocalAdministrators { get; set; } = true;
     public List<string> RbacRecoveryReaders { get; set; } = [];
     public List<string> RbacRotationOperators { get; set; } = [];
+    public List<string> RbacAdministrators { get; set; } = [];
 
     public bool AuditSigningEnabled { get; set; } = false;
     public string AuditSigningCertificateThumbprint { get; set; } = string.Empty;

@@ -510,6 +510,19 @@ public sealed class ConfigurationMaintenanceService
             }
         }
 
+        if (config.RecoverySearchSource is not "LiveAD" and not "LocalCache")
+        {
+            throw new InvalidOperationException(
+                "RecoverySearchSource must be LiveAD or LocalCache.");
+        }
+
+        if (string.IsNullOrWhiteSpace(config.LastRecoveryScopeSearchBase) !=
+            string.IsNullOrWhiteSpace(config.LastRecoveryScopeName))
+        {
+            throw new InvalidOperationException(
+                "LastRecoveryScopeName and LastRecoveryScopeSearchBase must either both be set or both be empty.");
+        }
+
         if (config.DefaultScopes.Any(x =>
                 string.IsNullOrWhiteSpace(
                     x.SearchBase)))
