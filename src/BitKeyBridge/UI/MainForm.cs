@@ -4437,12 +4437,6 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private static void ToggleKey(TextBox box, Button button)
-    {
-        box.UseSystemPasswordChar = !box.UseSystemPasswordChar;
-        button.Text = box.UseSystemPasswordChar ? "Show Key" : "Hide Key";
-    }
-
     private void CopyKeyWithAutoClear(string? key)
     {
         if (string.IsNullOrWhiteSpace(key)) return;
@@ -4464,14 +4458,6 @@ public sealed partial class MainForm : DpiAwareForm
     private static void AddColumns(ListView view, params (string Name, int Width)[] columns)
     {
         foreach (var (name, width) in columns) view.Columns.Add(name, width);
-    }
-
-    private static void AddLabeled(Control parent, string labelText, Control control, int x, int y, int labelWidth, int controlWidth)
-    {
-        var label = new Label { Text = labelText, Left = x, Top = y + 4, Width = labelWidth, Height = 23 };
-        control.SetBounds(x + labelWidth, y, controlWidth, 27);
-        parent.Controls.Add(label);
-        parent.Controls.Add(control);
     }
 
     private void OpenPath(string path, string? executable = null)
