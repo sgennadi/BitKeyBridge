@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.16.0
+
+- Added optional time-limited JIT recovery grants. JIT is disabled by default and must be explicitly enabled by an administrator.
+- Added optional two-person recovery approval with a distinct authorized Windows approver. The requester cannot approve their own session.
+- Added optional metadata-only SIEM forwarding with durable local outbox, JSONL or HTTPS webhook delivery, optional client-certificate authentication, bounded queueing, and explicit fail-open/fail-closed policy.
+- JIT grants and approval decisions are anchored to the existing tamper-evident audit chain; invalid or missing retained anchors are rejected.
+- Added privileged-access policy enforcement before local AD and Entra recovery-key reveal/copy/get operations.
+- Added privileged-access CLI controls for status, JIT grants/revocation, approval decisions, SIEM configuration/status/flush, grantor/approver authorization, and policy enable/disable.
+- Added a dedicated **Operations → Privileged Access...** GUI for JIT, two-person approval, SIEM configuration, JIT grant/revoke, approval/deny, readiness checks, and SIEM flush.
+- All privileged-access features remain opt-in and are never enabled by upgrade.
+- Added shared DPI-aware WinForms behavior across the main window and dialogs, including working-area constraints and scroll fallback for high display scaling, large text, RDP, and smaller screens.
+- All main tabs now permit scrolling when DPI/text scaling makes content larger than the visible client area.
+- Main GUI title now reads the assembly version instead of a hard-coded version string.
+- Application configuration schema remains v3 for the optional privileged-access/SIEM settings.
+
 ## 0.15.0
 
 - Added evidence-aware housekeeping for recovery incidents, configuration backups, and stale atomic temporary files.
