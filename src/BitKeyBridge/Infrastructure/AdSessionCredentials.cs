@@ -103,7 +103,7 @@ public static class AdSessionCredentials
         if (username.Contains('@'))
             return new NetworkCredential(username, password);
 
-        var slash = username.IndexOf('\');
+        var slash = username.IndexOf('\\');
         if (slash > 0 && slash + 1 < username.Length)
             return new NetworkCredential(
                 username[(slash + 1)..],
