@@ -777,7 +777,7 @@ public sealed partial class MainForm
                 "Delete Machine Cloud");
         var repairMachineKey =
             NewActionButton(
-                "Repair Cert Access");
+                "Repair Service Access");
         serviceSettingsActions.Controls.AddRange([
             saveSettings,
             saveMachineCloud,
@@ -902,7 +902,7 @@ public sealed partial class MainForm
                 DeleteMachineCloudFromGui();
         repairMachineKey.Click +=
             (_, _) =>
-                RepairMachineCertificateAccessFromGui();
+                RepairServiceAccessFromGui();
         applyIdentity.Click +=
             (_, _) =>
                 ApplyServiceIdentityFromGui();
