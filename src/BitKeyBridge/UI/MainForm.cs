@@ -3564,67 +3564,90 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private void RepairMachineCertificateAccessFromGui()
+    private void RepairServiceAccessFromGui()
     {
         try
         {
             if (!SecurityContext.IsAdministrator())
-                throw new InvalidOperationException(
-                    "Administrator rights are required to repair certificate private-key access.");
-
-            if (!File.Exists(AppPaths.MachineCloudConfigFile))
-                throw new InvalidOperationException(
-                    "Machine cloud configuration is not configured.");
-
-            var service = WindowsServiceHost.GetInfo();
-            if (!service.Installed ||
-                string.IsNullOrWhiteSpace(service.Identity))
             {
                 throw new InvalidOperationException(
-                    "Install the BitKeyBridge Windows Service before repairing certificate access.");
+                    "Administrator rights are required to repair Windows Service access.");
             }
 
-            var access =
-                WindowsServiceHost.EnsureConfiguredCloudCertificateAccess(
-                    service.Identity,
-                    required: true)
-                ?? throw new InvalidOperationException(
-                    "Certificate private-key access could not be prepared.");
+            var service =
+                WindowsServiceHost.GetInfo();
+
+            if (!service.Installed ||
+                string.IsNullOrWhiteSpace(
+                    service.Identity))
+            {
+                throw new InvalidOperationException(
+                    "Install the BitKeyBridge Windows Service before repairing service access.");
+            }
+
+            WindowsServiceHost
+                .EnsureConfiguredServiceAccess(
+                    service.Identity);
+
+            var vaultStatus =
+                string.Empty;
+
+            if (_config.AdUseExplicitCredentials &&
+                _config.AdCredentialStorageMode.Equals(
+                    "LocalMachine",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                var access =
+                    new CredentialVaultService()
+                        .GetMachineCredentialAccess(
+                            service.Identity);
+
+                vaultStatus =
+                    $" MachineCredential={access.Status}.";
+            }
 
             _audit.Write(
-                "RepairCertificatePrivateKeyAccess",
+                "RepairServiceAccess",
                 source: "WindowsService",
                 details:
-                    $"Account={access.Account}; SID={access.Sid}; Provider={access.Provider}; Status={access.Status}; Certificate={access.Thumbprint}");
+                    $"Account={service.Identity};{vaultStatus}");
 
+            RefreshCredentialVaultStatus();
             RefreshMachineCloudStatus();
+            RefreshServiceIdentityStatus();
             RefreshDashboard();
+            RefreshAuditSigningStatus();
 
             MessageBox.Show(
                 this,
-                $"Certificate private-key access: {access.Status}" +
+                "Windows Service access has been verified/repaired." +
                 Environment.NewLine +
-                $"Account: {access.Account}" +
                 Environment.NewLine +
-                $"Provider: {access.Provider}",
-                "Certificate Access",
+                $"Account: {service.Identity}" +
+                Environment.NewLine +
+                "Checked: configured certificate private keys, Machine / Service AD credential access, and protected storage.",
+                "Service Access",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
             _audit.Write(
-                "RepairCertificatePrivateKeyAccess",
+                "RepairServiceAccess",
                 "Failed",
                 source: "WindowsService",
                 details: ex.Message);
+
             MessageBox.Show(
                 this,
                 ex.Message,
-                "Certificate Access",
+                "Service Access",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+
+            RefreshCredentialVaultStatus();
             RefreshMachineCloudStatus();
+            RefreshServiceIdentityStatus();
         }
     }
 
