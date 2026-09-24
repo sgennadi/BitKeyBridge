@@ -178,16 +178,36 @@ public sealed class CertificatePrivateKeyAccessService
         string thumbprint,
         string serviceIdentity)
     {
-        var normalized = NormalizeServiceIdentity(serviceIdentity);
-        var status = GetStatus(thumbprint, normalized);
+        var normalized =
+            NormalizeServiceIdentity(
+                serviceIdentity);
+        var status =
+            GetStatus(
+                thumbprint,
+                normalized);
 
-        if (IsLocalSystem(normalized))
+        if (!status.KeyFileExists)
+        {
+            throw new FileNotFoundException(
+                "The certificate private-key file was not found.",
+                status.KeyPath);
+        }
+
+        if (IsLocalSystem(
+                normalized))
+        {
             return status;
+        }
 
-        if (status.ExplicitReadAllowed && !status.ExplicitReadDenied)
+        if (status.ExplicitReadAllowed &&
+            !status.ExplicitReadDenied)
+        {
             return status;
+        }
 
-        return GrantRead(thumbprint, normalized);
+        return GrantRead(
+            thumbprint,
+            normalized);
     }
 
     public static string NormalizeServiceIdentity(string identity)
