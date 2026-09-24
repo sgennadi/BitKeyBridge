@@ -10,6 +10,14 @@ namespace BitKeyBridge;
 
 public sealed class RemoteApiServer : IDisposable
 {
+    internal const int MaximumRequestLineBytes = 4096;
+    internal const int MaximumHeaderLineBytes = 8192;
+    internal const int MaximumHeaderBytes = 32768;
+    internal const int MaximumHeaderCount = 64;
+    internal const int MaximumConcurrentClients = 32;
+    internal static readonly TimeSpan PreAuthenticationTimeout =
+        TimeSpan.FromSeconds(15);
+
     private enum RemoteApiAccessScope
     {
         Admin,
@@ -21,6 +29,8 @@ public sealed class RemoteApiServer : IDisposable
     private readonly AppConfig _config;
     private readonly TcpListener _listener;
     private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate;
+    private readonly SemaphoreSlim _clientSlots =
+        new(MaximumConcurrentClients, MaximumConcurrentClients);
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
@@ -61,32 +71,98 @@ public sealed class RemoteApiServer : IDisposable
         {
             while (!ct.IsCancellationRequested)
             {
-                var client = await _listener.AcceptTcpClientAsync(ct);
-                _ = HandleClientSafeAsync(client, ct);
+                var client =
+                    await _listener.AcceptTcpClientAsync(
+                        ct);
+
+                if (!_clientSlots.Wait(0))
+                {
+                    try
+                    {
+                        client.Dispose();
+                    }
+                    catch
+                    {
+                    }
+
+                    continue;
+                }
+
+                _ = HandleClientWithSlotAsync(
+                    client,
+                    ct);
             }
         }
-        catch (OperationCanceledException) { }
-        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
-    private async Task HandleClientSafeAsync(TcpClient client, CancellationToken ct)
+    private async Task HandleClientWithSlotAsync(
+        TcpClient client,
+        CancellationToken ct)
     {
         try
         {
-            await HandleClientAsync(client, ct);
+            await HandleClientSafeAsync(
+                client,
+                ct);
+        }
+        finally
+        {
+            _clientSlots.Release();
+        }
+    }
+
+    private async Task HandleClientSafeAsync(
+        TcpClient client,
+        CancellationToken ct)
+    {
+        try
+        {
+            await HandleClientAsync(
+                client,
+                ct);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                client.Dispose();
+            }
+            catch
+            {
+            }
         }
         catch (AuthenticationException)
         {
-            try { client.Dispose(); } catch { }
+            try
+            {
+                client.Dispose();
+            }
+            catch
+            {
+            }
         }
         catch (Exception ex)
         {
             WindowsEventLogService.TryWrite(
-                "Remote API request failed: " + ex.Message,
+                "Remote API request failed: " +
+                ex.Message,
                 EventLogSeverity.Warning,
                 4398,
                 "RemoteAPI");
-            try { client.Dispose(); } catch { }
+
+            try
+            {
+                client.Dispose();
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -97,60 +173,195 @@ public sealed class RemoteApiServer : IDisposable
             client.ReceiveTimeout = 10000;
             client.SendTimeout = 10000;
 
-            await using var network = client.GetStream();
-            await using var ssl = new SslStream(network, leaveInnerStreamOpen: false);
+            await using var network =
+                client.GetStream();
+            await using var ssl =
+                new SslStream(
+                    network,
+                    leaveInnerStreamOpen: false);
+
+            using var preAuthentication =
+                CancellationTokenSource
+                    .CreateLinkedTokenSource(
+                        ct);
+            preAuthentication.CancelAfter(
+                PreAuthenticationTimeout);
+
             await ssl.AuthenticateAsServerAsync(
                 new SslServerAuthenticationOptions
                 {
                     ServerCertificate = _certificate,
                     ClientCertificateRequired = false,
-                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    EnabledSslProtocols =
+                        SslProtocols.Tls12 |
+                        SslProtocols.Tls13,
                     CertificateRevocationCheckMode =
                         System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck
                 },
-                ct);
+                preAuthentication.Token);
 
-            using var reader = new StreamReader(
-                ssl,
-                Encoding.ASCII,
-                detectEncodingFromByteOrderMarks: false,
-                bufferSize: 4096,
-                leaveOpen: true);
-
-            var requestLine = await reader.ReadLineAsync(ct);
-            if (string.IsNullOrWhiteSpace(requestLine))
+            string? requestLine;
+            try
             {
-                await WriteResponseAsync(ssl, 400, new { error = "Bad Request" }, ct);
+                requestLine =
+                    await ReadAsciiLineAsync(
+                        ssl,
+                        MaximumRequestLineBytes,
+                        preAuthentication.Token);
+            }
+            catch (InvalidDataException)
+            {
+                await WriteResponseAsync(
+                    ssl,
+                    414,
+                    new
+                    {
+                        error =
+                            "Request URI Too Long"
+                    },
+                    ct);
                 return;
             }
 
-            var requestParts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (string.IsNullOrWhiteSpace(
+                    requestLine))
+            {
+                await WriteResponseAsync(
+                    ssl,
+                    400,
+                    new
+                    {
+                        error =
+                            "Bad Request"
+                    },
+                    ct);
+                return;
+            }
+
+            var requestParts =
+                requestLine.Split(
+                    ' ',
+                    StringSplitOptions.RemoveEmptyEntries);
             if (requestParts.Length < 2)
             {
-                await WriteResponseAsync(ssl, 400, new { error = "Bad Request" }, ct);
+                await WriteResponseAsync(
+                    ssl,
+                    400,
+                    new
+                    {
+                        error =
+                            "Bad Request"
+                    },
+                    ct);
                 return;
             }
 
-            var method = requestParts[0].ToUpperInvariant();
-            var rawPath = requestParts[1];
-            var path = rawPath.Split('?', 2)[0];
+            var method =
+                requestParts[0]
+                    .ToUpperInvariant();
+            var rawPath =
+                requestParts[1];
+            var path =
+                rawPath.Split(
+                    '?',
+                    2)[0];
 
-            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var headers =
+                new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
             var totalHeaderBytes = 0;
-            for (var i = 0; i < 64; i++)
+            var headersComplete = false;
+
+            for (var i = 0;
+                 i < MaximumHeaderCount;
+                 i++)
             {
-                var line = await reader.ReadLineAsync(ct);
-                if (line is null || line.Length == 0) break;
-                totalHeaderBytes += line.Length;
-                if (totalHeaderBytes > 32768)
+                string? line;
+
+                try
                 {
-                    await WriteResponseAsync(ssl, 431, new { error = "Request Header Fields Too Large" }, ct);
+                    line =
+                        await ReadAsciiLineAsync(
+                            ssl,
+                            MaximumHeaderLineBytes,
+                            preAuthentication.Token);
+                }
+                catch (InvalidDataException)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        431,
+                        new
+                        {
+                            error =
+                                "Request Header Fields Too Large"
+                        },
+                        ct);
                     return;
                 }
 
-                var colon = line.IndexOf(':');
-                if (colon <= 0) continue;
-                headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
+                if (line is null)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        400,
+                        new
+                        {
+                            error =
+                                "Bad Request"
+                        },
+                        ct);
+                    return;
+                }
+
+                if (line.Length == 0)
+                {
+                    headersComplete = true;
+                    break;
+                }
+
+                totalHeaderBytes +=
+                    Encoding.ASCII.GetByteCount(
+                        line) +
+                    2;
+
+                if (totalHeaderBytes >
+                    MaximumHeaderBytes)
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        431,
+                        new
+                        {
+                            error =
+                                "Request Header Fields Too Large"
+                        },
+                        ct);
+                    return;
+                }
+
+                var colon =
+                    line.IndexOf(
+                        ':');
+                if (colon <= 0)
+                    continue;
+
+                headers[line[..colon].Trim()] =
+                    line[(colon + 1)..].Trim();
+            }
+
+            if (!headersComplete)
+            {
+                await WriteResponseAsync(
+                    ssl,
+                    431,
+                    new
+                    {
+                        error =
+                            "Request Header Fields Too Large"
+                    },
+                    ct);
+                return;
             }
 
             if (!headers.TryGetValue(
@@ -167,6 +378,9 @@ public sealed class RemoteApiServer : IDisposable
                     ("WWW-Authenticate", "Bearer"));
                 return;
             }
+
+            preAuthentication.CancelAfter(
+                Timeout.InfiniteTimeSpan);
 
             if (method == "GET" && path == "/api/v1/health")
             {
@@ -463,6 +677,70 @@ public sealed class RemoteApiServer : IDisposable
         }
     }
 
+    internal static async Task<string?> ReadAsciiLineAsync(
+        Stream stream,
+        int maximumBytes,
+        CancellationToken ct)
+    {
+        if (maximumBytes < 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumBytes));
+
+        var buffer =
+            new byte[maximumBytes];
+        var one =
+            new byte[1];
+        var length = 0;
+
+        while (true)
+        {
+            var read =
+                await stream.ReadAsync(
+                    one.AsMemory(
+                        0,
+                        1),
+                    ct);
+
+            if (read == 0)
+            {
+                return length == 0
+                    ? null
+                    : Encoding.ASCII.GetString(
+                        buffer,
+                        0,
+                        length);
+            }
+
+            var value =
+                one[0];
+
+            if (value == (byte)'\n')
+            {
+                if (length > 0 &&
+                    buffer[length - 1] ==
+                    (byte)'\r')
+                {
+                    length--;
+                }
+
+                return Encoding.ASCII.GetString(
+                    buffer,
+                    0,
+                    length);
+            }
+
+            if (length >=
+                maximumBytes)
+            {
+                throw new InvalidDataException(
+                    $"HTTP line exceeds {maximumBytes} bytes.");
+            }
+
+            buffer[length++] =
+                value;
+        }
+    }
+
     private static async Task WriteResponseAsync(
         Stream stream,
         int statusCode,
@@ -485,6 +763,7 @@ public sealed class RemoteApiServer : IDisposable
             401 => "Unauthorized",
             403 => "Forbidden",
             404 => "Not Found",
+            414 => "URI Too Long",
             431 => "Request Header Fields Too Large",
             500 => "Internal Server Error",
             503 => "Service Unavailable",
