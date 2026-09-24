@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.1
+
+- Published a fresh patch build from the completed v0.17 UI and recovery workflow.
+- Retained the four-section role-aware GUI: Recovery, Devices, Administration, and Health & Audit.
+- Retained metadata-only BitLocker search with on-demand recovery-key retrieval and the unified Live AD / local-cache recovery workspace.
+- Retained responsive WinForms layouts, administrator RBAC, unified AD + Entra + Intune device search, and the v0.17 security/audit behavior.
+- Release packages remain self-contained single-file builds for win-x64, win-x86, and win-arm64 with SHA-256 checksums, CycloneDX SBOM, and attestations.
+
 ## 0.17.0
 
 - Replaced the ten top-level GUI tabs with a role-aware four-section shell: **Recovery**, **Devices**, **Administration**, and **Health & Audit**.
