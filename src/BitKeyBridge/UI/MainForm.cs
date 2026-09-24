@@ -2532,11 +2532,27 @@ public sealed partial class MainForm : DpiAwareForm
                         string.Empty);
             }
 
-            var ous =
-                await Task.Run(
-                    () =>
-                        service.ListOrganizationalUnits(
-                            dc));
+            List<BitLockerScope> ous;
+            try
+            {
+                ous =
+                    await Task.Run(
+                        () =>
+                            service.ListOrganizationalUnits(
+                                dc));
+            }
+            catch (Exception ex)
+            {
+                if (TryUseDefaultRecoveryScope(
+                        "OU discovery failed; using the entire domain as the default search scope."))
+                {
+                    _adConnectionStatus.Text =
+                        $"Connected to {dc}. OU enumeration warning: {ex.Message}";
+                    return;
+                }
+
+                throw;
+            }
 
             var scopes =
                 new List<BitLockerScope>();
@@ -2564,25 +2580,30 @@ public sealed partial class MainForm : DpiAwareForm
                 browser.SelectedScope is not
                     { } selected)
             {
+                if (_startScope is null)
+                {
+                    TryUseDefaultRecoveryScope(
+                        "No OU selected; using the entire domain as the default search scope.");
+                }
+
                 return;
             }
 
-            _startScope =
-                selected;
-
-            _startOuStatus.Text =
-                $"Selected: {selected.Name}    {selected.SearchBase}";
-
-            _startSearch.Enabled =
-                true;
-            _startPurposeStatus.Text =
-                "Ready — enter a computer name or Recovery ID.";
-
-            TrySaveRecoveryUiState();
-            _startQuery.Focus();
+            SetRecoveryScope(
+                selected,
+                "Ready — enter a computer name or Recovery ID.");
         }
         catch (Exception ex)
         {
+            if (TryUseDefaultRecoveryScope(
+                    "OU selection is unavailable; using the entire domain as the default search scope."))
+            {
+                _adConnectionStatus.Text =
+                    "Connected to Active Directory. OU selection warning: " +
+                    ex.Message;
+                return;
+            }
+
             _startOuStatus.Text =
                 "OU discovery failed: " +
                 ex.Message;
@@ -2598,6 +2619,43 @@ public sealed partial class MainForm : DpiAwareForm
         {
             UseWaitCursor = false;
         }
+    }
+
+    private bool TryUseDefaultRecoveryScope(
+        string status)
+    {
+        if (string.IsNullOrWhiteSpace(
+                _startDomainDn))
+        {
+            return false;
+        }
+
+        SetRecoveryScope(
+            new BitLockerScope(
+                "Entire domain",
+                _startDomainDn),
+            status);
+
+        return true;
+    }
+
+    private void SetRecoveryScope(
+        BitLockerScope selected,
+        string status)
+    {
+        _startScope =
+            selected;
+
+        _startOuStatus.Text =
+            $"Selected: {selected.Name}    {selected.SearchBase}";
+
+        _startSearch.Enabled =
+            true;
+        _startPurposeStatus.Text =
+            status;
+
+        TrySaveRecoveryUiState();
+        _startQuery.Focus();
     }
 
     private async Task SearchStartRecoveryAsync()
