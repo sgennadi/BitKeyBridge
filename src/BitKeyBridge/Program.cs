@@ -1319,6 +1319,31 @@ internal static class Program
 
             try
             {
+                var namingContext = "DC=yosh,DC=ac,DC=il";
+
+                if (!ActiveDirectoryService.IsSearchBaseWithinNamingContext(
+                        "OU=Clients,DC=yosh,DC=ac,DC=il",
+                        namingContext) ||
+                    !ActiveDirectoryService.IsSearchBaseWithinNamingContext(
+                        namingContext,
+                        namingContext) ||
+                    ActiveDirectoryService.IsSearchBaseWithinNamingContext(
+                        "OU=Clients,DC=other,DC=example",
+                        namingContext))
+                {
+                    failures.Add(
+                        "Remembered recovery scope naming-context validation failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Recovery scope naming-context validation: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var csv = Path.Combine(tempDirectory, "recovery.csv");
                 var rows = new List<RecoveryRecord>
                 {
