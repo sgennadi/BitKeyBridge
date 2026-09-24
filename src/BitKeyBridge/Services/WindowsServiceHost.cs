@@ -692,7 +692,7 @@ public static class WindowsServiceHost
         }
     }
 
-    private static List<string>
+    internal static List<string>
         GetConfiguredServiceCertificateThumbprints(
             AppConfig config)
     {
