@@ -147,13 +147,35 @@ internal static class Program
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (needsConsole) ConsoleHelper.EnsureConsole();
 
-        var applyPlanIndex = Array.FindIndex(args, x =>
-            x.Equals("--apply-update-plan", StringComparison.OrdinalIgnoreCase));
-        if (applyPlanIndex >= 0)
+        var applyUpdatePlanRequested =
+            args.Any(
+                x =>
+                    x.Equals(
+                        "--apply-update-plan",
+                        StringComparison.OrdinalIgnoreCase));
+
+        if (applyUpdatePlanRequested)
         {
-            if (applyPlanIndex + 1 >= args.Length)
+            var applyPlanPath =
+                GetOptionValue(
+                    args,
+                    "--apply-update-plan");
+            var applyPlanSha256 =
+                GetOptionValue(
+                    args,
+                    "--apply-update-plan-sha256");
+
+            if (string.IsNullOrWhiteSpace(
+                    applyPlanPath) ||
+                string.IsNullOrWhiteSpace(
+                    applyPlanSha256))
+            {
                 return 2;
-            return UpdateService.ApplyPlan(args[applyPlanIndex + 1]);
+            }
+
+            return UpdateService.ApplyPlan(
+                applyPlanPath,
+                applyPlanSha256);
         }
 
         AppConfig config;
@@ -2757,6 +2779,66 @@ internal static class Program
                 {
                     failures.Add(
                         "Remote API bounded HTTP line reader accepted an oversized line.");
+                }
+
+                var updatePlanPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "update-plan-selftest.json");
+
+                JsonStore.WriteAtomic(
+                    updatePlanPath,
+                    new UpdateApplyPlan
+                    {
+                        StagedExecutable =
+                            "C:\\selftest\\BitKeyBridge.exe",
+                        StagedExecutableSha256 =
+                            new string(
+                                'a',
+                                64),
+                        ExpectedVersion =
+                            "0.18.2",
+                        TargetExecutables =
+                        [
+                            "C:\\selftest\\target.exe"
+                        ]
+                    });
+
+                var updatePlanHash =
+                    UpdateService.ComputeSha256File(
+                        updatePlanPath);
+                var verifiedPlan =
+                    UpdateService.ReadVerifiedApplyPlan(
+                        updatePlanPath,
+                        updatePlanHash);
+
+                if (verifiedPlan.ExpectedVersion !=
+                    "0.18.2")
+                {
+                    failures.Add(
+                        "Verified update-plan round-trip failed.");
+                }
+
+                File.AppendAllText(
+                    updatePlanPath,
+                    " ");
+
+                var tamperedPlanRejected = false;
+                try
+                {
+                    _ = UpdateService.ReadVerifiedApplyPlan(
+                        updatePlanPath,
+                        updatePlanHash);
+                }
+                catch (InvalidDataException)
+                {
+                    tamperedPlanRejected = true;
+                }
+
+                if (!tamperedPlanRejected)
+                {
+                    failures.Add(
+                        "Tampered elevated update plan was not rejected.");
                 }
 
                 try
