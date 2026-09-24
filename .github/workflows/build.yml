@@ -45,6 +45,18 @@ jobs:
             throw "CHANGELOG.md is missing required section: $heading"
           }
 
+      - name: Reject fixed-position WinForms layout
+        shell: pwsh
+        run: |
+          $uiFiles = Get-ChildItem src\BitKeyBridge\UI -Filter *.cs -File
+          $matches = $uiFiles | Select-String -Pattern 'SetBounds\s*\(|\bLeft\s*=|\bTop\s*='
+          if ($matches) {
+            $matches | ForEach-Object {
+              Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())"
+            }
+            throw "Fixed-position WinForms layout is not allowed in src/BitKeyBridge/UI. Use TableLayoutPanel/FlowLayoutPanel/Dock/Anchor instead."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj

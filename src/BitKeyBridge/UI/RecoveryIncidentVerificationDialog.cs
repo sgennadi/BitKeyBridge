@@ -13,128 +13,121 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         Text = "Recovery Incident Verification";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(860, 590);
-        MinimumSize = new Size(780, 520);
+        MinimumSize = new Size(650, 460);
         Font = new Font("Segoe UI", 9F);
 
-        Controls.Add(new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 5
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = "Verify Recovery Incident Bundle",
             Font = new Font("Segoe UI Semibold", 15F),
-            Left = 18,
-            Top = 16,
-            AutoSize = true
-        });
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 8)
+        }, 0, 0);
 
-        Controls.Add(new Label
+        root.Controls.Add(new Label
         {
             Text =
                 "The verifier matches incident actions to retained audit EntryHash values, CorrelationId and metadata. It never reads or stores a recovery password.",
-            Left = 20,
-            Top = 54,
-            Width = 810,
-            Height = 42
-        });
+            AutoSize = true,
+            MaximumSize = new Size(780, 0),
+            Margin = new Padding(0, 0, 0, 12)
+        }, 0, 1);
 
-        Controls.Add(new Label
+        var sessionRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 4,
+            Margin = new Padding(0, 0, 0, 12)
+        };
+        sessionRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        sessionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        sessionRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        sessionRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        sessionRow.Controls.Add(new Label
         {
             Text = "Session ID:",
-            Left = 20,
-            Top = 112,
-            Width = 90,
-            Height = 24
-        });
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 6, 8, 0)
+        }, 0, 0);
 
-        _session.SetBounds(
-            110,
-            108,
-            470,
-            28);
-        _session.DropDownStyle =
-            ComboBoxStyle.DropDown;
-        Controls.Add(_session);
+        _session.Dock = DockStyle.Fill;
+        _session.DropDownStyle = ComboBoxStyle.DropDown;
+        sessionRow.Controls.Add(_session, 1, 0);
 
         var verify = new Button
         {
             Text = "Verify",
-            Left = 595,
-            Top = 106,
-            Width = 100,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(100, 32),
+            Margin = new Padding(8, 0, 0, 0)
         };
         var openBundle = new Button
         {
             Text = "Open Bundle",
-            Left = 705,
-            Top = 106,
-            Width = 120,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(120, 32),
+            Margin = new Padding(8, 0, 0, 0)
         };
+        sessionRow.Controls.Add(verify, 2, 0);
+        sessionRow.Controls.Add(openBundle, 3, 0);
+        root.Controls.Add(sessionRow, 0, 2);
 
-        Controls.AddRange([
-            verify,
-            openBundle
-        ]);
-
-        _result.SetBounds(
-            20,
-            158,
-            805,
-            365);
+        _result.Dock = DockStyle.Fill;
         _result.Multiline = true;
         _result.ReadOnly = true;
-        _result.ScrollBars =
-            ScrollBars.Both;
+        _result.ScrollBars = ScrollBars.Both;
         _result.WordWrap = false;
-        _result.Font =
-            new Font(
-                "Consolas",
-                9F);
-        _result.Anchor =
-            AnchorStyles.Top |
-            AnchorStyles.Bottom |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        Controls.Add(_result);
+        _result.Font = new Font("Consolas", 9F);
+        root.Controls.Add(_result, 0, 3);
 
-        var openFolder = new Button
+        var footer = new FlowLayoutPanel
         {
-            Text = "Open Incident Folder",
-            Left = 20,
-            Top = 538,
-            Width = 160,
-            Height = 32,
-            Anchor =
-                AnchorStyles.Bottom |
-                AnchorStyles.Left
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 10, 0, 0)
         };
         var close = new Button
         {
             Text = "Close",
-            Left = 725,
-            Top = 538,
-            Width = 100,
-            Height = 32,
-            Anchor =
-                AnchorStyles.Bottom |
-                AnchorStyles.Right
+            AutoSize = true,
+            MinimumSize = new Size(100, 32)
         };
+        var openFolder = new Button
+        {
+            Text = "Open Incident Folder",
+            AutoSize = true,
+            MinimumSize = new Size(160, 32)
+        };
+        footer.Controls.Add(close);
+        footer.Controls.Add(openFolder);
+        root.Controls.Add(footer, 0, 4);
 
-        Controls.AddRange([
-            openFolder,
-            close
-        ]);
+        verify.Click += (_, _) => VerifyCurrent();
+        openBundle.Click += (_, _) => OpenCurrentBundle();
+        openFolder.Click += (_, _) => OpenFolder();
+        close.Click += (_, _) => Close();
 
-        verify.Click += (_, _) =>
-            VerifyCurrent();
-        openBundle.Click += (_, _) =>
-            OpenCurrentBundle();
-        openFolder.Click += (_, _) =>
-            OpenFolder();
-        close.Click += (_, _) =>
-            Close();
-
-        LoadRecentSessions(
-            initialSessionId);
+        LoadRecentSessions(initialSessionId);
     }
 
     private void LoadRecentSessions(

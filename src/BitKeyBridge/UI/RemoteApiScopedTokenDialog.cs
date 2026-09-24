@@ -6,6 +6,7 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
     private readonly Label _readStatus = new();
     private readonly Label _coverageStatus = new();
     private readonly Label _exportStatus = new();
+    private readonly TableLayoutPanel _scopeGrid = new();
 
     public RemoteApiScopedTokenDialog(
         AppConfig config)
@@ -14,62 +15,92 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
 
         Text = "Remote API Scoped Tokens";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(760, 390);
-        MinimumSize = new Size(720, 360);
+        ClientSize = new Size(780, 430);
+        MinimumSize = new Size(650, 390);
         MaximizeBox = false;
         MinimizeBox = false;
         Font = new Font("Segoe UI", 9F);
 
-        Controls.Add(new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 4
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = "Least-Privilege Remote API Tokens",
             Font = new Font("Segoe UI Semibold", 15F),
             AutoSize = true,
-            Left = 18,
-            Top = 16
-        });
+            Margin = new Padding(0, 0, 0, 8)
+        }, 0, 0);
 
-        Controls.Add(new Label
+        root.Controls.Add(new Label
         {
             Text =
                 "The existing Admin token remains unchanged. Scoped tokens are shown only once; BitKeyBridge stores only SHA-256 hashes.",
-            Left = 20,
-            Top = 55,
-            Width = 710,
-            Height = 42
-        });
+            AutoSize = true,
+            MaximumSize = new Size(720, 0),
+            Margin = new Padding(0, 0, 0, 12)
+        }, 0, 1);
+
+        _scopeGrid.Dock = DockStyle.Fill;
+        _scopeGrid.AutoSize = true;
+        _scopeGrid.ColumnCount = 4;
+        _scopeGrid.RowCount = 3;
+        _scopeGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _scopeGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _scopeGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _scopeGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        root.Controls.Add(_scopeGrid, 0, 2);
 
         AddScopeRow(
             "Read",
             "Read-only access to Remote API GET endpoints.",
             "read",
             _readStatus,
-            110);
+            0);
 
         AddScopeRow(
             "CoverageRun",
             "GET access plus POST /api/v1/coverage/run when remote management is enabled.",
             "coverage-run",
             _coverageStatus,
-            190);
+            1);
 
         AddScopeRow(
             "Export",
             "GET access plus POST /api/v1/export when remote management is enabled.",
             "export",
             _exportStatus,
-            270);
+            2);
 
+        var footer = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(0, 10, 0, 0)
+        };
         var close = new Button
         {
             Text = "Close",
-            Left = 630,
-            Top = 342,
-            Width = 100,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(100, 32)
         };
         close.Click += (_, _) => Close();
-        Controls.Add(close);
+        footer.Controls.Add(close);
+        root.Controls.Add(footer, 0, 3);
 
         RefreshStatuses();
     }
@@ -79,62 +110,58 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         string description,
         string scope,
         Label status,
-        int top)
+        int row)
     {
-        Controls.Add(new Label
+        var titleLabel = new Label
         {
             Text = title,
-            Font = new Font(
-                "Segoe UI Semibold",
-                10F),
-            Left = 20,
-            Top = top,
-            Width = 110,
-            Height = 24
-        });
+            Font = new Font("Segoe UI Semibold", 10F),
+            AutoSize = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            Margin = new Padding(0, 8, 10, 14)
+        };
+        _scopeGrid.Controls.Add(titleLabel, 0, row);
 
-        Controls.Add(new Label
+        var details = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 1,
+            Margin = new Padding(0, 4, 10, 10)
+        };
+        details.Controls.Add(new Label
         {
             Text = description,
-            Left = 130,
-            Top = top,
-            Width = 380,
-            Height = 36
+            AutoSize = true,
+            MaximumSize = new Size(380, 0)
         });
-
-        status.SetBounds(
-            20,
-            top + 35,
-            220,
-            24);
-        Controls.Add(status);
+        status.AutoSize = true;
+        status.Margin = new Padding(0, 4, 0, 0);
+        details.Controls.Add(status);
+        _scopeGrid.Controls.Add(details, 1, row);
 
         var generate = new Button
         {
             Text = "Generate",
-            Left = 520,
-            Top = top,
-            Width = 95,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(95, 32),
+            Anchor = AnchorStyles.Top,
+            Margin = new Padding(0, 4, 8, 10)
         };
         var revoke = new Button
         {
             Text = "Revoke",
-            Left = 625,
-            Top = top,
-            Width = 95,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(95, 32),
+            Anchor = AnchorStyles.Top,
+            Margin = new Padding(0, 4, 0, 10)
         };
 
-        generate.Click += (_, _) =>
-            Generate(scope);
-        revoke.Click += (_, _) =>
-            Revoke(scope);
+        generate.Click += (_, _) => Generate(scope);
+        revoke.Click += (_, _) => Revoke(scope);
 
-        Controls.AddRange([
-            generate,
-            revoke
-        ]);
+        _scopeGrid.Controls.Add(generate, 2, row);
+        _scopeGrid.Controls.Add(revoke, 3, row);
     }
 
     private void Generate(

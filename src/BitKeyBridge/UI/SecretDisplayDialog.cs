@@ -12,58 +12,85 @@ public sealed class SecretDisplayDialog : DpiAwareForm
     {
         Text = title;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(760, 330);
-        MinimumSize = new Size(700, 300);
+        ClientSize = new Size(760, 340);
+        MinimumSize = new Size(600, 300);
         MaximizeBox = false;
         MinimizeBox = false;
         Font = new Font("Segoe UI", 9F);
 
-        var descriptionLabel = new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 4
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = description,
-            Left = 18,
-            Top = 18,
-            Width = 720,
-            Height = 62
-        };
-        Controls.Add(descriptionLabel);
+            AutoSize = true,
+            MaximumSize = new Size(700, 0),
+            Margin = new Padding(0, 0, 0, 12)
+        }, 0, 0);
 
-        _secret.SetBounds(18, 92, 610, 28);
+        var secretRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            Margin = new Padding(0, 0, 0, 14)
+        };
+        secretRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        secretRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        _secret.Dock = DockStyle.Fill;
         _secret.ReadOnly = true;
         _secret.Text = secret;
         _secret.Font = new Font("Consolas", 10F);
-        Controls.Add(_secret);
+        secretRow.Controls.Add(_secret, 0, 0);
 
         var copy = new Button
         {
             Text = "Copy",
-            Left = 640,
-            Top = 90,
-            Width = 95,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(95, 32),
+            Margin = new Padding(10, 0, 0, 0)
         };
-        Controls.Add(copy);
+        secretRow.Controls.Add(copy, 1, 0);
+        root.Controls.Add(secretRow, 0, 1);
 
-        var footerLabel = new Label
+        root.Controls.Add(new Label
         {
             Text = footer,
-            Left = 18,
-            Top = 142,
-            Width = 720,
-            Height = 88
-        };
-        Controls.Add(footerLabel);
+            AutoSize = true,
+            MaximumSize = new Size(700, 0)
+        }, 0, 2);
 
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(0, 10, 0, 0)
+        };
         var close = new Button
         {
             Text = "Close",
             DialogResult = DialogResult.OK,
-            Left = 640,
-            Top = 270,
-            Width = 95,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(95, 32)
         };
-        Controls.Add(close);
+        buttons.Controls.Add(close);
+        root.Controls.Add(buttons, 0, 3);
+
         AcceptButton = close;
         CancelButton = close;
 
@@ -77,13 +104,24 @@ public sealed class SecretDisplayDialog : DpiAwareForm
                 try
                 {
                     if (Clipboard.ContainsText() &&
-                        string.Equals(Clipboard.GetText(), _secret.Text, StringComparison.Ordinal))
+                        string.Equals(
+                            Clipboard.GetText(),
+                            _secret.Text,
+                            StringComparison.Ordinal))
+                    {
                         Clipboard.Clear();
+                    }
                 }
-                catch { }
-                if (!IsDisposed) copy.Text = "Copy";
+                catch
+                {
+                }
+
+                if (!IsDisposed)
+                    copy.Text = "Copy";
             }
-            catch { }
+            catch
+            {
+            }
         };
 
         FormClosed += (_, _) =>
@@ -91,10 +129,18 @@ public sealed class SecretDisplayDialog : DpiAwareForm
             try
             {
                 if (Clipboard.ContainsText() &&
-                    string.Equals(Clipboard.GetText(), _secret.Text, StringComparison.Ordinal))
+                    string.Equals(
+                        Clipboard.GetText(),
+                        _secret.Text,
+                        StringComparison.Ordinal))
+                {
                     Clipboard.Clear();
+                }
             }
-            catch { }
+            catch
+            {
+            }
+
             _secret.Clear();
         };
     }
