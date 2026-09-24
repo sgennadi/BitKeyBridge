@@ -364,35 +364,78 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudUsername.Enabled = password;
         _cloudPassword.Enabled = password;
         _cloudThumbprint.Enabled = cert;
-        if (deviceCode) _cloudPassword.Clear();
+
+        if (!password)
+            _cloudPassword.Clear();
     }
 
     private async Task<bool> ConnectCloudAsync()
     {
+        var passwordMode =
+            _cloudAuthMode.SelectedIndex == 1;
+
         try
         {
             SaveCloudFields();
-            _cloudStatus.Text = "Connecting...";
-            using var graph = new CloudGraphService();
-            _cloudToken = _cloudAuthMode.SelectedIndex switch
-            {
-                2 => await graph.AcquireCertificateTokenAsync(_cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text),
-                1 => await graph.AcquirePasswordTokenAsync(_cloudTenant.Text, _cloudClient.Text, _cloudUsername.Text, _cloudPassword.Text),
-                _ => await graph.AcquireDeviceCodeTokenAsync(
-                    _cloudTenant.Text,
-                    _cloudClient.Text,
-                    ShowDeviceCodeAsync)
-            };
-            var count = await graph.TestAccessAsync(_cloudToken.AccessToken);
-            _cloudStatus.Text = $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).";
+            _cloudStatus.Text =
+                "Connecting...";
+
+            using var graph =
+                new CloudGraphService();
+
+            _cloudToken =
+                _cloudAuthMode.SelectedIndex switch
+                {
+                    2 =>
+                        await graph
+                            .AcquireCertificateTokenAsync(
+                                _cloudTenant.Text,
+                                _cloudClient.Text,
+                                _cloudThumbprint.Text),
+                    1 =>
+                        await graph
+                            .AcquirePasswordTokenAsync(
+                                _cloudTenant.Text,
+                                _cloudClient.Text,
+                                _cloudUsername.Text,
+                                _cloudPassword.Text),
+                    _ =>
+                        await graph
+                            .AcquireDeviceCodeTokenAsync(
+                                _cloudTenant.Text,
+                                _cloudClient.Text,
+                                ShowDeviceCodeAsync)
+                };
+
+            var count =
+                await graph.TestAccessAsync(
+                    _cloudToken.AccessToken);
+
+            _cloudStatus.Text =
+                $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).";
+
             return true;
         }
         catch (Exception ex)
         {
             _cloudToken = null;
-            _cloudStatus.Text = "Connection failed: " + ex.Message;
-            MessageBox.Show(this, ex.Message, "Microsoft Graph", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _cloudStatus.Text =
+                "Connection failed: " +
+                ex.Message;
+
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Microsoft Graph",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+
             return false;
+        }
+        finally
+        {
+            if (passwordMode)
+                _cloudPassword.Clear();
         }
     }
 
@@ -2427,12 +2470,38 @@ public sealed partial class MainForm : DpiAwareForm
                 ? vault.GetUserMetadata(_config.AdCredentialTarget)
                 : vault.GetMachineMetadata();
 
-            _credentialVaultStatus.Text = metadata.Exists
-                ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}." +
-                  (mode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase)
-                      ? " Interactive user only; do not use this mode for the Windows Service."
-                      : string.Empty)
-                : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.";
+            var suffix =
+                string.Empty;
+
+            if (mode.Equals(
+                    "CurrentUser",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                suffix =
+                    " Interactive user only; do not use this mode for the Windows Service.";
+            }
+            else if (metadata.Exists)
+            {
+                var service =
+                    WindowsServiceHost.GetInfo();
+
+                if (service.Installed &&
+                    !string.IsNullOrWhiteSpace(
+                        service.Identity))
+                {
+                    var access =
+                        vault.GetMachineCredentialAccess(
+                            service.Identity);
+
+                    suffix =
+                        $" ServiceAccess={access.Status}; Account={access.Account}.";
+                }
+            }
+
+            _credentialVaultStatus.Text =
+                metadata.Exists
+                    ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}.{suffix}"
+                    : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.";
         }
         catch (Exception ex)
         {
@@ -3257,49 +3326,77 @@ public sealed partial class MainForm : DpiAwareForm
         RefreshMachineCloudStatus();
     }
 
-    private void SaveDashboardSettings(bool restartRunningService)
+    private bool SaveDashboardSettings(
+        bool restartRunningService)
     {
         try
         {
-            var serviceBefore = WindowsServiceHost.GetInfo();
-            _config.ServiceIntervalMinutes = (int)_serviceInterval.Value;
-            _config.HealthEndpointPort = (int)_healthPort.Value;
-            _config.HealthEndpointEnabled = _healthEnabled.Checked;
-            _config.ServiceRunExportOnStart = _serviceRunOnStart.Checked;
-            _config.ServiceCoverageEnabled = _serviceCoverageEnabled.Checked;
+            var serviceBefore =
+                WindowsServiceHost.GetInfo();
+
+            _config.ServiceIntervalMinutes =
+                (int)_serviceInterval.Value;
+            _config.HealthEndpointPort =
+                (int)_healthPort.Value;
+            _config.HealthEndpointEnabled =
+                _healthEnabled.Checked;
+            _config.ServiceRunExportOnStart =
+                _serviceRunOnStart.Checked;
+            _config.ServiceCoverageEnabled =
+                _serviceCoverageEnabled.Checked;
             _config.ServiceCoverageIntervalMinutes =
                 (int)_serviceCoverageInterval.Value;
             _config.ServiceRunCoverageOnStart =
                 _serviceCoverageRunOnStart.Checked;
 
             if (_config.ServiceCoverageEnabled &&
-                !File.Exists(AppPaths.MachineCloudConfigFile))
+                !File.Exists(
+                    AppPaths.MachineCloudConfigFile))
             {
                 throw new InvalidOperationException(
                     "Scheduled Coverage requires machine cloud configuration. " +
                     "Click 'Save Cloud for Service' after configuring Tenant ID, Client ID, and certificate.");
             }
 
-            _config.ServiceIdentityMode = GetSelectedServiceIdentityMode();
-            _config.ServiceIdentityAccount = _serviceIdentityAccount.Text.Trim();
-            ConfigService.SaveAppConfig(_config);
+            ConfigService.SaveAppConfig(
+                _config);
+
             _audit.Write(
                 "SaveServiceSettings",
                 source: "Local",
-                details: $"Interval={_config.ServiceIntervalMinutes}; HealthEnabled={_config.HealthEndpointEnabled}; Port={_config.HealthEndpointPort}; RunOnStart={_config.ServiceRunExportOnStart}; CoverageEnabled={_config.ServiceCoverageEnabled}; CoverageInterval={_config.ServiceCoverageIntervalMinutes}; CoverageRunOnStart={_config.ServiceRunCoverageOnStart}; IdentityMode={_config.ServiceIdentityMode}; IdentityAccount={_config.ServiceIdentityAccount}");
+                details:
+                    $"Interval={_config.ServiceIntervalMinutes}; " +
+                    $"HealthEnabled={_config.HealthEndpointEnabled}; " +
+                    $"Port={_config.HealthEndpointPort}; " +
+                    $"RunOnStart={_config.ServiceRunExportOnStart}; " +
+                    $"CoverageEnabled={_config.ServiceCoverageEnabled}; " +
+                    $"CoverageInterval={_config.ServiceCoverageIntervalMinutes}; " +
+                    $"CoverageRunOnStart={_config.ServiceRunCoverageOnStart}");
 
-            if (restartRunningService && serviceBefore.Installed &&
-                string.Equals(serviceBefore.State, "Running", StringComparison.OrdinalIgnoreCase))
+            if (restartRunningService &&
+                serviceBefore.Installed &&
+                string.Equals(
+                    serviceBefore.State,
+                    "Running",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 WindowsServiceHost.Stop();
                 WindowsServiceHost.Start();
             }
 
             RefreshDashboard();
+            return true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Service Settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Service Settings",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+
+            return false;
         }
     }
 
@@ -3307,7 +3404,11 @@ public sealed partial class MainForm : DpiAwareForm
     {
         try
         {
-            SaveDashboardSettings(restartRunningService: false);
+            if (!SaveDashboardSettings(
+                    restartRunningService: false))
+            {
+                return;
+            }
 
             if (_config.AdUseExplicitCredentials &&
                 _config.AdCredentialStorageMode.Equals("CurrentUser", StringComparison.OrdinalIgnoreCase))
@@ -3606,37 +3707,77 @@ public sealed partial class MainForm : DpiAwareForm
         bool restartIfRunning,
         bool allowExistingDomainPassword)
     {
-        var mode = GetSelectedServiceIdentityMode();
-        var account = _serviceIdentityAccount.Text.Trim();
-        var password = _serviceIdentityPassword.Text;
-        var current = WindowsServiceHost.GetInfo();
+        var mode =
+            GetSelectedServiceIdentityMode();
+        var account =
+            _serviceIdentityAccount.Text.Trim();
+        var password =
+            _serviceIdentityPassword.Text;
+        var current =
+            WindowsServiceHost.GetInfo();
 
         if (!current.Installed)
+        {
             throw new InvalidOperationException(
                 "Install the BitKeyBridge Windows Service before applying its identity.");
+        }
 
-        if (mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase) &&
-            string.IsNullOrEmpty(password) &&
+        if (mode.Equals(
+                "DomainAccount",
+                StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrEmpty(
+                password) &&
             allowExistingDomainPassword &&
-            string.Equals(current.Identity, account, StringComparison.OrdinalIgnoreCase))
+            string.Equals(
+                current.Identity,
+                account,
+                StringComparison.OrdinalIgnoreCase))
         {
+            WindowsServiceHost
+                .EnsureConfiguredServiceAccess(
+                    current.Identity);
+
+            _config.ServiceIdentityMode =
+                "DomainAccount";
+            _config.ServiceIdentityAccount =
+                account;
+
+            ConfigService.SaveAppConfig(
+                _config);
+
             return;
         }
 
         WindowsServiceHost.ConfigureIdentity(
             mode,
             account,
-            mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase)
+            mode.Equals(
+                "DomainAccount",
+                StringComparison.OrdinalIgnoreCase)
                 ? password
                 : null,
             restartIfRunning);
+
+        _config.ServiceIdentityMode =
+            mode;
+        _config.ServiceIdentityAccount =
+            mode.Equals(
+                "LocalSystem",
+                StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : account;
     }
 
     private void ApplyServiceIdentityFromGui()
     {
         try
         {
-            SaveDashboardSettings(restartRunningService: false);
+            if (!SaveDashboardSettings(
+                    restartRunningService: false))
+            {
+                return;
+            }
+
             ApplyConfiguredServiceIdentity(
                 restartIfRunning: true,
                 allowExistingDomainPassword: false);
