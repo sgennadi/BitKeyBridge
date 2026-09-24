@@ -22,6 +22,25 @@ internal sealed class MachineCredentialPayload
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class MachineCredentialAccessInfo
+{
+    public string Account { get; set; } = string.Empty;
+    public string Sid { get; set; } = string.Empty;
+    public string Path { get; set; } = string.Empty;
+    public bool FileExists { get; set; }
+    public bool AccessRequired { get; set; }
+    public bool DirectoryReadAllowed { get; set; }
+    public bool FileReadAllowed { get; set; }
+    public string Status =>
+        !FileExists
+            ? "CredentialFileMissing"
+            : !AccessRequired
+                ? "NotRequired"
+                : DirectoryReadAllowed && FileReadAllowed
+                    ? "Allowed"
+                    : "NotGranted";
+}
+
 public sealed class StoredAdCredential
 {
     public string Username { get; set; } = string.Empty;
