@@ -4071,8 +4071,35 @@ public sealed partial class MainForm : DpiAwareForm
         return context;
     }
 
+    private void ClearTrackedRecoveryClipboard()
+    {
+        _clipboardClearTimer?.Stop();
+        _clipboardClearTimer?.Dispose();
+        _clipboardClearTimer = null;
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    _clipboardRecoveryKey) &&
+                Clipboard.ContainsText() &&
+                string.Equals(
+                    Clipboard.GetText(),
+                    _clipboardRecoveryKey,
+                    StringComparison.Ordinal))
+            {
+                Clipboard.Clear();
+            }
+        }
+        catch
+        {
+        }
+
+        _clipboardRecoveryKey = null;
+    }
+
     private void ResetRecoverySearchState()
     {
+        ClearTrackedRecoveryClipboard();
         _startResults.Items.Clear();
         _startResults.Visible = true;
         _startCurrentKey = null;
@@ -4085,18 +4112,14 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void ClearSensitiveState()
     {
-        _clipboardClearTimer?.Stop();
-        _clipboardClearTimer?.Dispose();
-        _clipboardClearTimer = null;
+        ClearTrackedRecoveryClipboard();
 
         try
         {
             if (Clipboard.ContainsText())
             {
                 var text = Clipboard.GetText();
-                if ((!string.IsNullOrWhiteSpace(_clipboardRecoveryKey) &&
-                     string.Equals(text, _clipboardRecoveryKey, StringComparison.Ordinal)) ||
-                    (!string.IsNullOrWhiteSpace(_startCurrentKey) &&
+                if ((!string.IsNullOrWhiteSpace(_startCurrentKey) &&
                      string.Equals(text, _startCurrentKey, StringComparison.Ordinal)) ||
                     (!string.IsNullOrWhiteSpace(_deviceCurrentKey) &&
                      string.Equals(text, _deviceCurrentKey, StringComparison.Ordinal)))
@@ -4107,7 +4130,6 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch { }
 
-        _clipboardRecoveryKey = null;
         _startCurrentKey = null;
         _startKey.Clear();
         _deviceCurrentKey = null;
