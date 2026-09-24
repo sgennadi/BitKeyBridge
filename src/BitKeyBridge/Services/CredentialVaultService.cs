@@ -860,31 +860,24 @@ public sealed class CredentialVaultService
     private static (string Account, SecurityIdentifier Sid)?
         ResolveInstalledServiceAccess()
     {
-        try
-        {
-            var service =
-                WindowsServiceHost.GetInfo();
+        var service =
+            WindowsServiceHost.GetInfo();
 
-            if (!service.Installed ||
-                string.IsNullOrWhiteSpace(
-                    service.Identity))
-            {
-                return null;
-            }
-
-            var target =
-                ResolveAccount(
-                    service.Identity);
-
-            return IsLocalSystem(
-                       target.Account)
-                ? null
-                : target;
-        }
-        catch
+        if (!service.Installed ||
+            string.IsNullOrWhiteSpace(
+                service.Identity))
         {
             return null;
         }
+
+        var target =
+            ResolveAccount(
+                service.Identity);
+
+        return IsLocalSystem(
+                   target.Account)
+            ? null
+            : target;
     }
 
     private static string NormalizeServiceIdentity(
