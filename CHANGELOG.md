@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.18.1
+
+- Hardened the helpdesk Recovery workflow after the v0.18 UI review.
+- Remembered Recovery OUs are now validated against the connected Active Directory naming context before reuse; stale cross-domain scopes are discarded and replaced with the safe `Entire domain` fallback.
+- If a previously saved/selected OU is deleted, renamed, or otherwise stops resolving during live recovery search, BitKeyBridge retries once against `Entire domain` instead of leaving the operator at a dead scope.
+- Switching between `Live AD` and `Local cache` now clears prior results, selected recovery metadata, in-memory recovery secret state, cached recovery-access context, and any BitLocker key currently tracked in the clipboard.
+- `Local cache` search is now disabled when the recovery export CSV is missing, and an explicit cache-unavailable message replaces the misleading zero-results state.
+- Clipboard cleanup now tracks the exact copied BitLocker secret independently from the currently selected row, so changing selection or closing the application cannot leave an older copied recovery key behind.
+- Added an offline self-test for remembered-scope naming-context validation.
+- Refined GitHub Actions concurrency so superseded PR builds cancel each other while `main`/release runs remain isolated by commit SHA and cannot block newer releases.
+
 ## 0.18.0
 
 - Rebuilt every remaining WinForms dialog under `src/BitKeyBridge/UI` with responsive `TableLayoutPanel` / `FlowLayoutPanel` layouts instead of fixed `Left`, `Top`, or `SetBounds` coordinates.

@@ -817,6 +817,24 @@ public sealed class ActiveDirectoryService
             : string.Empty;
     }
 
+    public static bool IsSearchBaseWithinNamingContext(
+        string searchBase,
+        string namingContext)
+    {
+        var search = searchBase?.Trim() ?? string.Empty;
+        var naming = namingContext?.Trim() ?? string.Empty;
+
+        if (search.Length == 0 || naming.Length == 0)
+            return false;
+
+        return search.Equals(
+                   naming,
+                   StringComparison.OrdinalIgnoreCase) ||
+               search.EndsWith(
+                   "," + naming,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string GetParentComputerName(string distinguishedName)
     {
         var first = FindUnescapedComma(distinguishedName, 0);
