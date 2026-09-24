@@ -2786,6 +2786,25 @@ public sealed partial class MainForm : DpiAwareForm
             return;
         }
 
+        if (localCache &&
+            !File.Exists(
+                _config.OutputCsv))
+        {
+            _startPurposeStatus.Text =
+                "Local recovery cache is unavailable. Run an export first or switch to Live AD.";
+
+            MessageBox.Show(
+                this,
+                "The local recovery export CSV does not exist." +
+                Environment.NewLine +
+                Environment.NewLine +
+                _config.OutputCsv,
+                "Local Recovery Cache",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
         var query =
             _startQuery.Text.Trim();
 
@@ -2937,8 +2956,10 @@ public sealed partial class MainForm : DpiAwareForm
         finally
         {
             _startSearch.Enabled =
-                localCache ||
-                _startScope is not null;
+                localCache
+                    ? File.Exists(
+                        _config.OutputCsv)
+                    : _startScope is not null;
             UseWaitCursor = false;
         }
     }
