@@ -14,7 +14,7 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: bitkeybridge-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  group: bitkeybridge-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || format('{0}-{1}', github.ref, github.sha) }}
   cancel-in-progress: true
 
 jobs:
