@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.2
+
+- Changed critical `appsettings.json` loading to fail closed: corrupt, unreadable, or invalid application configuration no longer silently falls back to default settings that could disable configured RBAC, JIT, approval, SIEM, or other security controls.
+- Added startup diagnostics for configuration-load failures in the Windows Event Log plus a clear GUI/CLI/service refusal instead of continuing with implicit defaults.
+- Application configuration is now validated on normal load and before save; legacy schema migration validates the effective configuration before overwriting the migrated file.
+- Preserved the internal elevated updater path even when application configuration is damaged, so a verified repair/update is not blocked by the fail-closed startup rule.
+- Hardened the TLS Remote API against pre-authentication resource exhaustion with a 15-second TLS/header deadline, a 32-client active connection cap, bounded request/header lines, total-header limits, and a strict header-count limit.
+- Added bounded ASCII HTTP-line parsing and offline regression tests for normal and oversized request lines.
+- Hardened verified self-update against verify-to-apply tampering: the staged executable is hashed before and after self-test, the elevated update plan is SHA-256-bound to the helper command line, and the elevated helper revalidates both staged executable hash and version immediately before replacement.
+- The elevated updater now copies from a read-locked verified staged executable and keeps the helper binary non-writable through process creation.
+- Added offline regression tests for missing/corrupt/invalid application configuration and tampered elevated update plans.
+
 ## 0.18.1
 
 - Hardened the helpdesk Recovery workflow after the v0.18 UI review.
