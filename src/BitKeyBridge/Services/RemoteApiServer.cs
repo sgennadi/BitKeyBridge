@@ -270,11 +270,11 @@ public sealed class RemoteApiServer : IDisposable
                 new Dictionary<string, string>(
                     StringComparer.OrdinalIgnoreCase);
             var totalHeaderBytes = 0;
+            var headerCount = 0;
             var headersComplete = false;
 
-            for (var i = 0;
-                 i < MaximumHeaderCount;
-                 i++)
+            while (headerCount <=
+                   MaximumHeaderCount)
             {
                 string? line;
 
@@ -317,6 +317,13 @@ public sealed class RemoteApiServer : IDisposable
                 if (line.Length == 0)
                 {
                     headersComplete = true;
+                    break;
+                }
+
+                headerCount++;
+                if (headerCount >
+                    MaximumHeaderCount)
+                {
                     break;
                 }
 
