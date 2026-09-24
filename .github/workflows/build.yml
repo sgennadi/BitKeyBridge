@@ -14,7 +14,7 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: bitkeybridge-${{ github.workflow }}-${{ github.ref }}
+  group: bitkeybridge-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
