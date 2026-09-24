@@ -1,25 +1,69 @@
 namespace BitKeyBridge;
 
+public sealed class ConfigurationLoadException : InvalidOperationException
+{
+    public ConfigurationLoadException(
+        string configPath,
+        Exception innerException)
+        : base(
+            $"BitKeyBridge configuration '{configPath}' could not be loaded safely. " +
+            "The application will not continue with default security settings. " +
+            innerException.Message,
+            innerException)
+    {
+        ConfigPath = configPath;
+    }
+
+    public string ConfigPath { get; }
+}
+
 public static class ConfigService
 {
-    public static AppConfig LoadAppConfig()
+    public static AppConfig LoadAppConfig() =>
+        LoadAppConfig(
+            AppPaths.AppSettingsFile,
+            AppPaths.ConfigMigrationStatusFile,
+            AppPaths.BackupsDirectory);
+
+    internal static AppConfig LoadAppConfig(
+        string configPath,
+        string statusPath,
+        string backupsDirectory)
     {
         try
         {
-            return new ConfigMigrationService()
-                .LoadAndMigrate();
+            var config =
+                new ConfigMigrationService(
+                    configPath,
+                    statusPath,
+                    backupsDirectory)
+                    .LoadAndMigrate();
+
+            ConfigurationMaintenanceService
+                .ValidateAppConfig(
+                    config);
+
+            return config;
         }
         catch (FutureConfigurationSchemaException)
         {
             throw;
         }
-        catch
+        catch (ConfigurationLoadException)
         {
-            return new AppConfig
-            {
-                SchemaVersion =
-                    ConfigSchema.CurrentVersion
-            };
+            throw;
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                $"BitKeyBridge configuration load failed closed. Path={configPath}; Error={ex.Message}",
+                EventLogSeverity.Error,
+                4612,
+                "Configuration");
+
+            throw new ConfigurationLoadException(
+                configPath,
+                ex);
         }
     }
 
@@ -77,6 +121,10 @@ public static class ConfigService
 
         config.SchemaVersion =
             ConfigSchema.CurrentVersion;
+
+        ConfigurationMaintenanceService
+            .ValidateAppConfig(
+                config);
 
         JsonStore.WriteAtomic(
             AppPaths.AppSettingsFile,
