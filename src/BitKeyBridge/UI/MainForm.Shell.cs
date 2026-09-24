@@ -939,9 +939,14 @@ public sealed partial class MainForm
             !string.IsNullOrWhiteSpace(
                 _startDomainDn);
 
+        var localCacheAvailable =
+            File.Exists(
+                _config.OutputCsv);
+
         _startSearch.Enabled =
-            local ||
-            _startScope is not null;
+            local
+                ? localCacheAvailable
+                : _startScope is not null;
 
         if (local)
         {
