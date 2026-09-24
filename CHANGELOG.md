@@ -6,6 +6,7 @@
 - Added explicit Machine credential ACL status, grant, revoke, and repair logic for Windows Service identities.
 - Credential-vault metadata no longer materializes stored passwords as managed strings: Credential Manager metadata reads only the username, while Machine DPAPI metadata parses only non-secret JSON fields and zeroes temporary plaintext buffers.
 - Reworked Windows Service identity changes as a preflight/commit transaction. Required Graph, audit-signing, Remote API, SIEM mTLS certificate ACLs, Machine AD credential ACL, and protected-storage ACLs are prepared before SCM identity changes.
+- Certificate service-access preflight now fails if the configured certificate's private-key file is missing, including for LocalSystem where no extra read ACE is normally required.
 - If a service-identity change fails before the SCM commit, newly granted BitKeyBridge ACLs, protected-storage changes, and persisted identity settings are rolled back. Post-commit failures retain the new identity's required access for repair rather than revoking it underneath the service.
 - Successful service-identity changes remove BitKeyBridge-style certificate and Machine credential read ACLs from the previous non-LocalSystem service identity.
 - Service uninstall now performs best-effort cleanup of managed certificate, Machine credential, and protected-storage ACLs for the removed service identity after the service is successfully deleted.
