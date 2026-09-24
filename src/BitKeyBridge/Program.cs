@@ -2832,6 +2832,89 @@ internal static class Program
                     }
                 }
 
+                const string sessionSecret =
+                    "SelfTest-AD-Session-Secret";
+
+                AdSessionCredentials.SetPassword(
+                    sessionSecret);
+
+                if (!AdSessionCredentials.HasPassword ||
+                    !string.Equals(
+                        AdSessionCredentials.GetPasswordCopy(),
+                        sessionSecret,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "AD session credential round-trip failed.");
+                }
+
+                AdSessionCredentials.Clear();
+
+                if (AdSessionCredentials.HasPassword ||
+                    !string.IsNullOrEmpty(
+                        AdSessionCredentials.GetPasswordCopy()))
+                {
+                    failures.Add(
+                        "AD session credential clear failed.");
+                }
+
+                const string graphSecret =
+                    "SelfTest-Graph-Access-Token";
+
+                var graphTokenJson =
+                    JsonSerializer.Serialize(
+                        new GraphToken
+                        {
+                            AccessToken =
+                                graphSecret,
+                            ExpiresAt =
+                                DateTime.UtcNow.AddHours(1),
+                            AuthMode =
+                                "SelfTest"
+                        });
+
+                if (graphTokenJson.Contains(
+                        graphSecret,
+                        StringComparison.Ordinal) ||
+                    graphTokenJson.Contains(
+                        "AccessToken",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add(
+                        "Graph access token was serialized.");
+                }
+
+                var serviceCertificates =
+                    WindowsServiceHost
+                        .GetConfiguredServiceCertificateThumbprints(
+                            new AppConfig
+                            {
+                                AuditSigningEnabled = true,
+                                AuditSigningCertificateThumbprint =
+                                    "111122223333444455556666777788889999AAAA",
+                                RemoteApiEnabled = true,
+                                RemoteApiCertificateThumbprint =
+                                    "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+                                SiemEnabled = true,
+                                SiemMode = "Webhook",
+                                SiemClientCertificateThumbprint =
+                                    "0123456789ABCDEF0123456789ABCDEF01234567"
+                            });
+
+                if (!serviceCertificates.Contains(
+                        "111122223333444455556666777788889999AAAA",
+                        StringComparer.OrdinalIgnoreCase) ||
+                    !serviceCertificates.Contains(
+                        "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+                        StringComparer.OrdinalIgnoreCase) ||
+                    !serviceCertificates.Contains(
+                        "0123456789ABCDEF0123456789ABCDEF01234567",
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    failures.Add(
+                        "Windows Service certificate dependency collection failed.");
+                }
+
                 if (RemoteApiSetupService.NormalizeScope(
                         "read-only") != "read" ||
                     RemoteApiSetupService.NormalizeScope(
