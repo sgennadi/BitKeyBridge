@@ -184,13 +184,36 @@ public sealed class UpdateService : IDisposable
             throw new InvalidOperationException(
                 $"Staged executable version '{fileVersion}' does not match release {info.LatestVersion}.");
 
-        await RunStagedSelfTestAsync(executable, ct);
+        var stagedHashBeforeSelfTest =
+            await ComputeSha256Async(
+                executable,
+                ct);
+
+        await RunStagedSelfTestAsync(
+            executable,
+            ct);
+
+        var stagedHashAfterSelfTest =
+            await ComputeSha256Async(
+                executable,
+                ct);
+
+        if (!string.Equals(
+                stagedHashBeforeSelfTest,
+                stagedHashAfterSelfTest,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The staged BitKeyBridge executable changed while it was being verified.");
+        }
 
         return new PreparedUpdate
         {
             Info = info,
             ZipPath = zipPath,
-            StagedExecutable = executable
+            StagedExecutable = executable,
+            StagedExecutableSha256 =
+                stagedHashAfterSelfTest
         };
     }
 
@@ -213,9 +236,20 @@ public sealed class UpdateService : IDisposable
         var helperExe = Path.Combine(helperDir, "BitKeyBridge-Updater.exe");
         File.Copy(current, helperExe, true);
 
+        if (string.IsNullOrWhiteSpace(
+                prepared.StagedExecutableSha256))
+        {
+            throw new InvalidOperationException(
+                "The staged update executable does not have verification metadata.");
+        }
+
         var plan = new UpdateApplyPlan
         {
             StagedExecutable = prepared.StagedExecutable,
+            StagedExecutableSha256 =
+                prepared.StagedExecutableSha256,
+            ExpectedVersion =
+                prepared.Info.LatestVersion,
             TargetExecutables = targets,
             WaitForProcessId = Environment.ProcessId,
             RestartService = service.Installed &&
@@ -227,25 +261,68 @@ public sealed class UpdateService : IDisposable
         var planPath = Path.Combine(helperDir, "update-plan.json");
         JsonStore.WriteAtomic(planPath, plan);
 
+        var planSha256 =
+            ComputeSha256File(
+                planPath);
+
         var psi = new ProcessStartInfo
         {
             FileName = helperExe,
-            Arguments = $"--apply-update-plan \"{planPath}\"",
+            Arguments =
+                $"--apply-update-plan \"{planPath}\" " +
+                $"--apply-update-plan-sha256 {planSha256}",
             UseShellExecute = true,
             WorkingDirectory = helperDir
         };
         if (OperatingSystem.IsWindows())
             psi.Verb = "runas";
 
+        // Keep the helper file non-writable until CreateProcess has opened it.
+        using var helperLock =
+            new FileStream(
+                helperExe,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
         _ = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start the BitKeyBridge update helper.");
         return planPath;
     }
 
-    public static int ApplyPlan(string planPath)
+    public static int ApplyPlan(
+        string planPath,
+        string expectedPlanSha256)
     {
-        var plan = JsonStore.Read<UpdateApplyPlan>(planPath)
-            ?? throw new InvalidOperationException("Update apply plan could not be read.");
+        if (OperatingSystem.IsWindows() &&
+            !SecurityContext.IsAdministrator())
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update apply was refused because the helper was not elevated.",
+                EventLogSeverity.Warning,
+                4197,
+                "Update");
+            return 5;
+        }
+
+        UpdateApplyPlan plan;
+        try
+        {
+            plan =
+                ReadVerifiedApplyPlan(
+                    planPath,
+                    expectedPlanSha256);
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update plan verification failed: " +
+                ex.Message,
+                EventLogSeverity.Error,
+                4198,
+                "Update");
+            return 1;
+        }
 
         if (plan.WaitForProcessId > 0)
         {
@@ -266,6 +343,10 @@ public sealed class UpdateService : IDisposable
         var backups = new List<(string Target, string Backup)>();
         try
         {
+            using var stagedExecutable =
+                OpenVerifiedStagedExecutable(
+                    plan);
+
             foreach (var target in plan.TargetExecutables
                          .Where(x => !string.IsNullOrWhiteSpace(x))
                          .Distinct(StringComparer.OrdinalIgnoreCase))
@@ -284,7 +365,21 @@ public sealed class UpdateService : IDisposable
                 }
 
                 var replacement = fullTarget + ".new";
-                File.Copy(plan.StagedExecutable, replacement, true);
+                stagedExecutable.Position = 0;
+
+                using (var output =
+                       new FileStream(
+                           replacement,
+                           FileMode.Create,
+                           FileAccess.Write,
+                           FileShare.None))
+                {
+                    stagedExecutable.CopyTo(
+                        output);
+                    output.Flush(
+                        flushToDisk: true);
+                }
+
                 File.Move(replacement, fullTarget, true);
             }
 
@@ -336,6 +431,174 @@ public sealed class UpdateService : IDisposable
             catch { }
             return 1;
         }
+    }
+
+    internal static UpdateApplyPlan ReadVerifiedApplyPlan(
+        string planPath,
+        string expectedPlanSha256)
+    {
+        var fullPath =
+            Path.GetFullPath(
+                planPath);
+
+        if (!File.Exists(
+                fullPath))
+        {
+            throw new FileNotFoundException(
+                "Update apply plan was not found.",
+                fullPath);
+        }
+
+        var expected =
+            NormalizeSha256(
+                expectedPlanSha256,
+                "update apply plan");
+
+        var bytes =
+            File.ReadAllBytes(
+                fullPath);
+        try
+        {
+            var actual =
+                SHA256.HashData(
+                    bytes);
+
+            if (!CryptographicOperations.FixedTimeEquals(
+                    actual,
+                    Convert.FromHexString(
+                        expected)))
+            {
+                throw new InvalidDataException(
+                    "Update apply plan SHA-256 does not match the value supplied to the elevated helper.");
+            }
+
+            return JsonSerializer.Deserialize<UpdateApplyPlan>(
+                       bytes,
+                       new JsonSerializerOptions
+                       {
+                           PropertyNameCaseInsensitive = true
+                       })
+                   ?? throw new InvalidDataException(
+                       "Update apply plan is empty or invalid.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(
+                bytes);
+        }
+    }
+
+    private static FileStream OpenVerifiedStagedExecutable(
+        UpdateApplyPlan plan)
+    {
+        if (string.IsNullOrWhiteSpace(
+                plan.StagedExecutable))
+        {
+            throw new InvalidDataException(
+                "Update plan does not contain a staged executable.");
+        }
+
+        var expectedHash =
+            NormalizeSha256(
+                plan.StagedExecutableSha256,
+                "staged executable");
+
+        if (string.IsNullOrWhiteSpace(
+                plan.ExpectedVersion))
+        {
+            throw new InvalidDataException(
+                "Update plan does not contain the expected version.");
+        }
+
+        var fullPath =
+            Path.GetFullPath(
+                plan.StagedExecutable);
+
+        var stream =
+            new FileStream(
+                fullPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
+        try
+        {
+            var actualHash =
+                SHA256.HashData(
+                    stream);
+            var expectedBytes =
+                Convert.FromHexString(
+                    expectedHash);
+
+            if (!CryptographicOperations.FixedTimeEquals(
+                    actualHash,
+                    expectedBytes))
+            {
+                throw new InvalidDataException(
+                    "Staged BitKeyBridge executable SHA-256 changed after verification.");
+            }
+
+            var fileVersion =
+                FileVersionInfo.GetVersionInfo(
+                    fullPath)
+                    .FileVersion;
+
+            if (!Version.TryParse(
+                    NormalizeVersionText(
+                        fileVersion),
+                    out var stagedVersion) ||
+                stagedVersion <
+                ParseVersion(
+                    plan.ExpectedVersion))
+            {
+                throw new InvalidDataException(
+                    $"Staged executable version '{fileVersion}' no longer matches expected version {plan.ExpectedVersion}.");
+            }
+
+            stream.Position = 0;
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
+    private static string NormalizeSha256(
+        string value,
+        string label)
+    {
+        var normalized =
+            (value ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant();
+
+        if (normalized.Length != 64 ||
+            !normalized.All(
+                Uri.IsHexDigit))
+        {
+            throw new InvalidDataException(
+                $"Expected SHA-256 for {label} is invalid.");
+        }
+
+        return normalized;
+    }
+
+    internal static string ComputeSha256File(
+        string path)
+    {
+        using var stream =
+            new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
+        return Convert.ToHexString(
+                SHA256.HashData(
+                    stream))
+            .ToLowerInvariant();
     }
 
     private static void TryScheduleHelperCleanup(string directory)

@@ -147,15 +147,79 @@ internal static class Program
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (needsConsole) ConsoleHelper.EnsureConsole();
 
-        var config = ConfigService.LoadAppConfig();
+        var applyUpdatePlanRequested =
+            args.Any(
+                x =>
+                    x.Equals(
+                        "--apply-update-plan",
+                        StringComparison.OrdinalIgnoreCase));
 
-        var applyPlanIndex = Array.FindIndex(args, x =>
-            x.Equals("--apply-update-plan", StringComparison.OrdinalIgnoreCase));
-        if (applyPlanIndex >= 0)
+        if (applyUpdatePlanRequested)
         {
-            if (applyPlanIndex + 1 >= args.Length)
+            var applyPlanPath =
+                GetOptionValue(
+                    args,
+                    "--apply-update-plan");
+            var applyPlanSha256 =
+                GetOptionValue(
+                    args,
+                    "--apply-update-plan-sha256");
+
+            if (string.IsNullOrWhiteSpace(
+                    applyPlanPath) ||
+                string.IsNullOrWhiteSpace(
+                    applyPlanSha256))
+            {
                 return 2;
-            return UpdateService.ApplyPlan(args[applyPlanIndex + 1]);
+            }
+
+            return UpdateService.ApplyPlan(
+                applyPlanPath,
+                applyPlanSha256);
+        }
+
+        AppConfig config;
+        try
+        {
+            config =
+                ConfigService.LoadAppConfig();
+        }
+        catch (Exception ex)
+            when (ex is ConfigurationLoadException or
+                  FutureConfigurationSchemaException)
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge startup blocked because application configuration could not be loaded safely. " +
+                ex.Message,
+                EventLogSeverity.Error,
+                4613,
+                "Configuration");
+
+            var message =
+                "BitKeyBridge will not start with default settings because the existing application configuration could not be loaded safely." +
+                Environment.NewLine +
+                Environment.NewLine +
+                ex.Message +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Repair or restore appsettings.json, then start BitKeyBridge again.";
+
+            if (needsConsole ||
+                !Environment.UserInteractive)
+            {
+                Console.Error.WriteLine(
+                    message);
+            }
+            else
+            {
+                MessageBox.Show(
+                    message,
+                    "BitKeyBridge Configuration Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+
+            return 12;
         }
 
         if (args.Any(x => x.Equals("--service", StringComparison.OrdinalIgnoreCase)))
@@ -1953,6 +2017,95 @@ internal static class Program
                     failures.Add(
                         "Future configuration schema refusal failed.");
                 }
+
+                var missingConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "missing-appsettings.json");
+                var missingDefaults =
+                    ConfigService.LoadAppConfig(
+                        missingConfigPath,
+                        Path.Combine(
+                            tempDirectory,
+                            "missing-status.json"),
+                        Path.Combine(
+                            tempDirectory,
+                            "missing-backups"));
+
+                if (missingDefaults.SchemaVersion !=
+                    ConfigSchema.CurrentVersion)
+                {
+                    failures.Add(
+                        "Missing configuration did not load safe defaults.");
+                }
+
+                var corruptConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "corrupt-appsettings.json");
+                File.WriteAllText(
+                    corruptConfigPath,
+                    "{ not valid json");
+
+                var corruptRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        corruptConfigPath,
+                        Path.Combine(
+                            tempDirectory,
+                            "corrupt-status.json"),
+                        Path.Combine(
+                            tempDirectory,
+                            "corrupt-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    corruptRejected = true;
+                }
+
+                if (!corruptRejected)
+                {
+                    failures.Add(
+                        "Corrupt application configuration did not fail closed.");
+                }
+
+                var invalidConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "invalid-appsettings.json");
+                File.WriteAllText(
+                    invalidConfigPath,
+                    JsonSerializer.Serialize(
+                        new AppConfig
+                        {
+                            SchemaVersion =
+                                ConfigSchema.CurrentVersion,
+                            HealthEndpointPort = 80
+                        }));
+
+                var invalidRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        invalidConfigPath,
+                        Path.Combine(
+                            tempDirectory,
+                            "invalid-status.json"),
+                        Path.Combine(
+                            tempDirectory,
+                            "invalid-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    invalidRejected = true;
+                }
+
+                if (!invalidRejected)
+                {
+                    failures.Add(
+                        "Invalid application configuration did not fail closed.");
+                }
             }
             catch (Exception ex)
             {
@@ -2573,6 +2726,119 @@ internal static class Program
                 {
                     failures.Add(
                         "Remote API scope normalization failed.");
+                }
+
+                using (var requestLineStream =
+                       new MemoryStream(
+                           Encoding.ASCII.GetBytes(
+                               "GET /api/v1/health HTTP/1.1\r\n")))
+                {
+                    var parsedRequestLine =
+                        RemoteApiServer.ReadAsciiLineAsync(
+                                requestLineStream,
+                                RemoteApiServer.MaximumRequestLineBytes,
+                                CancellationToken.None)
+                            .GetAwaiter()
+                            .GetResult();
+
+                    if (!string.Equals(
+                            parsedRequestLine,
+                            "GET /api/v1/health HTTP/1.1",
+                            StringComparison.Ordinal))
+                    {
+                        failures.Add(
+                            "Remote API bounded HTTP line reader returned unexpected content.");
+                    }
+                }
+
+                var oversizedRejected = false;
+                try
+                {
+                    using var oversizedStream =
+                        new MemoryStream(
+                            Encoding.ASCII.GetBytes(
+                                new string(
+                                    'A',
+                                    RemoteApiServer.MaximumRequestLineBytes +
+                                    1) +
+                                "\r\n"));
+
+                    _ = RemoteApiServer.ReadAsciiLineAsync(
+                            oversizedStream,
+                            RemoteApiServer.MaximumRequestLineBytes,
+                            CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+                catch (InvalidDataException)
+                {
+                    oversizedRejected = true;
+                }
+
+                if (!oversizedRejected)
+                {
+                    failures.Add(
+                        "Remote API bounded HTTP line reader accepted an oversized line.");
+                }
+
+                var updatePlanPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "update-plan-selftest.json");
+
+                JsonStore.WriteAtomic(
+                    updatePlanPath,
+                    new UpdateApplyPlan
+                    {
+                        StagedExecutable =
+                            "C:\\selftest\\BitKeyBridge.exe",
+                        StagedExecutableSha256 =
+                            new string(
+                                'a',
+                                64),
+                        ExpectedVersion =
+                            "0.18.2",
+                        TargetExecutables =
+                        [
+                            "C:\\selftest\\target.exe"
+                        ]
+                    });
+
+                var updatePlanHash =
+                    UpdateService.ComputeSha256File(
+                        updatePlanPath);
+                var verifiedPlan =
+                    UpdateService.ReadVerifiedApplyPlan(
+                        updatePlanPath,
+                        updatePlanHash);
+
+                if (verifiedPlan.ExpectedVersion !=
+                    "0.18.2")
+                {
+                    failures.Add(
+                        "Verified update-plan round-trip failed.");
+                }
+
+                File.AppendAllText(
+                    updatePlanPath,
+                    " ");
+
+                var tamperedPlanRejected = false;
+                try
+                {
+                    _ = UpdateService.ReadVerifiedApplyPlan(
+                        updatePlanPath,
+                        updatePlanHash);
+                }
+                catch (InvalidDataException)
+                {
+                    tamperedPlanRejected = true;
+                }
+
+                if (!tamperedPlanRejected)
+                {
+                    failures.Add(
+                        "Tampered elevated update plan was not rejected.");
                 }
 
                 try
