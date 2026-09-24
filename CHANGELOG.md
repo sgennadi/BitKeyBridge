@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0
+
+- Rebuilt every remaining WinForms dialog under `src/BitKeyBridge/UI` with responsive `TableLayoutPanel` / `FlowLayoutPanel` layouts instead of fixed `Left`, `Top`, or `SetBounds` coordinates.
+- Updated Input, OU Browser, Recovery Access, Recovery Incident Verification, Remote API Scoped Tokens, Secret Display, Secure Output, RBAC, Privileged Recovery Access, Housekeeping / Protected Storage, and Coverage Policy dialogs for DPI scaling, large text, RDP, and smaller displays.
+- Added a CI guard that rejects reintroduction of fixed-position WinForms layout in the UI directory.
+- Recovery startup now falls back to `Entire domain` when no OU is selected, preserving a working metadata search path instead of leaving Search disabled.
+- If OU enumeration fails after the Active Directory naming context is known, Recovery continues with the entire-domain scope and surfaces the OU-enumeration warning without blocking recovery search.
+- The selected/default recovery scope continues to be persisted through the existing recovery UI state settings.
+- Release packages remain self-contained single-file builds for win-x64, win-x86, and win-arm64 with SHA-256 checksums, CycloneDX SBOM, provenance/SBOM attestations, offline self-test, and CodeQL.
+
 ## 0.17.1
 
 - Published a fresh patch build from the completed v0.17 UI and recovery workflow.
