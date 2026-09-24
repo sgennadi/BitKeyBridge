@@ -9,6 +9,7 @@
 - `Local cache` search is now disabled when the recovery export CSV is missing, and an explicit cache-unavailable message replaces the misleading zero-results state.
 - Clipboard cleanup now tracks the exact copied BitLocker secret independently from the currently selected row, so changing selection or closing the application cannot leave an older copied recovery key behind.
 - Added an offline self-test for remembered-scope naming-context validation.
+- Refined GitHub Actions concurrency so superseded PR builds cancel each other while `main`/release runs remain isolated by commit SHA and cannot block newer releases.
 
 ## 0.18.0
 
