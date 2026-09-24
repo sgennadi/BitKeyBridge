@@ -271,7 +271,7 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
             Process.Start(
                 new ProcessStartInfo(
                     "notepad.exe",
-                    $""{path}"")
+                    $"\\\"{path}\\\"")
                 {
                     UseShellExecute = true
                 });
