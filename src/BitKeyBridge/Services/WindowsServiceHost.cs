@@ -130,20 +130,52 @@ public static class WindowsServiceHost
 
     public static void Uninstall()
     {
-        using var scm = OpenScManager(ScManagerConnect);
-        using var service = OpenServiceSafe(
-            scm.DangerousGetHandle(),
-            ServiceName,
-            ServiceQueryStatus | ServiceStop | ServiceDelete);
+        using var scm =
+            OpenScManager(
+                ScManagerConnect);
+        using var service =
+            OpenServiceSafe(
+                scm.DangerousGetHandle(),
+                ServiceName,
+                ServiceQueryStatus |
+                ServiceQueryConfig |
+                ServiceStop |
+                ServiceDelete);
+
         if (service.IsInvalid)
         {
-            if (Marshal.GetLastWin32Error() == ErrorServiceDoesNotExist) return;
-            ThrowLastWin32("Failed to open the BitKeyBridge Windows Service.");
+            if (Marshal.GetLastWin32Error() ==
+                ErrorServiceDoesNotExist)
+            {
+                return;
+            }
+
+            ThrowLastWin32(
+                "Failed to open the BitKeyBridge Windows Service.");
         }
 
-        try { Stop(); } catch { }
-        if (!DeleteService(service.DangerousGetHandle()))
-            ThrowLastWin32("Failed to delete the BitKeyBridge Windows Service.");
+        var previousIdentity =
+            QueryIdentity(
+                service.DangerousGetHandle());
+
+        try
+        {
+            Stop();
+        }
+        catch
+        {
+        }
+
+        if (!DeleteService(
+                service.DangerousGetHandle()))
+        {
+            ThrowLastWin32(
+                "Failed to delete the BitKeyBridge Windows Service.");
+        }
+
+        CleanupUninstalledServiceAccess(
+            previousIdentity);
+
         WindowsEventLogService.TryWrite(
             "BitKeyBridge Windows Service uninstalled.",
             EventLogSeverity.Information,
@@ -845,8 +877,8 @@ public static class WindowsServiceHost
             }
         }
 
-        if (RequiresMachineAdCredential(
-                config))
+        if (File.Exists(
+                AppPaths.MachineAdCredentialFile))
         {
             try
             {
@@ -863,6 +895,99 @@ public static class WindowsServiceHost
                     4073,
                     "CredentialVault");
             }
+        }
+    }
+
+    private static void CleanupUninstalledServiceAccess(
+        string previousIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(
+                previousIdentity) ||
+            CertificatePrivateKeyAccessService
+                .IsLocalSystem(
+                    previousIdentity))
+        {
+            return;
+        }
+
+        if (File.Exists(
+                AppPaths.MachineAdCredentialFile))
+        {
+            try
+            {
+                _ =
+                    new CredentialVaultService()
+                        .RevokeMachineCredentialAccess(
+                            previousIdentity);
+            }
+            catch (Exception ex)
+            {
+                WindowsEventLogService.TryWrite(
+                    $"Machine credential ACL cleanup after service uninstall failed. Account={previousIdentity}; Error={ex.Message}",
+                    EventLogSeverity.Warning,
+                    4074,
+                    "CredentialVault");
+            }
+        }
+
+        try
+        {
+            var config =
+                ConfigService.LoadAppConfig();
+            var certificateAccess =
+                new CertificatePrivateKeyAccessService();
+
+            foreach (var thumbprint in
+                     GetConfiguredServiceCertificateThumbprints(
+                         config))
+            {
+                try
+                {
+                    _ =
+                        certificateAccess
+                            .RevokeRead(
+                                thumbprint,
+                                previousIdentity);
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"Certificate ACL cleanup after service uninstall failed. Account={previousIdentity}; Certificate={thumbprint}; Error={ex.Message}",
+                        EventLogSeverity.Warning,
+                        4056,
+                        "CertificateACL");
+                }
+            }
+
+            if (config.StorageAclHardeningEnabled)
+            {
+                try
+                {
+                    _ =
+                        new StorageSecurityService(
+                            serviceIdentityOverride:
+                                string.Empty)
+                            .Repair();
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Protected storage ACL cleanup after service uninstall failed: " +
+                        ex.Message,
+                        EventLogSeverity.Warning,
+                        4624,
+                        "StorageSecurity");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Service access cleanup after uninstall could not load application configuration: " +
+                ex.Message,
+                EventLogSeverity.Warning,
+                4006,
+                "Service");
         }
     }
 
