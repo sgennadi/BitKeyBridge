@@ -1995,6 +1995,95 @@ internal static class Program
                     failures.Add(
                         "Future configuration schema refusal failed.");
                 }
+
+                var missingConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "missing-appsettings.json");
+                var missingDefaults =
+                    ConfigService.LoadAppConfig(
+                        missingConfigPath,
+                        Path.Combine(
+                            tempDirectory,
+                            "missing-status.json"),
+                        Path.Combine(
+                            tempDirectory,
+                            "missing-backups"));
+
+                if (missingDefaults.SchemaVersion !=
+                    ConfigSchema.CurrentVersion)
+                {
+                    failures.Add(
+                        "Missing configuration did not load safe defaults.");
+                }
+
+                var corruptConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "corrupt-appsettings.json");
+                File.WriteAllText(
+                    corruptConfigPath,
+                    "{ not valid json");
+
+                var corruptRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        corruptConfigPath,
+                        Path.Combine(
+                            tempDirectory,
+                            "corrupt-status.json"),
+                        Path.Combine(
+                            tempDirectory,
+                            "corrupt-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    corruptRejected = true;
+                }
+
+                if (!corruptRejected)
+                {
+                    failures.Add(
+                        "Corrupt application configuration did not fail closed.");
+                }
+
+                var invalidConfigPath =
+                    Path.Combine(
+                        tempDirectory,
+                        "invalid-appsettings.json");
+                File.WriteAllText(
+                    invalidConfigPath,
+                    JsonSerializer.Serialize(
+                        new AppConfig
+                        {
+                            SchemaVersion =
+                                ConfigSchema.CurrentVersion,
+                            HealthEndpointPort = 80
+                        }));
+
+                var invalidRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        invalidConfigPath,
+                        Path.Combine(
+                            tempDirectory,
+                            "invalid-status.json"),
+                        Path.Combine(
+                            tempDirectory,
+                            "invalid-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    invalidRejected = true;
+                }
+
+                if (!invalidRejected)
+                {
+                    failures.Add(
+                        "Invalid application configuration did not fail closed.");
+                }
             }
             catch (Exception ex)
             {
@@ -2615,6 +2704,59 @@ internal static class Program
                 {
                     failures.Add(
                         "Remote API scope normalization failed.");
+                }
+
+                using (var requestLineStream =
+                       new MemoryStream(
+                           Encoding.ASCII.GetBytes(
+                               "GET /api/v1/health HTTP/1.1\r\n")))
+                {
+                    var parsedRequestLine =
+                        RemoteApiServer.ReadAsciiLineAsync(
+                                requestLineStream,
+                                RemoteApiServer.MaximumRequestLineBytes,
+                                CancellationToken.None)
+                            .GetAwaiter()
+                            .GetResult();
+
+                    if (!string.Equals(
+                            parsedRequestLine,
+                            "GET /api/v1/health HTTP/1.1",
+                            StringComparison.Ordinal))
+                    {
+                        failures.Add(
+                            "Remote API bounded HTTP line reader returned unexpected content.");
+                    }
+                }
+
+                var oversizedRejected = false;
+                try
+                {
+                    using var oversizedStream =
+                        new MemoryStream(
+                            Encoding.ASCII.GetBytes(
+                                new string(
+                                    'A',
+                                    RemoteApiServer.MaximumRequestLineBytes +
+                                    1) +
+                                "\r\n"));
+
+                    _ = RemoteApiServer.ReadAsciiLineAsync(
+                            oversizedStream,
+                            RemoteApiServer.MaximumRequestLineBytes,
+                            CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+                catch (InvalidDataException)
+                {
+                    oversizedRejected = true;
+                }
+
+                if (!oversizedRejected)
+                {
+                    failures.Add(
+                        "Remote API bounded HTTP line reader accepted an oversized line.");
                 }
 
                 try
