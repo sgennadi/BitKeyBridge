@@ -101,6 +101,110 @@ public sealed class HealthService
 
         try
         {
+            var machineCredentialRequired =
+                _config.AdUseExplicitCredentials &&
+                _config.AdCredentialStorageMode.Equals(
+                    "LocalMachine",
+                    StringComparison.OrdinalIgnoreCase);
+
+            snapshot.MachineAdCredentialConfigured =
+                machineCredentialRequired &&
+                File.Exists(
+                    AppPaths.MachineAdCredentialFile);
+
+            if (snapshot.ServiceInstalled &&
+                !string.IsNullOrWhiteSpace(
+                    snapshot.ServiceIdentity))
+            {
+                var problems =
+                    new List<string>();
+
+                foreach (var thumbprint in
+                         WindowsServiceHost
+                             .GetConfiguredServiceCertificateThumbprints(
+                                 _config))
+                {
+                    var access =
+                        new CertificatePrivateKeyAccessService()
+                            .GetStatus(
+                                thumbprint,
+                                snapshot.ServiceIdentity);
+
+                    if (access.AccessRequired &&
+                        (!access.ExplicitReadAllowed ||
+                         access.ExplicitReadDenied))
+                    {
+                        problems.Add(
+                            $"Certificate {thumbprint}: {access.Status}");
+                    }
+                }
+
+                if (machineCredentialRequired)
+                {
+                    var credentialAccess =
+                        new CredentialVaultService()
+                            .GetMachineCredentialAccess(
+                                snapshot.ServiceIdentity);
+
+                    snapshot.MachineAdCredentialAccessStatus =
+                        credentialAccess.Status;
+                    snapshot.MachineAdCredentialAccessAccount =
+                        credentialAccess.Account;
+
+                    if (!credentialAccess.FileExists ||
+                        (credentialAccess.AccessRequired &&
+                         (!credentialAccess.DirectoryReadAllowed ||
+                          !credentialAccess.FileReadAllowed)))
+                    {
+                        problems.Add(
+                            $"Machine AD credential: {credentialAccess.Status}");
+                    }
+                }
+
+                snapshot.ServiceAccessProblems =
+                    problems.Count;
+                snapshot.ServiceAccessStatus =
+                    problems.Count == 0
+                        ? "Valid"
+                        : "Invalid";
+
+                foreach (var problem in
+                         problems)
+                {
+                    snapshot.Errors.Add(
+                        "Windows Service access: " +
+                        problem);
+                }
+            }
+            else
+            {
+                snapshot.ServiceAccessStatus =
+                    snapshot.ServiceInstalled
+                        ? "IdentityUnavailable"
+                        : "NotInstalled";
+
+                if (machineCredentialRequired)
+                {
+                    snapshot.MachineAdCredentialAccessStatus =
+                        snapshot.MachineAdCredentialConfigured
+                            ? "ServiceNotInstalled"
+                            : "CredentialFileMissing";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            snapshot.ServiceAccessStatus =
+                "Error";
+            snapshot.ServiceAccessProblems++;
+
+            snapshot.Errors.Add(
+                "Windows Service access validation: " +
+                ex.Message);
+        }
+
+        try
+        {
             var housekeeping =
                 new HousekeepingService()
                     .ReadLastStatus();
