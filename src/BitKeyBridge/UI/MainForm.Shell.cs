@@ -306,6 +306,7 @@ public sealed partial class MainForm
         _recoverySource.SelectedIndexChanged +=
             (_, _) =>
             {
+                ResetRecoverySearchState();
                 UpdateRecoverySourceUi();
                 TrySaveRecoveryUiState();
             };
