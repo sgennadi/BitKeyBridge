@@ -147,8 +147,6 @@ internal static class Program
             x.Equals("--ad-password-prompt", StringComparison.OrdinalIgnoreCase));
         if (needsConsole) ConsoleHelper.EnsureConsole();
 
-        var config = ConfigService.LoadAppConfig();
-
         var applyPlanIndex = Array.FindIndex(args, x =>
             x.Equals("--apply-update-plan", StringComparison.OrdinalIgnoreCase));
         if (applyPlanIndex >= 0)
@@ -156,6 +154,50 @@ internal static class Program
             if (applyPlanIndex + 1 >= args.Length)
                 return 2;
             return UpdateService.ApplyPlan(args[applyPlanIndex + 1]);
+        }
+
+        AppConfig config;
+        try
+        {
+            config =
+                ConfigService.LoadAppConfig();
+        }
+        catch (Exception ex)
+            when (ex is ConfigurationLoadException or
+                  FutureConfigurationSchemaException)
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge startup blocked because application configuration could not be loaded safely. " +
+                ex.Message,
+                EventLogSeverity.Error,
+                4613,
+                "Configuration");
+
+            var message =
+                "BitKeyBridge will not start with default settings because the existing application configuration could not be loaded safely." +
+                Environment.NewLine +
+                Environment.NewLine +
+                ex.Message +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Repair or restore appsettings.json, then start BitKeyBridge again.";
+
+            if (needsConsole ||
+                !Environment.UserInteractive)
+            {
+                Console.Error.WriteLine(
+                    message);
+            }
+            else
+            {
+                MessageBox.Show(
+                    message,
+                    "BitKeyBridge Configuration Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+
+            return 12;
         }
 
         if (args.Any(x => x.Equals("--service", StringComparison.OrdinalIgnoreCase)))
