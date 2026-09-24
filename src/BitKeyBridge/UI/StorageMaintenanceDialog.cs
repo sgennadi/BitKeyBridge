@@ -24,177 +24,156 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
 
         Text = "Housekeeping / Protected Storage";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(900, 660);
-        MinimumSize = new Size(820, 600);
+        ClientSize = new Size(920, 700);
+        MinimumSize = new Size(680, 560);
         Font = new Font("Segoe UI", 9F);
 
-        Controls.Add(new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 7
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = "Housekeeping / Protected Storage",
-            Font = new Font(
-                "Segoe UI Semibold",
-                15F),
+            Font = new Font("Segoe UI Semibold", 15F),
             AutoSize = true,
-            Left = 18,
-            Top = 16
-        });
+            Margin = new Padding(0, 0, 0, 8)
+        }, 0, 0);
 
-        Controls.Add(new Label
+        root.Controls.Add(new Label
         {
             Text =
                 "Incident deletion is evidence-aware: only fully verified bundles are eligible. " +
                 "NotFullyRetained or mismatched incidents are preserved. Audit-signing transition history is never automatically deleted.",
-            Left = 20,
-            Top = 54,
-            Width = 845,
-            Height = 48
-        });
+            AutoSize = true,
+            MaximumSize = new Size(850, 0),
+            Margin = new Padding(0, 0, 0, 10)
+        }, 0, 1);
 
         var policy = new GroupBox
         {
             Text = "Retention Policy",
-            Left = 20,
-            Top = 108,
-            Width = 855,
-            Height = 218,
-            Anchor =
-                AnchorStyles.Top |
-                AnchorStyles.Left |
-                AnchorStyles.Right
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12),
+            Margin = new Padding(0, 0, 0, 10)
         };
-        Controls.Add(policy);
+        var policyGrid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 4,
+            RowCount = 5
+        };
+        policyGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        policyGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        policyGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        policyGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        for (var row = 0; row < 5; row++)
+            policyGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        policy.Controls.Add(policyGrid);
+        root.Controls.Add(policy, 0, 2);
 
-        _enabled.Text =
-            "Enable scheduled housekeeping";
-        _enabled.SetBounds(
-            18,
-            28,
-            250,
-            26);
-        policy.Controls.Add(_enabled);
+        _enabled.Text = "Enable scheduled housekeeping";
+        _enabled.AutoSize = true;
+        _enabled.Anchor = AnchorStyles.Left;
+        policyGrid.Controls.Add(_enabled, 0, 0);
+        policyGrid.SetColumnSpan(_enabled, 2);
 
-        _runOnStart.Text =
-            "Run when Windows Service starts";
-        _runOnStart.SetBounds(
-            300,
-            28,
-            250,
-            26);
-        policy.Controls.Add(_runOnStart);
+        _runOnStart.Text = "Run when Windows Service starts";
+        _runOnStart.AutoSize = true;
+        _runOnStart.Anchor = AnchorStyles.Left;
+        policyGrid.Controls.Add(_runOnStart, 2, 0);
+        policyGrid.SetColumnSpan(_runOnStart, 2);
 
         AddNumeric(
-            policy,
+            policyGrid,
             "Interval (hours):",
             _intervalHours,
-            18,
-            68,
+            0,
+            1,
             1,
             168);
 
         AddNumeric(
-            policy,
+            policyGrid,
             "Incident retention days:",
             _incidentRetentionDays,
-            430,
-            68,
+            2,
+            1,
             0,
             36500);
 
         AddNumeric(
-            policy,
+            policyGrid,
             "Backup retention days:",
             _backupRetentionDays,
-            18,
-            108,
+            0,
+            2,
             0,
             36500);
 
         AddNumeric(
-            policy,
+            policyGrid,
             "Minimum backups to keep:",
             _backupMinimumFiles,
-            430,
-            108,
+            2,
+            2,
             0,
             1000);
 
         AddNumeric(
-            policy,
+            policyGrid,
             "Temporary-file retention days:",
             _tempRetentionDays,
-            18,
-            148,
+            0,
+            3,
             0,
             3650);
 
-        policy.Controls.Add(new Label
+        var hint = new Label
         {
             Text =
                 "0 incident/backup days = keep forever. 0 temporary-file days = disable temporary-file cleanup.",
-            Left = 430,
-            Top = 153,
-            Width = 390,
-            Height = 42
-        });
+            AutoSize = true,
+            MaximumSize = new Size(420, 0),
+            Margin = new Padding(0, 6, 0, 4)
+        };
+        policyGrid.Controls.Add(hint, 2, 3);
+        policyGrid.SetColumnSpan(hint, 2);
 
-        var save = new Button
+        var actionBar = new FlowLayoutPanel
         {
-            Text = "Save Policy",
-            Left = 20,
-            Top = 342,
-            Width = 120,
-            Height = 34
-        };
-        var dryRun = new Button
-        {
-            Text = "Dry Run",
-            Left = 150,
-            Top = 342,
-            Width = 110,
-            Height = 34
-        };
-        var runNow = new Button
-        {
-            Text = "Run Now",
-            Left = 270,
-            Top = 342,
-            Width = 110,
-            Height = 34
-        };
-        var aclStatus = new Button
-        {
-            Text = "ACL Status",
-            Left = 400,
-            Top = 342,
-            Width = 115,
-            Height = 34
-        };
-        var hardenAcl = new Button
-        {
-            Text = "Harden ACLs",
-            Left = 525,
-            Top = 342,
-            Width = 125,
-            Height = 34
-        };
-        var openIncidents = new Button
-        {
-            Text = "Incidents",
-            Left = 670,
-            Top = 342,
-            Width = 95,
-            Height = 34
-        };
-        var openBackups = new Button
-        {
-            Text = "Backups",
-            Left = 775,
-            Top = 342,
-            Width = 95,
-            Height = 34
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            WrapContents = true,
+            Margin = new Padding(0, 0, 0, 8)
         };
 
-        Controls.AddRange([
+        var save = ActionButton("Save Policy", 120);
+        var dryRun = ActionButton("Dry Run", 100);
+        var runNow = ActionButton("Run Now", 100);
+        var aclStatus = ActionButton("ACL Status", 110);
+        var hardenAcl = ActionButton("Harden ACLs", 120);
+        var openIncidents = ActionButton("Incidents", 95);
+        var openBackups = ActionButton("Backups", 95);
+
+        actionBar.Controls.AddRange([
             save,
             dryRun,
             runNow,
@@ -203,71 +182,58 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
             openIncidents,
             openBackups
         ]);
+        root.Controls.Add(actionBar, 0, 3);
 
-        _aclEnforcement.SetBounds(
-            20,
-            388,
-            850,
-            26);
-        Controls.Add(_aclEnforcement);
+        _aclEnforcement.AutoSize = true;
+        _aclEnforcement.MaximumSize = new Size(850, 0);
+        _aclEnforcement.Margin = new Padding(0, 0, 0, 8);
+        root.Controls.Add(_aclEnforcement, 0, 4);
 
-        _status.SetBounds(
-            20,
-            420,
-            850,
-            185);
+        _status.Dock = DockStyle.Fill;
         _status.ReadOnly = true;
         _status.WordWrap = false;
-        _status.ScrollBars =
-            RichTextBoxScrollBars.Both;
-        _status.Font =
-            new Font(
-                "Consolas",
-                9F);
-        _status.Anchor =
-            AnchorStyles.Top |
-            AnchorStyles.Bottom |
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        Controls.Add(_status);
+        _status.ScrollBars = RichTextBoxScrollBars.Both;
+        _status.Font = new Font("Consolas", 9F);
+        _status.MinimumSize = new Size(0, 190);
+        root.Controls.Add(_status, 0, 5);
 
-        var close = new Button
+        var footer = new FlowLayoutPanel
         {
-            Text = "Close",
-            Left = 770,
-            Top = 616,
-            Width = 100,
-            Height = 32,
-            Anchor =
-                AnchorStyles.Bottom |
-                AnchorStyles.Right
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(0, 8, 0, 0)
         };
-        close.Click += (_, _) =>
-            Close();
-        Controls.Add(close);
+        var close = ActionButton("Close", 100);
+        close.Click += (_, _) => Close();
+        footer.Controls.Add(close);
+        root.Controls.Add(footer, 0, 6);
 
-        save.Click += (_, _) =>
-            SavePolicy();
-        dryRun.Click += (_, _) =>
-            RunHousekeeping(
-                dryRun: true);
-        runNow.Click += (_, _) =>
-            RunHousekeeping(
-                dryRun: false);
-        aclStatus.Click += (_, _) =>
-            CheckAcl();
-        hardenAcl.Click += (_, _) =>
-            HardenAcl();
+        save.Click += (_, _) => SavePolicy();
+        dryRun.Click += (_, _) => RunHousekeeping(dryRun: true);
+        runNow.Click += (_, _) => RunHousekeeping(dryRun: false);
+        aclStatus.Click += (_, _) => CheckAcl();
+        hardenAcl.Click += (_, _) => HardenAcl();
         openIncidents.Click += (_, _) =>
-            OpenDirectory(
-                AppPaths.IncidentsDirectory);
+            OpenDirectory(AppPaths.IncidentsDirectory);
         openBackups.Click += (_, _) =>
-            OpenDirectory(
-                AppPaths.BackupsDirectory);
+            OpenDirectory(AppPaths.BackupsDirectory);
 
         LoadValues();
         ShowLastStatus();
     }
+
+    private static Button ActionButton(
+        string text,
+        int minimumWidth) =>
+        new()
+        {
+            Text = text,
+            AutoSize = true,
+            MinimumSize = new Size(minimumWidth, 34),
+            Margin = new Padding(0, 0, 8, 6)
+        };
 
     private void LoadValues()
     {
