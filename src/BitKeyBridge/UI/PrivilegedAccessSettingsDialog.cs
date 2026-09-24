@@ -37,66 +37,89 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
 
         Text = "Privileged Recovery Access";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(980, 790);
-        MinimumSize = new Size(900, 700);
+        ClientSize = new Size(1040, 860);
+        MinimumSize = new Size(760, 650);
         Font = new Font("Segoe UI", 9F);
 
-        var title = new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 6
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        for (var row = 0; row < 6; row++)
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = "Optional privileged recovery controls",
             Font = new Font("Segoe UI Semibold", 15F),
             AutoSize = true,
-            Left = 18,
-            Top = 14
-        };
-        Controls.Add(title);
+            Margin = new Padding(0, 0, 0, 8)
+        }, 0, 0);
 
-        var note = new Label
+        root.Controls.Add(new Label
         {
             Text =
                 "JIT recovery, two-person approval, and SIEM forwarding are opt-in. " +
                 "Upgrades never enable them automatically. Recovery passwords are never forwarded to SIEM.",
-            Left = 20,
-            Top = 50,
-            Width = 935,
-            Height = 42
-        };
-        Controls.Add(note);
+            AutoSize = true,
+            MaximumSize = new Size(960, 0),
+            Margin = new Padding(0, 0, 0, 10)
+        }, 0, 1);
 
-        BuildJitGroup();
-        BuildApprovalGroup();
-        BuildSiemGroup();
+        root.Controls.Add(BuildJitGroup(), 0, 2);
+        root.Controls.Add(BuildApprovalGroup(), 0, 3);
+        root.Controls.Add(BuildSiemGroup(), 0, 4);
 
-        var save = new Button
+        var footer = new TableLayoutPanel
         {
-            Text = "Save & Apply",
-            Left = 752,
-            Top = 742,
-            Width = 105,
-            Height = 34,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            Margin = new Padding(0, 10, 0, 0)
+        };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var refresh = new Button
+        {
+            Text = "Refresh Status",
+            AutoSize = true,
+            MinimumSize = new Size(125, 34),
+            Anchor = AnchorStyles.Left
+        };
+        footer.Controls.Add(refresh, 0, 0);
+
+        var buttons = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.RightToLeft,
+            Dock = DockStyle.Fill
         };
         var cancel = new Button
         {
             Text = "Cancel",
-            Left = 867,
-            Top = 742,
-            Width = 90,
-            Height = 34,
             DialogResult = DialogResult.Cancel,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            AutoSize = true,
+            MinimumSize = new Size(90, 34)
         };
-        var refresh = new Button
+        var save = new Button
         {
-            Text = "Refresh Status",
-            Left = 20,
-            Top = 742,
-            Width = 125,
-            Height = 34,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            Text = "Save & Apply",
+            AutoSize = true,
+            MinimumSize = new Size(110, 34)
         };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(save);
+        footer.Controls.Add(buttons, 1, 0);
+        root.Controls.Add(footer, 0, 5);
 
-        Controls.AddRange([save, cancel, refresh]);
         AcceptButton = save;
         CancelButton = cancel;
 
@@ -107,317 +130,278 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         RefreshStatus();
     }
 
-    private void BuildJitGroup()
+    private GroupBox BuildJitGroup()
     {
-        var group = new GroupBox
-        {
-            Text = "JIT recovery grant",
-            Left = 20,
-            Top = 100,
-            Width = 935,
-            Height = 205,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        Controls.Add(group);
+        var group = CreateResponsiveGroup("JIT recovery grant");
+        var layout = CreateFourColumnLayout();
+        group.Controls.Add(layout);
 
         _jitEnabled.Text = "Enable JIT recovery requirement";
-        _jitEnabled.SetBounds(16, 28, 240, 25);
-        group.Controls.Add(_jitEnabled);
+        _jitEnabled.AutoSize = true;
+        _jitEnabled.Anchor = AnchorStyles.Left;
+        layout.Controls.Add(_jitEnabled, 0, 0);
+        layout.SetColumnSpan(_jitEnabled, 2);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Grant lifetime (min):",
-            Left = 280,
-            Top = 31,
-            Width = 120,
-            Height = 24
-        });
-        _jitMinutes.SetBounds(405, 27, 80, 27);
-        _jitMinutes.Minimum = 1;
-        _jitMinutes.Maximum = 1440;
-        group.Controls.Add(_jitMinutes);
+        layout.Controls.Add(FieldLabel("Grant lifetime (min):"), 2, 0);
+        ConfigureNumeric(_jitMinutes, 1, 1440);
+        layout.Controls.Add(_jitMinutes, 3, 0);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Authorized grantors:",
-            Left = 16,
-            Top = 67,
-            Width = 125,
-            Height = 24
-        });
-        _jitGrantors.SetBounds(145, 63, 330, 54);
+        layout.Controls.Add(FieldLabel("Authorized grantors:"), 0, 1);
         _jitGrantors.Multiline = true;
         _jitGrantors.ScrollBars = ScrollBars.Vertical;
-        group.Controls.Add(_jitGrantors);
+        _jitGrantors.Dock = DockStyle.Fill;
+        _jitGrantors.MinimumSize = new Size(0, 64);
+        layout.Controls.Add(_jitGrantors, 1, 1);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Grant subject:",
-            Left = 500,
-            Top = 67,
-            Width = 95,
-            Height = 24
-        });
-        _jitSubject.SetBounds(600, 63, 305, 27);
-        group.Controls.Add(_jitSubject);
+        layout.Controls.Add(FieldLabel("Grant subject:"), 2, 1);
+        _jitSubject.Dock = DockStyle.Fill;
+        layout.Controls.Add(_jitSubject, 3, 1);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Reason:",
-            Left = 500,
-            Top = 101,
-            Width = 95,
-            Height = 24
-        });
-        _jitReason.SetBounds(600, 97, 305, 27);
-        group.Controls.Add(_jitReason);
+        layout.Controls.Add(FieldLabel("Reason:"), 2, 2);
+        _jitReason.Dock = DockStyle.Fill;
+        layout.Controls.Add(_jitReason, 3, 2);
 
-        var grant = new Button
-        {
-            Text = "Grant",
-            Left = 600,
-            Top = 132,
-            Width = 90,
-            Height = 30
-        };
-        _jitGrantId.SetBounds(145, 130, 330, 27);
+        layout.Controls.Add(FieldLabel("Grant ID:"), 0, 3);
+        _jitGrantId.Dock = DockStyle.Fill;
         _jitGrantId.PlaceholderText = "Grant ID for revoke";
+        layout.Controls.Add(_jitGrantId, 1, 3);
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = true
+        };
         var revoke = new Button
         {
             Text = "Revoke ID",
-            Left = 500,
-            Top = 132,
-            Width = 90,
-            Height = 30
+            AutoSize = true,
+            MinimumSize = new Size(90, 30)
         };
-        group.Controls.AddRange([_jitGrantId, revoke, grant]);
+        var grant = new Button
+        {
+            Text = "Grant",
+            AutoSize = true,
+            MinimumSize = new Size(90, 30)
+        };
+        actions.Controls.Add(revoke);
+        actions.Controls.Add(grant);
+        layout.Controls.Add(actions, 2, 3);
+        layout.SetColumnSpan(actions, 2);
 
-        _jitStatus.SetBounds(16, 169, 889, 28);
-        group.Controls.Add(_jitStatus);
+        _jitStatus.AutoSize = true;
+        _jitStatus.MaximumSize = new Size(940, 0);
+        _jitStatus.Margin = new Padding(0, 6, 0, 0);
+        layout.Controls.Add(_jitStatus, 0, 4);
+        layout.SetColumnSpan(_jitStatus, 4);
 
         grant.Click += (_, _) => GrantJit();
         revoke.Click += (_, _) => RevokeJit();
+
+        return group;
     }
 
-    private void BuildApprovalGroup()
+    private GroupBox BuildApprovalGroup()
     {
-        var group = new GroupBox
-        {
-            Text = "Two-person approval",
-            Left = 20,
-            Top = 315,
-            Width = 935,
-            Height = 180,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        Controls.Add(group);
+        var group = CreateResponsiveGroup("Two-person approval");
+        var layout = CreateFourColumnLayout();
+        group.Controls.Add(layout);
 
         _approvalEnabled.Text = "Require second authorized Windows user";
-        _approvalEnabled.SetBounds(16, 28, 280, 25);
-        group.Controls.Add(_approvalEnabled);
+        _approvalEnabled.AutoSize = true;
+        _approvalEnabled.Anchor = AnchorStyles.Left;
+        layout.Controls.Add(_approvalEnabled, 0, 0);
+        layout.SetColumnSpan(_approvalEnabled, 2);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Approval lifetime (min):",
-            Left = 315,
-            Top = 31,
-            Width = 135,
-            Height = 24
-        });
-        _approvalMinutes.SetBounds(455, 27, 80, 27);
-        _approvalMinutes.Minimum = 1;
-        _approvalMinutes.Maximum = 1440;
-        group.Controls.Add(_approvalMinutes);
+        layout.Controls.Add(FieldLabel("Approval lifetime (min):"), 2, 0);
+        ConfigureNumeric(_approvalMinutes, 1, 1440);
+        layout.Controls.Add(_approvalMinutes, 3, 0);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Authorized approvers:",
-            Left = 16,
-            Top = 67,
-            Width = 130,
-            Height = 24
-        });
-        _approvers.SetBounds(150, 63, 325, 54);
+        layout.Controls.Add(FieldLabel("Authorized approvers:"), 0, 1);
         _approvers.Multiline = true;
         _approvers.ScrollBars = ScrollBars.Vertical;
-        group.Controls.Add(_approvers);
+        _approvers.Dock = DockStyle.Fill;
+        _approvers.MinimumSize = new Size(0, 64);
+        layout.Controls.Add(_approvers, 1, 1);
 
-        group.Controls.Add(new Label
+        layout.Controls.Add(FieldLabel("Session ID:"), 2, 1);
+        _approvalSession.Dock = DockStyle.Fill;
+        layout.Controls.Add(_approvalSession, 3, 1);
+
+        layout.Controls.Add(FieldLabel("Comment:"), 2, 2);
+        _approvalComment.Dock = DockStyle.Fill;
+        layout.Controls.Add(_approvalComment, 3, 2);
+
+        var actions = new FlowLayoutPanel
         {
-            Text = "Session ID:",
-            Left = 500,
-            Top = 67,
-            Width = 85,
-            Height = 24
-        });
-        _approvalSession.SetBounds(590, 63, 315, 27);
-        group.Controls.Add(_approvalSession);
-
-        group.Controls.Add(new Label
-        {
-            Text = "Comment:",
-            Left = 500,
-            Top = 101,
-            Width = 85,
-            Height = 24
-        });
-        _approvalComment.SetBounds(590, 97, 315, 27);
-        group.Controls.Add(_approvalComment);
-
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = true
+        };
         var approve = new Button
         {
             Text = "Approve",
-            Left = 590,
-            Top = 132,
-            Width = 90,
-            Height = 30
+            AutoSize = true,
+            MinimumSize = new Size(90, 30)
         };
         var deny = new Button
         {
             Text = "Deny",
-            Left = 690,
-            Top = 132,
-            Width = 90,
-            Height = 30
+            AutoSize = true,
+            MinimumSize = new Size(90, 30)
         };
-        group.Controls.AddRange([approve, deny]);
+        actions.Controls.Add(approve);
+        actions.Controls.Add(deny);
+        layout.Controls.Add(actions, 2, 3);
+        layout.SetColumnSpan(actions, 2);
 
-        _approvalStatus.SetBounds(16, 137, 555, 30);
-        group.Controls.Add(_approvalStatus);
+        _approvalStatus.AutoSize = true;
+        _approvalStatus.MaximumSize = new Size(940, 0);
+        _approvalStatus.Margin = new Padding(0, 6, 0, 0);
+        layout.Controls.Add(_approvalStatus, 0, 4);
+        layout.SetColumnSpan(_approvalStatus, 4);
 
         approve.Click += (_, _) => DecideApproval(true);
         deny.Click += (_, _) => DecideApproval(false);
+
+        return group;
     }
 
-    private void BuildSiemGroup()
+    private GroupBox BuildSiemGroup()
     {
-        var group = new GroupBox
-        {
-            Text = "SIEM forwarding",
-            Left = 20,
-            Top = 505,
-            Width = 935,
-            Height = 220,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        Controls.Add(group);
+        var group = CreateResponsiveGroup("SIEM forwarding");
+        var layout = CreateFourColumnLayout();
+        group.Controls.Add(layout);
 
         _siemEnabled.Text = "Enable SIEM forwarding";
-        _siemEnabled.SetBounds(16, 28, 180, 25);
-        group.Controls.Add(_siemEnabled);
+        _siemEnabled.AutoSize = true;
+        _siemEnabled.Anchor = AnchorStyles.Left;
+        layout.Controls.Add(_siemEnabled, 0, 0);
 
-        group.Controls.Add(new Label
-        {
-            Text = "Mode:",
-            Left = 215,
-            Top = 31,
-            Width = 45,
-            Height = 24
-        });
-        _siemMode.SetBounds(265, 27, 135, 27);
+        layout.Controls.Add(FieldLabel("Mode:"), 1, 0);
         _siemMode.DropDownStyle = ComboBoxStyle.DropDownList;
         _siemMode.Items.AddRange(["FileJsonl", "Webhook"]);
-        group.Controls.Add(_siemMode);
+        _siemMode.Dock = DockStyle.Fill;
+        layout.Controls.Add(_siemMode, 2, 0);
 
         _siemFailClosed.Text = "Fail closed when SIEM is not ready";
-        _siemFailClosed.SetBounds(430, 28, 245, 25);
-        group.Controls.Add(_siemFailClosed);
+        _siemFailClosed.AutoSize = true;
+        _siemFailClosed.Anchor = AnchorStyles.Left;
+        layout.Controls.Add(_siemFailClosed, 3, 0);
 
-        group.Controls.Add(new Label
+        layout.Controls.Add(FieldLabel("JSONL file:"), 0, 1);
+        _siemFile.Dock = DockStyle.Fill;
+        layout.Controls.Add(_siemFile, 1, 1);
+
+        layout.Controls.Add(FieldLabel("HTTPS webhook:"), 2, 1);
+        _siemWebhook.Dock = DockStyle.Fill;
+        layout.Controls.Add(_siemWebhook, 3, 1);
+
+        layout.Controls.Add(FieldLabel("Client cert thumbprint:"), 0, 2);
+        _siemCertificate.Dock = DockStyle.Fill;
+        layout.Controls.Add(_siemCertificate, 1, 2);
+
+        var numericPanel = new FlowLayoutPanel
         {
-            Text = "JSONL file:",
-            Left = 16,
-            Top = 67,
-            Width = 85,
-            Height = 24
-        });
-        _siemFile.SetBounds(105, 63, 345, 27);
-        group.Controls.Add(_siemFile);
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = true
+        };
+        numericPanel.Controls.Add(FieldLabel("Timeout:"));
+        ConfigureNumeric(_siemTimeout, 2, 120);
+        numericPanel.Controls.Add(_siemTimeout);
+        numericPanel.Controls.Add(FieldLabel("Flush min:"));
+        ConfigureNumeric(_siemFlushMinutes, 1, 1440);
+        numericPanel.Controls.Add(_siemFlushMinutes);
+        numericPanel.Controls.Add(FieldLabel("Max outbox:"));
+        ConfigureNumeric(_siemMaxOutbox, 100, 100000);
+        numericPanel.Controls.Add(_siemMaxOutbox);
+        layout.Controls.Add(numericPanel, 2, 2);
+        layout.SetColumnSpan(numericPanel, 2);
 
-        group.Controls.Add(new Label
+        var actions = new FlowLayoutPanel
         {
-            Text = "HTTPS webhook:",
-            Left = 475,
-            Top = 67,
-            Width = 100,
-            Height = 24
-        });
-        _siemWebhook.SetBounds(580, 63, 325, 27);
-        group.Controls.Add(_siemWebhook);
-
-        group.Controls.Add(new Label
-        {
-            Text = "Client cert thumbprint:",
-            Left = 16,
-            Top = 101,
-            Width = 135,
-            Height = 24
-        });
-        _siemCertificate.SetBounds(155, 97, 295, 27);
-        group.Controls.Add(_siemCertificate);
-
-        group.Controls.Add(new Label
-        {
-            Text = "Timeout:",
-            Left = 475,
-            Top = 101,
-            Width = 55,
-            Height = 24
-        });
-        _siemTimeout.SetBounds(535, 97, 65, 27);
-        _siemTimeout.Minimum = 2;
-        _siemTimeout.Maximum = 120;
-        group.Controls.Add(_siemTimeout);
-
-        group.Controls.Add(new Label
-        {
-            Text = "Flush min:",
-            Left = 615,
-            Top = 101,
-            Width = 65,
-            Height = 24
-        });
-        _siemFlushMinutes.SetBounds(685, 97, 65, 27);
-        _siemFlushMinutes.Minimum = 1;
-        _siemFlushMinutes.Maximum = 1440;
-        group.Controls.Add(_siemFlushMinutes);
-
-        group.Controls.Add(new Label
-        {
-            Text = "Max outbox:",
-            Left = 765,
-            Top = 101,
-            Width = 75,
-            Height = 24
-        });
-        _siemMaxOutbox.SetBounds(840, 97, 65, 27);
-        _siemMaxOutbox.Minimum = 100;
-        _siemMaxOutbox.Maximum = 100000;
-        group.Controls.Add(_siemMaxOutbox);
-
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = true
+        };
         var check = new Button
         {
             Text = "Test Readiness",
-            Left = 580,
-            Top = 137,
-            Width = 115,
-            Height = 30
+            AutoSize = true,
+            MinimumSize = new Size(115, 30)
         };
         var flush = new Button
         {
             Text = "Flush Now",
-            Left = 705,
-            Top = 137,
-            Width = 100,
-            Height = 30
+            AutoSize = true,
+            MinimumSize = new Size(100, 30)
         };
-        group.Controls.AddRange([check, flush]);
+        actions.Controls.Add(check);
+        actions.Controls.Add(flush);
+        layout.Controls.Add(actions, 2, 3);
+        layout.SetColumnSpan(actions, 2);
 
-        _siemStatus.SetBounds(16, 137, 545, 65);
-        group.Controls.Add(_siemStatus);
+        _siemStatus.AutoSize = true;
+        _siemStatus.MaximumSize = new Size(940, 0);
+        _siemStatus.Margin = new Padding(0, 6, 0, 0);
+        layout.Controls.Add(_siemStatus, 0, 4);
+        layout.SetColumnSpan(_siemStatus, 4);
 
         check.Click += (_, _) => CheckSiem();
         flush.Click += async (_, _) => await FlushSiemAsync();
+
+        return group;
+    }
+
+    private static GroupBox CreateResponsiveGroup(string title) =>
+        new()
+        {
+            Text = title,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12),
+            Margin = new Padding(0, 0, 0, 10)
+        };
+
+    private static TableLayoutPanel CreateFourColumnLayout()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 4,
+            RowCount = 5
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        for (var row = 0; row < 5; row++)
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        return layout;
+    }
+
+    private static Label FieldLabel(string text) =>
+        new()
+        {
+            Text = text,
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 6, 8, 4)
+        };
+
+    private static void ConfigureNumeric(
+        NumericUpDown control,
+        int minimum,
+        int maximum)
+    {
+        control.Minimum = minimum;
+        control.Maximum = maximum;
+        control.Width = 90;
+        control.Anchor = AnchorStyles.Left;
+        control.Margin = new Padding(0, 2, 8, 4);
     }
 
     private void LoadSettings()
