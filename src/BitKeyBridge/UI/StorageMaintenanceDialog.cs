@@ -570,11 +570,11 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
                 value));
 
     private static void AddNumeric(
-        Control parent,
+        TableLayoutPanel parent,
         string label,
         NumericUpDown control,
-        int left,
-        int top,
+        int column,
+        int row,
         int minimum,
         int maximum)
     {
@@ -582,22 +582,23 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
             new Label
             {
                 Text = label,
-                Left = left,
-                Top = top + 4,
-                Width = 205,
-                Height = 24
-            });
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 6, 8, 4)
+            },
+            column,
+            row);
 
-        control.SetBounds(
-            left + 210,
-            top,
-            120,
-            27);
         control.Minimum = minimum;
         control.Maximum = maximum;
+        control.Width = 120;
+        control.Anchor = AnchorStyles.Left;
+        control.Margin = new Padding(0, 2, 12, 4);
 
         parent.Controls.Add(
-            control);
+            control,
+            column + 1,
+            row);
     }
 
     private static void OpenDirectory(
