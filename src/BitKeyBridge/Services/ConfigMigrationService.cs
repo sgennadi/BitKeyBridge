@@ -132,6 +132,10 @@ public sealed class ConfigMigrationService
 
         try
         {
+            ConfigurationMaintenanceService
+                .ValidateAppConfig(
+                    config);
+
             Directory.CreateDirectory(
                 _backupsDirectory);
 
