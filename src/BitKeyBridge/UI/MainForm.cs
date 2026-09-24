@@ -738,115 +738,131 @@ public sealed partial class MainForm : DpiAwareForm
         {
             Text = "Coverage Policy",
             StartPosition = FormStartPosition.CenterParent,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
+            ClientSize = new Size(680, 430),
+            MinimumSize = new Size(560, 390),
             MaximizeBox = false,
             MinimizeBox = false,
-            ClientSize = new Size(620, 365),
             Font = Font
         };
+
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 4
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        dialog.Controls.Add(root);
 
         var enabled = new CheckBox
         {
             Text = "Enable Coverage policy evaluation",
-            Left = 20,
-            Top = 18,
-            Width = 280,
-            Checked = _config.CoveragePolicyEnabled
+            AutoSize = true,
+            Checked = _config.CoveragePolicyEnabled,
+            Margin = new Padding(0, 0, 0, 12)
         };
-        dialog.Controls.Add(enabled);
+        root.Controls.Add(enabled, 0, 0);
 
-        dialog.Controls.Add(new Label
+        var grid = new TableLayoutPanel
         {
-            Text = "Metric",
-            Left = 20,
-            Top = 60,
-            Width = 190,
-            Font = new Font(Font, FontStyle.Bold)
-        });
-        dialog.Controls.Add(new Label
-        {
-            Text = "Allowed maximum",
-            Left = 235,
-            Top = 60,
-            Width = 120,
-            Font = new Font(Font, FontStyle.Bold)
-        });
-        dialog.Controls.Add(new Label
-        {
-            Text = "Severity",
-            Left = 390,
-            Top = 60,
-            Width = 100,
-            Font = new Font(Font, FontStyle.Bold)
-        });
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 3,
+            RowCount = 5
+        };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var row = 1; row < 5; row++)
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        grid.Controls.Add(CoveragePolicyHeader("Metric"), 0, 0);
+        grid.Controls.Add(CoveragePolicyHeader("Allowed maximum"), 1, 0);
+        grid.Controls.Add(CoveragePolicyHeader("Severity"), 2, 0);
 
         var noKeyMax = CreatePolicyMaximum(
-            dialog,
+            grid,
             "No recovery metadata",
-            90,
+            1,
             _config.CoveragePolicyMaxNoRecoveryKey);
         var noKeySeverity = CreatePolicySeverity(
-            dialog,
-            90,
+            grid,
+            1,
             _config.CoveragePolicyNoRecoveryKeySeverity);
 
         var unencryptedMax = CreatePolicyMaximum(
-            dialog,
+            grid,
             "Intune not encrypted",
-            135,
+            2,
             _config.CoveragePolicyMaxIntuneNotEncrypted);
         var unencryptedSeverity = CreatePolicySeverity(
-            dialog,
-            135,
+            grid,
+            2,
             _config.CoveragePolicyIntuneNotEncryptedSeverity);
 
         var staleMax = CreatePolicyMaximum(
-            dialog,
+            grid,
             "Intune stale",
-            180,
+            3,
             _config.CoveragePolicyMaxIntuneStale);
         var staleSeverity = CreatePolicySeverity(
-            dialog,
-            180,
+            grid,
+            3,
             _config.CoveragePolicyIntuneStaleSeverity);
 
         var oldKeyMax = CreatePolicyMaximum(
-            dialog,
+            grid,
             "Old cloud key metadata",
-            225,
+            4,
             _config.CoveragePolicyMaxOldCloudKey);
         var oldKeySeverity = CreatePolicySeverity(
-            dialog,
-            225,
+            grid,
+            4,
             _config.CoveragePolicyOldCloudKeySeverity);
 
-        dialog.Controls.Add(new Label
+        root.Controls.Add(grid, 0, 1);
+
+        root.Controls.Add(new Label
         {
             Text =
                 "Policy evaluates metadata counts only. It never retrieves a BitLocker recovery password.",
-            Left = 20,
-            Top = 275,
-            Width = 570,
-            Height = 36
-        });
+            AutoSize = true,
+            MaximumSize = new Size(620, 0),
+            Margin = new Padding(0, 12, 0, 8)
+        }, 0, 2);
 
-        var save = new Button
+        var buttons = new FlowLayoutPanel
         {
-            Text = "Save",
-            Left = 405,
-            Top = 320,
-            Width = 90,
-            DialogResult = DialogResult.OK
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.RightToLeft
         };
         var cancel = new Button
         {
             Text = "Cancel",
-            Left = 505,
-            Top = 320,
-            Width = 90,
-            DialogResult = DialogResult.Cancel
+            DialogResult = DialogResult.Cancel,
+            AutoSize = true,
+            MinimumSize = new Size(90, 32)
         };
-        dialog.Controls.AddRange([save, cancel]);
+        var save = new Button
+        {
+            Text = "Save",
+            DialogResult = DialogResult.OK,
+            AutoSize = true,
+            MinimumSize = new Size(90, 32)
+        };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(save);
+        root.Controls.Add(buttons, 0, 3);
+
         dialog.AcceptButton = save;
         dialog.CancelButton = cancel;
 
@@ -901,50 +917,58 @@ public sealed partial class MainForm : DpiAwareForm
         RefreshDashboard();
     }
 
-    private NumericUpDown CreatePolicyMaximum(
-        Control parent,
+    private Label CoveragePolicyHeader(string text) =>
+        new()
+        {
+            Text = text,
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            Margin = new Padding(0, 0, 12, 8)
+        };
+
+    private static NumericUpDown CreatePolicyMaximum(
+        TableLayoutPanel parent,
         string label,
-        int top,
+        int row,
         int value)
     {
         parent.Controls.Add(new Label
         {
             Text = label,
-            Left = 20,
-            Top = top + 4,
-            Width = 195,
-            Height = 24
-        });
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 6, 12, 6)
+        }, 0, row);
 
         var control = new NumericUpDown
         {
-            Left = 235,
-            Top = top,
             Width = 120,
             Minimum = 0,
             Maximum = 1000000,
-            Value = Math.Clamp(value, 0, 1000000)
+            Value = Math.Clamp(value, 0, 1000000),
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 2, 12, 6)
         };
-        parent.Controls.Add(control);
+        parent.Controls.Add(control, 1, row);
         return control;
     }
 
-    private ComboBox CreatePolicySeverity(
-        Control parent,
-        int top,
+    private static ComboBox CreatePolicySeverity(
+        TableLayoutPanel parent,
+        int row,
         string configured)
     {
         var control = new ComboBox
         {
-            Left = 390,
-            Top = top,
             Width = 130,
-            DropDownStyle = ComboBoxStyle.DropDownList
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 2, 0, 6)
         };
         control.Items.AddRange(["Error", "Warning", "Info"]);
         control.Text =
             CoveragePolicyService.NormalizeSeverity(configured);
-        parent.Controls.Add(control);
+        parent.Controls.Add(control, 2, row);
         return control;
     }
 
