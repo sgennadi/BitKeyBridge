@@ -19,157 +19,128 @@ public sealed class RbacSettingsDialog : DpiAwareForm
     {
         Text = "BitKeyBridge RBAC";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(780, 760);
-        MinimumSize = new Size(720, 680);
+        Size = new Size(820, 800);
+        MinimumSize = new Size(650, 620);
         Font = new Font("Segoe UI", 9F);
 
-        var title = new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 8
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        for (var i = 0; i < 8; i++)
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = "Windows User / Group Authorization",
             Font = new Font("Segoe UI Semibold", 15F),
             AutoSize = true,
-            Left = 18,
-            Top = 16
-        };
-        Controls.Add(title);
+            Margin = new Padding(0, 0, 0, 8)
+        }, 0, 0);
 
-        var note = new Label
+        root.Controls.Add(new Label
         {
             Text =
                 "RBAC controls recovery-password access and Intune rotation inside BitKeyBridge. " +
                 "Enter DOMAIN\\group, DOMAIN\\user, local account/group, or SID — one per line.",
-            Left = 20,
-            Top = 55,
-            Width = 700,
-            Height = 46
+            AutoSize = true,
+            MaximumSize = new Size(750, 0),
+            Margin = new Padding(0, 0, 0, 10)
+        }, 0, 1);
+
+        var options = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            WrapContents = true,
+            Margin = new Padding(0, 0, 0, 10)
         };
-        Controls.Add(note);
-
         _enabled.Text = "Enable RBAC";
-        _enabled.SetBounds(20, 105, 150, 26);
+        _enabled.AutoSize = true;
         _enabled.Checked = config.RbacEnabled;
-        Controls.Add(_enabled);
-
         _adminBypass.Text =
             "Allow members of local Administrators to bypass RBAC";
-        _adminBypass.SetBounds(200, 105, 420, 26);
+        _adminBypass.AutoSize = true;
         _adminBypass.Checked = config.RbacAllowLocalAdministrators;
-        Controls.Add(_adminBypass);
+        options.Controls.Add(_enabled);
+        options.Controls.Add(_adminBypass);
+        root.Controls.Add(options, 0, 2);
 
-        Controls.Add(new Label
-        {
-            Text = "Recovery Readers",
-            Left = 20,
-            Top = 148,
-            Width = 200,
-            Height = 24,
-            Font = new Font("Segoe UI Semibold", 10F)
-        });
-
-        Controls.Add(new Label
-        {
-            Text =
-                "May search the local recovery CSV, retrieve/reveal/copy AD or Entra recovery passwords.",
-            Left = 20,
-            Top = 173,
-            Width = 700,
-            Height = 24
-        });
-
-        _readers.Multiline = true;
-        _readers.ScrollBars = ScrollBars.Vertical;
-        _readers.SetBounds(20, 202, 700, 110);
         _readers.Text = string.Join(
             Environment.NewLine,
             config.RbacRecoveryReaders);
-        Controls.Add(_readers);
+        root.Controls.Add(
+            BuildPrincipalGroup(
+                "Recovery Readers",
+                "May search the local recovery CSV, retrieve/reveal/copy AD or Entra recovery passwords.",
+                _readers),
+            0,
+            3);
 
-        Controls.Add(new Label
-        {
-            Text = "Rotation Operators",
-            Left = 20,
-            Top = 327,
-            Width = 200,
-            Height = 24,
-            Font = new Font("Segoe UI Semibold", 10F)
-        });
-
-        Controls.Add(new Label
-        {
-            Text =
-                "May submit Intune BitLocker recovery-key rotation requests. RecoveryRead is independent.",
-            Left = 20,
-            Top = 352,
-            Width = 700,
-            Height = 24
-        });
-
-        _rotators.Multiline = true;
-        _rotators.ScrollBars = ScrollBars.Vertical;
-        _rotators.SetBounds(20, 381, 700, 100);
         _rotators.Text = string.Join(
             Environment.NewLine,
             config.RbacRotationOperators);
-        Controls.Add(_rotators);
+        root.Controls.Add(
+            BuildPrincipalGroup(
+                "Rotation Operators",
+                "May submit Intune BitLocker recovery-key rotation requests. RecoveryRead is independent.",
+                _rotators),
+            0,
+            4);
 
-        Controls.Add(new Label
-        {
-            Text = "BitKeyBridge Administrators",
-            Left = 20,
-            Top = 492,
-            Width = 240,
-            Height = 24,
-            Font = new Font("Segoe UI Semibold", 10F)
-        });
-
-        Controls.Add(new Label
-        {
-            Text =
-                "May see Administration and Health & Audit sections without being a local Windows Administrator.",
-            Left = 20,
-            Top = 517,
-            Width = 710,
-            Height = 24
-        });
-
-        _administrators.Multiline = true;
-        _administrators.ScrollBars = ScrollBars.Vertical;
-        _administrators.SetBounds(20, 546, 710, 90);
         _administrators.Text = string.Join(
             Environment.NewLine,
             config.RbacAdministrators);
-        Controls.Add(_administrators);
+        root.Controls.Add(
+            BuildPrincipalGroup(
+                "BitKeyBridge Administrators",
+                "May see Administration and Health & Audit sections without being a local Windows Administrator.",
+                _administrators),
+            0,
+            5);
 
-        _status.SetBounds(20, 646, 710, 45);
         _status.Text =
             "Current identity: " + AuthorizationService.CurrentIdentityName();
-        Controls.Add(_status);
+        _status.AutoSize = true;
+        _status.MaximumSize = new Size(750, 0);
+        _status.Margin = new Padding(0, 8, 0, 8);
+        root.Controls.Add(_status, 0, 6);
 
-        var validate = new Button
+        var buttons = new FlowLayoutPanel
         {
-            Text = "Validate",
-            Left = 20,
-            Top = 696,
-            Width = 110,
-            Height = 34
-        };
-        var save = new Button
-        {
-            Text = "Save",
-            Left = 495,
-            Top = 696,
-            Width = 105,
-            Height = 34
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false
         };
         var cancel = new Button
         {
             Text = "Cancel",
-            Left = 615,
-            Top = 696,
-            Width = 105,
-            Height = 34
+            AutoSize = true,
+            MinimumSize = new Size(105, 34)
         };
-        Controls.AddRange([validate, save, cancel]);
+        var save = new Button
+        {
+            Text = "Save",
+            AutoSize = true,
+            MinimumSize = new Size(105, 34)
+        };
+        var validate = new Button
+        {
+            Text = "Validate",
+            AutoSize = true,
+            MinimumSize = new Size(110, 34)
+        };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(save);
+        buttons.Controls.Add(validate);
+        root.Controls.Add(buttons, 0, 7);
 
         validate.Click += (_, _) => ValidateSettings(showSuccess: true);
         save.Click += (_, _) =>
@@ -185,6 +156,49 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             DialogResult = DialogResult.Cancel;
             Close();
         };
+    }
+
+    private static GroupBox BuildPrincipalGroup(
+        string title,
+        string description,
+        TextBox editor)
+    {
+        var group = new GroupBox
+        {
+            Text = title,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12),
+            Margin = new Padding(0, 0, 0, 8)
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+        layout.Controls.Add(new Label
+        {
+            Text = description,
+            AutoSize = true,
+            MaximumSize = new Size(720, 0),
+            Margin = new Padding(0, 0, 0, 6)
+        }, 0, 0);
+
+        editor.Multiline = true;
+        editor.ScrollBars = ScrollBars.Vertical;
+        editor.Dock = DockStyle.Top;
+        editor.Height = 96;
+        editor.MinimumSize = new Size(0, 80);
+        layout.Controls.Add(editor, 0, 1);
+
+        group.Controls.Add(layout);
+        return group;
     }
 
     private bool ValidateSettings(bool showSuccess)
