@@ -5,29 +5,49 @@ namespace BitKeyBridge;
 public static class AdSessionCredentials
 {
     private static readonly object Sync = new();
-    private static string _password = string.Empty;
+    private static char[] _password = [];
 
     public static bool HasPassword
     {
         get
         {
-            lock (Sync) return !string.IsNullOrEmpty(_password);
+            lock (Sync)
+            {
+                return _password.Length > 0;
+            }
         }
     }
 
     public static void SetPassword(string? password)
     {
-        lock (Sync) _password = password ?? string.Empty;
+        lock (Sync)
+        {
+            ZeroPasswordBuffer();
+
+            _password =
+                string.IsNullOrEmpty(password)
+                    ? []
+                    : password.ToCharArray();
+        }
     }
 
     public static string GetPasswordCopy()
     {
-        lock (Sync) return _password;
+        lock (Sync)
+        {
+            return _password.Length == 0
+                ? string.Empty
+                : new string(_password);
+        }
     }
 
     public static void Clear()
     {
-        lock (Sync) _password = string.Empty;
+        lock (Sync)
+        {
+            ZeroPasswordBuffer();
+            _password = [];
+        }
     }
 
     public static NetworkCredential? CreateNetworkCredential(AppConfig config)
@@ -63,7 +83,14 @@ public static class AdSessionCredentials
 
         var username = config.AdUsername?.Trim() ?? string.Empty;
         string password;
-        lock (Sync) password = _password;
+
+        lock (Sync)
+        {
+            password =
+                _password.Length == 0
+                    ? string.Empty
+                    : new string(_password);
+        }
 
         if (string.IsNullOrWhiteSpace(username))
             throw new InvalidOperationException(
@@ -87,5 +114,16 @@ public static class AdSessionCredentials
         return string.IsNullOrWhiteSpace(domain)
             ? new NetworkCredential(username, password)
             : new NetworkCredential(username, password, domain);
+    }
+
+    private static void ZeroPasswordBuffer()
+    {
+        if (_password.Length == 0)
+            return;
+
+        Array.Clear(
+            _password,
+            0,
+            _password.Length);
     }
 }

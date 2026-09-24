@@ -9,6 +9,11 @@ public sealed class HealthSnapshot
     public string ServiceState { get; set; } = "NotInstalled";
     public string ServiceIdentity { get; set; } = string.Empty;
     public bool ServiceInstalled { get; set; }
+    public string ServiceAccessStatus { get; set; } = "Unknown";
+    public int ServiceAccessProblems { get; set; }
+    public bool MachineAdCredentialConfigured { get; set; }
+    public string MachineAdCredentialAccessStatus { get; set; } = "NotConfigured";
+    public string MachineAdCredentialAccessAccount { get; set; } = string.Empty;
     public bool ServiceCoverageEnabled { get; set; }
     public int ServiceCoverageIntervalMinutes { get; set; }
     public bool MachineCloudConfigured { get; set; }

@@ -118,6 +118,10 @@ public sealed class HealthHttpServer : IDisposable
                         snapshot.OverallStatus != "Error",
                     serviceState =
                         snapshot.ServiceState,
+                    serviceAccessStatus =
+                        snapshot.ServiceAccessStatus,
+                    serviceAccessProblems =
+                        snapshot.ServiceAccessProblems,
                     lastSuccessfulExport =
                         snapshot.LastSuccessfulExport,
                     lastSuccessfulExportAgeHours =
@@ -162,6 +166,16 @@ public sealed class HealthHttpServer : IDisposable
                         snapshot.MachineCloudConfigured,
                     machineCloudKeyAccessStatus =
                         snapshot.MachineCloudKeyAccessStatus,
+                    serviceAccessStatus =
+                        snapshot.ServiceAccessStatus,
+                    serviceAccessProblems =
+                        snapshot.ServiceAccessProblems,
+                    machineAdCredentialConfigured =
+                        snapshot.MachineAdCredentialConfigured,
+                    machineAdCredentialAccessStatus =
+                        snapshot.MachineAdCredentialAccessStatus,
+                    machineAdCredentialAccessAccount =
+                        snapshot.MachineAdCredentialAccessAccount,
                     remoteApiEnabled =
                         snapshot.RemoteApiEnabled,
                     remoteApiManagementEnabled =

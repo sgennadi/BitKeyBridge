@@ -130,20 +130,52 @@ public static class WindowsServiceHost
 
     public static void Uninstall()
     {
-        using var scm = OpenScManager(ScManagerConnect);
-        using var service = OpenServiceSafe(
-            scm.DangerousGetHandle(),
-            ServiceName,
-            ServiceQueryStatus | ServiceStop | ServiceDelete);
+        using var scm =
+            OpenScManager(
+                ScManagerConnect);
+        using var service =
+            OpenServiceSafe(
+                scm.DangerousGetHandle(),
+                ServiceName,
+                ServiceQueryStatus |
+                ServiceQueryConfig |
+                ServiceStop |
+                ServiceDelete);
+
         if (service.IsInvalid)
         {
-            if (Marshal.GetLastWin32Error() == ErrorServiceDoesNotExist) return;
-            ThrowLastWin32("Failed to open the BitKeyBridge Windows Service.");
+            if (Marshal.GetLastWin32Error() ==
+                ErrorServiceDoesNotExist)
+            {
+                return;
+            }
+
+            ThrowLastWin32(
+                "Failed to open the BitKeyBridge Windows Service.");
         }
 
-        try { Stop(); } catch { }
-        if (!DeleteService(service.DangerousGetHandle()))
-            ThrowLastWin32("Failed to delete the BitKeyBridge Windows Service.");
+        var previousIdentity =
+            QueryIdentity(
+                service.DangerousGetHandle());
+
+        try
+        {
+            Stop();
+        }
+        catch
+        {
+        }
+
+        if (!DeleteService(
+                service.DangerousGetHandle()))
+        {
+            ThrowLastWin32(
+                "Failed to delete the BitKeyBridge Windows Service.");
+        }
+
+        CleanupUninstalledServiceAccess(
+            previousIdentity);
+
         WindowsEventLogService.TryWrite(
             "BitKeyBridge Windows Service uninstalled.",
             EventLogSeverity.Information,
@@ -226,40 +258,76 @@ public static class WindowsServiceHost
             throw new InvalidOperationException(
                 "Administrator rights are required to change the Windows Service identity.");
 
-        var normalized = string.IsNullOrWhiteSpace(mode)
-            ? "LocalSystem"
-            : mode.Trim();
+        var normalized =
+            string.IsNullOrWhiteSpace(mode)
+                ? "LocalSystem"
+                : mode.Trim();
 
         string serviceAccount;
         string? servicePassword;
+        string canonicalMode;
 
-        if (normalized.Equals("LocalSystem", StringComparison.OrdinalIgnoreCase))
+        if (normalized.Equals(
+                "LocalSystem",
+                StringComparison.OrdinalIgnoreCase))
         {
+            canonicalMode = "LocalSystem";
             serviceAccount = "LocalSystem";
             servicePassword = null;
         }
-        else if (normalized.Equals("gMSA", StringComparison.OrdinalIgnoreCase) ||
-                 normalized.Equals("ManagedAccount", StringComparison.OrdinalIgnoreCase))
+        else if (normalized.Equals(
+                     "gMSA",
+                     StringComparison.OrdinalIgnoreCase) ||
+                 normalized.Equals(
+                     "ManagedAccount",
+                     StringComparison.OrdinalIgnoreCase))
         {
-            serviceAccount = (account ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(serviceAccount))
+            canonicalMode = "gMSA";
+            serviceAccount =
+                (account ??
+                 string.Empty)
+                .Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    serviceAccount))
+            {
                 throw new ArgumentException(
                     "A gMSA / managed service account name is required.");
-            if (!serviceAccount.EndsWith("$", StringComparison.Ordinal))
+            }
+
+            if (!serviceAccount.EndsWith(
+                    "$",
+                    StringComparison.Ordinal))
+            {
                 throw new ArgumentException(
                     "A gMSA account name must end with '$' (for example DOMAIN\\BitKeyBridgeSvc$).");
+            }
 
             servicePassword = null;
         }
-        else if (normalized.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase))
+        else if (normalized.Equals(
+                     "DomainAccount",
+                     StringComparison.OrdinalIgnoreCase))
         {
-            serviceAccount = (account ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(serviceAccount))
+            canonicalMode = "DomainAccount";
+            serviceAccount =
+                (account ??
+                 string.Empty)
+                .Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    serviceAccount))
+            {
                 throw new ArgumentException(
                     "A domain service account name is required.");
-            if (string.IsNullOrEmpty(password))
+            }
+
+            if (string.IsNullOrEmpty(
+                    password))
+            {
                 throw new ArgumentException(
                     "A password is required when configuring a regular domain service account.");
+            }
 
             servicePassword = password;
         }
@@ -269,54 +337,111 @@ public static class WindowsServiceHost
                 "Service identity mode must be LocalSystem, gMSA, or DomainAccount.");
         }
 
-        var before = GetInfo();
+        var before =
+            GetInfo();
+
         if (!before.Installed)
+        {
             throw new InvalidOperationException(
                 "Install the BitKeyBridge Windows Service before changing its identity.");
-
-        var appConfig = ConfigService.LoadAppConfig();
-        var certificateAccessRequired =
-            appConfig.ServiceCoverageEnabled ||
-            File.Exists(AppPaths.MachineCloudConfigFile);
-
-        if (certificateAccessRequired)
-        {
-            EnsureConfiguredCloudCertificateAccess(
-                serviceAccount,
-                required: appConfig.ServiceCoverageEnabled);
         }
 
-        if (appConfig.AuditSigningEnabled)
-        {
-            new AuditSigningService(appConfig)
-                .EnsureServiceAccess(
-                    serviceAccount,
-                    required: true);
-        }
+        var appConfig =
+            ConfigService.LoadAppConfig();
 
-        if (appConfig.RemoteApiEnabled &&
-            !string.IsNullOrWhiteSpace(
-                appConfig.RemoteApiCertificateThumbprint))
-        {
-            new CertificatePrivateKeyAccessService()
-                .EnsureServiceAccess(
-                    appConfig.RemoteApiCertificateThumbprint,
-                    serviceAccount);
-        }
+        var originalConfigMode =
+            appConfig.ServiceIdentityMode;
+        var originalConfigAccount =
+            appConfig.ServiceIdentityAccount;
 
-        var wasRunning = string.Equals(
-            before.State,
-            "Running",
-            StringComparison.OrdinalIgnoreCase);
+        var certificateAccess =
+            new CertificatePrivateKeyAccessService();
+        var credentialVault =
+            new CredentialVaultService();
 
-        if (wasRunning)
-            Stop();
+        var managedCertificates =
+            GetConfiguredServiceCertificateThumbprints(
+                appConfig);
 
-        var storageAclPrepared = false;
-        var serviceIdentityChanged = false;
+        var newlyGrantedCertificates =
+            new List<string>();
+
+        var machineCredentialAccessAdded =
+            false;
+        var storageAclPrepared =
+            false;
+        var configPrepared =
+            false;
+        var serviceIdentityChanged =
+            false;
+
+        var wasRunning =
+            string.Equals(
+                before.State,
+                "Running",
+                StringComparison.OrdinalIgnoreCase);
 
         try
         {
+            foreach (var thumbprint in
+                     managedCertificates)
+            {
+                var accessBefore =
+                    certificateAccess.GetStatus(
+                        thumbprint,
+                        serviceAccount);
+
+                var alreadyAllowed =
+                    !accessBefore.AccessRequired ||
+                    (accessBefore.ExplicitReadAllowed &&
+                     !accessBefore.ExplicitReadDenied);
+
+                var accessAfter =
+                    certificateAccess
+                        .EnsureServiceAccess(
+                            thumbprint,
+                            serviceAccount);
+
+                if (!alreadyAllowed &&
+                    accessAfter.AccessRequired)
+                {
+                    newlyGrantedCertificates.Add(
+                        thumbprint);
+                }
+            }
+
+            if (RequiresMachineAdCredential(
+                    appConfig))
+            {
+                var accessBefore =
+                    credentialVault
+                        .GetMachineCredentialAccess(
+                            serviceAccount);
+
+                if (!accessBefore.FileExists)
+                {
+                    throw new InvalidOperationException(
+                        "Machine / Service AD credential storage is selected, but the machine credential file does not exist. Save the AD credential before changing the Windows Service identity.");
+                }
+
+                var alreadyAllowed =
+                    !accessBefore.AccessRequired ||
+                    (accessBefore.DirectoryReadAllowed &&
+                     accessBefore.FileReadAllowed);
+
+                var accessAfter =
+                    credentialVault
+                        .EnsureMachineCredentialAccess(
+                            serviceAccount);
+
+                machineCredentialAccessAdded =
+                    !alreadyAllowed &&
+                    accessAfter.AccessRequired;
+            }
+
+            if (wasRunning)
+                Stop();
+
             if (appConfig.StorageAclHardeningEnabled)
             {
                 var storage =
@@ -334,15 +459,32 @@ public static class WindowsServiceHost
                 storageAclPrepared = true;
             }
 
-            using var scm = OpenScManager(ScManagerConnect);
-            using var service = OpenServiceRequired(
-                scm.DangerousGetHandle(),
-                ServiceName,
-                ServiceChangeConfig |
-                ServiceQueryConfig |
-                ServiceQueryStatus |
-                ServiceStart |
-                ServiceStop);
+            appConfig.ServiceIdentityMode =
+                canonicalMode;
+            appConfig.ServiceIdentityAccount =
+                canonicalMode.Equals(
+                    "LocalSystem",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? string.Empty
+                    : serviceAccount;
+
+            ConfigService.SaveAppConfig(
+                appConfig);
+
+            configPrepared = true;
+
+            using var scm =
+                OpenScManager(
+                    ScManagerConnect);
+            using var service =
+                OpenServiceRequired(
+                    scm.DangerousGetHandle(),
+                    ServiceName,
+                    ServiceChangeConfig |
+                    ServiceQueryConfig |
+                    ServiceQueryStatus |
+                    ServiceStart |
+                    ServiceStop);
 
             if (!ChangeServiceConfig(
                     service.DangerousGetHandle(),
@@ -363,20 +505,17 @@ public static class WindowsServiceHost
 
             serviceIdentityChanged = true;
 
-            if (appConfig.StorageAclHardeningEnabled)
+            if (restartIfRunning &&
+                wasRunning)
             {
-                var verification =
-                    new StorageSecurityService(
-                        serviceIdentityOverride:
-                            serviceAccount)
-                        .Check();
-
-                if (!verification.Valid)
-                {
-                    throw new InvalidOperationException(
-                        "Windows Service identity changed, but protected storage ACL verification failed.");
-                }
+                Start();
             }
+
+            CleanupPreviousServiceIdentityAccess(
+                before.Identity,
+                serviceAccount,
+                managedCertificates,
+                appConfig);
 
             WindowsEventLogService.TryWrite(
                 $"BitKeyBridge Windows Service identity changed to {serviceAccount}.",
@@ -386,43 +525,495 @@ public static class WindowsServiceHost
         }
         catch
         {
-            if (storageAclPrepared &&
-                !serviceIdentityChanged &&
-                !string.IsNullOrWhiteSpace(
-                    before.Identity))
+            if (!serviceIdentityChanged)
+            {
+                if (configPrepared)
+                {
+                    try
+                    {
+                        appConfig.ServiceIdentityMode =
+                            originalConfigMode;
+                        appConfig.ServiceIdentityAccount =
+                            originalConfigAccount;
+
+                        ConfigService.SaveAppConfig(
+                            appConfig);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Service-identity configuration rollback failed: " +
+                            rollbackEx.Message,
+                            EventLogSeverity.Error,
+                            4008,
+                            "Service");
+                    }
+                }
+
+                if (storageAclPrepared &&
+                    !string.IsNullOrWhiteSpace(
+                        before.Identity))
+                {
+                    try
+                    {
+                        _ =
+                            new StorageSecurityService(
+                                serviceIdentityOverride:
+                                    before.Identity)
+                                .Repair();
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Protected storage ACL rollback failed after service-identity change failure: " +
+                            rollbackEx.Message,
+                            EventLogSeverity.Error,
+                            4623,
+                            "StorageSecurity");
+                    }
+                }
+
+                if (machineCredentialAccessAdded)
+                {
+                    try
+                    {
+                        _ =
+                            credentialVault
+                                .RevokeMachineCredentialAccess(
+                                    serviceAccount);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Machine credential ACL rollback failed after service-identity change failure: " +
+                            rollbackEx.Message,
+                            EventLogSeverity.Error,
+                            4072,
+                            "CredentialVault");
+                    }
+                }
+
+                foreach (var thumbprint in
+                         newlyGrantedCertificates)
+                {
+                    try
+                    {
+                        _ =
+                            certificateAccess.RevokeRead(
+                                thumbprint,
+                                serviceAccount);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            $"Certificate ACL rollback failed after service-identity change failure. Certificate={thumbprint}; Error={rollbackEx.Message}",
+                            EventLogSeverity.Error,
+                            4058,
+                            "CertificateACL");
+                    }
+                }
+
+                if (restartIfRunning &&
+                    wasRunning)
+                {
+                    try
+                    {
+                        Start();
+                    }
+                    catch (Exception restartEx)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Previous Windows Service identity could not be restarted after rollback: " +
+                            restartEx.Message,
+                            EventLogSeverity.Error,
+                            4009,
+                            "Service");
+                    }
+                }
+            }
+            else
+            {
+                WindowsEventLogService.TryWrite(
+                    "Windows Service identity was changed but a post-change operation failed. The new identity and its required access were retained so the service can be repaired without losing access.",
+                    EventLogSeverity.Error,
+                    4007,
+                    "Service");
+            }
+
+            throw;
+        }
+    }
+
+    public static void EnsureConfiguredServiceAccess(
+        string? identity = null)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException(
+                "Windows Service access preparation is only available on Windows.");
+
+        if (!SecurityContext.IsAdministrator())
+            throw new InvalidOperationException(
+                "Administrator rights are required to prepare Windows Service access.");
+
+        var serviceIdentity =
+            string.IsNullOrWhiteSpace(
+                identity)
+                ? GetInfo().Identity
+                : identity.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                serviceIdentity))
+        {
+            throw new InvalidOperationException(
+                "The Windows Service identity could not be determined.");
+        }
+
+        var config =
+            ConfigService.LoadAppConfig();
+
+        var certificateAccess =
+            new CertificatePrivateKeyAccessService();
+
+        foreach (var thumbprint in
+                 GetConfiguredServiceCertificateThumbprints(
+                     config))
+        {
+            _ =
+                certificateAccess
+                    .EnsureServiceAccess(
+                        thumbprint,
+                        serviceIdentity);
+        }
+
+        if (RequiresMachineAdCredential(
+                config))
+        {
+            var credentialVault =
+                new CredentialVaultService();
+
+            var access =
+                credentialVault
+                    .GetMachineCredentialAccess(
+                        serviceIdentity);
+
+            if (!access.FileExists)
+            {
+                throw new InvalidOperationException(
+                    "Machine / Service AD credential storage is selected, but the machine credential file does not exist.");
+            }
+
+            _ =
+                credentialVault
+                    .EnsureMachineCredentialAccess(
+                        serviceIdentity);
+        }
+
+        if (config.StorageAclHardeningEnabled)
+        {
+            var storage =
+                new StorageSecurityService(
+                    serviceIdentityOverride:
+                        serviceIdentity)
+                    .Repair();
+
+            if (!storage.RepairSucceeded)
+            {
+                throw new InvalidOperationException(
+                    "Protected storage ACLs could not be prepared for the Windows Service identity.");
+            }
+        }
+    }
+
+    internal static List<string>
+        GetConfiguredServiceCertificateThumbprints(
+            AppConfig config)
+    {
+        var result =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        static void Add(
+            ISet<string> set,
+            string? thumbprint)
+        {
+            var normalized =
+                new string(
+                    (thumbprint ??
+                     string.Empty)
+                    .Where(
+                        Uri.IsHexDigit)
+                    .Select(
+                        char.ToUpperInvariant)
+                    .ToArray());
+
+            if (!string.IsNullOrWhiteSpace(
+                    normalized))
+            {
+                set.Add(
+                    normalized);
+            }
+        }
+
+        if (config.ServiceCoverageEnabled ||
+            File.Exists(
+                AppPaths.MachineCloudConfigFile))
+        {
+            if (!File.Exists(
+                    AppPaths.MachineCloudConfigFile))
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration is required before scheduled Coverage can use a non-LocalSystem service identity.");
+            }
+
+            var cloud =
+                ConfigService.LoadMachineCloudConfig();
+
+            if (string.IsNullOrWhiteSpace(
+                    cloud.CertificateThumbprint))
+            {
+                throw new InvalidOperationException(
+                    "Machine cloud configuration does not contain a certificate thumbprint.");
+            }
+
+            Add(
+                result,
+                cloud.CertificateThumbprint);
+        }
+
+        if (config.AuditSigningEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    config.AuditSigningCertificateThumbprint))
+            {
+                throw new InvalidOperationException(
+                    "Audit signing is enabled but no audit-signing certificate is configured.");
+            }
+
+            Add(
+                result,
+                config.AuditSigningCertificateThumbprint);
+        }
+
+        if (config.RemoteApiEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    config.RemoteApiCertificateThumbprint))
+            {
+                throw new InvalidOperationException(
+                    "Remote API is enabled but no TLS certificate is configured.");
+            }
+
+            Add(
+                result,
+                config.RemoteApiCertificateThumbprint);
+        }
+
+        if (config.SiemEnabled &&
+            string.Equals(
+                SiemForwardingService.NormalizeMode(
+                    config.SiemMode),
+                "Webhook",
+                StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(
+                config.SiemClientCertificateThumbprint))
+        {
+            Add(
+                result,
+                config.SiemClientCertificateThumbprint);
+        }
+
+        return result.ToList();
+    }
+
+    private static bool RequiresMachineAdCredential(
+        AppConfig config) =>
+        config.AdUseExplicitCredentials &&
+        string.Equals(
+            config.AdCredentialStorageMode,
+            "LocalMachine",
+            StringComparison.OrdinalIgnoreCase);
+
+    private static void CleanupPreviousServiceIdentityAccess(
+        string previousIdentity,
+        string currentIdentity,
+        IReadOnlyCollection<string> managedCertificates,
+        AppConfig config)
+    {
+        if (string.IsNullOrWhiteSpace(
+                previousIdentity) ||
+            ServiceIdentitiesEquivalent(
+                previousIdentity,
+                currentIdentity))
+        {
+            return;
+        }
+
+        if (!CertificatePrivateKeyAccessService
+                .IsLocalSystem(
+                    previousIdentity))
+        {
+            var certificateAccess =
+                new CertificatePrivateKeyAccessService();
+
+            foreach (var thumbprint in
+                     managedCertificates)
+            {
+                try
+                {
+                    _ =
+                        certificateAccess
+                            .RevokeRead(
+                                thumbprint,
+                                previousIdentity);
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"Old service identity certificate ACL cleanup failed. Account={previousIdentity}; Certificate={thumbprint}; Error={ex.Message}",
+                        EventLogSeverity.Warning,
+                        4057,
+                        "CertificateACL");
+                }
+            }
+        }
+
+        if (File.Exists(
+                AppPaths.MachineAdCredentialFile))
+        {
+            try
+            {
+                _ =
+                    new CredentialVaultService()
+                        .RevokeMachineCredentialAccess(
+                            previousIdentity);
+            }
+            catch (Exception ex)
+            {
+                WindowsEventLogService.TryWrite(
+                    $"Old service identity machine credential ACL cleanup failed. Account={previousIdentity}; Error={ex.Message}",
+                    EventLogSeverity.Warning,
+                    4073,
+                    "CredentialVault");
+            }
+        }
+    }
+
+    private static void CleanupUninstalledServiceAccess(
+        string previousIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(
+                previousIdentity) ||
+            CertificatePrivateKeyAccessService
+                .IsLocalSystem(
+                    previousIdentity))
+        {
+            return;
+        }
+
+        if (File.Exists(
+                AppPaths.MachineAdCredentialFile))
+        {
+            try
+            {
+                _ =
+                    new CredentialVaultService()
+                        .RevokeMachineCredentialAccess(
+                            previousIdentity);
+            }
+            catch (Exception ex)
+            {
+                WindowsEventLogService.TryWrite(
+                    $"Machine credential ACL cleanup after service uninstall failed. Account={previousIdentity}; Error={ex.Message}",
+                    EventLogSeverity.Warning,
+                    4074,
+                    "CredentialVault");
+            }
+        }
+
+        try
+        {
+            var config =
+                ConfigService.LoadAppConfig();
+            var certificateAccess =
+                new CertificatePrivateKeyAccessService();
+
+            foreach (var thumbprint in
+                     GetConfiguredServiceCertificateThumbprints(
+                         config))
+            {
+                try
+                {
+                    _ =
+                        certificateAccess
+                            .RevokeRead(
+                                thumbprint,
+                                previousIdentity);
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"Certificate ACL cleanup after service uninstall failed. Account={previousIdentity}; Certificate={thumbprint}; Error={ex.Message}",
+                        EventLogSeverity.Warning,
+                        4056,
+                        "CertificateACL");
+                }
+            }
+
+            if (config.StorageAclHardeningEnabled)
             {
                 try
                 {
                     _ =
                         new StorageSecurityService(
                             serviceIdentityOverride:
-                                before.Identity)
+                                string.Empty)
                             .Repair();
-
-                    WindowsEventLogService.TryWrite(
-                        $"Protected storage ACLs were restored for the previous Windows Service identity {before.Identity}.",
-                        EventLogSeverity.Warning,
-                        4622,
-                        "StorageSecurity");
                 }
-                catch (Exception rollbackEx)
+                catch (Exception ex)
                 {
                     WindowsEventLogService.TryWrite(
-                        "Protected storage ACL rollback failed after service-identity change failure: " +
-                        rollbackEx.Message,
-                        EventLogSeverity.Error,
-                        4623,
+                        "Protected storage ACL cleanup after service uninstall failed: " +
+                        ex.Message,
+                        EventLogSeverity.Warning,
+                        4624,
                         "StorageSecurity");
                 }
             }
-
-            throw;
         }
-        finally
+        catch (Exception ex)
         {
-            if (restartIfRunning && wasRunning)
-                Start();
+            WindowsEventLogService.TryWrite(
+                "Service access cleanup after uninstall could not load application configuration: " +
+                ex.Message,
+                EventLogSeverity.Warning,
+                4006,
+                "Service");
         }
+    }
+
+    private static bool ServiceIdentitiesEquivalent(
+        string left,
+        string right)
+    {
+        try
+        {
+            left =
+                CertificatePrivateKeyAccessService
+                    .NormalizeServiceIdentity(
+                        left);
+            right =
+                CertificatePrivateKeyAccessService
+                    .NormalizeServiceIdentity(
+                        right);
+        }
+        catch
+        {
+        }
+
+        return string.Equals(
+            left.Trim(),
+            right.Trim(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     public static CertificateKeyAccessInfo? EnsureConfiguredCloudCertificateAccess(

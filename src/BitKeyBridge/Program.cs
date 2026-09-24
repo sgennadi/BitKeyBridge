@@ -127,6 +127,7 @@ internal static class Program
             x.Equals("--service-identity-local-system", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-identity-gmsa", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-identity-user", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--service-access-repair", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-coverage-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-coverage-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-coverage-interval", StringComparison.OrdinalIgnoreCase) ||
@@ -813,6 +814,9 @@ internal static class Program
         if (args.Any(x => x.Equals("--vault-delete-machine", StringComparison.OrdinalIgnoreCase)))
             return DeleteVaultCredential(config, "LocalMachine");
 
+        if (args.Any(x => x.Equals("--service-access-repair", StringComparison.OrdinalIgnoreCase)))
+            return RepairServiceAccessCli(config);
+
         if (args.Any(x => x.Equals("--service-identity-local-system", StringComparison.OrdinalIgnoreCase)))
             return ConfigureServiceIdentityCli(config, "LocalSystem", null);
 
@@ -1001,32 +1005,79 @@ internal static class Program
     {
         try
         {
-            var vault = new CredentialVaultService();
-            var user = vault.GetUserMetadata(config.AdCredentialTarget);
+            var vault =
+                new CredentialVaultService();
+
+            var user =
+                vault.GetUserMetadata(
+                    config.AdCredentialTarget);
+
             CredentialVaultMetadata? machine = null;
-            string machineError = string.Empty;
+            string machineError =
+                string.Empty;
 
-            try { machine = vault.GetMachineMetadata(); }
-            catch (Exception ex) { machineError = ex.Message; }
+            try
+            {
+                machine =
+                    vault.GetMachineMetadata();
+            }
+            catch (Exception ex)
+            {
+                machineError =
+                    ex.Message;
+            }
 
-            Console.WriteLine($"Configured storage: {config.AdCredentialStorageMode}");
+            Console.WriteLine(
+                $"Configured storage: {config.AdCredentialStorageMode}");
+
             Console.WriteLine(
                 $"CurrentUser: Exists={user.Exists}; User={user.Username}; Target={user.Target}; Protection={user.ProtectedBy}");
+
             if (machine is not null)
             {
                 Console.WriteLine(
                     $"LocalMachine: Exists={machine.Exists}; User={machine.Username}; Location={machine.Location}; Protection={machine.ProtectedBy}");
+
+                if (machine.Exists)
+                {
+                    var service =
+                        WindowsServiceHost.GetInfo();
+
+                    if (service.Installed &&
+                        !string.IsNullOrWhiteSpace(
+                            service.Identity))
+                    {
+                        try
+                        {
+                            var access =
+                                vault.GetMachineCredentialAccess(
+                                    service.Identity);
+
+                            Console.WriteLine(
+                                $"LocalMachine service access: Account={access.Account}; Status={access.Status}; DirectoryRead={access.DirectoryReadAllowed}; FileRead={access.FileReadAllowed}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(
+                                "LocalMachine service access: ERROR: " +
+                                ex.Message);
+                        }
+                    }
+                }
             }
             else
             {
-                Console.WriteLine("LocalMachine: unavailable to current identity: " + machineError);
+                Console.WriteLine(
+                    "LocalMachine: unavailable to current identity: " +
+                    machineError);
             }
 
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            Console.Error.WriteLine(
+                ex.Message);
             return 1;
         }
     }
@@ -1110,8 +1161,15 @@ internal static class Program
         try
         {
             string? password = null;
-            if (mode.Equals("DomainAccount", StringComparison.OrdinalIgnoreCase))
-                password = ReadSecretFromConsole("Windows Service account password: ");
+
+            if (mode.Equals(
+                    "DomainAccount",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                password =
+                    ReadSecretFromConsole(
+                        "Windows Service account password: ");
+            }
 
             WindowsServiceHost.ConfigureIdentity(
                 mode,
@@ -1119,18 +1177,75 @@ internal static class Program
                 password,
                 restartIfRunning: true);
 
-            config.ServiceIdentityMode = mode;
-            config.ServiceIdentityAccount = account ?? string.Empty;
-            ConfigService.SaveAppConfig(config);
+            config.ServiceIdentityMode =
+                mode;
+            config.ServiceIdentityAccount =
+                mode.Equals(
+                    "LocalSystem",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? string.Empty
+                    : account ??
+                      string.Empty;
 
-            var info = WindowsServiceHost.GetInfo();
+            var info =
+                WindowsServiceHost.GetInfo();
+
             Console.WriteLine(
                 $"BitKeyBridge service identity: {info.Identity}; State={info.State}");
+
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            Console.Error.WriteLine(
+                ex.Message);
+            return 1;
+        }
+    }
+
+    private static int RepairServiceAccessCli(
+        AppConfig config)
+    {
+        try
+        {
+            var service =
+                WindowsServiceHost.GetInfo();
+
+            if (!service.Installed ||
+                string.IsNullOrWhiteSpace(
+                    service.Identity))
+            {
+                throw new InvalidOperationException(
+                    "The BitKeyBridge Windows Service is not installed or its identity is unavailable.");
+            }
+
+            WindowsServiceHost
+                .EnsureConfiguredServiceAccess(
+                    service.Identity);
+
+            Console.WriteLine(
+                $"Service access verified/repaired for {service.Identity}.");
+
+            if (config.AdUseExplicitCredentials &&
+                config.AdCredentialStorageMode.Equals(
+                    "LocalMachine",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                var access =
+                    new CredentialVaultService()
+                        .GetMachineCredentialAccess(
+                            service.Identity);
+
+                Console.WriteLine(
+                    $"Machine AD credential access: {access.Status}; DirectoryRead={access.DirectoryReadAllowed}; FileRead={access.FileReadAllowed}");
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                ex.Message);
             return 1;
         }
     }
@@ -2717,6 +2832,89 @@ internal static class Program
                     }
                 }
 
+                const string sessionSecret =
+                    "SelfTest-AD-Session-Secret";
+
+                AdSessionCredentials.SetPassword(
+                    sessionSecret);
+
+                if (!AdSessionCredentials.HasPassword ||
+                    !string.Equals(
+                        AdSessionCredentials.GetPasswordCopy(),
+                        sessionSecret,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "AD session credential round-trip failed.");
+                }
+
+                AdSessionCredentials.Clear();
+
+                if (AdSessionCredentials.HasPassword ||
+                    !string.IsNullOrEmpty(
+                        AdSessionCredentials.GetPasswordCopy()))
+                {
+                    failures.Add(
+                        "AD session credential clear failed.");
+                }
+
+                const string graphSecret =
+                    "SelfTest-Graph-Access-Token";
+
+                var graphTokenJson =
+                    JsonSerializer.Serialize(
+                        new GraphToken
+                        {
+                            AccessToken =
+                                graphSecret,
+                            ExpiresAt =
+                                DateTime.UtcNow.AddHours(1),
+                            AuthMode =
+                                "SelfTest"
+                        });
+
+                if (graphTokenJson.Contains(
+                        graphSecret,
+                        StringComparison.Ordinal) ||
+                    graphTokenJson.Contains(
+                        "AccessToken",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add(
+                        "Graph access token was serialized.");
+                }
+
+                var serviceCertificates =
+                    WindowsServiceHost
+                        .GetConfiguredServiceCertificateThumbprints(
+                            new AppConfig
+                            {
+                                AuditSigningEnabled = true,
+                                AuditSigningCertificateThumbprint =
+                                    "111122223333444455556666777788889999AAAA",
+                                RemoteApiEnabled = true,
+                                RemoteApiCertificateThumbprint =
+                                    "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+                                SiemEnabled = true,
+                                SiemMode = "Webhook",
+                                SiemClientCertificateThumbprint =
+                                    "0123456789ABCDEF0123456789ABCDEF01234567"
+                            });
+
+                if (!serviceCertificates.Contains(
+                        "111122223333444455556666777788889999AAAA",
+                        StringComparer.OrdinalIgnoreCase) ||
+                    !serviceCertificates.Contains(
+                        "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+                        StringComparer.OrdinalIgnoreCase) ||
+                    !serviceCertificates.Contains(
+                        "0123456789ABCDEF0123456789ABCDEF01234567",
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    failures.Add(
+                        "Windows Service certificate dependency collection failed.");
+                }
+
                 if (RemoteApiSetupService.NormalizeScope(
                         "read-only") != "read" ||
                     RemoteApiSetupService.NormalizeScope(
@@ -3019,6 +3217,7 @@ internal static class Program
         Console.WriteLine("  --service-identity-local-system  Run installed service as LocalSystem");
         Console.WriteLine("  --service-identity-gmsa <DOMAIN\\account$>  Configure gMSA/managed account");
         Console.WriteLine("  --service-identity-user <DOMAIN\\user>  Configure regular service account; prompts for password");
+        Console.WriteLine("  --service-access-repair Repair service access to configured certs, machine AD credential and protected storage");
         Console.WriteLine("  --service-coverage-enable  Enable scheduled metadata-only Coverage in the service");
         Console.WriteLine("  --service-coverage-disable Disable scheduled Coverage");
         Console.WriteLine("  --service-coverage-interval <minutes>  Coverage interval (15-10080)");
