@@ -29,6 +29,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly Label _cloudStatus = new();
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
+    private string _cloudTokenContext = string.Empty;
     private readonly ListView _coverageResults = new();
     private readonly Label _coverageSummary = new();
     private readonly Label _coverageStatus = new();
@@ -411,6 +412,9 @@ public sealed partial class MainForm : DpiAwareForm
                 await graph.TestAccessAsync(
                     _cloudToken.AccessToken);
 
+            _cloudTokenContext =
+                BuildCloudTokenContext();
+
             _cloudStatus.Text =
                 $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).";
 
@@ -419,6 +423,7 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _cloudToken = null;
+            _cloudTokenContext = string.Empty;
             _cloudStatus.Text =
                 "Connection failed: " +
                 ex.Message;
@@ -441,8 +446,62 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task<bool> EnsureCloudTokenAsync()
     {
-        if (_cloudToken is not null && _cloudToken.ExpiresAt > DateTime.Now.AddMinutes(1)) return true;
+        var currentContext =
+            BuildCloudTokenContext();
+
+        if (_cloudToken is not null &&
+            _cloudToken.ExpiresAt >
+                DateTime.Now.AddMinutes(1) &&
+            string.Equals(
+                _cloudTokenContext,
+                currentContext,
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        _cloudToken = null;
+        _cloudTokenContext =
+            string.Empty;
+
         return await ConnectCloudAsync();
+    }
+
+    private string BuildCloudTokenContext()
+    {
+        var mode =
+            _cloudAuthMode.SelectedIndex switch
+            {
+                2 => "Certificate",
+                1 => "Password",
+                _ => "DeviceCode"
+            };
+
+        var identity =
+            mode.Equals(
+                "Password",
+                StringComparison.Ordinal)
+                ? _cloudUsername.Text.Trim()
+                : mode.Equals(
+                    "Certificate",
+                    StringComparison.Ordinal)
+                    ? new string(
+                        _cloudThumbprint.Text
+                            .Where(
+                                Uri.IsHexDigit)
+                            .Select(
+                                char.ToUpperInvariant)
+                            .ToArray())
+                    : string.Empty;
+
+        return string.Join(
+            "|",
+            _cloudTenant.Text.Trim()
+                .ToUpperInvariant(),
+            _cloudClient.Text.Trim()
+                .ToUpperInvariant(),
+            mode,
+            identity.ToUpperInvariant());
     }
 
     private async Task RunNativeAutoSetupAsync()
@@ -4320,6 +4379,7 @@ public sealed partial class MainForm : DpiAwareForm
         _deviceCurrentKey = null;
         _deviceRecoveryKey.Clear();
         _cloudToken = null;
+        _cloudTokenContext = string.Empty;
         AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
         _cloudPassword.Clear();
