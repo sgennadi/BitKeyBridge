@@ -26,96 +26,148 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
 
         Text = "Recovery Access Context";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(700, 390);
-        MinimumSize = new Size(660, 360);
+        ClientSize = new Size(700, 430);
+        MinimumSize = new Size(560, 390);
         MaximizeBox = false;
         MinimizeBox = false;
         Font = new Font("Segoe UI", 9F);
 
-        Controls.Add(new Label
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = 6
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(root);
+
+        root.Controls.Add(new Label
         {
             Text = "Record why this BitLocker recovery secret is being accessed.",
             Font = new Font("Segoe UI Semibold", 13F),
-            Left = 18,
-            Top = 16,
-            AutoSize = true
-        });
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 12)
+        }, 0, 0);
 
-        Controls.Add(new Label
+        var device = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            Margin = new Padding(0, 0, 0, 12)
+        };
+        device.Controls.Add(new Label
         {
             Text = $"Computer: {computerName}",
-            Left = 20,
-            Top = 58,
-            Width = 650,
-            Height = 24
+            AutoSize = true,
+            AutoEllipsis = true
         });
-        Controls.Add(new Label
+        device.Controls.Add(new Label
         {
             Text = $"Recovery ID: {recoveryId}",
-            Left = 20,
-            Top = 82,
-            Width = 650,
-            Height = 24
+            AutoSize = true,
+            AutoEllipsis = true
         });
+        root.Controls.Add(device, 0, 1);
 
-        Controls.Add(new Label
+        var referenceRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        referenceRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        referenceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        referenceRow.Controls.Add(new Label
         {
             Text = requireReference ? "Ticket / Reference *:" : "Ticket / Reference:",
-            Left = 20,
-            Top = 124,
-            Width = 135,
-            Height = 24
-        });
-        _reference.SetBounds(160, 120, 510, 27);
-        Controls.Add(_reference);
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 6, 10, 0)
+        }, 0, 0);
+        _reference.Dock = DockStyle.Fill;
+        referenceRow.Controls.Add(_reference, 1, 0);
+        root.Controls.Add(referenceRow, 0, 2);
 
-        Controls.Add(new Label
+        var details = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 3,
+            Margin = new Padding(0, 0, 0, 8)
+        };
+        details.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        details.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        details.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        details.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        details.Controls.Add(new Label
         {
             Text = "Reason:",
-            Left = 20,
-            Top = 166,
-            Width = 135,
-            Height = 24
-        });
-        _reason.SetBounds(160, 162, 510, 86);
+            AutoSize = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            Margin = new Padding(0, 6, 10, 0)
+        }, 0, 0);
+
+        _reason.Dock = DockStyle.Fill;
         _reason.Multiline = true;
         _reason.ScrollBars = ScrollBars.Vertical;
-        Controls.Add(_reason);
+        _reason.MinimumSize = new Size(0, 90);
+        details.Controls.Add(_reason, 1, 0);
 
         _rotationReminder.Text =
             "Remind me to rotate the Intune recovery key after recovery is complete";
         _rotationReminder.Checked = allowRotationReminder && defaultRotationReminder;
         _rotationReminder.Enabled = allowRotationReminder;
-        _rotationReminder.SetBounds(160, 260, 510, 28);
-        Controls.Add(_rotationReminder);
+        _rotationReminder.AutoSize = true;
+        _rotationReminder.Margin = new Padding(0, 8, 0, 4);
+        details.Controls.Add(_rotationReminder, 1, 1);
 
-        Controls.Add(new Label
+        var auditNote = new Label
         {
             Text = "The ticket/reference and reason are written to the local security audit. The recovery password is never written to the audit.",
-            Left = 160,
-            Top = 294,
-            Width = 510,
-            Height = 42
-        });
+            AutoSize = true,
+            MaximumSize = new Size(560, 0),
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        details.Controls.Add(auditNote, 1, 2);
+        root.Controls.Add(details, 0, 3);
 
-        var ok = new Button
+        var buttons = new FlowLayoutPanel
         {
-            Text = "Continue",
-            Left = 470,
-            Top = 346,
-            Width = 95,
-            Height = 32
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 8, 0, 0)
         };
         var cancel = new Button
         {
             Text = "Cancel",
             DialogResult = DialogResult.Cancel,
-            Left = 575,
-            Top = 346,
-            Width = 95,
-            Height = 32
+            AutoSize = true,
+            MinimumSize = new Size(95, 34)
         };
-        Controls.AddRange([ok, cancel]);
+        var ok = new Button
+        {
+            Text = "Continue",
+            AutoSize = true,
+            MinimumSize = new Size(95, 34)
+        };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(ok);
+        root.Controls.Add(buttons, 0, 5);
+
         AcceptButton = ok;
         CancelButton = cancel;
 
