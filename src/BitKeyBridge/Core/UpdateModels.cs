@@ -22,11 +22,14 @@ public sealed class PreparedUpdate
     public UpdateInfo Info { get; set; } = new();
     public string ZipPath { get; set; } = string.Empty;
     public string StagedExecutable { get; set; } = string.Empty;
+    public string StagedExecutableSha256 { get; set; } = string.Empty;
 }
 
 public sealed class UpdateApplyPlan
 {
     public string StagedExecutable { get; set; } = string.Empty;
+    public string StagedExecutableSha256 { get; set; } = string.Empty;
+    public string ExpectedVersion { get; set; } = string.Empty;
     public List<string> TargetExecutables { get; set; } = [];
     public int WaitForProcessId { get; set; }
     public bool RestartService { get; set; }
