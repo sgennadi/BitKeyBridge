@@ -70,6 +70,8 @@ public sealed partial class MainForm : DpiAwareForm
     private BitLockerScope? _startScope;
     private string _startDomainDn = string.Empty;
     private string? _startCurrentKey;
+    private string? _clipboardRecoveryKey;
+    private System.Windows.Forms.Timer? _clipboardClearTimer;
 
     private readonly Label _dashboardStatus = new();
     private readonly RichTextBox _dashboardDetails = new();
@@ -2478,6 +2480,20 @@ public sealed partial class MainForm : DpiAwareForm
 
             _startSelectOu.Enabled = true;
 
+            if (_startScope is not null &&
+                !ActiveDirectoryService.IsSearchBaseWithinNamingContext(
+                    _startScope.SearchBase,
+                    _startDomainDn))
+            {
+                _startScope = null;
+                _config.LastRecoveryScopeName = string.Empty;
+                _config.LastRecoveryScopeSearchBase = string.Empty;
+                TrySaveRecoveryUiState();
+
+                TryUseDefaultRecoveryScope(
+                    "The remembered OU belongs to a different Active Directory naming context; using the entire domain.");
+            }
+
             if (_startScope is not null)
             {
                 _startOuStatus.Text =
@@ -2682,6 +2698,77 @@ public sealed partial class MainForm : DpiAwareForm
         _startQuery.Focus();
     }
 
+    private async Task<List<RecoverySearchResult>> SearchLiveAdRecoveryMetadataAsync(
+        string query,
+        BitLockerScope scope)
+    {
+        return await Task.Run(
+            () =>
+            {
+                var service =
+                    new ActiveDirectoryService(
+                        _config);
+                var dc =
+                    service.GetPreferredWritableDc();
+
+                var computers =
+                    service.SearchComputersInScope(
+                        dc,
+                        scope,
+                        query,
+                        100);
+
+                var found =
+                    new List<RecoverySearchResult>();
+
+                foreach (var computer in
+                         computers)
+                {
+                    found.AddRange(
+                        service.GetRecoveryMetadataForComputer(
+                            dc,
+                            computer.DistinguishedName));
+                }
+
+                if (computers.Count == 0)
+                {
+                    var idQuery =
+                        query
+                            .Trim()
+                            .Trim(
+                                '{',
+                                '}');
+
+                    if (idQuery.Length >= 4)
+                    {
+                        found.AddRange(
+                            service.SearchRecoveryMetadataInScope(
+                                dc,
+                                scope,
+                                idQuery,
+                                200));
+                    }
+                }
+
+                return found
+                    .GroupBy(
+                        x =>
+                            x.ComputerName +
+                            "|" +
+                            x.RecoveryId,
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(
+                        x =>
+                            x.First())
+                    .OrderByDescending(
+                        x =>
+                            x.CreatedDateTime ??
+                            x.LastChecked)
+                    .Take(200)
+                    .ToList();
+            });
+    }
+
     private async Task SearchStartRecoveryAsync()
     {
         var localCache =
@@ -2763,72 +2850,25 @@ public sealed partial class MainForm : DpiAwareForm
                 var scope =
                     _startScope!;
 
-                rows =
-                    await Task.Run(
-                        () =>
-                        {
-                            var service =
-                                new ActiveDirectoryService(
-                                    _config);
-                            var dc =
-                                service.GetPreferredWritableDc();
-
-                            var computers =
-                                service.SearchComputersInScope(
-                                    dc,
-                                    scope,
-                                    query,
-                                    100);
-
-                            var found =
-                                new List<RecoverySearchResult>();
-
-                            foreach (var computer in
-                                     computers)
-                            {
-                                found.AddRange(
-                                    service.GetRecoveryMetadataForComputer(
-                                        dc,
-                                        computer.DistinguishedName));
-                            }
-
-                            if (computers.Count == 0)
-                            {
-                                var idQuery =
-                                    query
-                                        .Trim()
-                                        .Trim(
-                                            '{',
-                                            '}');
-
-                                if (idQuery.Length >= 4)
-                                {
-                                    found.AddRange(
-                                        service.SearchRecoveryMetadataInScope(
-                                            dc,
-                                            scope,
-                                            idQuery,
-                                            200));
-                                }
-                            }
-
-                            return found
-                                .GroupBy(
-                                    x =>
-                                        x.ComputerName +
-                                        "|" +
-                                        x.RecoveryId,
-                                    StringComparer.OrdinalIgnoreCase)
-                                .Select(
-                                    x =>
-                                        x.First())
-                                .OrderByDescending(
-                                    x =>
-                                        x.CreatedDateTime ??
-                                        x.LastChecked)
-                                .Take(200)
-                                .ToList();
-                        });
+                try
+                {
+                    rows =
+                        await SearchLiveAdRecoveryMetadataAsync(
+                            query,
+                            scope);
+                }
+                catch when (
+                    !scope.SearchBase.Equals(
+                        _startDomainDn,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    TryUseDefaultRecoveryScope(
+                        "The selected OU is no longer available; retrying the search across the entire domain."))
+                {
+                    rows =
+                        await SearchLiveAdRecoveryMetadataAsync(
+                            query,
+                            _startScope!);
+                }
             }
 
             foreach (var row in rows)
@@ -4031,14 +4071,32 @@ public sealed partial class MainForm : DpiAwareForm
         return context;
     }
 
+    private void ResetRecoverySearchState()
+    {
+        _startResults.Items.Clear();
+        _startResults.Visible = true;
+        _startCurrentKey = null;
+        _startKey.Clear();
+        _startKey.UseSystemPasswordChar = true;
+        _startShow.Text = "Reveal Recovery Key";
+        ClearRecoveryCard();
+        _recoveryAccessContexts.Clear();
+    }
+
     private void ClearSensitiveState()
     {
+        _clipboardClearTimer?.Stop();
+        _clipboardClearTimer?.Dispose();
+        _clipboardClearTimer = null;
+
         try
         {
             if (Clipboard.ContainsText())
             {
                 var text = Clipboard.GetText();
-                if ((!string.IsNullOrWhiteSpace(_startCurrentKey) &&
+                if ((!string.IsNullOrWhiteSpace(_clipboardRecoveryKey) &&
+                     string.Equals(text, _clipboardRecoveryKey, StringComparison.Ordinal)) ||
+                    (!string.IsNullOrWhiteSpace(_startCurrentKey) &&
                      string.Equals(text, _startCurrentKey, StringComparison.Ordinal)) ||
                     (!string.IsNullOrWhiteSpace(_deviceCurrentKey) &&
                      string.Equals(text, _deviceCurrentKey, StringComparison.Ordinal)))
@@ -4048,6 +4106,8 @@ public sealed partial class MainForm : DpiAwareForm
             }
         }
         catch { }
+
+        _clipboardRecoveryKey = null;
         _startCurrentKey = null;
         _startKey.Clear();
         _deviceCurrentKey = null;
@@ -4499,20 +4559,47 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void CopyKeyWithAutoClear(string? key)
     {
-        if (string.IsNullOrWhiteSpace(key)) return;
+        if (string.IsNullOrWhiteSpace(key))
+            return;
+
+        _clipboardClearTimer?.Stop();
+        _clipboardClearTimer?.Dispose();
+
         Clipboard.SetText(key);
-        var timer = new System.Windows.Forms.Timer { Interval = 60000 };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop();
-            try
+        _clipboardRecoveryKey = key;
+
+        _clipboardClearTimer =
+            new System.Windows.Forms.Timer
             {
-                if (Clipboard.ContainsText() && string.Equals(Clipboard.GetText(), key, StringComparison.Ordinal)) Clipboard.Clear();
-            }
-            catch { }
-            timer.Dispose();
-        };
-        timer.Start();
+                Interval = 60000
+            };
+
+        _clipboardClearTimer.Tick +=
+            (_, _) =>
+            {
+                _clipboardClearTimer?.Stop();
+
+                try
+                {
+                    if (Clipboard.ContainsText() &&
+                        string.Equals(
+                            Clipboard.GetText(),
+                            _clipboardRecoveryKey,
+                            StringComparison.Ordinal))
+                    {
+                        Clipboard.Clear();
+                    }
+                }
+                catch
+                {
+                }
+
+                _clipboardRecoveryKey = null;
+                _clipboardClearTimer?.Dispose();
+                _clipboardClearTimer = null;
+            };
+
+        _clipboardClearTimer.Start();
     }
 
     private static void AddColumns(ListView view, params (string Name, int Width)[] columns)
