@@ -19,6 +19,12 @@ public sealed class CredentialVaultService
     private const uint CryptProtectUiForbidden = 0x1;
     private const uint CryptProtectLocalMachine = 0x4;
 
+    private const FileSystemRights ServiceDirectoryReadRights =
+        FileSystemRights.ReadAndExecute |
+        FileSystemRights.ListDirectory;
+    private const FileSystemRights ServiceFileReadRights =
+        FileSystemRights.Read;
+
     private static readonly byte[] Entropy =
         SHA256.HashData(Encoding.UTF8.GetBytes("BitKeyBridge|MachineCredentialVault|v1"));
 
@@ -114,25 +120,61 @@ public sealed class CredentialVaultService
 
     public CredentialVaultMetadata GetUserMetadata(string target)
     {
-        var credential = ReadUserCredential(target);
-        return credential is null
-            ? new CredentialVaultMetadata
+        EnsureWindows();
+        target = NormalizeTarget(target);
+
+        if (!CredRead(
+                target,
+                CredTypeGeneric,
+                0,
+                out var pointer))
+        {
+            var error =
+                Marshal.GetLastWin32Error();
+
+            if (error == ErrorNotFound)
             {
-                Storage = "CurrentUser",
-                Target = NormalizeTarget(target),
-                ProtectedBy = "Windows Credential Manager",
-                Location = "Current Windows user credential set"
+                return new CredentialVaultMetadata
+                {
+                    Storage = "CurrentUser",
+                    Target = target,
+                    ProtectedBy =
+                        "Windows Credential Manager",
+                    Location =
+                        "Current Windows user credential set"
+                };
             }
-            : new CredentialVaultMetadata
+
+            throw new Win32Exception(
+                error,
+                "Windows Credential Manager could not read BitKeyBridge credential metadata.");
+        }
+
+        try
+        {
+            var credential =
+                Marshal.PtrToStructure<CREDENTIAL>(
+                    pointer);
+
+            return new CredentialVaultMetadata
             {
                 Exists = true,
                 Storage = "CurrentUser",
-                Target = NormalizeTarget(target),
-                Username = credential.Username,
-                Domain = credential.Domain,
-                ProtectedBy = "Windows Credential Manager",
-                Location = "Current Windows user credential set"
+                Target = target,
+                Username =
+                    credential.UserName ??
+                    string.Empty,
+                ProtectedBy =
+                    "Windows Credential Manager",
+                Location =
+                    "Current Windows user credential set"
             };
+        }
+        finally
+        {
+            CredFree(
+                pointer);
+        }
     }
 
     public void SaveMachineCredential(
@@ -151,8 +193,13 @@ public sealed class CredentialVaultService
         var directory = Path.GetDirectoryName(path)
             ?? throw new InvalidOperationException("Machine credential path has no parent directory.");
 
+        var serviceAccess =
+            ResolveInstalledServiceAccess();
+
         Directory.CreateDirectory(directory);
-        SecureMachineSecretsDirectory(directory);
+        SecureMachineSecretsDirectory(
+            directory,
+            serviceAccess?.Sid);
 
         var payload = new MachineCredentialPayload
         {
@@ -169,9 +216,13 @@ public sealed class CredentialVaultService
             protectedBytes = ProtectMachineData(plain);
             var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             File.WriteAllBytes(temp, protectedBytes);
-            SecureMachineCredentialFile(temp);
+            SecureMachineCredentialFile(
+                temp,
+                serviceAccess?.Sid);
             File.Move(temp, path, true);
-            SecureMachineCredentialFile(path);
+            SecureMachineCredentialFile(
+                path,
+                serviceAccess?.Sid);
         }
         finally
         {
@@ -224,32 +275,328 @@ public sealed class CredentialVaultService
 
     public CredentialVaultMetadata GetMachineMetadata(string? path = null)
     {
-        path ??= AppPaths.MachineAdCredentialFile;
-        var credential = ReadMachineCredential(path);
-        DateTime? created = null;
+        EnsureWindows();
+        path ??=
+            AppPaths.MachineAdCredentialFile;
 
-        if (File.Exists(path))
-            created = File.GetCreationTimeUtc(path);
-
-        return credential is null
-            ? new CredentialVaultMetadata
+        if (!File.Exists(path))
+        {
+            return new CredentialVaultMetadata
             {
                 Storage = "LocalMachine",
                 Target = DefaultTarget,
-                ProtectedBy = "Windows DPAPI LocalMachine + NTFS ACL",
+                ProtectedBy =
+                    "Windows DPAPI LocalMachine + NTFS ACL",
                 Location = path
+            };
+        }
+
+        var protectedBytes =
+            File.ReadAllBytes(path);
+        byte[]? plain = null;
+
+        try
+        {
+            plain =
+                UnprotectMachineData(
+                    protectedBytes);
+
+            using var document =
+                JsonDocument.Parse(
+                    plain);
+
+            var root =
+                document.RootElement;
+
+            var username =
+                root.TryGetProperty(
+                    nameof(MachineCredentialPayload.Username),
+                    out var usernameValue)
+                    ? usernameValue.GetString() ??
+                      string.Empty
+                    : string.Empty;
+
+            var domain =
+                root.TryGetProperty(
+                    nameof(MachineCredentialPayload.Domain),
+                    out var domainValue)
+                    ? domainValue.GetString() ??
+                      string.Empty
+                    : string.Empty;
+
+            DateTime? created = null;
+            if (root.TryGetProperty(
+                    nameof(MachineCredentialPayload.CreatedAtUtc),
+                    out var createdValue) &&
+                createdValue.ValueKind ==
+                    JsonValueKind.String &&
+                DateTime.TryParse(
+                    createdValue.GetString(),
+                    out var parsed))
+            {
+                created =
+                    parsed.ToUniversalTime();
             }
-            : new CredentialVaultMetadata
+
+            return new CredentialVaultMetadata
             {
                 Exists = true,
                 Storage = "LocalMachine",
                 Target = DefaultTarget,
-                Username = credential.Username,
-                Domain = credential.Domain,
-                CreatedAtUtc = created,
-                ProtectedBy = "Windows DPAPI LocalMachine + NTFS ACL",
+                Username = username,
+                Domain = domain,
+                CreatedAtUtc =
+                    created ??
+                    File.GetCreationTimeUtc(path),
+                ProtectedBy =
+                    "Windows DPAPI LocalMachine + NTFS ACL",
                 Location = path
             };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(
+                protectedBytes);
+
+            if (plain is not null)
+            {
+                CryptographicOperations.ZeroMemory(
+                    plain);
+            }
+        }
+    }
+
+    public MachineCredentialAccessInfo GetMachineCredentialAccess(
+        string account,
+        string? path = null)
+    {
+        EnsureWindows();
+
+        var target =
+            ResolveAccount(
+                account);
+        path ??=
+            AppPaths.MachineAdCredentialFile;
+
+        var result =
+            new MachineCredentialAccessInfo
+            {
+                Account =
+                    target.Account,
+                Sid =
+                    target.Sid.Value,
+                Path =
+                    path,
+                FileExists =
+                    File.Exists(
+                        path),
+                AccessRequired =
+                    !IsLocalSystem(
+                        target.Account)
+            };
+
+        if (!result.FileExists ||
+            !result.AccessRequired)
+        {
+            return result;
+        }
+
+        var directory =
+            Path.GetDirectoryName(
+                path);
+
+        if (string.IsNullOrWhiteSpace(
+                directory) ||
+            !Directory.Exists(
+                directory))
+        {
+            return result;
+        }
+
+        result.DirectoryReadAllowed =
+            HasExplicitAllow(
+                new DirectoryInfo(
+                    directory)
+                    .GetAccessControl(
+                        AccessControlSections.Access),
+                target.Sid,
+                ServiceDirectoryReadRights);
+
+        result.FileReadAllowed =
+            HasExplicitAllow(
+                new FileInfo(
+                    path)
+                    .GetAccessControl(
+                        AccessControlSections.Access),
+                target.Sid,
+                ServiceFileReadRights);
+
+        return result;
+    }
+
+    public MachineCredentialAccessInfo EnsureMachineCredentialAccess(
+        string account,
+        string? path = null)
+    {
+        EnsureWindows();
+        RequireAdministrator();
+
+        path ??=
+            AppPaths.MachineAdCredentialFile;
+
+        var current =
+            GetMachineCredentialAccess(
+                account,
+                path);
+
+        if (!current.FileExists ||
+            !current.AccessRequired ||
+            (current.DirectoryReadAllowed &&
+             current.FileReadAllowed))
+        {
+            return current;
+        }
+
+        var target =
+            ResolveAccount(
+                account);
+        var directory =
+            Path.GetDirectoryName(
+                path)
+            ?? throw new InvalidOperationException(
+                "Machine credential path has no parent directory.");
+
+        var directoryInfo =
+            new DirectoryInfo(
+                directory);
+        var directorySecurity =
+            directoryInfo.GetAccessControl(
+                AccessControlSections.Access);
+
+        directorySecurity.AddAccessRule(
+            new FileSystemAccessRule(
+                target.Sid,
+                ServiceDirectoryReadRights,
+                AccessControlType.Allow));
+        directoryInfo.SetAccessControl(
+            directorySecurity);
+
+        var fileInfo =
+            new FileInfo(
+                path);
+        var fileSecurity =
+            fileInfo.GetAccessControl(
+                AccessControlSections.Access);
+
+        fileSecurity.AddAccessRule(
+            new FileSystemAccessRule(
+                target.Sid,
+                ServiceFileReadRights,
+                AccessControlType.Allow));
+        fileInfo.SetAccessControl(
+            fileSecurity);
+
+        var verified =
+            GetMachineCredentialAccess(
+                target.Account,
+                path);
+
+        if (!verified.DirectoryReadAllowed ||
+            !verified.FileReadAllowed)
+        {
+            throw new InvalidOperationException(
+                $"Machine credential read access could not be verified for {target.Account}.");
+        }
+
+        WindowsEventLogService.TryWrite(
+            $"Machine AD credential vault read access granted to {target.Account}; Path={path}.",
+            EventLogSeverity.Warning,
+            4070,
+            "CredentialVault");
+
+        return verified;
+    }
+
+    public MachineCredentialAccessInfo RevokeMachineCredentialAccess(
+        string account,
+        string? path = null)
+    {
+        EnsureWindows();
+        RequireAdministrator();
+
+        path ??=
+            AppPaths.MachineAdCredentialFile;
+
+        var target =
+            ResolveAccount(
+                account);
+
+        if (IsLocalSystem(
+                target.Account))
+        {
+            return GetMachineCredentialAccess(
+                target.Account,
+                path);
+        }
+
+        var directory =
+            Path.GetDirectoryName(
+                path);
+
+        if (!string.IsNullOrWhiteSpace(
+                directory) &&
+            Directory.Exists(
+                directory))
+        {
+            var info =
+                new DirectoryInfo(
+                    directory);
+            var security =
+                info.GetAccessControl(
+                    AccessControlSections.Access);
+
+            security.RemoveAccessRuleSpecific(
+                new FileSystemAccessRule(
+                    target.Sid,
+                    ServiceDirectoryReadRights,
+                    AccessControlType.Allow));
+
+            info.SetAccessControl(
+                security);
+        }
+
+        if (File.Exists(
+                path))
+        {
+            var info =
+                new FileInfo(
+                    path);
+            var security =
+                info.GetAccessControl(
+                    AccessControlSections.Access);
+
+            security.RemoveAccessRuleSpecific(
+                new FileSystemAccessRule(
+                    target.Sid,
+                    ServiceFileReadRights,
+                    AccessControlType.Allow));
+
+            info.SetAccessControl(
+                security);
+        }
+
+        var status =
+            GetMachineCredentialAccess(
+                target.Account,
+                path);
+
+        WindowsEventLogService.TryWrite(
+            $"Machine AD credential vault read ACL removed for {target.Account}; Path={path}.",
+            EventLogSeverity.Warning,
+            4071,
+            "CredentialVault");
+
+        return status;
     }
 
     public static byte[] ProtectMachineData(byte[] plain)
@@ -324,49 +671,262 @@ public sealed class CredentialVaultService
         }
     }
 
-    private static void SecureMachineSecretsDirectory(string directory)
+    private static void SecureMachineSecretsDirectory(
+        string directory,
+        SecurityIdentifier? serviceSid)
     {
-        var security = new DirectorySecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
-        var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-        var inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+        var security =
+            new DirectorySecurity();
 
-        security.SetOwner(admins);
-        security.AddAccessRule(new FileSystemAccessRule(
-            system,
-            FileSystemRights.FullControl,
-            inherit,
-            PropagationFlags.None,
-            AccessControlType.Allow));
-        security.AddAccessRule(new FileSystemAccessRule(
-            admins,
-            FileSystemRights.FullControl,
-            inherit,
-            PropagationFlags.None,
-            AccessControlType.Allow));
+        security.SetAccessRuleProtection(
+            isProtected: true,
+            preserveInheritance: false);
 
-        new DirectoryInfo(directory).SetAccessControl(security);
+        var system =
+            new SecurityIdentifier(
+                WellKnownSidType.LocalSystemSid,
+                null);
+        var admins =
+            new SecurityIdentifier(
+                WellKnownSidType.BuiltinAdministratorsSid,
+                null);
+        var inherit =
+            InheritanceFlags.ContainerInherit |
+            InheritanceFlags.ObjectInherit;
+
+        security.SetOwner(
+            admins);
+
+        security.AddAccessRule(
+            new FileSystemAccessRule(
+                system,
+                FileSystemRights.FullControl,
+                inherit,
+                PropagationFlags.None,
+                AccessControlType.Allow));
+
+        security.AddAccessRule(
+            new FileSystemAccessRule(
+                admins,
+                FileSystemRights.FullControl,
+                inherit,
+                PropagationFlags.None,
+                AccessControlType.Allow));
+
+        if (serviceSid is not null &&
+            !serviceSid.Equals(
+                system) &&
+            !serviceSid.Equals(
+                admins))
+        {
+            security.AddAccessRule(
+                new FileSystemAccessRule(
+                    serviceSid,
+                    ServiceDirectoryReadRights,
+                    AccessControlType.Allow));
+        }
+
+        new DirectoryInfo(
+            directory)
+            .SetAccessControl(
+                security);
     }
 
-    private static void SecureMachineCredentialFile(string path)
+    private static void SecureMachineCredentialFile(
+        string path,
+        SecurityIdentifier? serviceSid)
     {
-        var security = new FileSecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
-        var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+        var security =
+            new FileSecurity();
 
-        security.SetOwner(admins);
-        security.AddAccessRule(new FileSystemAccessRule(
-            system,
-            FileSystemRights.FullControl,
-            AccessControlType.Allow));
-        security.AddAccessRule(new FileSystemAccessRule(
-            admins,
-            FileSystemRights.FullControl,
-            AccessControlType.Allow));
+        security.SetAccessRuleProtection(
+            isProtected: true,
+            preserveInheritance: false);
 
-        new FileInfo(path).SetAccessControl(security);
+        var system =
+            new SecurityIdentifier(
+                WellKnownSidType.LocalSystemSid,
+                null);
+        var admins =
+            new SecurityIdentifier(
+                WellKnownSidType.BuiltinAdministratorsSid,
+                null);
+
+        security.SetOwner(
+            admins);
+
+        security.AddAccessRule(
+            new FileSystemAccessRule(
+                system,
+                FileSystemRights.FullControl,
+                AccessControlType.Allow));
+
+        security.AddAccessRule(
+            new FileSystemAccessRule(
+                admins,
+                FileSystemRights.FullControl,
+                AccessControlType.Allow));
+
+        if (serviceSid is not null &&
+            !serviceSid.Equals(
+                system) &&
+            !serviceSid.Equals(
+                admins))
+        {
+            security.AddAccessRule(
+                new FileSystemAccessRule(
+                    serviceSid,
+                    ServiceFileReadRights,
+                    AccessControlType.Allow));
+        }
+
+        new FileInfo(
+            path)
+            .SetAccessControl(
+                security);
+    }
+
+    private static bool HasExplicitAllow(
+        FileSystemSecurity security,
+        SecurityIdentifier sid,
+        FileSystemRights required)
+    {
+        var rules =
+            security.GetAccessRules(
+                    includeExplicit: true,
+                    includeInherited: false,
+                    targetType:
+                        typeof(SecurityIdentifier))
+                .OfType<FileSystemAccessRule>()
+                .Where(
+                    rule =>
+                        rule.IdentityReference
+                            is SecurityIdentifier
+                            ruleSid &&
+                        ruleSid.Equals(
+                            sid))
+                .ToList();
+
+        var denied =
+            rules.Any(
+                rule =>
+                    rule.AccessControlType ==
+                        AccessControlType.Deny &&
+                    (rule.FileSystemRights &
+                     required) != 0);
+
+        if (denied)
+            return false;
+
+        return rules.Any(
+            rule =>
+                rule.AccessControlType ==
+                    AccessControlType.Allow &&
+                (rule.FileSystemRights &
+                 required) ==
+                required);
+    }
+
+    private static (string Account, SecurityIdentifier Sid)
+        ResolveAccount(
+            string account)
+    {
+        var normalized =
+            NormalizeServiceIdentity(
+                account);
+
+        try
+        {
+            var sid =
+                (SecurityIdentifier)
+                new NTAccount(
+                        normalized)
+                    .Translate(
+                        typeof(
+                            SecurityIdentifier));
+
+            return (
+                normalized,
+                sid);
+        }
+        catch (IdentityNotMappedException ex)
+        {
+            throw new InvalidOperationException(
+                $"Windows could not resolve service identity '{normalized}' to a SID.",
+                ex);
+        }
+    }
+
+    private static (string Account, SecurityIdentifier Sid)?
+        ResolveInstalledServiceAccess()
+    {
+        try
+        {
+            var service =
+                WindowsServiceHost.GetInfo();
+
+            if (!service.Installed ||
+                string.IsNullOrWhiteSpace(
+                    service.Identity))
+            {
+                return null;
+            }
+
+            var target =
+                ResolveAccount(
+                    service.Identity);
+
+            return IsLocalSystem(
+                       target.Account)
+                ? null
+                : target;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeServiceIdentity(
+        string identity)
+    {
+        var value =
+            (identity ??
+             string.Empty)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                value))
+        {
+            throw new ArgumentException(
+                "Service identity is required.");
+        }
+
+        return IsLocalSystem(
+                   value)
+            ? @"NT AUTHORITY\SYSTEM"
+            : value;
+    }
+
+    private static bool IsLocalSystem(
+        string identity) =>
+        identity.Equals(
+            "LocalSystem",
+            StringComparison.OrdinalIgnoreCase) ||
+        identity.Equals(
+            @"NT AUTHORITY\SYSTEM",
+            StringComparison.OrdinalIgnoreCase) ||
+        identity.Equals(
+            "SYSTEM",
+            StringComparison.OrdinalIgnoreCase);
+
+    private static void RequireAdministrator()
+    {
+        if (!SecurityContext.IsAdministrator())
+        {
+            throw new InvalidOperationException(
+                "Administrator rights are required to modify the Machine / Service credential vault ACL.");
+        }
     }
 
     private static string NormalizeTarget(string? target) =>
