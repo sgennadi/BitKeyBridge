@@ -789,11 +789,15 @@ public sealed class ConfigurationMaintenanceService
                 directory,
                 name);
 
-        File.WriteAllText(
-            path,
+        var json =
             JsonSerializer.Serialize(
                 value,
-                JsonOptions));
+                JsonOptions);
+
+        File.WriteAllText(
+            path,
+            DiagnosticRedaction.Sanitize(
+                json));
 
         if (addToIncludedFiles)
             result.IncludedFiles.Add(name);
@@ -812,7 +816,8 @@ public sealed class ConfigurationMaintenanceService
 
         File.WriteAllText(
             path,
-            value);
+            DiagnosticRedaction.Sanitize(
+                value));
 
         result.IncludedFiles.Add(name);
     }
@@ -838,28 +843,9 @@ public sealed class ConfigurationMaintenanceService
     }
 
     private static string SanitizeDiagnosticText(
-        string value)
-    {
-        var redacted =
-            Regex.Replace(
-                value ?? string.Empty,
-                @"\b\d{6}(?:-\d{6}){7}\b",
-                "[REDACTED-BITLOCKER-KEY]");
-
-        redacted =
-            Regex.Replace(
-                redacted,
-                @"(?i)(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9+/=_-]+",
-                "$1[REDACTED]");
-
-        redacted =
-            Regex.Replace(
-                redacted,
-                @"(?i)(password\s*[=:]\s*)[^\s;,\r\n]+",
-                "$1[REDACTED]");
-
-        return redacted;
-    }
+        string value) =>
+        DiagnosticRedaction.Sanitize(
+            value);
 
     private static string NormalizeOutputFile(
         string path,
