@@ -399,6 +399,42 @@ public sealed class ConfigurationMaintenanceService
             config.RemoteApiPort,
             nameof(config.RemoteApiPort));
 
+        ValidateOptionalSha256(
+            config.RemoteApiTokenSha256,
+            nameof(config.RemoteApiTokenSha256));
+        ValidateOptionalSha256(
+            config.RemoteApiReadTokenSha256,
+            nameof(config.RemoteApiReadTokenSha256));
+        ValidateOptionalSha256(
+            config.RemoteApiCoverageRunTokenSha256,
+            nameof(config.RemoteApiCoverageRunTokenSha256));
+        ValidateOptionalSha256(
+            config.RemoteApiExportTokenSha256,
+            nameof(config.RemoteApiExportTokenSha256));
+
+        if (config.RemoteApiEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    config.RemoteApiCertificateThumbprint))
+            {
+                throw new InvalidOperationException(
+                    "RemoteApiEnabled requires RemoteApiCertificateThumbprint.");
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    config.RemoteApiTokenSha256) &&
+                string.IsNullOrWhiteSpace(
+                    config.RemoteApiReadTokenSha256) &&
+                string.IsNullOrWhiteSpace(
+                    config.RemoteApiCoverageRunTokenSha256) &&
+                string.IsNullOrWhiteSpace(
+                    config.RemoteApiExportTokenSha256))
+            {
+                throw new InvalidOperationException(
+                    "RemoteApiEnabled requires at least one configured bearer-token hash.");
+            }
+        }
+
         if (config.ServiceIntervalMinutes is < 1 or > 10080)
         {
             throw new InvalidOperationException(
@@ -873,6 +909,28 @@ public sealed class ConfigurationMaintenanceService
 
         return Path.GetFullPath(
             expanded);
+    }
+
+    private static void ValidateOptionalSha256(
+        string? value,
+        string name)
+    {
+        if (string.IsNullOrWhiteSpace(
+                value))
+        {
+            return;
+        }
+
+        var normalized =
+            value.Trim();
+
+        if (normalized.Length != 64 ||
+            !normalized.All(
+                Uri.IsHexDigit))
+        {
+            throw new InvalidOperationException(
+                $"{name} must be an empty value or a 64-character SHA-256 hex digest.");
+        }
     }
 
     private static void ValidatePort(
