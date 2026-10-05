@@ -17,6 +17,21 @@ public static class UiStyle
     public static Font BodyFont =>
         SystemFonts.MessageBoxFont;
 
+    public static Font CreateBodyFont(
+        float size) =>
+        new(
+            BodyFont.FontFamily,
+            size,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
+
+    public static Font CreateDialogTitleFont() =>
+        new(
+            "Segoe UI Semibold",
+            15F,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
+
     public static Font CreatePageTitleFont() =>
         new(
             "Segoe UI Semibold",
