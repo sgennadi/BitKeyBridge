@@ -13,7 +13,7 @@ public sealed class OuBrowserForm : DpiAwareForm
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(950, 650);
         MinimumSize = new Size(620, 420);
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {

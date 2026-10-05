@@ -31,6 +31,13 @@ internal static class Program
             return RunSelfTest();
         }
 
+        if (args.Any(x => x.Equals("--ui-self-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConsoleHelper.EnsureConsole();
+            ApplicationConfiguration.Initialize();
+            return UiLayoutSelfTest.Run();
+        }
+
         var isCli = args.Any(x =>
             x.Equals("--cli", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dry-run", StringComparison.OrdinalIgnoreCase) ||
@@ -3216,6 +3223,7 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("GUI:");
         Console.WriteLine("  BitKeyBridge.exe");
+        Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout without showing the UI");
         Console.WriteLine();
         Console.WriteLine("CLI:");
         Console.WriteLine("  --cli                 Export using saved scopes");

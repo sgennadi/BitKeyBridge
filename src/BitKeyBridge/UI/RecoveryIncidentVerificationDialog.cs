@@ -14,7 +14,7 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(860, 590);
         MinimumSize = new Size(650, 460);
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -34,7 +34,7 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Verify Recovery Incident Bundle",
-            Font = new Font("Segoe UI Semibold", 15F),
+            Font = UiStyle.CreateDialogTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);
@@ -95,7 +95,7 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         _result.ReadOnly = true;
         _result.ScrollBars = ScrollBars.Both;
         _result.WordWrap = false;
-        _result.Font = new Font("Consolas", 9F);
+        _result.Font = UiStyle.CreateMonospaceFont(9F);
         root.Controls.Add(_result, 0, 3);
 
         var footer = new FlowLayoutPanel

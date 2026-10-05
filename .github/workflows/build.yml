@@ -14,7 +14,10 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: bitkeybridge-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || format('{0}-{1}', github.ref, github.sha) }}
+  # Bind concurrency to the exact commit. GitHub can deliver rapid PR
+  # synchronize events out of order; an older event must never cancel CI for
+  # the current PR head.
+  group: bitkeybridge-${{ github.workflow }}-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -102,6 +105,22 @@ jobs:
             throw "Buttons must use AutoSize/MinimumSize instead of fixed Width/Height."
           }
 
+          $directFontFiles = $uiFiles |
+            Where-Object { $_.Name -ne 'UiStyle.cs' }
+
+          $directFontFailures = @()
+          foreach ($file in $directFontFiles) {
+            $raw = Get-Content $file.FullName -Raw
+            if ($raw -match 'new\s+Font\s*\(\s*"(Segoe UI|Consolas)') {
+              $directFontFailures += $file.FullName
+            }
+          }
+
+          if ($directFontFailures) {
+            $directFontFailures | ForEach-Object { Write-Host $_ }
+            throw "Direct Segoe UI/Consolas construction is not allowed outside UiStyle. Use shared typography tokens."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
@@ -118,6 +137,20 @@ jobs:
         if: matrix.rid == 'win-x64'
         shell: cmd
         run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --self-test
+
+      - name: Runtime UI layout self-test
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
+          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -Wait -PassThru
+          if (Test-Path $report) {
+            Get-Content $report
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
+          }
 
       - name: Package architecture
         shell: cmd

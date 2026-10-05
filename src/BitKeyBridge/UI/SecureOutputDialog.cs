@@ -26,7 +26,7 @@ public sealed class SecureOutputDialog : DpiAwareForm
         MinimumSize = new Size(620, 430);
         MaximizeBox = false;
         MinimizeBox = false;
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -47,7 +47,7 @@ public sealed class SecureOutputDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Create a protected BitLocker recovery directory",
-            Font = new Font("Segoe UI Semibold", 14F),
+            Font = UiStyle.CreateSectionTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);

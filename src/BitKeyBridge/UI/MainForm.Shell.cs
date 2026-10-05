@@ -23,6 +23,7 @@ public sealed partial class MainForm
     private string? _deviceCurrentKey;
 
     private bool AdministrationAllowed =>
+        _layoutSelfTest ||
         new AuthorizationService(_config)
             .Check(BitKeyBridgePermission.Administrator)
             .Allowed;
@@ -136,7 +137,7 @@ public sealed partial class MainForm
         titlePanel.Controls.Add(new Label
         {
             Text = "Find BitLocker Recovery Key",
-            Font = new Font("Segoe UI Semibold", 18F),
+            Font = UiStyle.CreatePageTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 4)
         }, 0, 0);
@@ -151,52 +152,162 @@ public sealed partial class MainForm
         root.Controls.Add(titlePanel, 0, 0);
 
         _startPurposeStatus.AutoSize = true;
-        _startPurposeStatus.Font = new Font("Segoe UI Semibold", 10F);
+        _startPurposeStatus.Font = UiStyle.CreateEmphasisFont(10F);
         _startPurposeStatus.Text =
             "Ready — choose the source, connect if required, and search.";
         _startPurposeStatus.Margin = new Padding(0, 0, 0, 10);
         root.Controls.Add(_startPurposeStatus, 0, 1);
 
-        var connection = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, 0, 0, 8)
-        };
+        var connection =
+            new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 4,
+                RowCount = 2,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
 
-        connection.Controls.Add(new Label
-        {
-            Text = "Source:",
-            AutoSize = true,
-            Margin = new Padding(0, 9, 6, 0)
-        });
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
 
-        _recoverySource.DropDownStyle = ComboBoxStyle.DropDownList;
-        _recoverySource.Width = 145;
+        connection.Controls.Add(
+            new Label
+            {
+                Text = "Source:",
+                AutoSize = true,
+                Anchor =
+                    AnchorStyles.Left,
+                Margin =
+                    new Padding(
+                        0,
+                        8,
+                        UiStyle.ControlGap,
+                        4)
+            },
+            0,
+            0);
+
+        _recoverySource.Name =
+            "RecoverySourceSelector";
+        _recoverySource.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _recoverySource.MinimumSize =
+            new Size(
+                160,
+                0);
+        _recoverySource.Anchor =
+            AnchorStyles.Left |
+            AnchorStyles.Right;
+        _recoverySource.Margin =
+            new Padding(
+                0,
+                3,
+                UiStyle.ControlGap,
+                3);
         _recoverySource.Items.AddRange([
             "Live AD",
             "Local cache"
         ]);
-        connection.Controls.Add(_recoverySource);
+        connection.Controls.Add(
+            _recoverySource,
+            1,
+            0);
 
-        _connectAdButton.Text = "Connect to AD";
-        _connectAdButton.AutoSize = true;
-        _connectAdButton.Padding = new Padding(8, 3, 8, 3);
-        connection.Controls.Add(_connectAdButton);
+        _connectAdButton.Name =
+            "ConnectAdButton";
+        _connectAdButton.Text =
+            "Connect to AD";
+        UiStyle.ConfigureActionButton(
+            _connectAdButton);
+        _connectAdButton.MinimumSize =
+            new Size(
+                160,
+                UiStyle.MinimumButtonHeight);
+        _connectAdButton.Anchor =
+            AnchorStyles.Left |
+            AnchorStyles.Right;
+        _connectAdButton.Margin =
+            new Padding(
+                0,
+                0,
+                UiStyle.ControlGap,
+                0);
+        connection.Controls.Add(
+            _connectAdButton,
+            2,
+            0);
 
-        _adConnectionStatus.AutoSize = true;
-        _adConnectionStatus.MaximumSize = new Size(620, 0);
-        _adConnectionStatus.Margin = new Padding(10, 8, 8, 0);
-        connection.Controls.Add(_adConnectionStatus);
+        _advancedConnectionButton.Text =
+            "Advanced connection settings...";
+        UiStyle.ConfigureActionButton(
+            _advancedConnectionButton);
+        _advancedConnectionButton.Anchor =
+            AnchorStyles.Left;
+        _advancedConnectionButton.Margin =
+            new Padding(
+                0);
+        connection.Controls.Add(
+            _advancedConnectionButton,
+            3,
+            0);
 
-        _advancedConnectionButton.Text = "Advanced connection settings...";
-        _advancedConnectionButton.AutoSize = true;
-        _advancedConnectionButton.Padding = new Padding(6, 1, 6, 1);
-        connection.Controls.Add(_advancedConnectionButton);
+        _adConnectionStatus.Name =
+            "AdConnectionStatus";
+        _adConnectionStatus.AutoSize =
+            true;
+        _adConnectionStatus.Dock =
+            DockStyle.Fill;
+        _adConnectionStatus.BorderStyle =
+            BorderStyle.FixedSingle;
+        _adConnectionStatus.Padding =
+            new Padding(
+                UiStyle.ControlGap,
+                6,
+                UiStyle.ControlGap,
+                6);
+        _adConnectionStatus.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        _adConnectionStatus.TextAlign =
+            ContentAlignment.MiddleLeft;
+        connection.Controls.Add(
+            _adConnectionStatus,
+            0,
+            1);
+        connection.SetColumnSpan(
+            _adConnectionStatus,
+            4);
 
-        root.Controls.Add(connection, 0, 2);
+        root.Controls.Add(
+            connection,
+            0,
+            2);
 
         var scopeFlow = new FlowLayoutPanel
         {
@@ -232,20 +343,22 @@ public sealed partial class MainForm
         {
             Text = "Computer / Recovery ID:",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9.5F),
+            Font = UiStyle.CreateEmphasisFont(9.5F),
             Anchor = AnchorStyles.Left,
             Margin = new Padding(0, 7, 10, 0)
         }, 0, 0);
 
         _startQuery.Dock = DockStyle.Fill;
-        _startQuery.Font = new Font("Segoe UI", 11F);
+        _startQuery.Font = UiStyle.CreateBodyFont(11F);
         _startQuery.PlaceholderText = "PC-12345 or Recovery ID";
         searchGrid.Controls.Add(_startQuery, 1, 0);
 
         _startSearch.Text = "Search BitLocker";
         _startSearch.AutoSize = true;
         _startSearch.Padding = new Padding(12, 3, 12, 3);
-        _startSearch.Font = new Font("Segoe UI Semibold", 9.5F);
+        _startSearch.Font =
+            UiStyle.CreateEmphasisFont(
+                9.5F);
         searchGrid.Controls.Add(_startSearch, 2, 0);
         root.Controls.Add(searchGrid, 0, 4);
 
@@ -271,7 +384,9 @@ public sealed partial class MainForm
 
         _connectAdButton.Click +=
             async (_, _) =>
-                await TestDirectoryConnectionAsync();
+                await TestDirectoryConnectionAsync(
+                    promptForOu: true,
+                    promptForSessionCredentials: true);
 
         _startSelectOu.Click +=
             async (_, _) =>
@@ -350,34 +465,86 @@ public sealed partial class MainForm
         AddRecoveryCardRow(grid, 3, "Created / checked:", _recoveryCardTime);
         AddRecoveryCardRow(grid, 4, "Source:", _recoveryCardSource);
 
-        var keyFlow = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            Dock = DockStyle.Fill,
-            WrapContents = true
-        };
-        _startKey.Width = 470;
+        var keyLayout =
+            new TableLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2
+            };
+        keyLayout.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        keyLayout.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        keyLayout.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+
+        _startKey.Dock =
+            DockStyle.Top;
         _startKey.ReadOnly = true;
         _startKey.UseSystemPasswordChar = true;
-        _startKey.Font = new Font("Consolas", 10F);
-        keyFlow.Controls.Add(_startKey);
+        _startKey.Font =
+            UiStyle.CreateMonospaceFont(
+                10F);
+        _startKey.Margin =
+            new Padding(
+                0,
+                0,
+                0,
+                UiStyle.ControlGap);
+        keyLayout.Controls.Add(
+            _startKey,
+            0,
+            0);
 
-        _startShow.Text = "Reveal Recovery Key";
-        _startShow.AutoSize = true;
-        keyFlow.Controls.Add(_startShow);
+        var keyActions =
+            new FlowLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                WrapContents = true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(0)
+            };
 
-        _startCopy.Text = "Copy Key";
-        _startCopy.AutoSize = true;
-        keyFlow.Controls.Add(_startCopy);
+        _startShow.Text =
+            "Reveal Recovery Key";
+        UiStyle.ConfigureActionButton(
+            _startShow);
+        keyActions.Controls.Add(
+            _startShow);
+
+        _startCopy.Text =
+            "Copy Key";
+        UiStyle.ConfigureActionButton(
+            _startCopy);
+        keyActions.Controls.Add(
+            _startCopy);
+
+        keyLayout.Controls.Add(
+            keyActions,
+            0,
+            1);
 
         grid.Controls.Add(new Label
         {
             Text = "Recovery key:",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9F),
+            Font =
+                UiStyle.CreateEmphasisFont(),
             Margin = new Padding(0, 8, 10, 0)
         }, 0, 5);
-        grid.Controls.Add(keyFlow, 1, 5);
+        grid.Controls.Add(
+            keyLayout,
+            1,
+            5);
 
         grid.Controls.Add(new Label
         {
@@ -401,7 +568,7 @@ public sealed partial class MainForm
         {
             Text = caption,
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9F),
+            Font = UiStyle.CreateEmphasisFont(9F),
             Margin = new Padding(0, 3, 10, 3)
         }, 0, row);
 
@@ -505,7 +672,8 @@ public sealed partial class MainForm
             (_, _) =>
             {
                 UpdateDirectoryConnectionUi();
-                RefreshCredentialVaultStatus();
+                if (!_layoutSelfTest)
+                    RefreshCredentialVaultStatus();
             };
         _adUseLdaps.CheckedChanged +=
             (_, _) =>
@@ -527,7 +695,8 @@ public sealed partial class MainForm
             {
                 _adPassword.Clear();
                 AdSessionCredentials.Clear();
-                RefreshCredentialVaultStatus();
+                if (!_layoutSelfTest)
+                    RefreshCredentialVaultStatus();
             };
     }
 
@@ -605,7 +774,7 @@ public sealed partial class MainForm
         }, 0, 0);
 
         _unifiedQuery.Dock = DockStyle.Fill;
-        _unifiedQuery.Font = new Font("Segoe UI", 10.5F);
+        _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);
 
         var searchButton = new Button
@@ -645,41 +814,120 @@ public sealed partial class MainForm
         root.Controls.Add(_unifiedResults, 0, 2);
 
         _unifiedDetails.ReadOnly = true;
-        _unifiedDetails.Font = new Font("Consolas", 9F);
+        _unifiedDetails.Font = UiStyle.CreateMonospaceFont(9F);
         _unifiedDetails.Dock = DockStyle.Fill;
         root.Controls.Add(_unifiedDetails, 0, 3);
 
-        var keyPanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true
-        };
+        var keyPanel =
+            new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 3,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+        keyPanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        keyPanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+
         keyPanel.Controls.Add(new Label
         {
             Text = "Entra Recovery ID:",
             AutoSize = true,
-            Margin = new Padding(0, 8, 6, 0)
-        });
-        _deviceRecoveryIds.DropDownStyle = ComboBoxStyle.DropDownList;
-        _deviceRecoveryIds.Width = 330;
-        keyPanel.Controls.Add(_deviceRecoveryIds);
+            Anchor = AnchorStyles.Left,
+            Margin =
+                new Padding(
+                    0,
+                    7,
+                    UiStyle.ControlGap,
+                    4)
+        }, 0, 0);
 
-        _deviceRecoveryKey.Width = 410;
+        _deviceRecoveryIds.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _deviceRecoveryIds.Dock =
+            DockStyle.Top;
+        keyPanel.Controls.Add(
+            _deviceRecoveryIds,
+            1,
+            0);
+
+        keyPanel.Controls.Add(new Label
+        {
+            Text = "Recovery key:",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin =
+                new Padding(
+                    0,
+                    7,
+                    UiStyle.ControlGap,
+                    4)
+        }, 0, 1);
+
+        _deviceRecoveryKey.Dock =
+            DockStyle.Top;
         _deviceRecoveryKey.ReadOnly = true;
         _deviceRecoveryKey.UseSystemPasswordChar = true;
-        _deviceRecoveryKey.Font = new Font("Consolas", 9.5F);
-        keyPanel.Controls.Add(_deviceRecoveryKey);
+        _deviceRecoveryKey.Font =
+            UiStyle.CreateMonospaceFont();
+        keyPanel.Controls.Add(
+            _deviceRecoveryKey,
+            1,
+            1);
 
-        _deviceShowKey.Text = "Reveal Key";
-        _deviceShowKey.AutoSize = true;
-        keyPanel.Controls.Add(_deviceShowKey);
+        var deviceKeyActions =
+            new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                WrapContents = true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
 
-        _deviceCopyKey.Text = "Copy Key";
-        _deviceCopyKey.AutoSize = true;
-        keyPanel.Controls.Add(_deviceCopyKey);
+        _deviceShowKey.Text =
+            "Reveal Key";
+        UiStyle.ConfigureActionButton(
+            _deviceShowKey);
+        deviceKeyActions.Controls.Add(
+            _deviceShowKey);
 
-        root.Controls.Add(keyPanel, 0, 4);
+        _deviceCopyKey.Text =
+            "Copy Key";
+        UiStyle.ConfigureActionButton(
+            _deviceCopyKey);
+        deviceKeyActions.Controls.Add(
+            _deviceCopyKey);
+
+        keyPanel.SetColumnSpan(
+            deviceKeyActions,
+            2);
+        keyPanel.Controls.Add(
+            deviceKeyActions,
+            0,
+            2);
+
+        root.Controls.Add(
+            keyPanel,
+            0,
+            4);
 
         var actions = new FlowLayoutPanel
         {
@@ -784,7 +1032,7 @@ public sealed partial class MainForm
         root.Controls.Add(new Label
         {
             Text = "Microsoft Graph / Entra / Intune",
-            Font = new Font("Segoe UI Semibold", 16F),
+            Font = UiStyle.CreateEmphasisFont(16F),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 12)
         }, 0, 0);
@@ -950,10 +1198,13 @@ public sealed partial class MainForm
 
         if (local)
         {
-            _adConnectionStatus.Text =
+            SetDirectoryConnectionStatus(
                 File.Exists(_config.OutputCsv)
                     ? "Local cache is available. AD connection is not required for this search."
-                    : "Local cache is selected, but the recovery export CSV does not exist yet.";
+                    : "Local cache is selected, but the recovery export CSV does not exist yet.",
+                File.Exists(_config.OutputCsv)
+                    ? UiStatusKind.Neutral
+                    : UiStatusKind.Warning);
 
             _startOuStatus.Text =
                 "OU selection is not used for Local cache search.";

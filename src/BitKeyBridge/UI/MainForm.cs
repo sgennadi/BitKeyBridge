@@ -5,6 +5,7 @@ namespace BitKeyBridge;
 public sealed partial class MainForm : DpiAwareForm
 {
     private readonly AppConfig _config;
+    private readonly bool _layoutSelfTest;
     private readonly ActiveDirectoryService _ad;
     private readonly AuditService _audit = new();
     private readonly CheckedListBox _scopes = new();
@@ -105,25 +106,61 @@ public sealed partial class MainForm : DpiAwareForm
         new(StringComparer.OrdinalIgnoreCase);
 
     public MainForm(AppConfig config)
+        : this(
+            config,
+            layoutSelfTest: false)
+    {
+    }
+
+    internal MainForm(
+        AppConfig config,
+        bool layoutSelfTest)
     {
         _config = config;
-        _ad = new ActiveDirectoryService(config);
-        _cloudConfig = ConfigService.LoadCloudConfig();
-        try
+        _layoutSelfTest =
+            layoutSelfTest;
+        _ad =
+            new ActiveDirectoryService(
+                config);
+        _cloudConfig =
+            layoutSelfTest
+                ? new CloudAuthConfig()
+                : ConfigService.LoadCloudConfig();
+
+        if (!layoutSelfTest)
         {
-            if (SecurityContext.IsAdministrator())
-                WindowsEventLogService.EnsureSource();
+            try
+            {
+                if (SecurityContext.IsAdministrator())
+                    WindowsEventLogService.EnsureSource();
+            }
+            catch
+            {
+            }
         }
-        catch { }
-        var assemblyVersion = GetType().Assembly.GetName().Version;
-        Text = $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
-        StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(1220, 820);
-        MinimumSize = new Size(1000, 700);
+
+        var assemblyVersion =
+            GetType().Assembly.GetName().Version;
+        Text =
+            $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
+        StartPosition =
+            FormStartPosition.CenterScreen;
+        Size =
+            new Size(
+                1220,
+                820);
+        MinimumSize =
+            new Size(
+                1000,
+                700);
         Font =
             UiStyle.BodyFont;
 
-        Controls.Add(BuildMainShell());
+        Controls.Add(
+            BuildMainShell());
+
+        if (layoutSelfTest)
+            return;
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -132,7 +169,11 @@ public sealed partial class MainForm : DpiAwareForm
         LoadDashboardSettings();
         LoadOperationsSettings();
         RefreshDashboard();
-        FormClosing += (_, _) => ClearSensitiveState();
+
+        FormClosing +=
+            (_, _) =>
+                ClearSensitiveState();
+
         Shown += async (_, _) =>
         {
             await InitializeRecoveryWorkspaceAsync();
@@ -277,14 +318,34 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task RunDcTestAsync()
     {
-        _dcTest.Enabled = false;
+        if (!EnsureSessionAdCredentialForConnection())
+            return;
+
+        SaveDirectorySettings(
+            showConfirmation: false,
+            allowInMemoryFallback: true);
+
+        _dcTest.Enabled =
+            false;
         _dcResults.Items.Clear();
         _dcDetails.Clear();
+
         try
         {
-            var progress = new Progress<string>(m => _dcDetails.AppendText($"[{DateTime.Now:HH:mm:ss}] {m}{Environment.NewLine}"));
-            var service = new DomainControllerComparisonService(_config);
-            var rows = await service.RunAsync(GetSelectedScopes(), progress);
+            var progress =
+                new Progress<string>(
+                    message =>
+                        _dcDetails.AppendText(
+                            $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}"));
+
+            var service =
+                new DomainControllerComparisonService(
+                    _config);
+
+            var rows =
+                await service.RunAsync(
+                    GetSelectedScopes(),
+                    progress);
             foreach (var row in rows)
             {
                 var item = new ListViewItem(row.Name);
@@ -2192,12 +2253,13 @@ public sealed partial class MainForm : DpiAwareForm
         UpdateDirectoryConnectionUi();
         RefreshCredentialVaultStatus();
 
-        _adConnectionStatus.Text =
+        SetDirectoryConnectionStatus(
             _adMode.SelectedIndex == 1 &&
             !string.IsNullOrWhiteSpace(
                 _adServer.Text)
                 ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}."
-                : "Ready to auto-discover a writable domain controller.";
+                : "Ready to auto-discover a writable domain controller.",
+            UiStatusKind.Neutral);
 
         _startPurposeStatus.Text =
             "Search loads metadata only. Recovery passwords are read on demand.";
@@ -2570,17 +2632,26 @@ public sealed partial class MainForm : DpiAwareForm
     }
 
     private async Task TestDirectoryConnectionAsync(
-        bool promptForOu = true)
+        bool promptForOu = true,
+        bool promptForSessionCredentials = true)
     {
+        if (promptForSessionCredentials &&
+            !EnsureSessionAdCredentialForConnection())
+        {
+            return;
+        }
+
         try
         {
             SaveDirectorySettings(
                 showConfirmation: false,
                 allowInMemoryFallback: true);
 
-            _adConnectionStatus.Text =
-                "Connecting to Active Directory...";
-            UseWaitCursor = true;
+            SetDirectoryConnectionStatus(
+                "Connecting to Active Directory...",
+                UiStatusKind.Busy);
+            UseWaitCursor =
+                true;
 
             var result =
                 await Task.Run(
@@ -2599,24 +2670,29 @@ public sealed partial class MainForm : DpiAwareForm
                             Root: root);
                     });
 
-            _adConnectionStatus.Text =
-                $"Connected to {result.Server}. Ready to search BitLocker.";
+            SetDirectoryConnectionStatus(
+                $"Connected to {result.Server}. Ready to search BitLocker.",
+                UiStatusKind.Success);
 
             _startDomainDn =
                 result.Root.GetValueOrDefault(
                     "defaultNamingContext",
                     string.Empty);
 
-            _startSelectOu.Enabled = true;
+            _startSelectOu.Enabled =
+                true;
 
             if (_startScope is not null &&
                 !ActiveDirectoryService.IsSearchBaseWithinNamingContext(
                     _startScope.SearchBase,
                     _startDomainDn))
             {
-                _startScope = null;
-                _config.LastRecoveryScopeName = string.Empty;
-                _config.LastRecoveryScopeSearchBase = string.Empty;
+                _startScope =
+                    null;
+                _config.LastRecoveryScopeName =
+                    string.Empty;
+                _config.LastRecoveryScopeSearchBase =
+                    string.Empty;
                 TrySaveRecoveryUiState();
 
                 TryUseDefaultRecoveryScope(
@@ -2627,7 +2703,8 @@ public sealed partial class MainForm : DpiAwareForm
             {
                 _startOuStatus.Text =
                     $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
-                _startSearch.Enabled = true;
+                _startSearch.Enabled =
+                    true;
                 _startPurposeStatus.Text =
                     "Connected. Enter a computer name or Recovery ID.";
             }
@@ -2639,8 +2716,17 @@ public sealed partial class MainForm : DpiAwareForm
             }
             else
             {
-                _startPurposeStatus.Text =
-                    "Connected. Select an OU before searching.";
+                if (TryUseDefaultRecoveryScope(
+                        "Connected with no OU selected; using the entire domain."))
+                {
+                    _startPurposeStatus.Text =
+                        "Connected. Enter a computer name or Recovery ID.";
+                }
+                else
+                {
+                    _startPurposeStatus.Text =
+                        "Connected. Select an OU before searching.";
+                }
             }
         }
         catch (Exception ex)
@@ -2655,9 +2741,12 @@ public sealed partial class MainForm : DpiAwareForm
             _startCurrentKey =
                 null;
             _startKey.Clear();
-            _adConnectionStatus.Text =
+
+            SetDirectoryConnectionStatus(
                 "Connection failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
+
             _startPurposeStatus.Text =
                 "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.";
 
@@ -2673,8 +2762,87 @@ public sealed partial class MainForm : DpiAwareForm
         }
         finally
         {
-            UseWaitCursor = false;
+            UseWaitCursor =
+                false;
         }
+    }
+
+    private bool EnsureSessionAdCredentialForConnection()
+    {
+        if (!_adExplicitCredentials.Checked ||
+            !GetSelectedCredentialStorageMode()
+                .Equals(
+                    "Session",
+                    StringComparison.OrdinalIgnoreCase) ||
+            AdSessionCredentials.HasPassword ||
+            !string.IsNullOrEmpty(
+                _adPassword.Text))
+        {
+            return true;
+        }
+
+        using var prompt =
+            new AdCredentialPromptDialog(
+                _adUsername.Text.Trim());
+
+        if (prompt.ShowDialog(this) !=
+            DialogResult.OK)
+        {
+            SetDirectoryConnectionStatus(
+                "Connection canceled. Session credentials were not provided.",
+                UiStatusKind.Warning);
+            _startPurposeStatus.Text =
+                "Live AD is waiting for session credentials.";
+            return false;
+        }
+
+        var username =
+            prompt.Username;
+        var password =
+            prompt.TakePassword();
+
+        try
+        {
+            _adUsername.Text =
+                username;
+            _config.AdUsername =
+                username;
+
+            AdSessionCredentials.SetPassword(
+                password);
+
+            _adPassword.Clear();
+
+            _audit.Write(
+                "LoadAdSessionCredential",
+                source: "Session",
+                details:
+                    $"Storage=Session; User={username}; Trigger=Connect");
+
+            RefreshCredentialVaultStatus();
+
+            SetDirectoryConnectionStatus(
+                $"Session credential loaded for {username}. Connecting...",
+                UiStatusKind.Busy);
+
+            return true;
+        }
+        finally
+        {
+            password =
+                string.Empty;
+        }
+    }
+
+    private void SetDirectoryConnectionStatus(
+        string text,
+        UiStatusKind kind)
+    {
+        _adConnectionStatus.Text =
+            text;
+        UiStyle.ApplyStatusLabel(
+            _adConnectionStatus,
+            kind);
     }
 
     private async Task SelectStartOuAsync()
@@ -2715,8 +2883,9 @@ public sealed partial class MainForm : DpiAwareForm
                 if (TryUseDefaultRecoveryScope(
                         "OU discovery failed; using the entire domain as the default search scope."))
                 {
-                    _adConnectionStatus.Text =
-                        $"Connected to {dc}. OU enumeration warning: {ex.Message}";
+                    SetDirectoryConnectionStatus(
+                        $"Connected to {dc}. OU enumeration warning: {ex.Message}",
+                        UiStatusKind.Warning);
                     return;
                 }
 
@@ -2767,9 +2936,10 @@ public sealed partial class MainForm : DpiAwareForm
             if (TryUseDefaultRecoveryScope(
                     "OU selection is unavailable; using the entire domain as the default search scope."))
             {
-                _adConnectionStatus.Text =
+                SetDirectoryConnectionStatus(
                     "Connected to Active Directory. OU selection warning: " +
-                    ex.Message;
+                    ex.Message,
+                    UiStatusKind.Warning);
                 return;
             }
 

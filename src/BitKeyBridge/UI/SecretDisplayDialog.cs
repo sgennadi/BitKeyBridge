@@ -16,7 +16,7 @@ public sealed class SecretDisplayDialog : DpiAwareForm
         MinimumSize = new Size(600, 300);
         MaximizeBox = false;
         MinimizeBox = false;
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -53,7 +53,7 @@ public sealed class SecretDisplayDialog : DpiAwareForm
         _secret.Dock = DockStyle.Fill;
         _secret.ReadOnly = true;
         _secret.Text = secret;
-        _secret.Font = new Font("Consolas", 10F);
+        _secret.Font = UiStyle.CreateMonospaceFont(10F);
         secretRow.Controls.Add(_secret, 0, 0);
 
         var copy = new Button

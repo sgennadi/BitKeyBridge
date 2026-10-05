@@ -39,7 +39,7 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(1040, 860);
         MinimumSize = new Size(760, 650);
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -57,7 +57,7 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Optional privileged recovery controls",
-            Font = new Font("Segoe UI Semibold", 15F),
+            Font = UiStyle.CreateDialogTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);

@@ -19,7 +19,7 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         MinimumSize = new Size(650, 390);
         MaximizeBox = false;
         MinimizeBox = false;
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -39,7 +39,7 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Least-Privilege Remote API Tokens",
-            Font = new Font("Segoe UI Semibold", 15F),
+            Font = UiStyle.CreateDialogTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);
@@ -115,7 +115,7 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         var titleLabel = new Label
         {
             Text = title,
-            Font = new Font("Segoe UI Semibold", 10F),
+            Font = UiStyle.CreateEmphasisFont(10F),
             AutoSize = true,
             Anchor = AnchorStyles.Top | AnchorStyles.Left,
             Margin = new Padding(0, 8, 10, 14)

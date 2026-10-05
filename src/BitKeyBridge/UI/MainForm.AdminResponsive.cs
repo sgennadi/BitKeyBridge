@@ -452,8 +452,7 @@ public sealed partial class MainForm
         _exportLog.WordWrap =
             false;
         _exportLog.Font =
-            new Font(
-                "Consolas",
+            UiStyle.CreateMonospaceFont(
                 9F);
         _exportLog.Dock =
             DockStyle.Top;
@@ -573,8 +572,7 @@ public sealed partial class MainForm
         _coverageSummary.AutoSize =
             true;
         _coverageSummary.Font =
-            new Font(
-                "Segoe UI Semibold",
+            UiStyle.CreateEmphasisFont(
                 9.5F);
         _coverageSummary.MaximumSize =
             new Size(1000, 0);
@@ -654,8 +652,7 @@ public sealed partial class MainForm
         _dashboardStatus.AutoSize =
             true;
         _dashboardStatus.Font =
-            new Font(
-                "Segoe UI Semibold",
+            UiStyle.CreateEmphasisFont(
                 11F);
         _dashboardStatus.MaximumSize =
             new Size(1000, 0);
@@ -862,8 +859,7 @@ public sealed partial class MainForm
         _dashboardDetails.ReadOnly =
             true;
         _dashboardDetails.Font =
-            new Font(
-                "Consolas",
+            UiStyle.CreateMonospaceFont(
                 9.5F);
         _dashboardDetails.Dock =
             DockStyle.Top;
@@ -874,7 +870,10 @@ public sealed partial class MainForm
 
         refresh.Click +=
             (_, _) =>
-                RefreshDashboard();
+            {
+                if (!_layoutSelfTest)
+                    RefreshDashboard();
+            };
         install.Click +=
             (_, _) =>
                 InstallOrUpdateService();
@@ -998,8 +997,7 @@ public sealed partial class MainForm
         _dcDetails.ReadOnly =
             true;
         _dcDetails.Font =
-            new Font(
-                "Consolas",
+            UiStyle.CreateMonospaceFont(
                 9F);
         _dcDetails.Dock =
             DockStyle.Fill;
@@ -1162,8 +1160,11 @@ public sealed partial class MainForm
             (_, _) =>
                 VerifyRecoveryIncidentGui();
 
-        RefreshAudit();
-        RefreshAuditSigningStatus();
+        if (!_layoutSelfTest)
+        {
+            RefreshAudit();
+            RefreshAuditSigningStatus();
+        }
 
         return page;
     }
@@ -1247,7 +1248,6 @@ public sealed partial class MainForm
             new TableLayoutPanel
             {
                 AutoSize = true,
-                Width = 1040,
                 ColumnCount = 2,
                 Margin = new Padding(
                     0,

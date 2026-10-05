@@ -1,5 +1,14 @@
 namespace BitKeyBridge;
 
+public enum UiStatusKind
+{
+    Neutral,
+    Busy,
+    Success,
+    Warning,
+    Error
+}
+
 /// <summary>
 /// Shared visual and layout standard for BitKeyBridge WinForms UI.
 /// Values are expressed in 96-DPI logical pixels and are scaled by WinForms.
@@ -16,6 +25,21 @@ public static class UiStyle
 
     public static Font BodyFont =>
         SystemFonts.MessageBoxFont;
+
+    public static Font CreateBodyFont(
+        float size) =>
+        new(
+            BodyFont.FontFamily,
+            size,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
+
+    public static Font CreateDialogTitleFont() =>
+        new(
+            "Segoe UI Semibold",
+            15F,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
 
     public static Font CreatePageTitleFont() =>
         new(
@@ -46,6 +70,36 @@ public static class UiStyle
             size,
             FontStyle.Regular,
             GraphicsUnit.Point);
+
+    public static void ApplyStatusLabel(
+        Label label,
+        UiStatusKind kind)
+    {
+        (label.BackColor, label.ForeColor) =
+            kind switch
+            {
+                UiStatusKind.Busy =>
+                    (
+                        Color.LemonChiffon,
+                        Color.DarkGoldenrod),
+                UiStatusKind.Success =>
+                    (
+                        Color.Honeydew,
+                        Color.DarkGreen),
+                UiStatusKind.Warning =>
+                    (
+                        Color.LemonChiffon,
+                        Color.DarkOrange),
+                UiStatusKind.Error =>
+                    (
+                        Color.MistyRose,
+                        Color.DarkRed),
+                _ =>
+                    (
+                        SystemColors.Window,
+                        SystemColors.ControlText)
+            };
+    }
 
     public static void ConfigureActionButton(
         Button button)
@@ -103,8 +157,27 @@ public static class UiStyle
                         available -
                         child.Margin.Horizontal);
 
-                if (width > 0 &&
-                    child.Width != width)
+                if (width <= 0)
+                    continue;
+
+                if (child is TableLayoutPanel table &&
+                    table.AutoSize)
+                {
+                    // AutoSize tables otherwise grow back to their preferred
+                    // content width and can overflow the workspace at high DPI
+                    // or with enlarged text. Keep the width responsive while
+                    // allowing the height to continue growing naturally.
+                    table.MinimumSize =
+                        new Size(
+                            width,
+                            0);
+                    table.MaximumSize =
+                        new Size(
+                            width,
+                            0);
+                }
+
+                if (child.Width != width)
                 {
                     child.Width =
                         width;

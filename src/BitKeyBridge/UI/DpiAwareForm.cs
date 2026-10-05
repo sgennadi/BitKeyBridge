@@ -38,19 +38,13 @@ public class DpiAwareForm : Form
         // A scrollbar is preferable to clipped controls on high DPI, large-text
         // configurations, RDP sessions, or small displays.
         AutoScroll = true;
-        ApplyResponsiveDefaults(
-            this);
-        ConstrainToWorkingArea();
-        PerformLayout();
+        RefreshResponsiveLayout();
     }
 
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        ApplyResponsiveDefaults(
-            this);
-        ConstrainToWorkingArea();
-        PerformLayout();
+        RefreshResponsiveLayout();
     }
 
     protected override void OnDpiChanged(
@@ -78,11 +72,24 @@ public class DpiAwareForm : Form
         }
     }
 
+    internal void PrepareResponsiveLayoutForTesting()
+    {
+        AutoScroll =
+            true;
+        ApplyResponsiveDefaults(
+            this);
+        PerformLayout();
+        RefreshResponsiveLabelWidths();
+        PerformLayout();
+    }
+
     private void RefreshResponsiveLayout()
     {
         ApplyResponsiveDefaults(
             this);
         ConstrainToWorkingArea();
+        PerformLayout();
+        RefreshResponsiveLabelWidths();
         PerformLayout();
     }
 
@@ -252,6 +259,21 @@ public class DpiAwareForm : Form
         {
             available -=
                 parent.Padding.Horizontal;
+        }
+
+        var parentAvailable =
+            Math.Max(
+                0,
+                parent.ClientSize.Width -
+                parent.Padding.Horizontal -
+                control.Margin.Horizontal);
+
+        if (parentAvailable > 0)
+        {
+            available =
+                Math.Min(
+                    available,
+                    parentAvailable);
         }
 
         return Math.Max(

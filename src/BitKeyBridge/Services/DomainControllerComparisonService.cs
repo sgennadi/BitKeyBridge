@@ -20,12 +20,47 @@ public sealed class DomainControllerComparisonService
     {
         return await Task.Run(() =>
         {
-            var scopes = selectedScopes is { Count: > 0 } ? selectedScopes.ToList() : _config.DefaultScopes.ToList();
-            if (scopes.Count == 0)
-                throw new InvalidOperationException("No OU scopes are configured. Add an OU in the GUI or pass --search-base.");
+            var domain =
+                _ad.GetCurrentDomainName();
 
-            var domain = _ad.GetCurrentDomainName();
-            progress?.Report($"Discovering domain controllers in {domain}...");
+            var scopes =
+                selectedScopes is { Count: > 0 }
+                    ? selectedScopes.ToList()
+                    : _config.DefaultScopes.ToList();
+
+            if (scopes.Count == 0)
+            {
+                progress?.Report(
+                    $"No OU scopes are configured. Resolving the entire-domain search base for {domain}...");
+
+                var preferredDc =
+                    _ad.GetPreferredWritableDc();
+                var root =
+                    _ad.GetRootDse(
+                        preferredDc);
+                var namingContext =
+                    root.GetValueOrDefault(
+                        "defaultNamingContext",
+                        string.Empty);
+
+                if (string.IsNullOrWhiteSpace(
+                        namingContext))
+                {
+                    throw new InvalidOperationException(
+                        $"Active Directory on {preferredDc} did not return defaultNamingContext.");
+                }
+
+                scopes.Add(
+                    new BitLockerScope(
+                        "Entire domain",
+                        namingContext));
+
+                progress?.Report(
+                    $"Using entire domain scope: {namingContext}");
+            }
+
+            progress?.Report(
+                $"Discovering domain controllers in {domain}...");
             var controllers = _ad.DiscoverDomainControllers(domain);
             var rows = new List<DomainControllerComparisonRow>();
 

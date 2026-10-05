@@ -26,7 +26,7 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(920, 700);
         MinimumSize = new Size(680, 560);
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -49,7 +49,7 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Housekeeping / Protected Storage",
-            Font = new Font("Segoe UI Semibold", 15F),
+            Font = UiStyle.CreateDialogTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);
@@ -193,7 +193,7 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
         _status.ReadOnly = true;
         _status.WordWrap = false;
         _status.ScrollBars = RichTextBoxScrollBars.Both;
-        _status.Font = new Font("Consolas", 9F);
+        _status.Font = UiStyle.CreateMonospaceFont(9F);
         _status.MinimumSize = new Size(0, 190);
         root.Controls.Add(_status, 0, 5);
 
