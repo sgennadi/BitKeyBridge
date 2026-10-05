@@ -78,7 +78,7 @@ public sealed class SecretDisplayDialog : DpiAwareForm
             Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
+            WrapContents = true,
             Padding = new Padding(0, 10, 0, 0)
         };
         var close = new Button
