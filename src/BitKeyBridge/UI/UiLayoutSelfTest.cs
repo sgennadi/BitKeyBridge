@@ -330,9 +330,17 @@ public static class UiLayoutSelfTest
                     $"{path}/{page.Text}";
 
                 page.CreateControl();
+
+                // Tab selection and Dock=Fill layout are message-loop driven in
+                // WinForms. Pump pending layout/visibility work so this headless
+                // test observes the same geometry as the interactive GUI.
+                Application.DoEvents();
+                form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
                 form.PrepareResponsiveLayoutForTesting();
+                Application.DoEvents();
+                form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
 
@@ -424,7 +432,8 @@ public static class UiLayoutSelfTest
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: wrapping label '{ShortText(label.Text)}' exceeds the visible parent width " +
-                        $"(X={label.Left}, Width={label.Width}, Right={label.Right}, ParentWidth={label.Parent.ClientSize.Width}).");
+                        $"(X={label.Left}, Width={label.Width}, Right={label.Right}, ParentWidth={label.Parent.ClientSize.Width}; " +
+                        $"Ancestors={DescribeAncestors(label)}).");
                 }
             }
 
@@ -563,6 +572,29 @@ public static class UiLayoutSelfTest
         }
 
         return null;
+    }
+
+    private static string DescribeAncestors(
+        Control control)
+    {
+        var parts =
+            new List<string>();
+        var current =
+            control.Parent;
+
+        while (current is not null &&
+               parts.Count < 8)
+        {
+            parts.Add(
+                $"{current.GetType().Name}[{current.ClientSize.Width}x{current.ClientSize.Height}]");
+
+            current =
+                current.Parent;
+        }
+
+        return string.Join(
+            " > ",
+            parts);
     }
 
     private static string ControlName(
