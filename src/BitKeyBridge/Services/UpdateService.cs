@@ -296,6 +296,8 @@ public sealed class UpdateService : IDisposable
                    HttpCompletionOption.ResponseHeadersRead,
                    ct))
         {
+            ValidateTrustedDownloadResponse(
+                response);
             response.EnsureSuccessStatusCode();
 
             if (response.Content.Headers.ContentLength is long contentLength &&
@@ -855,6 +857,8 @@ public sealed class UpdateService : IDisposable
                 HttpCompletionOption.ResponseHeadersRead,
                 ct);
 
+        ValidateTrustedDownloadResponse(
+            response);
         response.EnsureSuccessStatusCode();
 
         if (response.Content.Headers.ContentLength is long contentLength &&
@@ -954,7 +958,13 @@ public sealed class UpdateService : IDisposable
             !string.Equals(
                 uri.Host,
                 "github.com",
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrEmpty(
+                uri.UserInfo) ||
+            !string.IsNullOrEmpty(
+                uri.Query) ||
+            !string.IsNullOrEmpty(
+                uri.Fragment))
         {
             throw new InvalidOperationException(
                 $"GitHub release asset URL for {assetName} is invalid.");
@@ -997,7 +1007,13 @@ public sealed class UpdateService : IDisposable
             !string.Equals(
                 uri.Host,
                 "github.com",
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrEmpty(
+                uri.UserInfo) ||
+            !string.IsNullOrEmpty(
+                uri.Query) ||
+            !string.IsNullOrEmpty(
+                uri.Fragment))
         {
             throw new InvalidOperationException(
                 "GitHub release page URL is invalid.");
@@ -1017,6 +1033,38 @@ public sealed class UpdateService : IDisposable
         {
             throw new InvalidOperationException(
                 $"GitHub release page URL does not match repository {repository} and release {tag}.");
+        }
+    }
+
+    private static void ValidateTrustedDownloadResponse(
+        HttpResponseMessage response)
+    {
+        var uri =
+            response.RequestMessage?.RequestUri;
+
+        if (uri is null ||
+            !string.Equals(
+                uri.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Release download did not remain on HTTPS.");
+        }
+
+        var host =
+            uri.Host;
+
+        if (!string.Equals(
+                host,
+                "github.com",
+                StringComparison.OrdinalIgnoreCase) &&
+            !host.EndsWith(
+                ".githubusercontent.com",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Release download redirected to an untrusted host '{host}'.");
         }
     }
 
