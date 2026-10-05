@@ -14,7 +14,10 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: bitkeybridge-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || format('{0}-{1}', github.ref, github.sha) }}
+  # Bind concurrency to the exact commit. GitHub can deliver rapid PR
+  # synchronize events out of order; an older event must never cancel CI for
+  # the current PR head.
+  group: bitkeybridge-${{ github.workflow }}-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
