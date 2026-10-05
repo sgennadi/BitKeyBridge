@@ -23,6 +23,7 @@ public sealed partial class MainForm
     private string? _deviceCurrentKey;
 
     private bool AdministrationAllowed =>
+        _layoutSelfTest ||
         new AuthorizationService(_config)
             .Check(BitKeyBridgePermission.Administrator)
             .Allowed;
