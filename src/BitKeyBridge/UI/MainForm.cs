@@ -318,14 +318,34 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task RunDcTestAsync()
     {
-        _dcTest.Enabled = false;
+        if (!EnsureSessionAdCredentialForConnection())
+            return;
+
+        SaveDirectorySettings(
+            showConfirmation: false,
+            allowInMemoryFallback: true);
+
+        _dcTest.Enabled =
+            false;
         _dcResults.Items.Clear();
         _dcDetails.Clear();
+
         try
         {
-            var progress = new Progress<string>(m => _dcDetails.AppendText($"[{DateTime.Now:HH:mm:ss}] {m}{Environment.NewLine}"));
-            var service = new DomainControllerComparisonService(_config);
-            var rows = await service.RunAsync(GetSelectedScopes(), progress);
+            var progress =
+                new Progress<string>(
+                    message =>
+                        _dcDetails.AppendText(
+                            $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}"));
+
+            var service =
+                new DomainControllerComparisonService(
+                    _config);
+
+            var rows =
+                await service.RunAsync(
+                    GetSelectedScopes(),
+                    progress);
             foreach (var row in rows)
             {
                 var item = new ListViewItem(row.Name);
