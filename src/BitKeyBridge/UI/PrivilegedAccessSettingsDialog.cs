@@ -98,7 +98,7 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         var buttons = new FlowLayoutPanel
         {
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             FlowDirection = FlowDirection.RightToLeft,
             Dock = DockStyle.Fill
         };
