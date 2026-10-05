@@ -201,6 +201,9 @@ public sealed class ConfigurationMaintenanceService
                 string.Empty;
             appConfig.RemoteApiExportTokenSha256 =
                 string.Empty;
+            appConfig.SiemWebhookUrl =
+                DiagnosticRedaction.SanitizeUriForDiagnostics(
+                    appConfig.SiemWebhookUrl);
 
             WriteJson(
                 tempDirectory,
