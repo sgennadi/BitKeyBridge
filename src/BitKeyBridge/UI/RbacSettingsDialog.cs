@@ -117,7 +117,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false
+            WrapContents = true
         };
         var cancel = new Button
         {
