@@ -1247,7 +1247,6 @@ public sealed partial class MainForm
             new TableLayoutPanel
             {
                 AutoSize = true,
-                Width = 1040,
                 ColumnCount = 2,
                 Margin = new Padding(
                     0,
