@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.18.4
+
+- Centralized diagnostic secret redaction and applied it to Windows Event Log messages, service logs, SIEM metadata, diagnostics JSON/TXT payloads, and diagnostics error files.
+- Diagnostics bundles now redact the configured SIEM webhook down to scheme/host only, preventing webhook path/query credential material from being exported.
+- SIEM webhook delivery no longer follows HTTP redirects, preventing metadata from being forwarded to an unexpected redirect target.
+- Remote API bearer parsing now rejects decoded tokens that are not exactly 256 bits and rejects duplicate Authorization headers.
+- Scoped Remote API token generation/revocation is transactional: failed configuration persistence restores the previous in-memory token hash.
+- Application configuration now validates every Remote API token hash as SHA-256 and refuses an enabled Remote API with no TLS thumbprint or no configured bearer-token hash.
+- Self-update now binds release asset URLs to the configured GitHub repository, release tag, and exact asset name; redirected downloads must remain HTTPS on GitHub/GitHubusercontent.
+- Update checks validate release asset sizes, verify the SHA256SUMS asset against its GitHub digest when present, require a valid checksum entry when SHA256SUMS is published, and reject disagreement between checksum sources.
+- Update installation revalidates release metadata immediately before download, enforces the exact GitHub-declared ZIP byte size, requires exactly one package-root BitKeyBridge.exe, and requires the staged EXE version to exactly match the selected release.
+- The elevated updater repeats the exact staged-version check before replacement.
+- Added offline regression tests for diagnostics redaction, GitHub release URL/digest validation, and invalid Remote API token-hash configuration.
+
 ## 0.18.3
 
 - Hardened Machine / Service AD credential storage for gMSA and regular domain service identities. The DPAPI credential file and Secrets directory now preserve the installed service identity's required read access instead of resetting to SYSTEM/Administrators only.
