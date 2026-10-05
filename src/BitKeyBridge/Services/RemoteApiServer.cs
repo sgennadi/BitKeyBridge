@@ -353,8 +353,32 @@ public sealed class RemoteApiServer : IDisposable
                 if (colon <= 0)
                     continue;
 
-                headers[line[..colon].Trim()] =
+                var headerName =
+                    line[..colon].Trim();
+                var headerValue =
                     line[(colon + 1)..].Trim();
+
+                if (headers.ContainsKey(
+                        headerName) &&
+                    string.Equals(
+                        headerName,
+                        "Authorization",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteResponseAsync(
+                        ssl,
+                        400,
+                        new
+                        {
+                            error =
+                                "Bad Request"
+                        },
+                        ct);
+                    return;
+                }
+
+                headers[headerName] =
+                    headerValue;
             }
 
             if (!headersComplete)
@@ -622,6 +646,15 @@ public sealed class RemoteApiServer : IDisposable
         {
             var tokenBytes =
                 Convert.FromBase64String(token);
+
+            if (tokenBytes.Length !=
+                32)
+            {
+                CryptographicOperations.ZeroMemory(
+                    tokenBytes);
+                return null;
+            }
+
             try
             {
                 var actual =
