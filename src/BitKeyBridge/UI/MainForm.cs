@@ -105,25 +105,59 @@ public sealed partial class MainForm : DpiAwareForm
         new(StringComparer.OrdinalIgnoreCase);
 
     public MainForm(AppConfig config)
+        : this(
+            config,
+            layoutSelfTest: false)
+    {
+    }
+
+    internal MainForm(
+        AppConfig config,
+        bool layoutSelfTest)
     {
         _config = config;
-        _ad = new ActiveDirectoryService(config);
-        _cloudConfig = ConfigService.LoadCloudConfig();
-        try
+        _ad =
+            new ActiveDirectoryService(
+                config);
+        _cloudConfig =
+            layoutSelfTest
+                ? new CloudAuthConfig()
+                : ConfigService.LoadCloudConfig();
+
+        if (!layoutSelfTest)
         {
-            if (SecurityContext.IsAdministrator())
-                WindowsEventLogService.EnsureSource();
+            try
+            {
+                if (SecurityContext.IsAdministrator())
+                    WindowsEventLogService.EnsureSource();
+            }
+            catch
+            {
+            }
         }
-        catch { }
-        var assemblyVersion = GetType().Assembly.GetName().Version;
-        Text = $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
-        StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(1220, 820);
-        MinimumSize = new Size(1000, 700);
+
+        var assemblyVersion =
+            GetType().Assembly.GetName().Version;
+        Text =
+            $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
+        StartPosition =
+            FormStartPosition.CenterScreen;
+        Size =
+            new Size(
+                1220,
+                820);
+        MinimumSize =
+            new Size(
+                1000,
+                700);
         Font =
             UiStyle.BodyFont;
 
-        Controls.Add(BuildMainShell());
+        Controls.Add(
+            BuildMainShell());
+
+        if (layoutSelfTest)
+            return;
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -132,7 +166,11 @@ public sealed partial class MainForm : DpiAwareForm
         LoadDashboardSettings();
         LoadOperationsSettings();
         RefreshDashboard();
-        FormClosing += (_, _) => ClearSensitiveState();
+
+        FormClosing +=
+            (_, _) =>
+                ClearSensitiveState();
+
         Shown += async (_, _) =>
         {
             await InitializeRecoveryWorkspaceAsync();
