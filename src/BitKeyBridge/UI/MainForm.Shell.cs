@@ -157,46 +157,142 @@ public sealed partial class MainForm
         _startPurposeStatus.Margin = new Padding(0, 0, 0, 10);
         root.Controls.Add(_startPurposeStatus, 0, 1);
 
-        var connection = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, 0, 0, 8)
-        };
+        var connection =
+            new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 4,
+                RowCount = 2,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
 
-        connection.Controls.Add(new Label
-        {
-            Text = "Source:",
-            AutoSize = true,
-            Margin = new Padding(0, 9, 6, 0)
-        });
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Absolute,
+                160F));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Absolute,
+                160F));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
 
-        _recoverySource.DropDownStyle = ComboBoxStyle.DropDownList;
-        _recoverySource.Width = 145;
+        connection.Controls.Add(
+            new Label
+            {
+                Text = "Source:",
+                AutoSize = true,
+                Anchor =
+                    AnchorStyles.Left,
+                Margin =
+                    new Padding(
+                        0,
+                        8,
+                        UiStyle.ControlGap,
+                        4)
+            },
+            0,
+            0);
+
+        _recoverySource.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _recoverySource.Dock =
+            DockStyle.Fill;
+        _recoverySource.Margin =
+            new Padding(
+                0,
+                3,
+                UiStyle.ControlGap,
+                3);
         _recoverySource.Items.AddRange([
             "Live AD",
             "Local cache"
         ]);
-        connection.Controls.Add(_recoverySource);
+        connection.Controls.Add(
+            _recoverySource,
+            1,
+            0);
 
-        _connectAdButton.Text = "Connect to AD";
-        _connectAdButton.AutoSize = true;
-        _connectAdButton.Padding = new Padding(8, 3, 8, 3);
-        connection.Controls.Add(_connectAdButton);
+        _connectAdButton.Text =
+            "Connect to AD";
+        UiStyle.ConfigureActionButton(
+            _connectAdButton);
+        _connectAdButton.Dock =
+            DockStyle.Fill;
+        _connectAdButton.Margin =
+            new Padding(
+                0,
+                0,
+                UiStyle.ControlGap,
+                0);
+        connection.Controls.Add(
+            _connectAdButton,
+            2,
+            0);
 
-        _adConnectionStatus.AutoSize = true;
-        _adConnectionStatus.MaximumSize = new Size(620, 0);
-        _adConnectionStatus.Margin = new Padding(10, 8, 8, 0);
-        connection.Controls.Add(_adConnectionStatus);
+        _advancedConnectionButton.Text =
+            "Advanced connection settings...";
+        UiStyle.ConfigureActionButton(
+            _advancedConnectionButton);
+        _advancedConnectionButton.Anchor =
+            AnchorStyles.Left;
+        _advancedConnectionButton.Margin =
+            new Padding(
+                0);
+        connection.Controls.Add(
+            _advancedConnectionButton,
+            3,
+            0);
 
-        _advancedConnectionButton.Text = "Advanced connection settings...";
-        _advancedConnectionButton.AutoSize = true;
-        _advancedConnectionButton.Padding = new Padding(6, 1, 6, 1);
-        connection.Controls.Add(_advancedConnectionButton);
+        _adConnectionStatus.AutoSize =
+            true;
+        _adConnectionStatus.Dock =
+            DockStyle.Fill;
+        _adConnectionStatus.BorderStyle =
+            BorderStyle.FixedSingle;
+        _adConnectionStatus.Padding =
+            new Padding(
+                UiStyle.ControlGap,
+                6,
+                UiStyle.ControlGap,
+                6);
+        _adConnectionStatus.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        _adConnectionStatus.TextAlign =
+            ContentAlignment.MiddleLeft;
+        connection.Controls.Add(
+            _adConnectionStatus,
+            0,
+            1);
+        connection.SetColumnSpan(
+            _adConnectionStatus,
+            4);
 
-        root.Controls.Add(connection, 0, 2);
+        root.Controls.Add(
+            connection,
+            0,
+            2);
 
         var scopeFlow = new FlowLayoutPanel
         {
@@ -271,7 +367,9 @@ public sealed partial class MainForm
 
         _connectAdButton.Click +=
             async (_, _) =>
-                await TestDirectoryConnectionAsync();
+                await TestDirectoryConnectionAsync(
+                    promptForOu: true,
+                    promptForSessionCredentials: true);
 
         _startSelectOu.Click +=
             async (_, _) =>
