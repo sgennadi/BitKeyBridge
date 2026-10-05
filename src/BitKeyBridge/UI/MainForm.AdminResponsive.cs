@@ -870,8 +870,10 @@ public sealed partial class MainForm
 
         refresh.Click +=
             (_, _) =>
+            {
                 if (!_layoutSelfTest)
-            RefreshDashboard();
+                    RefreshDashboard();
+            };
         install.Click +=
             (_, _) =>
                 InstallOrUpdateService();
