@@ -102,6 +102,22 @@ jobs:
             throw "Buttons must use AutoSize/MinimumSize instead of fixed Width/Height."
           }
 
+          $directFontFiles = $uiFiles |
+            Where-Object { $_.Name -ne 'UiStyle.cs' }
+
+          $directFontFailures = @()
+          foreach ($file in $directFontFiles) {
+            $raw = Get-Content $file.FullName -Raw
+            if ($raw -match 'new\s+Font\s*\(\s*"(Segoe UI|Consolas)') {
+              $directFontFailures += $file.FullName
+            }
+          }
+
+          if ($directFontFailures) {
+            $directFontFailures | ForEach-Object { Write-Host $_ }
+            throw "Direct Segoe UI/Consolas construction is not allowed outside UiStyle. Use shared typography tokens."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
@@ -118,6 +134,11 @@ jobs:
         if: matrix.rid == 'win-x64'
         shell: cmd
         run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --self-test
+
+      - name: Runtime UI layout self-test
+        if: matrix.rid == 'win-x64'
+        shell: cmd
+        run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --ui-self-test
 
       - name: Package architecture
         shell: cmd
