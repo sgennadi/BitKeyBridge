@@ -90,8 +90,12 @@ public static class UiLayoutSelfTest
                     }
 
                     form.CreateControl();
+                    NormalizeDockFillSizes(
+                        form);
                     form.PrepareResponsiveLayoutForTesting();
                     form.PerformLayout();
+                    NormalizeDockFillSizes(
+                        form);
                     form.PrepareResponsiveLayoutForTesting();
 
                     VerifyForm(
@@ -241,6 +245,33 @@ public static class UiLayoutSelfTest
         ];
     }
 
+    private static void NormalizeDockFillSizes(
+        Control root)
+    {
+        foreach (Control child in
+                 root.Controls)
+        {
+            if (child.Dock ==
+                    DockStyle.Fill &&
+                child.Parent is not null)
+            {
+                var target =
+                    child.Parent.DisplayRectangle.Size;
+
+                if (target.Width > 0 &&
+                    target.Height > 0 &&
+                    child.Size != target)
+                {
+                    child.Size =
+                        target;
+                }
+            }
+
+            NormalizeDockFillSizes(
+                child);
+        }
+    }
+
     private static void VerifyForm(
         DpiAwareForm form,
         string formName,
@@ -332,17 +363,24 @@ public static class UiLayoutSelfTest
                 page.CreateControl();
 
                 // Tab selection and Dock=Fill layout are message-loop driven in
-                // WinForms. Pump pending layout/visibility work so this headless
-                // test observes the same geometry as the interactive GUI.
+                // WinForms. A headless WinExe can retain the framework's default
+                // 200x100 child size, so normalize Dock=Fill geometry before and
+                // after pumping pending layout work.
+                NormalizeDockFillSizes(
+                    form);
                 Application.DoEvents();
                 form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
+                NormalizeDockFillSizes(
+                    form);
                 form.PrepareResponsiveLayoutForTesting();
                 Application.DoEvents();
                 form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
+                NormalizeDockFillSizes(
+                    form);
 
                 VerifyControlTree(
                     page,
