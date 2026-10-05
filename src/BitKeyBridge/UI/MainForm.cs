@@ -2233,12 +2233,13 @@ public sealed partial class MainForm : DpiAwareForm
         UpdateDirectoryConnectionUi();
         RefreshCredentialVaultStatus();
 
-        _adConnectionStatus.Text =
+        SetDirectoryConnectionStatus(
             _adMode.SelectedIndex == 1 &&
             !string.IsNullOrWhiteSpace(
                 _adServer.Text)
                 ? $"Ready to connect to {_adServer.Text}:{_adPort.Value}."
-                : "Ready to auto-discover a writable domain controller.";
+                : "Ready to auto-discover a writable domain controller.",
+            UiStatusKind.Neutral);
 
         _startPurposeStatus.Text =
             "Search loads metadata only. Recovery passwords are read on demand.";
@@ -2862,8 +2863,9 @@ public sealed partial class MainForm : DpiAwareForm
                 if (TryUseDefaultRecoveryScope(
                         "OU discovery failed; using the entire domain as the default search scope."))
                 {
-                    _adConnectionStatus.Text =
-                        $"Connected to {dc}. OU enumeration warning: {ex.Message}";
+                    SetDirectoryConnectionStatus(
+                        $"Connected to {dc}. OU enumeration warning: {ex.Message}",
+                        UiStatusKind.Warning);
                     return;
                 }
 
@@ -2914,9 +2916,10 @@ public sealed partial class MainForm : DpiAwareForm
             if (TryUseDefaultRecoveryScope(
                     "OU selection is unavailable; using the entire domain as the default search scope."))
             {
-                _adConnectionStatus.Text =
+                SetDirectoryConnectionStatus(
                     "Connected to Active Directory. OU selection warning: " +
-                    ex.Message;
+                    ex.Message,
+                    UiStatusKind.Warning);
                 return;
             }
 
