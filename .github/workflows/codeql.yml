@@ -15,7 +15,9 @@ permissions:
   security-events: write
 
 concurrency:
-  group: bitkeybridge-codeql-${{ github.ref }}
+  # Keep CodeQL bound to the exact commit for the same out-of-order PR event
+  # protection used by the build workflow.
+  group: bitkeybridge-codeql-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
