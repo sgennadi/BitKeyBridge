@@ -874,7 +874,8 @@ public sealed partial class MainForm
 
         refresh.Click +=
             (_, _) =>
-                RefreshDashboard();
+                if (!_layoutSelfTest)
+            RefreshDashboard();
         install.Click +=
             (_, _) =>
                 InstallOrUpdateService();
@@ -1162,8 +1163,11 @@ public sealed partial class MainForm
             (_, _) =>
                 VerifyRecoveryIncidentGui();
 
-        RefreshAudit();
-        RefreshAuditSigningStatus();
+        if (!_layoutSelfTest)
+        {
+            RefreshAudit();
+            RefreshAuditSigningStatus();
+        }
 
         return page;
     }
