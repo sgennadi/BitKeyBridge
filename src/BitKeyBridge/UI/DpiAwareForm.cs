@@ -261,6 +261,21 @@ public class DpiAwareForm : Form
                 parent.Padding.Horizontal;
         }
 
+        var parentAvailable =
+            Math.Max(
+                0,
+                parent.ClientSize.Width -
+                parent.Padding.Horizontal -
+                control.Margin.Horizontal);
+
+        if (parentAvailable > 0)
+        {
+            available =
+                Math.Min(
+                    available,
+                    parentAvailable);
+        }
+
         return Math.Max(
             0,
             available);
