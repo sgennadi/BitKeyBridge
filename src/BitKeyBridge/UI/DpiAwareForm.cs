@@ -26,13 +26,19 @@ public class DpiAwareForm : Form
         // A scrollbar is preferable to clipped controls on high DPI, large-text
         // configurations, RDP sessions, or small displays.
         AutoScroll = true;
+        ApplyResponsiveDefaults(
+            this);
         ConstrainToWorkingArea();
+        PerformLayout();
     }
 
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        ApplyResponsiveDefaults(
+            this);
         ConstrainToWorkingArea();
+        PerformLayout();
     }
 
     protected override void OnDpiChanged(
@@ -42,7 +48,13 @@ public class DpiAwareForm : Form
             e);
 
         BeginInvoke(
-            ConstrainToWorkingArea);
+            () =>
+            {
+                ApplyResponsiveDefaults(
+                    this);
+                ConstrainToWorkingArea();
+                PerformLayout();
+            });
     }
 
     protected override void OnFontChanged(
@@ -54,7 +66,48 @@ public class DpiAwareForm : Form
         if (IsHandleCreated)
         {
             BeginInvoke(
-                ConstrainToWorkingArea);
+                () =>
+                {
+                    ApplyResponsiveDefaults(
+                        this);
+                    ConstrainToWorkingArea();
+                    PerformLayout();
+                });
+        }
+    }
+
+    private static void ApplyResponsiveDefaults(
+        Control root)
+    {
+        if (root is FlowLayoutPanel flow &&
+            flow.FlowDirection is
+                FlowDirection.LeftToRight or
+                FlowDirection.RightToLeft)
+        {
+            // Horizontal action/status rows must be allowed to wrap when
+            // DPI, text size, RDP width, or localization increases.
+            flow.WrapContents =
+                true;
+        }
+
+        if (root is Button button &&
+            button.AutoSize)
+        {
+            button.MinimumSize =
+                new Size(
+                    Math.Max(
+                        button.MinimumSize.Width,
+                        UiStyle.MinimumButtonWidth),
+                    Math.Max(
+                        button.MinimumSize.Height,
+                        UiStyle.MinimumButtonHeight));
+        }
+
+        foreach (Control child in
+                 root.Controls)
+        {
+            ApplyResponsiveDefaults(
+                child);
         }
     }
 
