@@ -157,8 +157,27 @@ public static class UiStyle
                         available -
                         child.Margin.Horizontal);
 
-                if (width > 0 &&
-                    child.Width != width)
+                if (width <= 0)
+                    continue;
+
+                if (child is TableLayoutPanel table &&
+                    table.AutoSize)
+                {
+                    // AutoSize tables otherwise grow back to their preferred
+                    // content width and can overflow the workspace at high DPI
+                    // or with enlarged text. Keep the width responsive while
+                    // allowing the height to continue growing naturally.
+                    table.MinimumSize =
+                        new Size(
+                            width,
+                            0);
+                    table.MaximumSize =
+                        new Size(
+                            width,
+                            0);
+                }
+
+                if (child.Width != width)
                 {
                     child.Width =
                         width;
