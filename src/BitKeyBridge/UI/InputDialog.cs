@@ -14,7 +14,7 @@ public sealed class InputDialog : DpiAwareForm
         MinimizeBox = false;
         ClientSize = new Size(570, 170);
         MinimumSize = new Size(430, 170);
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
