@@ -260,19 +260,89 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: form scrolling is disabled.");
         }
 
-        VerifyControlTree(
-            form,
-            formName,
-            scenario,
-            failures);
-
         if (form is MainForm)
         {
-            VerifyMainConnectionBar(
+            VerifyMainFormTabs(
                 form,
                 formName,
                 scenario,
                 failures);
+        }
+        else
+        {
+            VerifyControlTree(
+                form,
+                formName,
+                scenario,
+                failures);
+        }
+    }
+
+    private static void VerifyMainFormTabs(
+        DpiAwareForm form,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        var tabs =
+            FindFirst<TabControl>(
+                form);
+
+        if (tabs is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: main TabControl was not found.");
+            return;
+        }
+
+        var originalIndex =
+            tabs.SelectedIndex;
+
+        try
+        {
+            for (var index = 0;
+                 index < tabs.TabPages.Count;
+                 index++)
+            {
+                tabs.SelectedIndex =
+                    index;
+
+                var page =
+                    tabs.TabPages[index];
+
+                page.CreateControl();
+                page.PerformLayout();
+                form.PrepareResponsiveLayoutForTesting();
+                page.PerformLayout();
+
+                VerifyControlTree(
+                    page,
+                    $"{formName}/{page.Text}",
+                    scenario,
+                    failures);
+
+                if (string.Equals(
+                        page.Text,
+                        "Recovery",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    VerifyMainConnectionBar(
+                        page,
+                        $"{formName}/{page.Text}",
+                        scenario,
+                        failures);
+                }
+            }
+        }
+        finally
+        {
+            if (originalIndex >= 0 &&
+                originalIndex <
+                tabs.TabPages.Count)
+            {
+                tabs.SelectedIndex =
+                    originalIndex;
+            }
         }
     }
 
@@ -397,6 +467,27 @@ public static class UiLayoutSelfTest
             failures.Add(
                 $"{formName}/{scenario.Name}: Live AD selector and Connect button are not visually balanced.");
         }
+    }
+
+    private static T? FindFirst<T>(
+        Control root)
+        where T : Control
+    {
+        if (root is T typed)
+            return typed;
+
+        foreach (Control child in
+                 root.Controls)
+        {
+            var found =
+                FindFirst<T>(
+                    child);
+
+            if (found is not null)
+                return found;
+        }
+
+        return null;
     }
 
     private static Control? FindByName(
