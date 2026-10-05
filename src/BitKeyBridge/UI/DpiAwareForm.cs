@@ -9,8 +9,14 @@ public class DpiAwareForm : Form
 {
     public DpiAwareForm()
     {
-        AutoScaleMode = AutoScaleMode.Dpi;
-        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode =
+            AutoScaleMode.Dpi;
+        AutoScaleDimensions =
+            new SizeF(
+                UiStyle.BaselineDpi,
+                UiStyle.BaselineDpi);
+        Font =
+            UiStyle.BodyFont;
     }
 
     protected override void OnLoad(EventArgs e)
@@ -29,13 +35,59 @@ public class DpiAwareForm : Form
         ConstrainToWorkingArea();
     }
 
+    protected override void OnDpiChanged(
+        DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(
+            e);
+
+        BeginInvoke(
+            ConstrainToWorkingArea);
+    }
+
+    protected override void OnFontChanged(
+        EventArgs e)
+    {
+        base.OnFontChanged(
+            e);
+
+        if (IsHandleCreated)
+        {
+            BeginInvoke(
+                ConstrainToWorkingArea);
+        }
+    }
+
+    private int ScaleLogical(
+        int value) =>
+        Math.Max(
+            1,
+            (int)Math.Round(
+                value *
+                DeviceDpi /
+                (double)UiStyle.BaselineDpi));
+
     private void ConstrainToWorkingArea()
     {
         var workingArea = Screen.FromControl(this).WorkingArea;
-        const int margin = 16;
+        var margin =
+            ScaleLogical(
+                UiStyle.WindowMargin);
 
-        var maxWidth = Math.Max(320, workingArea.Width - margin * 2);
-        var maxHeight = Math.Max(240, workingArea.Height - margin * 2);
+        var maxWidth =
+            Math.Max(
+                ScaleLogical(
+                    320),
+                workingArea.Width -
+                margin *
+                2);
+        var maxHeight =
+            Math.Max(
+                ScaleLogical(
+                    240),
+                workingArea.Height -
+                margin *
+                2);
         var targetWidth = Math.Min(Width, maxWidth);
         var targetHeight = Math.Min(Height, maxHeight);
 
