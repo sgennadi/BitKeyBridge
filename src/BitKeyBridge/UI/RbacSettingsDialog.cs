@@ -21,7 +21,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(820, 800);
         MinimumSize = new Size(650, 620);
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -39,7 +39,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Windows User / Group Authorization",
-            Font = new Font("Segoe UI Semibold", 15F),
+            Font = UiStyle.CreateDialogTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 8)
         }, 0, 0);
