@@ -295,6 +295,23 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        VerifyTabControlPages(
+            tabs,
+            formName,
+            scenario,
+            failures,
+            form,
+            checkRecoveryConnection: true);
+    }
+
+    private static void VerifyTabControlPages(
+        TabControl tabs,
+        string path,
+        Scenario scenario,
+        List<string> failures,
+        DpiAwareForm form,
+        bool checkRecoveryConnection = false)
+    {
         var originalIndex =
             tabs.SelectedIndex;
 
@@ -309,26 +326,31 @@ public static class UiLayoutSelfTest
 
                 var page =
                     tabs.TabPages[index];
+                var pagePath =
+                    $"{path}/{page.Text}";
 
                 page.CreateControl();
+                tabs.PerformLayout();
                 page.PerformLayout();
                 form.PrepareResponsiveLayoutForTesting();
+                tabs.PerformLayout();
                 page.PerformLayout();
 
                 VerifyControlTree(
                     page,
-                    $"{formName}/{page.Text}",
+                    pagePath,
                     scenario,
                     failures);
 
-                if (string.Equals(
+                if (checkRecoveryConnection &&
+                    string.Equals(
                         page.Text,
                         "Recovery",
                         StringComparison.OrdinalIgnoreCase))
                 {
                     VerifyMainConnectionBar(
                         page,
-                        $"{formName}/{page.Text}",
+                        pagePath,
                         scenario,
                         failures);
                 }
@@ -404,6 +426,25 @@ public static class UiLayoutSelfTest
                         $"{formName}/{scenario.Name}: wrapping label '{ShortText(label.Text)}' exceeds the visible parent width " +
                         $"(X={label.Left}, Width={label.Width}, Right={label.Right}, ParentWidth={label.Parent.ClientSize.Width}).");
                 }
+            }
+
+            if (control is TabControl nestedTabs)
+            {
+                var form =
+                    nestedTabs.FindForm() as
+                    DpiAwareForm;
+
+                if (form is not null)
+                {
+                    VerifyTabControlPages(
+                        nestedTabs,
+                        formName,
+                        scenario,
+                        failures,
+                        form);
+                }
+
+                continue;
             }
 
             VerifyControlTree(
