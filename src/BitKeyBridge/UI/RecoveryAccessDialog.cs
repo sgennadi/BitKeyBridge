@@ -147,7 +147,7 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 8, 0, 0)
         };
