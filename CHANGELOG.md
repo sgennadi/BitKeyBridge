@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.18.5
+
+- Reworked the Recovery connection bar so **Source**, **Connect to AD**, **Advanced connection settings**, and AD connection status have a stable responsive layout. The long connection status now occupies its own full-width status row instead of being squeezed between controls.
+- Added shared visual status states for neutral, connecting, success, warning, and error conditions using the common `UiStyle` palette.
+- Fixed interactive Live AD connection with explicit **Session** credentials. When no session password is loaded, **Connect to AD** now opens a credential dialog instead of failing with “Session credential mode is selected, but no session password is loaded.” The password remains session-only and is not written to `appsettings.json`.
+- The same session-credential prompt is used before GUI **Discover DC**, so DC comparison no longer fails merely because the session password has not yet been loaded.
+- Fixed DC comparison with no configured OU scopes. BitKeyBridge now resolves `defaultNamingContext` and automatically uses an **Entire domain** scope instead of throwing “No OU scopes are configured.”
+- Rebuilt Recovery and Devices recovery-key controls so long key/ID fields use the available width and action buttons wrap on compact, RDP, HiDPI and large-text layouts instead of relying on fixed 470/410/330-pixel fields.
+- Removed the remaining fixed 1040-pixel administrative form grid width.
+- Expanded the shared typography system: body, dialog-title, page-title, section-title, emphasis and monospace fonts are now defined centrally in `UiStyle`; remaining dialogs and main workspaces were migrated away from direct Segoe UI / Consolas construction.
+- Added `--ui-self-test`, which constructs the real WinForms UI without displaying it and validates responsive layout invariants in compact and 150% large-text scenarios.
+- GitHub Actions now runs the runtime UI self-test on win-x64 and rejects direct Segoe UI / Consolas construction outside `UiStyle`, in addition to the existing PerMonitorV2, DPI scaling and fixed-position checks.
+- Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
+
+
 ## 0.18.4
 
 - Added a shared WinForms UI standard and `UiStyle` baseline for consistent typography, spacing, buttons, administrative workspaces, and machine-oriented monospace fields.
