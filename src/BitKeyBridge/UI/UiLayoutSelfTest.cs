@@ -402,7 +402,7 @@ public static class UiLayoutSelfTest
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: wrapping label '{ShortText(label.Text)}' exceeds the visible parent width " +
-                        $"(Left={label.Left}, Width={label.Width}, Right={label.Right}, ParentWidth={label.Parent.ClientSize.Width}).");
+                        $"(X={label.Left}, Width={label.Width}, Right={label.Right}, ParentWidth={label.Parent.ClientSize.Width}).");
                 }
             }
 
