@@ -390,13 +390,20 @@ public static class UiLayoutSelfTest
                 label.AutoSize &&
                 label.MaximumSize.Width > 0 &&
                 label.Parent is not null &&
-                label.Parent.ClientSize.Width > 0 &&
-                label.MaximumSize.Width >
-                    label.Parent.ClientSize.Width +
-                    2)
+                label.Parent.ClientSize.Width > 0)
             {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: wrapping label '{ShortText(label.Text)}' exceeds its parent width.");
+                var parentRight =
+                    label.Parent.ClientSize.Width -
+                    label.Parent.Padding.Right;
+
+                if (label.Right >
+                    parentRight +
+                    2)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: wrapping label '{ShortText(label.Text)}' exceeds the visible parent width " +
+                        $"(Left={label.Left}, Width={label.Width}, Right={label.Right}, ParentWidth={label.Parent.ClientSize.Width}).");
+                }
             }
 
             VerifyControlTree(
