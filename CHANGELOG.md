@@ -12,6 +12,7 @@
 - Expanded the shared typography system: body, dialog-title, page-title, section-title, emphasis and monospace fonts are now defined centrally in `UiStyle`; remaining dialogs and main workspaces were migrated away from direct Segoe UI / Consolas construction.
 - Added `--ui-self-test`, which constructs the real WinForms UI without displaying it and validates responsive layout invariants in compact and 150% large-text scenarios.
 - GitHub Actions now runs the runtime UI self-test on win-x64 and rejects direct Segoe UI / Consolas construction outside `UiStyle`, in addition to the existing PerMonitorV2, DPI scaling and fixed-position checks.
+- CI concurrency is now bound to the exact commit SHA so delayed/out-of-order pull-request events cannot cancel validation for the current PR head.
 - Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
 
 
