@@ -178,16 +178,14 @@ public sealed partial class MainForm
                 SizeType.AutoSize));
         connection.ColumnStyles.Add(
             new ColumnStyle(
-                SizeType.Percent,
-                25F));
+                SizeType.AutoSize));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
         connection.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
-                25F));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                50F));
+                100F));
         connection.RowStyles.Add(
             new RowStyle(
                 SizeType.AutoSize));
@@ -216,6 +214,10 @@ public sealed partial class MainForm
             "RecoverySourceSelector";
         _recoverySource.DropDownStyle =
             ComboBoxStyle.DropDownList;
+        _recoverySource.MinimumSize =
+            new Size(
+                160,
+                0);
         _recoverySource.Anchor =
             AnchorStyles.Left |
             AnchorStyles.Right;
@@ -240,6 +242,10 @@ public sealed partial class MainForm
             "Connect to AD";
         UiStyle.ConfigureActionButton(
             _connectAdButton);
+        _connectAdButton.MinimumSize =
+            new Size(
+                160,
+                UiStyle.MinimumButtonHeight);
         _connectAdButton.Anchor =
             AnchorStyles.Left |
             AnchorStyles.Right;
@@ -259,8 +265,7 @@ public sealed partial class MainForm
         UiStyle.ConfigureActionButton(
             _advancedConnectionButton);
         _advancedConnectionButton.Anchor =
-            AnchorStyles.Left |
-            AnchorStyles.Right;
+            AnchorStyles.Left;
         _advancedConnectionButton.Margin =
             new Padding(
                 0);
