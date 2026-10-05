@@ -35,7 +35,13 @@ public sealed class AppLogger
         {
             try
             {
-                File.AppendAllText(_path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{level}] {message}{Environment.NewLine}");
+                var safeMessage =
+                    DiagnosticRedaction.Sanitize(
+                        message);
+
+                File.AppendAllText(
+                    _path,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{level}] {safeMessage}{Environment.NewLine}");
             }
             catch
             {
