@@ -136,7 +136,7 @@ public sealed partial class MainForm
         titlePanel.Controls.Add(new Label
         {
             Text = "Find BitLocker Recovery Key",
-            Font = new Font("Segoe UI Semibold", 18F),
+            Font = UiStyle.CreatePageTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 4)
         }, 0, 0);
@@ -151,7 +151,7 @@ public sealed partial class MainForm
         root.Controls.Add(titlePanel, 0, 0);
 
         _startPurposeStatus.AutoSize = true;
-        _startPurposeStatus.Font = new Font("Segoe UI Semibold", 10F);
+        _startPurposeStatus.Font = UiStyle.CreateEmphasisFont(10F);
         _startPurposeStatus.Text =
             "Ready — choose the source, connect if required, and search.";
         _startPurposeStatus.Margin = new Padding(0, 0, 0, 10);
@@ -328,13 +328,13 @@ public sealed partial class MainForm
         {
             Text = "Computer / Recovery ID:",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9.5F),
+            Font = UiStyle.CreateEmphasisFont(9.5F),
             Anchor = AnchorStyles.Left,
             Margin = new Padding(0, 7, 10, 0)
         }, 0, 0);
 
         _startQuery.Dock = DockStyle.Fill;
-        _startQuery.Font = new Font("Segoe UI", 11F);
+        _startQuery.Font = UiStyle.CreateBodyFont(11F);
         _startQuery.PlaceholderText = "PC-12345 or Recovery ID";
         searchGrid.Controls.Add(_startQuery, 1, 0);
 
@@ -551,7 +551,7 @@ public sealed partial class MainForm
         {
             Text = caption,
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9F),
+            Font = UiStyle.CreateEmphasisFont(9F),
             Margin = new Padding(0, 3, 10, 3)
         }, 0, row);
 
@@ -757,7 +757,7 @@ public sealed partial class MainForm
         }, 0, 0);
 
         _unifiedQuery.Dock = DockStyle.Fill;
-        _unifiedQuery.Font = new Font("Segoe UI", 10.5F);
+        _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);
 
         var searchButton = new Button
@@ -797,7 +797,7 @@ public sealed partial class MainForm
         root.Controls.Add(_unifiedResults, 0, 2);
 
         _unifiedDetails.ReadOnly = true;
-        _unifiedDetails.Font = new Font("Consolas", 9F);
+        _unifiedDetails.Font = UiStyle.CreateMonospaceFont(9F);
         _unifiedDetails.Dock = DockStyle.Fill;
         root.Controls.Add(_unifiedDetails, 0, 3);
 
@@ -1015,7 +1015,7 @@ public sealed partial class MainForm
         root.Controls.Add(new Label
         {
             Text = "Microsoft Graph / Entra / Intune",
-            Font = new Font("Segoe UI Semibold", 16F),
+            Font = UiStyle.CreateEmphasisFont(16F),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 12)
         }, 0, 0);
