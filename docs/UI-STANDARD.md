@@ -16,6 +16,14 @@ WinForms style for related administrative utilities.
   padding at the 96-DPI logical baseline.
 - Primary and secondary buttons use `AutoSize` with a minimum logical size of
   88 x 32 and shared padding.
+- Connection/source selectors and their primary action should use balanced
+  logical widths in the same `TableLayoutPanel`; long connection/error text belongs
+  on a separate full-width status row rather than between controls.
+- Status surfaces use the shared `UiStatusKind` / `UiStyle.ApplyStatusLabel`
+  states: Neutral, Busy, Success, Warning and Error. Do not invent per-window
+  status colors.
+- Direct Segoe UI / Consolas construction outside `UiStyle` is not allowed.
+  Typography changes must flow through the shared style tokens.
 
 ## HiDPI and resizing
 
@@ -81,6 +89,9 @@ The build checks enforce:
 - Application forms do not inherit directly from `Form`.
 - Fixed-position WinForms layout is rejected.
 - Fixed button Width/Height declarations are rejected.
+- Direct Segoe UI / Consolas construction outside `UiStyle` is rejected.
+- The published win-x64 executable runs `--ui-self-test`, which constructs the
+  real forms and validates compact and 150% large-text responsive-layout invariants.
 
 When a layout needs an exception, prefer changing the layout architecture rather
 than weakening these checks.
