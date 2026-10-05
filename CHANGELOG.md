@@ -2,6 +2,21 @@
 
 ## 0.18.4
 
+- Added a shared WinForms UI standard and `UiStyle` baseline for consistent typography, spacing, buttons, administrative workspaces, and machine-oriented monospace fields.
+- Strengthened HiDPI behavior for 4K, mixed-DPI monitors, RDP, large text, and 100-200% Windows scaling. All forms inherit the shared DPI-aware base, horizontal action rows wrap automatically, windows are constrained to the active monitor work area, and responsive admin sections follow the available client width instead of a fixed 1040-pixel workspace.
+- Added CI guards for `PerMonitorV2`, `AutoScaleMode.Dpi`, `DpiAwareForm` inheritance, fixed-position UI, and fixed button dimensions.
+- Centralized diagnostic secret redaction across service logs, Windows Event Log, diagnostics bundles, and SIEM status/error text. The diagnostics bundle also strips Remote API token hashes and redacts SIEM webhook path/query material.
+- Hardened SIEM webhook delivery by disabling automatic HTTP redirects so metadata is never forwarded to an unexpected redirect target.
+- Hardened Remote API bearer handling: tokens must decode to exactly 256 bits, duplicate Authorization headers are rejected, and scoped-token generation/revocation rolls back in-memory configuration if persistence fails.
+- Added fail-closed validation for enabled Remote API configuration and all stored Remote API SHA-256 token hashes.
+- Hardened self-update release trust. Release page and asset URLs are bound to the configured GitHub repository/tag, download redirects must remain on trusted HTTPS GitHub hosts, release asset sizes are enforced, checksum-file metadata/digest is validated, GitHub asset digest and `SHA256SUMS.txt` must agree when both are present, and release metadata is revalidated immediately before download.
+- Staged update packages must now contain exactly one root-level `BitKeyBridge.exe`, and the staged executable version must exactly match the selected release both before self-test and again in the elevated apply helper.
+- Added offline regression coverage for diagnostic redaction, GitHub release URL/digest validation, Remote API token-hash validation, and existing tamper-resistant update-plan checks.
+- Version bumped to 0.18.4; release builds remain self-contained single-file win-x64, win-x86 and win-arm64 packages.
+
+
+## 0.18.4
+
 - Centralized diagnostic secret redaction and applied it to Windows Event Log messages, service logs, SIEM metadata, diagnostics JSON/TXT payloads, and diagnostics error files.
 - Diagnostics bundles now redact the configured SIEM webhook down to scheme/host only, preventing webhook path/query credential material from being exported.
 - SIEM webhook delivery no longer follows HTTP redirects, preventing metadata from being forwarded to an unexpected redirect target.
