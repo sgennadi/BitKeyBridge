@@ -248,6 +248,27 @@ public static class UiLayoutSelfTest
     private static void NormalizeDockFillSizes(
         Control root)
     {
+        if (root is TabControl tabs)
+        {
+            var pageTarget =
+                tabs.DisplayRectangle.Size;
+
+            if (pageTarget.Width > 0 &&
+                pageTarget.Height > 0)
+            {
+                foreach (TabPage page in
+                         tabs.TabPages)
+                {
+                    if (page.Size !=
+                        pageTarget)
+                    {
+                        page.Size =
+                            pageTarget;
+                    }
+                }
+            }
+        }
+
         foreach (Control child in
                  root.Controls)
         {
