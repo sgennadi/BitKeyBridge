@@ -2611,17 +2611,26 @@ public sealed partial class MainForm : DpiAwareForm
     }
 
     private async Task TestDirectoryConnectionAsync(
-        bool promptForOu = true)
+        bool promptForOu = true,
+        bool promptForSessionCredentials = true)
     {
+        if (promptForSessionCredentials &&
+            !EnsureSessionAdCredentialForConnection())
+        {
+            return;
+        }
+
         try
         {
             SaveDirectorySettings(
                 showConfirmation: false,
                 allowInMemoryFallback: true);
 
-            _adConnectionStatus.Text =
-                "Connecting to Active Directory...";
-            UseWaitCursor = true;
+            SetDirectoryConnectionStatus(
+                "Connecting to Active Directory...",
+                UiStatusKind.Busy);
+            UseWaitCursor =
+                true;
 
             var result =
                 await Task.Run(
@@ -2640,24 +2649,29 @@ public sealed partial class MainForm : DpiAwareForm
                             Root: root);
                     });
 
-            _adConnectionStatus.Text =
-                $"Connected to {result.Server}. Ready to search BitLocker.";
+            SetDirectoryConnectionStatus(
+                $"Connected to {result.Server}. Ready to search BitLocker.",
+                UiStatusKind.Success);
 
             _startDomainDn =
                 result.Root.GetValueOrDefault(
                     "defaultNamingContext",
                     string.Empty);
 
-            _startSelectOu.Enabled = true;
+            _startSelectOu.Enabled =
+                true;
 
             if (_startScope is not null &&
                 !ActiveDirectoryService.IsSearchBaseWithinNamingContext(
                     _startScope.SearchBase,
                     _startDomainDn))
             {
-                _startScope = null;
-                _config.LastRecoveryScopeName = string.Empty;
-                _config.LastRecoveryScopeSearchBase = string.Empty;
+                _startScope =
+                    null;
+                _config.LastRecoveryScopeName =
+                    string.Empty;
+                _config.LastRecoveryScopeSearchBase =
+                    string.Empty;
                 TrySaveRecoveryUiState();
 
                 TryUseDefaultRecoveryScope(
@@ -2668,7 +2682,8 @@ public sealed partial class MainForm : DpiAwareForm
             {
                 _startOuStatus.Text =
                     $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
-                _startSearch.Enabled = true;
+                _startSearch.Enabled =
+                    true;
                 _startPurposeStatus.Text =
                     "Connected. Enter a computer name or Recovery ID.";
             }
@@ -2680,8 +2695,17 @@ public sealed partial class MainForm : DpiAwareForm
             }
             else
             {
-                _startPurposeStatus.Text =
-                    "Connected. Select an OU before searching.";
+                if (TryUseDefaultRecoveryScope(
+                        "Connected with no OU selected; using the entire domain."))
+                {
+                    _startPurposeStatus.Text =
+                        "Connected. Enter a computer name or Recovery ID.";
+                }
+                else
+                {
+                    _startPurposeStatus.Text =
+                        "Connected. Select an OU before searching.";
+                }
             }
         }
         catch (Exception ex)
@@ -2696,9 +2720,12 @@ public sealed partial class MainForm : DpiAwareForm
             _startCurrentKey =
                 null;
             _startKey.Clear();
-            _adConnectionStatus.Text =
+
+            SetDirectoryConnectionStatus(
                 "Connection failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
+
             _startPurposeStatus.Text =
                 "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.";
 
@@ -2714,8 +2741,87 @@ public sealed partial class MainForm : DpiAwareForm
         }
         finally
         {
-            UseWaitCursor = false;
+            UseWaitCursor =
+                false;
         }
+    }
+
+    private bool EnsureSessionAdCredentialForConnection()
+    {
+        if (!_adExplicitCredentials.Checked ||
+            !GetSelectedCredentialStorageMode()
+                .Equals(
+                    "Session",
+                    StringComparison.OrdinalIgnoreCase) ||
+            AdSessionCredentials.HasPassword ||
+            !string.IsNullOrEmpty(
+                _adPassword.Text))
+        {
+            return true;
+        }
+
+        using var prompt =
+            new AdCredentialPromptDialog(
+                _adUsername.Text.Trim());
+
+        if (prompt.ShowDialog(this) !=
+            DialogResult.OK)
+        {
+            SetDirectoryConnectionStatus(
+                "Connection canceled. Session credentials were not provided.",
+                UiStatusKind.Warning);
+            _startPurposeStatus.Text =
+                "Live AD is waiting for session credentials.";
+            return false;
+        }
+
+        var username =
+            prompt.Username;
+        var password =
+            prompt.TakePassword();
+
+        try
+        {
+            _adUsername.Text =
+                username;
+            _config.AdUsername =
+                username;
+
+            AdSessionCredentials.SetPassword(
+                password);
+
+            _adPassword.Clear();
+
+            _audit.Write(
+                "LoadAdSessionCredential",
+                source: "Session",
+                details:
+                    $"Storage=Session; User={username}; Trigger=Connect");
+
+            RefreshCredentialVaultStatus();
+
+            SetDirectoryConnectionStatus(
+                $"Session credential loaded for {username}. Connecting...",
+                UiStatusKind.Busy);
+
+            return true;
+        }
+        finally
+        {
+            password =
+                string.Empty;
+        }
+    }
+
+    private void SetDirectoryConnectionStatus(
+        string text,
+        UiStatusKind kind)
+    {
+        _adConnectionStatus.Text =
+            text;
+        UiStyle.ApplyStatusLabel(
+            _adConnectionStatus,
+            kind);
     }
 
     private async Task SelectStartOuAsync()
