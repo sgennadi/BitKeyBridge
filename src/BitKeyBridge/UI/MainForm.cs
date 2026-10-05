@@ -120,7 +120,8 @@ public sealed partial class MainForm : DpiAwareForm
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1220, 820);
         MinimumSize = new Size(1000, 700);
-        Font = new Font("Segoe UI", 9F);
+        Font =
+            UiStyle.BodyFont;
 
         Controls.Add(BuildMainShell());
 
@@ -946,7 +947,7 @@ public sealed partial class MainForm : DpiAwareForm
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             FlowDirection = FlowDirection.RightToLeft
         };
         var cancel = new Button

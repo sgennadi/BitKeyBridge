@@ -148,7 +148,7 @@ public sealed class SecureOutputDialog : DpiAwareForm
             Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
+            WrapContents = true,
             Padding = new Padding(0, 10, 0, 0)
         };
         var cancel = new Button

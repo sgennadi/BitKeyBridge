@@ -39,6 +39,7 @@ public sealed class DiagnosticsBundleResult
         "Credential Manager / DPAPI credential blobs",
         "Remote API bearer tokens and token hashes",
         "Graph access/refresh tokens",
+        "SIEM webhook path/query credential material",
         "certificate private keys"
     ];
 }

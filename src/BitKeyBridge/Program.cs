@@ -1594,6 +1594,60 @@ internal static class Program
                 var rid = UpdateService.GetRid();
                 if (rid is not "win-x64" and not "win-x86" and not "win-arm64")
                     failures.Add("Updater architecture RID detection returned an unexpected value.");
+
+                var releaseAssetUrl =
+                    UpdateService.ValidateReleaseAssetUrl(
+                        "https://github.com/sgennadi/BitKeyBridge/releases/download/v0.18.4/BitKeyBridge-win-x64.zip",
+                        "sgennadi/BitKeyBridge",
+                        "v0.18.4",
+                        "BitKeyBridge-win-x64.zip");
+
+                if (!string.Equals(
+                        releaseAssetUrl,
+                        "https://github.com/sgennadi/BitKeyBridge/releases/download/v0.18.4/BitKeyBridge-win-x64.zip",
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "Updater release asset URL binding returned an unexpected URL.");
+                }
+
+                var hostileReleaseUrlRejected =
+                    false;
+                try
+                {
+                    _ =
+                        UpdateService.ValidateReleaseAssetUrl(
+                            "https://example.invalid/sgennadi/BitKeyBridge/releases/download/v0.18.4/BitKeyBridge-win-x64.zip",
+                            "sgennadi/BitKeyBridge",
+                            "v0.18.4",
+                            "BitKeyBridge-win-x64.zip");
+                }
+                catch (InvalidOperationException)
+                {
+                    hostileReleaseUrlRejected =
+                        true;
+                }
+
+                if (!hostileReleaseUrlRejected)
+                {
+                    failures.Add(
+                        "Updater accepted a release asset URL outside github.com.");
+                }
+
+                var githubDigest =
+                    UpdateService.ParseGitHubAssetDigest(
+                        "sha256:" +
+                        expectedHash,
+                        "BitKeyBridge-win-x64.zip");
+
+                if (!string.Equals(
+                        githubDigest,
+                        expectedHash,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "Updater GitHub asset-digest parsing failed.");
+                }
             }
             catch (Exception ex) { failures.Add("Updater pure helpers: " + ex.Message); }
 
@@ -2858,6 +2912,59 @@ internal static class Program
                         "AD session credential clear failed.");
                 }
 
+                const string diagnosticBearerSecret =
+                    "SelfTestBearerToken0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                const string diagnosticPasswordSecret =
+                    "SelfTestPassword-DoNotLeak";
+                const string diagnosticQuerySecret =
+                    "SelfTestQuerySecret";
+                const string diagnosticRecoverySecret =
+                    "111111-222222-333333-444444-555555-666666-777777-888888";
+
+                var diagnosticText =
+                    "Authorization: Bearer " +
+                    diagnosticBearerSecret +
+                    "; password=" +
+                    diagnosticPasswordSecret +
+                    "; https://example.test/hook?sig=" +
+                    diagnosticQuerySecret +
+                    "; recovery=" +
+                    diagnosticRecoverySecret;
+
+                var sanitizedDiagnosticText =
+                    DiagnosticRedaction.Sanitize(
+                        diagnosticText);
+
+                if (sanitizedDiagnosticText.Contains(
+                        diagnosticBearerSecret,
+                        StringComparison.Ordinal) ||
+                    sanitizedDiagnosticText.Contains(
+                        diagnosticPasswordSecret,
+                        StringComparison.Ordinal) ||
+                    sanitizedDiagnosticText.Contains(
+                        diagnosticQuerySecret,
+                        StringComparison.Ordinal) ||
+                    sanitizedDiagnosticText.Contains(
+                        diagnosticRecoverySecret,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "Diagnostic secret redaction leaked a known test secret.");
+                }
+
+                var sanitizedWebhook =
+                    DiagnosticRedaction.SanitizeUriForDiagnostics(
+                        "https://user:secret@example.test/private/path?sig=secret");
+
+                if (!string.Equals(
+                        sanitizedWebhook,
+                        "https://example.test/[REDACTED]",
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        "Diagnostic webhook URL redaction returned an unexpected value.");
+                }
+
                 const string graphSecret =
                     "SelfTest-Graph-Access-Token";
 
@@ -3048,6 +3155,24 @@ internal static class Program
                         });
                     failures.Add(
                         "Configuration validation accepted an invalid health port.");
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                try
+                {
+                    ConfigurationMaintenanceService.ValidateAppConfig(
+                        new AppConfig
+                        {
+                            RemoteApiEnabled = true,
+                            RemoteApiCertificateThumbprint =
+                                "00112233445566778899AABBCCDDEEFF00112233",
+                            RemoteApiTokenSha256 =
+                                "not-a-valid-sha256"
+                        });
+                    failures.Add(
+                        "Configuration validation accepted an invalid Remote API token hash.");
                 }
                 catch (InvalidOperationException)
                 {

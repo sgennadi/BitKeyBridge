@@ -597,7 +597,12 @@ public sealed class SiemForwardingService
             GetWebhookUri();
 
         using var handler =
-            new HttpClientHandler();
+            new HttpClientHandler
+            {
+                // Never forward SIEM events, including metadata, to a redirect target.
+                // The configured HTTPS endpoint must be the endpoint that receives the event.
+                AllowAutoRedirect = false
+            };
 
         if (!string.IsNullOrWhiteSpace(
                 _config
@@ -717,32 +722,7 @@ public sealed class SiemForwardingService
     }
 
     private static string Sanitize(
-        string? value)
-    {
-        if (string.IsNullOrWhiteSpace(
-                value))
-        {
-            return string.Empty;
-        }
-
-        var redacted =
-            Regex.Replace(
-                value,
-                @"\b\d{6}(?:-\d{6}){7}\b",
-                "[REDACTED-BITLOCKER-KEY]");
-
-        redacted =
-            Regex.Replace(
-                redacted,
-                @"(?i)(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9+/=_-]+",
-                "$1[REDACTED]");
-
-        redacted =
-            Regex.Replace(
-                redacted,
-                @"(?i)(password\s*[=:]\s*)[^\s;,\r\n]+",
-                "$1[REDACTED]");
-
-        return redacted;
-    }
+        string? value) =>
+        DiagnosticRedaction.Sanitize(
+            value);
 }

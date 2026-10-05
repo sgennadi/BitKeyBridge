@@ -201,6 +201,9 @@ public sealed class ConfigurationMaintenanceService
                 string.Empty;
             appConfig.RemoteApiExportTokenSha256 =
                 string.Empty;
+            appConfig.SiemWebhookUrl =
+                DiagnosticRedaction.SanitizeUriForDiagnostics(
+                    appConfig.SiemWebhookUrl);
 
             WriteJson(
                 tempDirectory,
@@ -395,6 +398,42 @@ public sealed class ConfigurationMaintenanceService
         ValidatePort(
             config.RemoteApiPort,
             nameof(config.RemoteApiPort));
+
+        ValidateOptionalSha256(
+            config.RemoteApiTokenSha256,
+            nameof(config.RemoteApiTokenSha256));
+        ValidateOptionalSha256(
+            config.RemoteApiReadTokenSha256,
+            nameof(config.RemoteApiReadTokenSha256));
+        ValidateOptionalSha256(
+            config.RemoteApiCoverageRunTokenSha256,
+            nameof(config.RemoteApiCoverageRunTokenSha256));
+        ValidateOptionalSha256(
+            config.RemoteApiExportTokenSha256,
+            nameof(config.RemoteApiExportTokenSha256));
+
+        if (config.RemoteApiEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    config.RemoteApiCertificateThumbprint))
+            {
+                throw new InvalidOperationException(
+                    "RemoteApiEnabled requires RemoteApiCertificateThumbprint.");
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    config.RemoteApiTokenSha256) &&
+                string.IsNullOrWhiteSpace(
+                    config.RemoteApiReadTokenSha256) &&
+                string.IsNullOrWhiteSpace(
+                    config.RemoteApiCoverageRunTokenSha256) &&
+                string.IsNullOrWhiteSpace(
+                    config.RemoteApiExportTokenSha256))
+            {
+                throw new InvalidOperationException(
+                    "RemoteApiEnabled requires at least one configured bearer-token hash.");
+            }
+        }
 
         if (config.ServiceIntervalMinutes is < 1 or > 10080)
         {
@@ -789,11 +828,15 @@ public sealed class ConfigurationMaintenanceService
                 directory,
                 name);
 
-        File.WriteAllText(
-            path,
+        var json =
             JsonSerializer.Serialize(
                 value,
-                JsonOptions));
+                JsonOptions);
+
+        File.WriteAllText(
+            path,
+            DiagnosticRedaction.Sanitize(
+                json));
 
         if (addToIncludedFiles)
             result.IncludedFiles.Add(name);
@@ -812,7 +855,8 @@ public sealed class ConfigurationMaintenanceService
 
         File.WriteAllText(
             path,
-            value);
+            DiagnosticRedaction.Sanitize(
+                value));
 
         result.IncludedFiles.Add(name);
     }
@@ -838,28 +882,9 @@ public sealed class ConfigurationMaintenanceService
     }
 
     private static string SanitizeDiagnosticText(
-        string value)
-    {
-        var redacted =
-            Regex.Replace(
-                value ?? string.Empty,
-                @"\b\d{6}(?:-\d{6}){7}\b",
-                "[REDACTED-BITLOCKER-KEY]");
-
-        redacted =
-            Regex.Replace(
-                redacted,
-                @"(?i)(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9+/=_-]+",
-                "$1[REDACTED]");
-
-        redacted =
-            Regex.Replace(
-                redacted,
-                @"(?i)(password\s*[=:]\s*)[^\s;,\r\n]+",
-                "$1[REDACTED]");
-
-        return redacted;
-    }
+        string value) =>
+        DiagnosticRedaction.Sanitize(
+            value);
 
     private static string NormalizeOutputFile(
         string path,
@@ -884,6 +909,28 @@ public sealed class ConfigurationMaintenanceService
 
         return Path.GetFullPath(
             expanded);
+    }
+
+    private static void ValidateOptionalSha256(
+        string? value,
+        string name)
+    {
+        if (string.IsNullOrWhiteSpace(
+                value))
+        {
+            return;
+        }
+
+        var normalized =
+            value.Trim();
+
+        if (normalized.Length != 64 ||
+            !normalized.All(
+                Uri.IsHexDigit))
+        {
+            throw new InvalidOperationException(
+                $"{name} must be an empty value or a 64-character SHA-256 hex digest.");
+        }
     }
 
     private static void ValidatePort(

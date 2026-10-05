@@ -143,6 +143,10 @@ public sealed class RemoteApiSetupService
                 "Remote API is not enabled.");
 
         var normalized = NormalizeScope(scope);
+        var previousHash =
+            GetScopeHash(
+                config,
+                normalized);
 
         var tokenBytes =
             RandomNumberGenerator.GetBytes(32);
@@ -152,11 +156,22 @@ public sealed class RemoteApiSetupService
                     SHA256.HashData(tokenBytes))
                 .ToLowerInvariant();
 
-            SetScopeHash(
-                config,
-                normalized,
-                hash);
-            ConfigService.SaveAppConfig(config);
+            try
+            {
+                SetScopeHash(
+                    config,
+                    normalized,
+                    hash);
+                ConfigService.SaveAppConfig(config);
+            }
+            catch
+            {
+                SetScopeHash(
+                    config,
+                    normalized,
+                    previousHash);
+                throw;
+            }
 
             WindowsEventLogService.TryWrite(
                 $"Remote API scoped token generated. Scope={normalized}.",
@@ -189,11 +204,27 @@ public sealed class RemoteApiSetupService
                 "Administrator rights are required to revoke Remote API tokens.");
 
         var normalized = NormalizeScope(scope);
-        SetScopeHash(
-            config,
-            normalized,
-            string.Empty);
-        ConfigService.SaveAppConfig(config);
+        var previousHash =
+            GetScopeHash(
+                config,
+                normalized);
+
+        try
+        {
+            SetScopeHash(
+                config,
+                normalized,
+                string.Empty);
+            ConfigService.SaveAppConfig(config);
+        }
+        catch
+        {
+            SetScopeHash(
+                config,
+                normalized,
+                previousHash);
+            throw;
+        }
 
         WindowsEventLogService.TryWrite(
             $"Remote API scoped token revoked. Scope={normalized}.",
@@ -222,6 +253,21 @@ public sealed class RemoteApiSetupService
                 "Remote API scope must be read, coverage-run, or export.")
         };
     }
+
+    private static string GetScopeHash(
+        AppConfig config,
+        string scope) =>
+        scope switch
+        {
+            "read" =>
+                config.RemoteApiReadTokenSha256,
+            "coverage-run" =>
+                config.RemoteApiCoverageRunTokenSha256,
+            "export" =>
+                config.RemoteApiExportTokenSha256,
+            _ => throw new ArgumentException(
+                "Unsupported Remote API scope.")
+        };
 
     private static void SetScopeHash(
         AppConfig config,

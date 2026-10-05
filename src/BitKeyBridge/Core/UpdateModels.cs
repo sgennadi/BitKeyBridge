@@ -4,9 +4,11 @@ public sealed class UpdateInfo
 {
     public string CurrentVersion { get; set; } = string.Empty;
     public string LatestVersion { get; set; } = string.Empty;
+    public string ReleaseTag { get; set; } = string.Empty;
     public bool UpdateAvailable { get; set; }
     public string Architecture { get; set; } = string.Empty;
     public string AssetName { get; set; } = string.Empty;
+    public long AssetSizeBytes { get; set; }
     public string DownloadUrl { get; set; } = string.Empty;
     public string ReleaseUrl { get; set; } = string.Empty;
     public string ExpectedSha256 { get; set; } = string.Empty;

@@ -1170,14 +1170,22 @@ public sealed partial class MainForm
 
     private static FlowLayoutPanel CreateVerticalWorkspace()
     {
-        return new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Padding = new Padding(18)
-        };
+        var panel =
+            new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding =
+                    new Padding(
+                        UiStyle.PagePadding)
+            };
+
+        UiStyle.MakeVerticalWorkspaceResponsive(
+            panel);
+
+        return panel;
     }
 
     private static Control CreateSectionTitle(
@@ -1188,7 +1196,6 @@ public sealed partial class MainForm
             new TableLayoutPanel
             {
                 AutoSize = true,
-                Width = 1040,
                 ColumnCount = 1,
                 Margin = new Padding(
                     0,
@@ -1206,9 +1213,7 @@ public sealed partial class MainForm
             {
                 Text = title,
                 Font =
-                    new Font(
-                        "Segoe UI Semibold",
-                        14F),
+                    UiStyle.CreateSectionTitleFont(),
                 AutoSize = true,
                 Margin =
                     new Padding(

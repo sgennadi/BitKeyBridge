@@ -57,6 +57,51 @@ jobs:
             throw "Fixed-position WinForms layout is not allowed in src/BitKeyBridge/UI. Use TableLayoutPanel/FlowLayoutPanel/Dock/Anchor instead."
           }
 
+      - name: Verify HiDPI WinForms conventions
+        shell: pwsh
+        run: |
+          $project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj -Raw
+          if ($project -notmatch '<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>') {
+            throw "ApplicationHighDpiMode must remain PerMonitorV2."
+          }
+
+          $dpiBase = Get-Content src\BitKeyBridge\UI\DpiAwareForm.cs -Raw
+          if ($dpiBase -notmatch 'AutoScaleMode\s*=\s*AutoScaleMode\.Dpi') {
+            throw "DpiAwareForm must use AutoScaleMode.Dpi."
+          }
+
+          $uiFiles = Get-ChildItem src\BitKeyBridge\UI -Filter *.cs -File
+          $directForms = $uiFiles |
+            Where-Object { $_.Name -ne 'DpiAwareForm.cs' } |
+            Select-String -Pattern 'class\s+\w+\s*:\s*Form\b'
+
+          if ($directForms) {
+            $directForms | ForEach-Object {
+              Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())"
+            }
+            throw "All application forms must inherit DpiAwareForm."
+          }
+
+          $forbiddenScale = $uiFiles |
+            Select-String -Pattern 'AutoScaleMode\s*=\s*AutoScaleMode\.(None|Font)'
+
+          if ($forbiddenScale) {
+            $forbiddenScale | ForEach-Object {
+              Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())"
+            }
+            throw "WinForms UI must use the shared DPI scaling policy."
+          }
+
+          $fixedButtonSizes = $uiFiles |
+            Select-String -Pattern 'new\s+Button\s*\{[^\r\n]*(Width|Height)\s*='
+
+          if ($fixedButtonSizes) {
+            $fixedButtonSizes | ForEach-Object {
+              Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())"
+            }
+            throw "Buttons must use AutoSize/MinimumSize instead of fixed Width/Height."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
