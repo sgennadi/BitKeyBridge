@@ -140,8 +140,17 @@ jobs:
 
       - name: Runtime UI layout self-test
         if: matrix.rid == 'win-x64'
-        shell: cmd
-        run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --ui-self-test
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
+          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -Wait -PassThru
+          if (Test-Path $report) {
+            Get-Content $report
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
+          }
 
       - name: Package architecture
         shell: cmd
