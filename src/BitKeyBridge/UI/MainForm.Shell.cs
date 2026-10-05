@@ -347,7 +347,9 @@ public sealed partial class MainForm
         _startSearch.Text = "Search BitLocker";
         _startSearch.AutoSize = true;
         _startSearch.Padding = new Padding(12, 3, 12, 3);
-        _startSearch.Font = new Font("Segoe UI Semibold", 9.5F);
+        _startSearch.Font =
+            UiStyle.CreateEmphasisFont(
+                9.5F);
         searchGrid.Controls.Add(_startSearch, 2, 0);
         root.Controls.Add(searchGrid, 0, 4);
 
