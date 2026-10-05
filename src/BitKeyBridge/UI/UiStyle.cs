@@ -1,5 +1,14 @@
 namespace BitKeyBridge;
 
+public enum UiStatusKind
+{
+    Neutral,
+    Busy,
+    Success,
+    Warning,
+    Error
+}
+
 /// <summary>
 /// Shared visual and layout standard for BitKeyBridge WinForms UI.
 /// Values are expressed in 96-DPI logical pixels and are scaled by WinForms.
@@ -61,6 +70,36 @@ public static class UiStyle
             size,
             FontStyle.Regular,
             GraphicsUnit.Point);
+
+    public static void ApplyStatusLabel(
+        Label label,
+        UiStatusKind kind)
+    {
+        (label.BackColor, label.ForeColor) =
+            kind switch
+            {
+                UiStatusKind.Busy =>
+                    (
+                        Color.LemonChiffon,
+                        Color.DarkGoldenrod),
+                UiStatusKind.Success =>
+                    (
+                        Color.Honeydew,
+                        Color.DarkGreen),
+                UiStatusKind.Warning =>
+                    (
+                        Color.LemonChiffon,
+                        Color.DarkOrange),
+                UiStatusKind.Error =>
+                    (
+                        Color.MistyRose,
+                        Color.DarkRed),
+                _ =>
+                    (
+                        SystemColors.Window,
+                        SystemColors.ControlText)
+            };
+    }
 
     public static void ConfigureActionButton(
         Button button)
