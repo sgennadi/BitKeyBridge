@@ -5,6 +5,7 @@ namespace BitKeyBridge;
 public sealed partial class MainForm : DpiAwareForm
 {
     private readonly AppConfig _config;
+    private readonly bool _layoutSelfTest;
     private readonly ActiveDirectoryService _ad;
     private readonly AuditService _audit = new();
     private readonly CheckedListBox _scopes = new();
@@ -116,6 +117,8 @@ public sealed partial class MainForm : DpiAwareForm
         bool layoutSelfTest)
     {
         _config = config;
+        _layoutSelfTest =
+            layoutSelfTest;
         _ad =
             new ActiveDirectoryService(
                 config);
