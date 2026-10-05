@@ -211,6 +211,8 @@ public sealed partial class MainForm
             0,
             0);
 
+        _recoverySource.Name =
+            "RecoverySourceSelector";
         _recoverySource.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _recoverySource.Dock =
@@ -230,6 +232,8 @@ public sealed partial class MainForm
             1,
             0);
 
+        _connectAdButton.Name =
+            "ConnectAdButton";
         _connectAdButton.Text =
             "Connect to AD";
         UiStyle.ConfigureActionButton(
@@ -261,6 +265,8 @@ public sealed partial class MainForm
             3,
             0);
 
+        _adConnectionStatus.Name =
+            "AdConnectionStatus";
         _adConnectionStatus.AutoSize =
             true;
         _adConnectionStatus.Dock =
