@@ -78,6 +78,16 @@ public class DpiAwareForm : Form
         }
     }
 
+    internal void PrepareResponsiveLayoutForTesting()
+    {
+        AutoScroll =
+            true;
+        ApplyResponsiveDefaults(
+            this);
+        RefreshResponsiveLabelWidths();
+        PerformLayout();
+    }
+
     private void RefreshResponsiveLayout()
     {
         ApplyResponsiveDefaults(
