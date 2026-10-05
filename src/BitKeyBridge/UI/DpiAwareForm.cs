@@ -170,8 +170,7 @@ public class DpiAwareForm : Form
 
         var maximumWidth =
             Math.Max(
-                ScaleLogical(
-                    120),
+                1,
                 Math.Min(
                     designMaximum.Width,
                     availableWidth));
