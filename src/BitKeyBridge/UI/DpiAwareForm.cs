@@ -48,13 +48,8 @@ public class DpiAwareForm : Form
             e);
 
         BeginInvoke(
-            () =>
-            {
-                ApplyResponsiveDefaults(
-                    this);
-                ConstrainToWorkingArea();
-                PerformLayout();
-            });
+            new MethodInvoker(
+                RefreshResponsiveLayout));
     }
 
     protected override void OnFontChanged(
@@ -66,14 +61,17 @@ public class DpiAwareForm : Form
         if (IsHandleCreated)
         {
             BeginInvoke(
-                () =>
-                {
-                    ApplyResponsiveDefaults(
-                        this);
-                    ConstrainToWorkingArea();
-                    PerformLayout();
-                });
+                new MethodInvoker(
+                    RefreshResponsiveLayout));
         }
+    }
+
+    private void RefreshResponsiveLayout()
+    {
+        ApplyResponsiveDefaults(
+            this);
+        ConstrainToWorkingArea();
+        PerformLayout();
     }
 
     private static void ApplyResponsiveDefaults(
