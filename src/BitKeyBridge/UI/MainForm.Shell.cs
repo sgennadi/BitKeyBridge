@@ -664,7 +664,7 @@ public sealed partial class MainForm
             {
                 UpdateDirectoryConnectionUi();
                 if (!_layoutSelfTest)
-            RefreshCredentialVaultStatus();
+                    RefreshCredentialVaultStatus();
             };
         _adUseLdaps.CheckedChanged +=
             (_, _) =>
@@ -687,7 +687,7 @@ public sealed partial class MainForm
                 _adPassword.Clear();
                 AdSessionCredentials.Clear();
                 if (!_layoutSelfTest)
-            RefreshCredentialVaultStatus();
+                    RefreshCredentialVaultStatus();
             };
     }
 
