@@ -25,6 +25,24 @@ public static class UiLayoutSelfTest
 
     public static int Run()
     {
+        var reportPath =
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "ui-self-test.log");
+
+        try
+        {
+            if (File.Exists(
+                    reportPath))
+            {
+                File.Delete(
+                    reportPath);
+            }
+        }
+        catch
+        {
+        }
+
         var failures =
             new List<string>();
 
@@ -95,22 +113,41 @@ public static class UiLayoutSelfTest
             }
         }
 
-        if (failures.Count == 0)
+        var reportLines =
+            failures.Count == 0
+                ? new[]
+                {
+                    "UI-SELF-TEST OK"
+                }
+                : failures
+                    .Select(
+                        failure =>
+                            "UI-SELF-TEST FAILED: " +
+                            failure)
+                    .ToArray();
+
+        try
         {
-            Console.WriteLine(
-                "UI-SELF-TEST OK");
-            return 0;
+            File.WriteAllLines(
+                reportPath,
+                reportLines);
+        }
+        catch
+        {
         }
 
-        foreach (var failure in
-                 failures)
+        foreach (var line in
+                 reportLines)
         {
-            Console.Error.WriteLine(
-                "UI-SELF-TEST FAILED: " +
-                failure);
+            if (failures.Count == 0)
+                Console.WriteLine(line);
+            else
+                Console.Error.WriteLine(line);
         }
 
-        return 1;
+        return failures.Count == 0
+            ? 0
+            : 1;
     }
 
     private static IReadOnlyList<(
