@@ -3,12 +3,18 @@ using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace BitKeyBridge;
 
 public sealed class UpdateService : IDisposable
 {
+    private const long MaximumReleaseAssetBytes =
+        512L * 1024L * 1024L;
+    private const int MaximumChecksumBytes =
+        1024 * 1024;
+
     private readonly AppConfig _config;
     private readonly HttpClient _http;
 
@@ -65,11 +71,20 @@ public sealed class UpdateService : IDisposable
             }
 
             var tag = GetString(release, "tag_name");
+            if (string.IsNullOrWhiteSpace(tag))
+                throw new InvalidOperationException(
+                    "GitHub release metadata does not contain a release tag.");
+
             var latest = ParseVersion(tag);
             var current = GetCurrentVersion();
             info.LatestVersion = latest.ToString();
+            info.ReleaseTag = tag;
             info.UpdateAvailable = latest > current;
             info.ReleaseUrl = GetString(release, "html_url");
+            ValidateReleasePageUrl(
+                info.ReleaseUrl,
+                repository,
+                tag);
             info.ReleaseNotes = GetString(release, "body");
             if (release.TryGetProperty("published_at", out var published) &&
                 DateTime.TryParse(published.GetString(), out var publishedAt))
@@ -97,27 +112,152 @@ public sealed class UpdateService : IDisposable
                 throw new InvalidOperationException(
                     $"Release {tag} does not contain the required asset {assetName}.");
 
-            info.DownloadUrl = GetString(selected, "browser_download_url");
-            var digest = GetString(selected, "digest");
-            if (digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
-                info.AssetDigestSha256 = digest["sha256:".Length..].Trim().ToLowerInvariant();
+            info.DownloadUrl =
+                ValidateReleaseAssetUrl(
+                    GetString(
+                        selected,
+                        "browser_download_url"),
+                    repository,
+                    tag,
+                    assetName);
 
-            if (sums.ValueKind != JsonValueKind.Undefined)
+            info.AssetSizeBytes =
+                GetInt64(
+                    selected,
+                    "size");
+
+            if (info.AssetSizeBytes <= 0 ||
+                info.AssetSizeBytes >
+                MaximumReleaseAssetBytes)
             {
-                var sumsUrl = GetString(sums, "browser_download_url");
-                if (!string.IsNullOrWhiteSpace(sumsUrl))
+                throw new InvalidOperationException(
+                    $"Release {tag} reports an invalid size for {assetName}: {info.AssetSizeBytes} bytes.");
+            }
+
+            var digest =
+                GetString(
+                    selected,
+                    "digest");
+
+            if (!string.IsNullOrWhiteSpace(
+                    digest))
+            {
+                info.AssetDigestSha256 =
+                    ParseGitHubAssetDigest(
+                        digest,
+                        assetName);
+            }
+
+            if (sums.ValueKind !=
+                JsonValueKind.Undefined)
+            {
+                var sumsUrl =
+                    ValidateReleaseAssetUrl(
+                        GetString(
+                            sums,
+                            "browser_download_url"),
+                        repository,
+                        tag,
+                        "SHA256SUMS.txt");
+
+                var sumsSize =
+                    GetInt64(
+                        sums,
+                        "size");
+
+                if (sumsSize <= 0 ||
+                    sumsSize >
+                    MaximumChecksumBytes)
                 {
-                    var sumsText = await _http.GetStringAsync(sumsUrl, ct);
-                    info.ExpectedSha256 = ParseChecksum(sumsText, assetName);
+                    throw new InvalidOperationException(
+                        $"Release {tag} reports an invalid SHA256SUMS.txt size: {sumsSize} bytes.");
+                }
+
+                var sumsBytes =
+                    await DownloadSmallReleaseAssetAsync(
+                        sumsUrl,
+                        sumsSize,
+                        ct);
+
+                try
+                {
+                    var sumsDigest =
+                        GetString(
+                            sums,
+                            "digest");
+
+                    if (!string.IsNullOrWhiteSpace(
+                            sumsDigest))
+                    {
+                        var expectedSumsDigest =
+                            ParseGitHubAssetDigest(
+                                sumsDigest,
+                                "SHA256SUMS.txt");
+
+                        var actualSumsDigest =
+                            Convert.ToHexString(
+                                    SHA256.HashData(
+                                        sumsBytes))
+                                .ToLowerInvariant();
+
+                        if (!CryptographicOperations.FixedTimeEquals(
+                                Convert.FromHexString(
+                                    expectedSumsDigest),
+                                Convert.FromHexString(
+                                    actualSumsDigest)))
+                        {
+                            throw new InvalidOperationException(
+                                "GitHub SHA256SUMS.txt asset digest does not match the downloaded checksum file.");
+                        }
+                    }
+
+                    var sumsText =
+                        Encoding.UTF8.GetString(
+                            sumsBytes);
+
+                    info.ExpectedSha256 =
+                        ParseChecksum(
+                            sumsText,
+                            assetName);
+
+                    if (string.IsNullOrWhiteSpace(
+                            info.ExpectedSha256))
+                    {
+                        throw new InvalidOperationException(
+                            $"Release {tag} SHA256SUMS.txt does not contain a valid SHA-256 entry for {assetName}.");
+                    }
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(
+                        sumsBytes);
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(info.ExpectedSha256))
-                info.ExpectedSha256 = info.AssetDigestSha256;
+            if (string.IsNullOrWhiteSpace(
+                    info.ExpectedSha256))
+            {
+                info.ExpectedSha256 =
+                    info.AssetDigestSha256;
+            }
 
-            if (string.IsNullOrWhiteSpace(info.ExpectedSha256))
+            if (string.IsNullOrWhiteSpace(
+                    info.ExpectedSha256))
+            {
                 throw new InvalidOperationException(
                     $"Release {tag} does not provide a SHA-256 checksum for {assetName}.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    info.AssetDigestSha256) &&
+                !string.Equals(
+                    info.ExpectedSha256,
+                    info.AssetDigestSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Release {tag} checksum sources disagree for {assetName}.");
+            }
 
             JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info);
             return info;
@@ -135,8 +275,14 @@ public sealed class UpdateService : IDisposable
         if (!info.UpdateAvailable)
             throw new InvalidOperationException("No newer BitKeyBridge release is available.");
         if (string.IsNullOrWhiteSpace(info.DownloadUrl) ||
-            string.IsNullOrWhiteSpace(info.ExpectedSha256))
+            string.IsNullOrWhiteSpace(info.ExpectedSha256) ||
+            string.IsNullOrWhiteSpace(info.ReleaseTag) ||
+            info.AssetSizeBytes <= 0)
             throw new InvalidOperationException("Update metadata is incomplete.");
+
+        await RevalidateUpdateInfoAsync(
+            info,
+            ct);
 
         Directory.CreateDirectory(AppPaths.UpdatesDirectory);
         var versionDir = Path.Combine(AppPaths.UpdatesDirectory, "v" + info.LatestVersion);
@@ -151,7 +297,17 @@ public sealed class UpdateService : IDisposable
                    ct))
         {
             response.EnsureSuccessStatusCode();
-            await using var input = await response.Content.ReadAsStreamAsync(ct);
+
+            if (response.Content.Headers.ContentLength is long contentLength &&
+                contentLength != info.AssetSizeBytes)
+            {
+                throw new InvalidOperationException(
+                    $"Release asset size changed before download. Expected {info.AssetSizeBytes} bytes, received {contentLength} bytes.");
+            }
+
+            await using var input =
+                await response.Content.ReadAsStreamAsync(
+                    ct);
             await using var output = new FileStream(
                 zipPath,
                 FileMode.Create,
@@ -159,7 +315,12 @@ public sealed class UpdateService : IDisposable
                 FileShare.None,
                 1024 * 1024,
                 useAsync: true);
-            await input.CopyToAsync(output, ct);
+
+            await CopyExactSizeAsync(
+                input,
+                output,
+                info.AssetSizeBytes,
+                ct);
         }
 
         var actual = await ComputeSha256Async(zipPath, ct);
@@ -173,16 +334,50 @@ public sealed class UpdateService : IDisposable
 
         var extractDir = Path.Combine(versionDir, "extract");
         ZipFile.ExtractToDirectory(zipPath, extractDir, overwriteFiles: true);
-        var executable = Directory
-            .EnumerateFiles(extractDir, "BitKeyBridge.exe", SearchOption.AllDirectories)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("The downloaded release does not contain BitKeyBridge.exe.");
+
+        var executables =
+            Directory
+                .EnumerateFiles(
+                    extractDir,
+                    "BitKeyBridge.exe",
+                    SearchOption.AllDirectories)
+                .ToArray();
+
+        if (executables.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"The downloaded release must contain exactly one BitKeyBridge.exe; found {executables.Length}.");
+        }
+
+        var executable =
+            executables[0];
+
+        if (!string.Equals(
+                Path.GetRelativePath(
+                    extractDir,
+                    executable),
+                "BitKeyBridge.exe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The downloaded release contains BitKeyBridge.exe outside the package root.");
+        }
 
         var fileVersion = FileVersionInfo.GetVersionInfo(executable).FileVersion;
-        if (!Version.TryParse(NormalizeVersionText(fileVersion), out var stagedVersion) ||
-            stagedVersion < ParseVersion(info.LatestVersion))
+        var expectedVersion =
+            ParseVersion(
+                info.LatestVersion);
+
+        if (!Version.TryParse(
+                NormalizeVersionText(
+                    fileVersion),
+                out var stagedVersion) ||
+            !stagedVersion.Equals(
+                expectedVersion))
+        {
             throw new InvalidOperationException(
-                $"Staged executable version '{fileVersion}' does not match release {info.LatestVersion}.");
+                $"Staged executable version '{fileVersion}' does not exactly match release {info.LatestVersion}.");
+        }
 
         var stagedHashBeforeSelfTest =
             await ComputeSha256Async(
@@ -543,16 +738,19 @@ public sealed class UpdateService : IDisposable
                     fullPath)
                     .FileVersion;
 
+            var expectedVersion =
+                ParseVersion(
+                    plan.ExpectedVersion);
+
             if (!Version.TryParse(
                     NormalizeVersionText(
                         fileVersion),
                     out var stagedVersion) ||
-                stagedVersion <
-                ParseVersion(
-                    plan.ExpectedVersion))
+                !stagedVersion.Equals(
+                    expectedVersion))
             {
                 throw new InvalidDataException(
-                    $"Staged executable version '{fileVersion}' no longer matches expected version {plan.ExpectedVersion}.");
+                    $"Staged executable version '{fileVersion}' no longer exactly matches expected version {plan.ExpectedVersion}.");
             }
 
             stream.Position = 0;
@@ -583,6 +781,292 @@ public sealed class UpdateService : IDisposable
         }
 
         return normalized;
+    }
+
+    private async Task RevalidateUpdateInfoAsync(
+        UpdateInfo expected,
+        CancellationToken ct)
+    {
+        var fresh =
+            await CheckAsync(
+                ct);
+
+        if (!string.IsNullOrWhiteSpace(
+                fresh.Error))
+        {
+            throw new InvalidOperationException(
+                "Update metadata revalidation failed: " +
+                fresh.Error);
+        }
+
+        if (!fresh.UpdateAvailable)
+        {
+            throw new InvalidOperationException(
+                "The selected update is no longer reported as available.");
+        }
+
+        var unchanged =
+            string.Equals(
+                fresh.ReleaseTag,
+                expected.ReleaseTag,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                fresh.LatestVersion,
+                expected.LatestVersion,
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                fresh.Architecture,
+                expected.Architecture,
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                fresh.AssetName,
+                expected.AssetName,
+                StringComparison.Ordinal) &&
+            fresh.AssetSizeBytes ==
+            expected.AssetSizeBytes &&
+            string.Equals(
+                fresh.DownloadUrl,
+                expected.DownloadUrl,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                fresh.ExpectedSha256,
+                expected.ExpectedSha256,
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                fresh.AssetDigestSha256,
+                expected.AssetDigestSha256,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!unchanged)
+        {
+            throw new InvalidOperationException(
+                "GitHub release metadata changed after the update was selected. Check for updates again before installing.");
+        }
+    }
+
+    private async Task<byte[]> DownloadSmallReleaseAssetAsync(
+        string url,
+        long expectedSize,
+        CancellationToken ct)
+    {
+        using var response =
+            await _http.GetAsync(
+                url,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct);
+
+        response.EnsureSuccessStatusCode();
+
+        if (response.Content.Headers.ContentLength is long contentLength &&
+            contentLength != expectedSize)
+        {
+            throw new InvalidOperationException(
+                $"Release metadata size mismatch. Expected {expectedSize} bytes, received {contentLength} bytes.");
+        }
+
+        await using var input =
+            await response.Content.ReadAsStreamAsync(
+                ct);
+
+        using var output =
+            new MemoryStream(
+                checked((int)expectedSize));
+
+        await CopyExactSizeAsync(
+            input,
+            output,
+            expectedSize,
+            ct);
+
+        return output.ToArray();
+    }
+
+    private static async Task CopyExactSizeAsync(
+        Stream input,
+        Stream output,
+        long expectedSize,
+        CancellationToken ct)
+    {
+        if (expectedSize < 1 ||
+            expectedSize >
+            MaximumReleaseAssetBytes)
+        {
+            throw new InvalidDataException(
+                $"Expected release asset size {expectedSize} is outside the allowed range.");
+        }
+
+        var buffer =
+            new byte[128 * 1024];
+        long total = 0;
+
+        while (true)
+        {
+            var read =
+                await input.ReadAsync(
+                    buffer.AsMemory(
+                        0,
+                        buffer.Length),
+                    ct);
+
+            if (read == 0)
+                break;
+
+            total += read;
+
+            if (total >
+                expectedSize)
+            {
+                throw new InvalidDataException(
+                    "Downloaded release asset exceeded the size declared by GitHub.");
+            }
+
+            await output.WriteAsync(
+                buffer.AsMemory(
+                    0,
+                    read),
+                ct);
+        }
+
+        if (total != expectedSize)
+        {
+            throw new InvalidDataException(
+                $"Downloaded release asset size mismatch. Expected {expectedSize} bytes, received {total} bytes.");
+        }
+
+        await output.FlushAsync(
+            ct);
+    }
+
+    internal static string ValidateReleaseAssetUrl(
+        string value,
+        string repository,
+        string tag,
+        string assetName)
+    {
+        if (!Uri.TryCreate(
+                value,
+                UriKind.Absolute,
+                out var uri) ||
+            !string.Equals(
+                uri.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                uri.Host,
+                "github.com",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"GitHub release asset URL for {assetName} is invalid.");
+        }
+
+        var expectedPath =
+            "/" +
+            repository +
+            "/releases/download/" +
+            tag +
+            "/" +
+            assetName;
+
+        if (!string.Equals(
+                Uri.UnescapeDataString(
+                    uri.AbsolutePath),
+                expectedPath,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"GitHub release asset URL for {assetName} does not match repository {repository} and release {tag}.");
+        }
+
+        return uri.AbsoluteUri;
+    }
+
+    internal static void ValidateReleasePageUrl(
+        string value,
+        string repository,
+        string tag)
+    {
+        if (!Uri.TryCreate(
+                value,
+                UriKind.Absolute,
+                out var uri) ||
+            !string.Equals(
+                uri.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                uri.Host,
+                "github.com",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "GitHub release page URL is invalid.");
+        }
+
+        var expectedPath =
+            "/" +
+            repository +
+            "/releases/tag/" +
+            tag;
+
+        if (!string.Equals(
+                Uri.UnescapeDataString(
+                    uri.AbsolutePath),
+                expectedPath,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"GitHub release page URL does not match repository {repository} and release {tag}.");
+        }
+    }
+
+    internal static string ParseGitHubAssetDigest(
+        string value,
+        string assetName)
+    {
+        const string prefix =
+            "sha256:";
+
+        if (!value.StartsWith(
+                prefix,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"GitHub asset digest for {assetName} is not SHA-256.");
+        }
+
+        var digest =
+            value[prefix.Length..]
+                .Trim()
+                .ToLowerInvariant();
+
+        if (digest.Length != 64 ||
+            !digest.All(
+                Uri.IsHexDigit))
+        {
+            throw new InvalidOperationException(
+                $"GitHub asset digest for {assetName} is invalid.");
+        }
+
+        return digest;
+    }
+
+    private static long GetInt64(
+        JsonElement element,
+        string name)
+    {
+        if (!element.TryGetProperty(
+                name,
+                out var value) ||
+            value.ValueKind !=
+            JsonValueKind.Number ||
+            !value.TryGetInt64(
+                out var result))
+        {
+            return 0;
+        }
+
+        return result;
     }
 
     internal static string ComputeSha256File(
