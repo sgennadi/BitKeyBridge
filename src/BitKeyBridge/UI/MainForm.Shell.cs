@@ -350,34 +350,86 @@ public sealed partial class MainForm
         AddRecoveryCardRow(grid, 3, "Created / checked:", _recoveryCardTime);
         AddRecoveryCardRow(grid, 4, "Source:", _recoveryCardSource);
 
-        var keyFlow = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            Dock = DockStyle.Fill,
-            WrapContents = true
-        };
-        _startKey.Width = 470;
+        var keyLayout =
+            new TableLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2
+            };
+        keyLayout.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        keyLayout.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        keyLayout.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+
+        _startKey.Dock =
+            DockStyle.Top;
         _startKey.ReadOnly = true;
         _startKey.UseSystemPasswordChar = true;
-        _startKey.Font = new Font("Consolas", 10F);
-        keyFlow.Controls.Add(_startKey);
+        _startKey.Font =
+            UiStyle.CreateMonospaceFont(
+                10F);
+        _startKey.Margin =
+            new Padding(
+                0,
+                0,
+                0,
+                UiStyle.ControlGap);
+        keyLayout.Controls.Add(
+            _startKey,
+            0,
+            0);
 
-        _startShow.Text = "Reveal Recovery Key";
-        _startShow.AutoSize = true;
-        keyFlow.Controls.Add(_startShow);
+        var keyActions =
+            new FlowLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                WrapContents = true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(0)
+            };
 
-        _startCopy.Text = "Copy Key";
-        _startCopy.AutoSize = true;
-        keyFlow.Controls.Add(_startCopy);
+        _startShow.Text =
+            "Reveal Recovery Key";
+        UiStyle.ConfigureActionButton(
+            _startShow);
+        keyActions.Controls.Add(
+            _startShow);
+
+        _startCopy.Text =
+            "Copy Key";
+        UiStyle.ConfigureActionButton(
+            _startCopy);
+        keyActions.Controls.Add(
+            _startCopy);
+
+        keyLayout.Controls.Add(
+            keyActions,
+            0,
+            1);
 
         grid.Controls.Add(new Label
         {
             Text = "Recovery key:",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9F),
+            Font =
+                UiStyle.CreateEmphasisFont(),
             Margin = new Padding(0, 8, 10, 0)
         }, 0, 5);
-        grid.Controls.Add(keyFlow, 1, 5);
+        grid.Controls.Add(
+            keyLayout,
+            1,
+            5);
 
         grid.Controls.Add(new Label
         {
@@ -649,37 +701,116 @@ public sealed partial class MainForm
         _unifiedDetails.Dock = DockStyle.Fill;
         root.Controls.Add(_unifiedDetails, 0, 3);
 
-        var keyPanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true
-        };
+        var keyPanel =
+            new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 3,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+        keyPanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        keyPanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+
         keyPanel.Controls.Add(new Label
         {
             Text = "Entra Recovery ID:",
             AutoSize = true,
-            Margin = new Padding(0, 8, 6, 0)
-        });
-        _deviceRecoveryIds.DropDownStyle = ComboBoxStyle.DropDownList;
-        _deviceRecoveryIds.Width = 330;
-        keyPanel.Controls.Add(_deviceRecoveryIds);
+            Anchor = AnchorStyles.Left,
+            Margin =
+                new Padding(
+                    0,
+                    7,
+                    UiStyle.ControlGap,
+                    4)
+        }, 0, 0);
 
-        _deviceRecoveryKey.Width = 410;
+        _deviceRecoveryIds.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _deviceRecoveryIds.Dock =
+            DockStyle.Top;
+        keyPanel.Controls.Add(
+            _deviceRecoveryIds,
+            1,
+            0);
+
+        keyPanel.Controls.Add(new Label
+        {
+            Text = "Recovery key:",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin =
+                new Padding(
+                    0,
+                    7,
+                    UiStyle.ControlGap,
+                    4)
+        }, 0, 1);
+
+        _deviceRecoveryKey.Dock =
+            DockStyle.Top;
         _deviceRecoveryKey.ReadOnly = true;
         _deviceRecoveryKey.UseSystemPasswordChar = true;
-        _deviceRecoveryKey.Font = new Font("Consolas", 9.5F);
-        keyPanel.Controls.Add(_deviceRecoveryKey);
+        _deviceRecoveryKey.Font =
+            UiStyle.CreateMonospaceFont();
+        keyPanel.Controls.Add(
+            _deviceRecoveryKey,
+            1,
+            1);
 
-        _deviceShowKey.Text = "Reveal Key";
-        _deviceShowKey.AutoSize = true;
-        keyPanel.Controls.Add(_deviceShowKey);
+        var deviceKeyActions =
+            new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                WrapContents = true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
 
-        _deviceCopyKey.Text = "Copy Key";
-        _deviceCopyKey.AutoSize = true;
-        keyPanel.Controls.Add(_deviceCopyKey);
+        _deviceShowKey.Text =
+            "Reveal Key";
+        UiStyle.ConfigureActionButton(
+            _deviceShowKey);
+        deviceKeyActions.Controls.Add(
+            _deviceShowKey);
 
-        root.Controls.Add(keyPanel, 0, 4);
+        _deviceCopyKey.Text =
+            "Copy Key";
+        UiStyle.ConfigureActionButton(
+            _deviceCopyKey);
+        deviceKeyActions.Controls.Add(
+            _deviceCopyKey);
+
+        keyPanel.SetColumnSpan(
+            deviceKeyActions,
+            2);
+        keyPanel.Controls.Add(
+            deviceKeyActions,
+            0,
+            2);
+
+        root.Controls.Add(
+            keyPanel,
+            0,
+            4);
 
         var actions = new FlowLayoutPanel
         {
