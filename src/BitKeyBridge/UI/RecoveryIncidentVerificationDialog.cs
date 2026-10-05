@@ -102,7 +102,7 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 10, 0, 0)
         };
