@@ -7,6 +7,9 @@ namespace BitKeyBridge;
 /// </summary>
 public class DpiAwareForm : Form
 {
+    private readonly Dictionary<Label, Size> _labelMaximumSizes =
+        new();
+
     public DpiAwareForm()
     {
         AutoScaleMode =
@@ -17,6 +20,15 @@ public class DpiAwareForm : Form
                 UiStyle.BaselineDpi);
         Font =
             UiStyle.BodyFont;
+
+        SizeChanged +=
+            (_, _) =>
+            {
+                if (IsHandleCreated)
+                {
+                    RefreshResponsiveLabelWidths();
+                }
+            };
     }
 
     protected override void OnLoad(EventArgs e)
@@ -74,7 +86,7 @@ public class DpiAwareForm : Form
         PerformLayout();
     }
 
-    private static void ApplyResponsiveDefaults(
+    private void ApplyResponsiveDefaults(
         Control root)
     {
         if (root is FlowLayoutPanel flow &&
@@ -101,12 +113,151 @@ public class DpiAwareForm : Form
                         UiStyle.MinimumButtonHeight));
         }
 
+        if (root is Label label &&
+            label.AutoSize &&
+            label.MaximumSize.Width > 0)
+        {
+            if (!_labelMaximumSizes.ContainsKey(
+                    label))
+            {
+                _labelMaximumSizes[label] =
+                    label.MaximumSize;
+            }
+
+            RefreshResponsiveLabelWidth(
+                label);
+        }
+
         foreach (Control child in
                  root.Controls)
         {
             ApplyResponsiveDefaults(
                 child);
         }
+    }
+
+    private void RefreshResponsiveLabelWidths()
+    {
+        foreach (var label in
+                 _labelMaximumSizes.Keys
+                     .Where(
+                         x => !x.IsDisposed)
+                     .ToArray())
+        {
+            RefreshResponsiveLabelWidth(
+                label);
+        }
+    }
+
+    private void RefreshResponsiveLabelWidth(
+        Label label)
+    {
+        if (!_labelMaximumSizes.TryGetValue(
+                label,
+                out var designMaximum) ||
+            designMaximum.Width <= 0 ||
+            label.Parent is null)
+        {
+            return;
+        }
+
+        var availableWidth =
+            GetAvailableWidth(
+                label);
+
+        if (availableWidth <= 0)
+            return;
+
+        var maximumWidth =
+            Math.Max(
+                ScaleLogical(
+                    120),
+                Math.Min(
+                    designMaximum.Width,
+                    availableWidth));
+
+        var target =
+            new Size(
+                maximumWidth,
+                designMaximum.Height);
+
+        if (label.MaximumSize !=
+            target)
+        {
+            label.MaximumSize =
+                target;
+        }
+    }
+
+    private static int GetAvailableWidth(
+        Control control)
+    {
+        var parent =
+            control.Parent;
+
+        if (parent is null)
+            return 0;
+
+        var available =
+            parent.ClientSize.Width -
+            control.Margin.Horizontal;
+
+        if (parent is TableLayoutPanel table)
+        {
+            try
+            {
+                var position =
+                    table.GetPositionFromControl(
+                        control);
+                var widths =
+                    table.GetColumnWidths();
+
+                if (position.Column >= 0 &&
+                    position.Column <
+                    widths.Length)
+                {
+                    var span =
+                        Math.Max(
+                            1,
+                            table.GetColumnSpan(
+                                control));
+                    var end =
+                        Math.Min(
+                            widths.Length,
+                            position.Column +
+                            span);
+
+                    available =
+                        0;
+
+                    for (var column =
+                             position.Column;
+                         column <
+                         end;
+                         column++)
+                    {
+                        available +=
+                            widths[column];
+                    }
+
+                    available -=
+                        control.Margin.Horizontal;
+                }
+            }
+            catch
+            {
+                // Fall back to the parent client width.
+            }
+        }
+        else
+        {
+            available -=
+                parent.Padding.Horizontal;
+        }
+
+        return Math.Max(
+            0,
+            available);
     }
 
     private int ScaleLogical(
