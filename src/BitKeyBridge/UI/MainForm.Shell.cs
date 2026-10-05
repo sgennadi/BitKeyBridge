@@ -1181,10 +1181,13 @@ public sealed partial class MainForm
 
         if (local)
         {
-            _adConnectionStatus.Text =
+            SetDirectoryConnectionStatus(
                 File.Exists(_config.OutputCsv)
                     ? "Local cache is available. AD connection is not required for this search."
-                    : "Local cache is selected, but the recovery export CSV does not exist yet.";
+                    : "Local cache is selected, but the recovery export CSV does not exist yet.",
+                File.Exists(_config.OutputCsv)
+                    ? UiStatusKind.Neutral
+                    : UiStatusKind.Warning);
 
             _startOuStatus.Text =
                 "OU selection is not used for Local cache search.";
