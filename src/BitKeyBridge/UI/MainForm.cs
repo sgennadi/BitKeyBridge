@@ -946,7 +946,7 @@ public sealed partial class MainForm : DpiAwareForm
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             FlowDirection = FlowDirection.RightToLeft
         };
         var cancel = new Button
