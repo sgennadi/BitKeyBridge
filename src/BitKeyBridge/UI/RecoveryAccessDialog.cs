@@ -30,7 +30,7 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
         MinimumSize = new Size(560, 390);
         MaximizeBox = false;
         MinimizeBox = false;
-        Font = new Font("Segoe UI", 9F);
+        Font = UiStyle.BodyFont;
 
         var root = new TableLayoutPanel
         {
@@ -52,7 +52,7 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
         root.Controls.Add(new Label
         {
             Text = "Record why this BitLocker recovery secret is being accessed.",
-            Font = new Font("Segoe UI Semibold", 13F),
+            Font = UiStyle.CreateSectionTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 12)
         }, 0, 0);
