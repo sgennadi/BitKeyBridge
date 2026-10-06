@@ -398,8 +398,10 @@ public sealed partial class MainForm : DpiAwareForm
         UpdateCloudAuthUi();
         if (string.IsNullOrWhiteSpace(_cloudConfig.ClientId))
         {
-            _cloudStatus.Text =
-                "No BitKeyBridge App Registration is configured yet. Click First-Run / Repair Setup; no pre-created App Registration is required.";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "No BitKeyBridge App Registration is configured yet. Click First-Run / Repair Setup; no pre-created App Registration is required.",
+                UiStatusKind.Warning);
         }
     }
 
@@ -416,7 +418,10 @@ public sealed partial class MainForm : DpiAwareForm
             _ => "DeviceCode"
         };
         ConfigService.SaveCloudConfig(_cloudConfig);
-        _cloudStatus.Text = "Cloud config saved. Password was not saved.";
+        UiStyle.SetStatus(
+            _cloudStatus,
+            "Cloud config saved. Password was not saved.",
+            UiStatusKind.Success);
     }
 
     private void UpdateCloudAuthUi()
@@ -440,8 +445,10 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             SaveCloudFields();
-            _cloudStatus.Text =
-                "Connecting...";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Connecting...",
+                UiStatusKind.Busy);
 
             using var graph =
                 new CloudGraphService();
@@ -477,8 +484,10 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudTokenContext =
                 BuildCloudTokenContext();
 
-            _cloudStatus.Text =
-                $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).",
+                UiStatusKind.Success);
 
             return true;
         }
@@ -486,9 +495,11 @@ public sealed partial class MainForm : DpiAwareForm
         {
             _cloudToken = null;
             _cloudTokenContext = string.Empty;
-            _cloudStatus.Text =
+            UiStyle.SetStatus(
+                _cloudStatus,
                 "Connection failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
 
             MessageBox.Show(
                 this,
@@ -599,9 +610,18 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             Enabled = false;
-            _cloudStatus.Text = "Starting first-run Entra setup...";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Starting first-run Entra setup...",
+                UiStatusKind.Busy);
             using var setup = new EntraSetupService();
-            var progress = new Progress<string>(m => _cloudStatus.Text = m);
+            var progress =
+                new Progress<string>(
+                    message =>
+                        UiStyle.SetStatus(
+                            _cloudStatus,
+                            message,
+                            UiStatusKind.Busy));
             var result = await setup.RunAsync(
                 _cloudTenant.Text,
                 _cloudConfig.BootstrapClientId,
@@ -618,8 +638,10 @@ public sealed partial class MainForm : DpiAwareForm
                 source: "Entra",
                 authMode: "DeviceCode",
                 details: $"ApplicationId={result.ClientId}; ServicePrincipalId={result.ServicePrincipalId}");
-            _cloudStatus.Text =
-                $"First-run setup complete. BitKeyBridge App Client ID: {result.ClientId}; certificate: {result.CertificateThumbprint}";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                $"First-run setup complete. BitKeyBridge App Client ID: {result.ClientId}; certificate: {result.CertificateThumbprint}",
+                UiStatusKind.Success);
             MessageBox.Show(
                 this,
                 "Microsoft Entra setup completed successfully." + Environment.NewLine + Environment.NewLine +
@@ -639,7 +661,10 @@ public sealed partial class MainForm : DpiAwareForm
                 source: "Entra",
                 authMode: "DeviceCode",
                 details: ex.Message);
-            _cloudStatus.Text = "Auto Setup failed: " + ex.Message;
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Auto Setup failed: " + ex.Message,
+                UiStatusKind.Error);
             MessageBox.Show(
                 this,
                 ex.Message + Environment.NewLine + Environment.NewLine +
@@ -689,8 +714,10 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             Enabled = false;
-            _cloudStatus.Text =
-                "Starting staged Entra certificate rollover...";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Starting staged Entra certificate rollover...",
+                UiStatusKind.Busy);
 
             using var lifecycle =
                 new EntraCertificateLifecycleService();
@@ -698,8 +725,10 @@ public sealed partial class MainForm : DpiAwareForm
             var progress =
                 new Progress<string>(
                     message =>
-                        _cloudStatus.Text =
-                            message);
+                        UiStyle.SetStatus(
+                            _cloudStatus,
+                            message,
+                            UiStatusKind.Busy));
 
             var result =
                 await lifecycle.RolloverAsync(
@@ -718,8 +747,12 @@ public sealed partial class MainForm : DpiAwareForm
                 details:
                     $"Previous={result.PreviousThumbprint}; New={result.NewThumbprint}; Verified={result.CertificateAuthenticationVerified}; MachineConfigUpdated={result.MachineCloudConfigUpdated}; ServiceKeyAccess={result.ServiceKeyAccessStatus}");
 
-            _cloudStatus.Text =
-                $"Certificate rollover completed. New certificate: {result.NewThumbprint}; expires {result.NewCertificateNotAfter:yyyy-MM-dd}.";
+            UiStyle.SetStatus(
+                _cloudStatus,
+                $"Certificate rollover completed. New certificate: {result.NewThumbprint}; expires {result.NewCertificateNotAfter:yyyy-MM-dd}.",
+                result.Warnings.Count == 0
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
 
             MessageBox.Show(
                 this,
@@ -753,9 +786,11 @@ public sealed partial class MainForm : DpiAwareForm
                 authMode: "DeviceCode",
                 details: ex.Message);
 
-            _cloudStatus.Text =
+            UiStyle.SetStatus(
+                _cloudStatus,
                 "Certificate rollover failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
 
             MessageBox.Show(
                 this,
@@ -791,9 +826,12 @@ public sealed partial class MainForm : DpiAwareForm
                 : value;
         ConfigService.SaveCloudConfig(_cloudConfig);
 
-        _cloudStatus.Text = string.IsNullOrWhiteSpace(_cloudConfig.BootstrapClientId)
-            ? $"Bootstrap reset to Microsoft first-party '{EntraSetupService.DefaultBootstrapDisplayName}'."
-            : $"Custom bootstrap saved: {_cloudConfig.BootstrapClientId}";
+        UiStyle.SetStatus(
+            _cloudStatus,
+            string.IsNullOrWhiteSpace(_cloudConfig.BootstrapClientId)
+                ? $"Bootstrap reset to Microsoft first-party '{EntraSetupService.DefaultBootstrapDisplayName}'."
+                : $"Custom bootstrap saved: {_cloudConfig.BootstrapClientId}",
+            UiStatusKind.Success);
     }
 
     private async Task ShowDeviceCodeAsync(DeviceCodeInfo info)
@@ -822,12 +860,19 @@ public sealed partial class MainForm : DpiAwareForm
                 (int)_coverageOldKeyDays.Value;
             ConfigService.SaveAppConfig(_config);
 
-            _coverageStatus.Text =
-                "Starting metadata-only coverage analysis...";
+            UiStyle.SetStatus(
+                _coverageStatus,
+                "Starting metadata-only coverage analysis...",
+                UiStatusKind.Busy);
             UseWaitCursor = true;
 
-            var progress = new Progress<string>(
-                message => _coverageStatus.Text = message);
+            var progress =
+                new Progress<string>(
+                    message =>
+                        UiStyle.SetStatus(
+                            _coverageStatus,
+                            message,
+                            UiStatusKind.Busy));
 
             var service = new CoverageService(_config);
             _coverageCurrent = await service.RunAsync(
@@ -846,14 +891,18 @@ public sealed partial class MainForm : DpiAwareForm
                 details:
                     $"Devices={s.TotalDevices}; Both={s.BothSources}; ADOnly={s.AdOnly}; EntraOnly={s.EntraOnly}; NoKey={s.NoRecoveryKey}; Multiple={s.MultipleKeys}; IntuneNotEncrypted={s.IntuneNotEncrypted}; Stale={s.IntuneStale}; OldCloudKey={s.OldCloudKey}");
 
-            _coverageStatus.Text =
+            UiStyle.SetStatus(
+                _coverageStatus,
                 $"Coverage completed at {_coverageCurrent.GeneratedAt:yyyy-MM-dd HH:mm:ss}. " +
-                $"DC={_coverageCurrent.DomainController}. Recovery passwords were not requested.";
+                $"DC={_coverageCurrent.DomainController}. Recovery passwords were not requested.",
+                UiStatusKind.Success);
         }
         catch (Exception ex)
         {
-            _coverageStatus.Text =
-                "Coverage failed: " + ex.Message;
+            UiStyle.SetStatus(
+                _coverageStatus,
+                "Coverage failed: " + ex.Message,
+                UiStatusKind.Error);
             _audit.Write(
                 "RunCoverageReport",
                 "Failed",
@@ -1213,10 +1262,12 @@ public sealed partial class MainForm : DpiAwareForm
 
         if (_coverageCurrent is not null)
         {
-            _coverageStatus.Text =
+            UiStyle.SetStatus(
+                _coverageStatus,
                 $"Showing {_coverageResults.Items.Count} of " +
                 $"{_coverageCurrent.Rows.Count} device(s). " +
-                "Recovery passwords were not requested.";
+                "Recovery passwords were not requested.",
+                UiStatusKind.Neutral);
         }
     }
 
@@ -1255,8 +1306,10 @@ public sealed partial class MainForm : DpiAwareForm
                 source: "Coverage",
                 details:
                     $"Path={dialog.FileName}; Rows={rows.Count}; Filter={_coverageFilter.Text}");
-            _coverageStatus.Text =
-                $"Exported {rows.Count} visible coverage row(s) to {dialog.FileName}.";
+            UiStyle.SetStatus(
+                _coverageStatus,
+                $"Exported {rows.Count} visible coverage row(s) to {dialog.FileName}.",
+                UiStatusKind.Success);
         }
         catch (Exception ex)
         {
@@ -1273,8 +1326,10 @@ public sealed partial class MainForm : DpiAwareForm
     {
         try
         {
-            _unifiedStatus.Text =
-                "Searching devices...";
+            UiStyle.SetStatus(
+                _unifiedStatus,
+                "Searching devices...",
+                UiStatusKind.Busy);
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
             _deviceRecoveryIds.Items.Clear();
@@ -1299,8 +1354,10 @@ public sealed partial class MainForm : DpiAwareForm
 
             if (cloudReady)
             {
-                _unifiedStatus.Text =
-                    "Searching Active Directory, Entra and Intune...";
+                UiStyle.SetStatus(
+                    _unifiedStatus,
+                    "Searching Active Directory, Entra and Intune...",
+                    UiStatusKind.Busy);
 
                 rows =
                     await service.SearchAsync(
@@ -1309,10 +1366,12 @@ public sealed partial class MainForm : DpiAwareForm
             }
             else
             {
-                _unifiedStatus.Text =
+                UiStyle.SetStatus(
+                    _unifiedStatus,
                     cloudConfigured
                         ? "Cloud is unavailable; continuing with Active Directory only..."
-                        : "Cloud is not configured; searching Active Directory only...";
+                        : "Cloud is not configured; searching Active Directory only...",
+                    UiStatusKind.Warning);
 
                 rows =
                     await service.SearchAdOnlyAsync(
@@ -1378,10 +1437,14 @@ public sealed partial class MainForm : DpiAwareForm
                     ? "AD+Entra+Intune"
                     : "AD";
 
-            _unifiedStatus.Text =
+            UiStyle.SetStatus(
+                _unifiedStatus,
                 cloudReady
                     ? $"Unified search returned {rows.Count} device(s). Recovery passwords were not requested."
-                    : $"AD search returned {rows.Count} device(s). Configure Cloud under Administration to add Entra/Intune data.";
+                    : $"AD search returned {rows.Count} device(s). Configure Cloud under Administration to add Entra/Intune data.",
+                cloudReady
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
 
             _audit.Write(
                 "UnifiedDeviceSearch",
@@ -1398,9 +1461,11 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            _unifiedStatus.Text =
+            UiStyle.SetStatus(
+                _unifiedStatus,
                 "Device search failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
 
             _audit.Write(
                 "UnifiedDeviceSearch",
@@ -1528,9 +1593,17 @@ public sealed partial class MainForm : DpiAwareForm
                 rotationRequested: true,
                 rotationSucceeded: true);
 
-            _cloudStatus.Text =
+            var rotationStatus =
                 $"Intune accepted the BitLocker key-rotation request for {computerName}.";
-            _unifiedStatus.Text = _cloudStatus.Text;
+
+            UiStyle.SetStatus(
+                _cloudStatus,
+                rotationStatus,
+                UiStatusKind.Success);
+            UiStyle.SetStatus(
+                _unifiedStatus,
+                rotationStatus,
+                UiStatusKind.Success);
             MessageBox.Show(
                 this,
                 "Intune accepted the rotation request. The new recovery key appears after the device processes the action and backs up the new key.",
@@ -1671,7 +1744,10 @@ public sealed partial class MainForm : DpiAwareForm
         SaveOperationsSettings();
         try
         {
-            _updateStatus.Text = "Checking GitHub Releases...";
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Checking GitHub Releases...",
+                UiStatusKind.Busy);
             using var updater = new UpdateService(_config);
             _lastUpdateInfo = await updater.CheckAsync();
             DisplayUpdateInfo(_lastUpdateInfo);
@@ -1710,7 +1786,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            _updateStatus.Text = "Update check failed: " + ex.Message;
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Update check failed: " + ex.Message,
+                UiStatusKind.Error);
         }
     }
 
@@ -1718,19 +1797,25 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!string.IsNullOrWhiteSpace(info.Error))
         {
-            _updateStatus.Text =
+            UiStyle.SetStatus(
+                _updateStatus,
                 $"Current: {info.CurrentVersion}{Environment.NewLine}" +
-                $"Update check failed: {info.Error}";
+                $"Update check failed: {info.Error}",
+                UiStatusKind.Error);
             return;
         }
 
-        _updateStatus.Text =
+        UiStyle.SetStatus(
+            _updateStatus,
             $"Current: {info.CurrentVersion}    Latest: {info.LatestVersion}    Architecture: {info.Architecture}{Environment.NewLine}" +
             (info.UpdateAvailable
                 ? $"UPDATE AVAILABLE: {info.LatestVersion}    Asset: {info.AssetName}"
                 : "No newer release is available.") +
             Environment.NewLine +
-            $"Checked: {info.CheckedAtUtc:u}";
+            $"Checked: {info.CheckedAtUtc:u}",
+            info.UpdateAvailable
+                ? UiStatusKind.Warning
+                : UiStatusKind.Success);
     }
 
     private async Task InstallLatestUpdateGuiAsync()
@@ -1763,7 +1848,10 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             Enabled = false;
-            _updateStatus.Text = $"Downloading and verifying BitKeyBridge {info.LatestVersion}...";
+            UiStyle.SetStatus(
+                _updateStatus,
+                $"Downloading and verifying BitKeyBridge {info.LatestVersion}...",
+                UiStatusKind.Busy);
             using var updater = new UpdateService(_config);
             var prepared = await updater.PrepareAsync(info);
             _audit.Write(
@@ -1780,7 +1868,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             Enabled = true;
-            _updateStatus.Text = "Update preparation failed: " + ex.Message;
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Update preparation failed: " + ex.Message,
+                UiStatusKind.Error);
             _audit.Write(
                 "PrepareVerifiedUpdate",
                 "Failed",
@@ -1918,11 +2009,16 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void RefreshRemoteApiStatus()
     {
-        _remoteApiStatus.Text = _config.RemoteApiEnabled
-            ? $"ENABLED: https://{Environment.MachineName}:{_config.RemoteApiPort}/api/v1/{Environment.NewLine}" +
-              $"Management: {_config.RemoteApiAllowManagement}    Certificate: {_config.RemoteApiCertificateThumbprint}{Environment.NewLine}" +
-              $"Tokens: Admin={Configured(_config.RemoteApiTokenSha256)}  Read={Configured(_config.RemoteApiReadTokenSha256)}  CoverageRun={Configured(_config.RemoteApiCoverageRunTokenSha256)}  Export={Configured(_config.RemoteApiExportTokenSha256)}"
-            : "DISABLED. Remote API does not listen on the network until explicitly enabled.";
+        UiStyle.SetStatus(
+            _remoteApiStatus,
+            _config.RemoteApiEnabled
+                ? $"ENABLED: https://{Environment.MachineName}:{_config.RemoteApiPort}/api/v1/{Environment.NewLine}" +
+                  $"Management: {_config.RemoteApiAllowManagement}    Certificate: {_config.RemoteApiCertificateThumbprint}{Environment.NewLine}" +
+                  $"Tokens: Admin={Configured(_config.RemoteApiTokenSha256)}  Read={Configured(_config.RemoteApiReadTokenSha256)}  CoverageRun={Configured(_config.RemoteApiCoverageRunTokenSha256)}  Export={Configured(_config.RemoteApiExportTokenSha256)}"
+                : "DISABLED. Remote API does not listen on the network until explicitly enabled.",
+            _config.RemoteApiEnabled
+                ? UiStatusKind.Success
+                : UiStatusKind.Neutral);
     }
 
     private void ConfigureStorageMaintenanceGui()
@@ -2573,17 +2669,24 @@ public sealed partial class MainForm : DpiAwareForm
         {
             if (!_adExplicitCredentials.Checked)
             {
-                _credentialVaultStatus.Text =
-                    "Using current Windows identity; no explicit AD credential is required.";
+                UiStyle.SetStatus(
+                    _credentialVaultStatus,
+                    "Using current Windows identity; no explicit AD credential is required.",
+                    UiStatusKind.Neutral);
                 return;
             }
 
             var mode = GetSelectedCredentialStorageMode();
             if (mode.Equals("Session", StringComparison.OrdinalIgnoreCase))
             {
-                _credentialVaultStatus.Text = AdSessionCredentials.HasPassword
-                    ? $"Session credential loaded for {_adUsername.Text.Trim()}."
-                    : "Session credential is not loaded.";
+                UiStyle.SetStatus(
+                    _credentialVaultStatus,
+                    AdSessionCredentials.HasPassword
+                        ? $"Session credential loaded for {_adUsername.Text.Trim()}."
+                        : "Session credential is not loaded.",
+                    AdSessionCredentials.HasPassword
+                        ? UiStatusKind.Success
+                        : UiStatusKind.Warning);
                 return;
             }
 
@@ -2620,14 +2723,21 @@ public sealed partial class MainForm : DpiAwareForm
                 }
             }
 
-            _credentialVaultStatus.Text =
+            UiStyle.SetStatus(
+                _credentialVaultStatus,
                 metadata.Exists
                     ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}.{suffix}"
-                    : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.";
+                    : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.",
+                metadata.Exists
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
         }
         catch (Exception ex)
         {
-            _credentialVaultStatus.Text = "Credential status error: " + ex.Message;
+            UiStyle.SetStatus(
+                _credentialVaultStatus,
+                "Credential status error: " + ex.Message,
+                UiStatusKind.Error);
         }
     }
 
@@ -3682,8 +3792,10 @@ public sealed partial class MainForm : DpiAwareForm
         {
             if (!File.Exists(AppPaths.MachineCloudConfigFile))
             {
-                _machineCloudStatus.Text =
-                    "Machine cloud config: not configured. Scheduled Coverage requires certificate mode.";
+                UiStyle.SetStatus(
+                    _machineCloudStatus,
+                    "Machine cloud config: not configured. Scheduled Coverage requires certificate mode.",
+                    UiStatusKind.Warning);
                 return;
             }
 
@@ -3704,15 +3816,19 @@ public sealed partial class MainForm : DpiAwareForm
                     $"; KeyAccess={access.Status}; Account={access.Account}; Provider={access.Provider}";
             }
 
-            _machineCloudStatus.Text =
+            UiStyle.SetStatus(
+                _machineCloudStatus,
                 $"Machine cloud: Tenant={cloud.TenantId}; Client={cloud.ClientId}; " +
                 $"Certificate={cloud.CertificateThumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}" +
-                suffix;
+                suffix,
+                UiStatusKind.Success);
         }
         catch (Exception ex)
         {
-            _machineCloudStatus.Text =
-                "Machine cloud config error: " + ex.Message;
+            UiStyle.SetStatus(
+                _machineCloudStatus,
+                "Machine cloud config error: " + ex.Message,
+                UiStatusKind.Error);
         }
     }
 
@@ -3946,13 +4062,21 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             var info = WindowsServiceHost.GetInfo();
-            _serviceIdentityStatus.Text = info.Installed
-                ? $"Installed service identity: {(string.IsNullOrWhiteSpace(info.Identity) ? "Unknown" : info.Identity)}"
-                : "Windows Service is not installed.";
+            UiStyle.SetStatus(
+                _serviceIdentityStatus,
+                info.Installed
+                    ? $"Installed service identity: {(string.IsNullOrWhiteSpace(info.Identity) ? "Unknown" : info.Identity)}"
+                    : "Windows Service is not installed.",
+                info.Installed
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
         }
         catch (Exception ex)
         {
-            _serviceIdentityStatus.Text = "Service identity status error: " + ex.Message;
+            UiStyle.SetStatus(
+                _serviceIdentityStatus,
+                "Service identity status error: " + ex.Message,
+                UiStatusKind.Error);
         }
     }
 
@@ -4146,8 +4270,14 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             var health = new HealthService(_config).GetSnapshot();
-            _dashboardStatus.Text =
-                $"Overall: {health.OverallStatus}    Service: {health.ServiceState}    Last rows: {health.LastRunRows}    DC: {(string.IsNullOrWhiteSpace(health.LastRunDc) ? "-" : health.LastRunDc)}";
+            UiStyle.SetStatus(
+                _dashboardStatus,
+                $"Overall: {health.OverallStatus}    Service: {health.ServiceState}    Last rows: {health.LastRunRows}    DC: {(string.IsNullOrWhiteSpace(health.LastRunDc) ? "-" : health.LastRunDc)}",
+                health.Errors.Count > 0
+                    ? UiStatusKind.Error
+                    : health.Warnings.Count > 0
+                        ? UiStatusKind.Warning
+                        : UiStatusKind.Success);
 
             _dashboardDetails.Clear();
             _dashboardDetails.AppendText($"Version:                  {health.Version}{Environment.NewLine}");
@@ -4208,7 +4338,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            _dashboardStatus.Text = "Dashboard error: " + ex.Message;
+            UiStyle.SetStatus(
+                _dashboardStatus,
+                "Dashboard error: " + ex.Message,
+                UiStatusKind.Error);
         }
     }
 
@@ -4569,7 +4702,8 @@ public sealed partial class MainForm : DpiAwareForm
             var transitions =
                 service.VerifyTransitionHistory();
 
-            _auditSigningStatus.Text =
+            UiStyle.SetStatus(
+                _auditSigningStatus,
                 $"Signed audit: {result.Status}; Enabled={_config.AuditSigningEnabled}; " +
                 $"SignatureValid={result.SignatureValid}; CurrentHeadSigned={result.CurrentHeadSigned}; " +
                 $"Transitions={transitions.Status}/{transitions.ValidTransitions}" +
@@ -4581,12 +4715,20 @@ public sealed partial class MainForm : DpiAwareForm
                     : $"; Checkpoint={result.Checkpoint.CreatedAtUtc:u}; Entries={result.Checkpoint.TotalEntries}") +
                 (string.IsNullOrWhiteSpace(transitions.FirstError)
                     ? string.Empty
-                    : $"; TransitionError={transitions.FirstError}");
+                    : $"; TransitionError={transitions.FirstError}"),
+                !_config.AuditSigningEnabled
+                    ? UiStatusKind.Neutral
+                    : !result.SignatureValid ||
+                      !string.IsNullOrWhiteSpace(transitions.FirstError)
+                        ? UiStatusKind.Error
+                        : UiStatusKind.Success);
         }
         catch (Exception ex)
         {
-            _auditSigningStatus.Text =
-                "Signed audit status error: " + ex.Message;
+            UiStyle.SetStatus(
+                _auditSigningStatus,
+                "Signed audit status error: " + ex.Message,
+                UiStatusKind.Error);
         }
     }
 
