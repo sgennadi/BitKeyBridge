@@ -392,6 +392,24 @@ public static class UiLayoutSelfTest
 
                 page.CreateControl();
 
+                if (checkRecoveryConnection &&
+                    string.Equals(
+                        page.Text,
+                        "Recovery",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    var advanced =
+                        FindByName(
+                            page,
+                            "AdvancedConnectionGroup");
+
+                    if (advanced is not null)
+                    {
+                        advanced.Visible =
+                            true;
+                    }
+                }
+
                 // Tab selection and Dock=Fill layout are message-loop driven in
                 // WinForms. A headless WinExe can retain the framework's default
                 // 200x100 child size, so normalize Dock=Fill geometry before and
@@ -453,6 +471,9 @@ public static class UiLayoutSelfTest
         foreach (Control control in
                  root.Controls)
         {
+            if (!control.Visible)
+                continue;
+
             if (control is FlowLayoutPanel flow &&
                 flow.FlowDirection is
                     FlowDirection.LeftToRight or
