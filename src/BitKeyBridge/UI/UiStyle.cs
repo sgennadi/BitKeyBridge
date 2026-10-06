@@ -291,20 +291,47 @@ public static class UiStyle
         Refresh();
     }
 
+    public static Button CreateActionButton(
+        string text,
+        DialogResult dialogResult =
+            DialogResult.None)
+    {
+        var button =
+            new Button
+            {
+                Text =
+                    text,
+                DialogResult =
+                    dialogResult
+            };
+
+        ConfigureActionButton(
+            button);
+
+        return button;
+    }
+
     public static void ConfigureActionButton(
         Button button)
     {
-        button.AutoSize = true;
+        button.AutoSize =
+            true;
         button.MinimumSize =
             new Size(
-                MinimumButtonWidth,
-                MinimumButtonHeight);
+                Math.Max(
+                    button.MinimumSize.Width,
+                    MinimumButtonWidth),
+                Math.Max(
+                    button.MinimumSize.Height,
+                    MinimumButtonHeight));
         button.Padding =
             new Padding(
                 8,
                 2,
                 8,
                 2);
+        button.UseVisualStyleBackColor =
+            true;
     }
 
     public static void ConfigureWrappingLabel(
