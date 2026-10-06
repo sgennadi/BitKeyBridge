@@ -2351,8 +2351,10 @@ public sealed partial class MainForm : DpiAwareForm
                 : "Ready to auto-discover a writable domain controller.",
             UiStatusKind.Neutral);
 
-        _startPurposeStatus.Text =
-            "Search loads metadata only. Recovery passwords are read on demand.";
+        UiStyle.SetStatus(
+            _startPurposeStatus,
+            "Search loads metadata only. Recovery passwords are read on demand.",
+            UiStatusKind.Neutral);
 
         UpdateRecoverySourceUi();
     }
@@ -2805,17 +2807,23 @@ public sealed partial class MainForm : DpiAwareForm
 
             if (_startScope is not null)
             {
-                _startOuStatus.Text =
-                    $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
+                UiStyle.SetStatus(
+                    _startOuStatus,
+                    $"Selected: {_startScope.Name}    {_startScope.SearchBase}",
+                    UiStatusKind.Success);
                 _startSearch.Enabled =
                     true;
-                _startPurposeStatus.Text =
-                    "Connected. Enter a computer name or Recovery ID.";
+                UiStyle.SetStatus(
+                    _startPurposeStatus,
+                    "Connected. Enter a computer name or Recovery ID.",
+                    UiStatusKind.Success);
             }
             else if (promptForOu)
             {
-                _startPurposeStatus.Text =
-                    "Connected. Select the OU that contains the target computer.";
+                UiStyle.SetStatus(
+                    _startPurposeStatus,
+                    "Connected. Select the OU that contains the target computer.",
+                    UiStatusKind.Warning);
                 await SelectStartOuAsync();
             }
             else
@@ -2823,13 +2831,17 @@ public sealed partial class MainForm : DpiAwareForm
                 if (TryUseDefaultRecoveryScope(
                         "Connected with no OU selected; using the entire domain."))
                 {
-                    _startPurposeStatus.Text =
-                        "Connected. Enter a computer name or Recovery ID.";
+                    UiStyle.SetStatus(
+                        _startPurposeStatus,
+                        "Connected. Enter a computer name or Recovery ID.",
+                        UiStatusKind.Success);
                 }
                 else
                 {
-                    _startPurposeStatus.Text =
-                        "Connected. Select an OU before searching.";
+                    UiStyle.SetStatus(
+                        _startPurposeStatus,
+                        "Connected. Select an OU before searching.",
+                        UiStatusKind.Warning);
                 }
             }
         }
@@ -2851,8 +2863,10 @@ public sealed partial class MainForm : DpiAwareForm
                 ex.Message,
                 UiStatusKind.Error);
 
-            _startPurposeStatus.Text =
-                "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.";
+            UiStyle.SetStatus(
+                _startPurposeStatus,
+                "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.",
+                UiStatusKind.Error);
 
             if (promptForOu)
             {
@@ -2895,8 +2909,10 @@ public sealed partial class MainForm : DpiAwareForm
             SetDirectoryConnectionStatus(
                 "Connection canceled. Session credentials were not provided.",
                 UiStatusKind.Warning);
-            _startPurposeStatus.Text =
-                "Live AD is waiting for session credentials.";
+            UiStyle.SetStatus(
+                _startPurposeStatus,
+                "Live AD is waiting for session credentials.",
+                UiStatusKind.Warning);
             return false;
         }
 
@@ -3047,9 +3063,11 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
-            _startOuStatus.Text =
+            UiStyle.SetStatus(
+                _startOuStatus,
                 "OU discovery failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
 
             MessageBox.Show(
                 this,
@@ -3077,25 +3095,32 @@ public sealed partial class MainForm : DpiAwareForm
             new BitLockerScope(
                 "Entire domain",
                 _startDomainDn),
-            status);
+            status,
+            UiStatusKind.Warning);
 
         return true;
     }
 
     private void SetRecoveryScope(
         BitLockerScope selected,
-        string status)
+        string status,
+        UiStatusKind statusKind =
+            UiStatusKind.Success)
     {
         _startScope =
             selected;
 
-        _startOuStatus.Text =
-            $"Selected: {selected.Name}    {selected.SearchBase}";
+        UiStyle.SetStatus(
+            _startOuStatus,
+            $"Selected: {selected.Name}    {selected.SearchBase}",
+            UiStatusKind.Success);
 
         _startSearch.Enabled =
             true;
-        _startPurposeStatus.Text =
-            status;
+        UiStyle.SetStatus(
+            _startPurposeStatus,
+            status,
+            statusKind);
 
         TrySaveRecoveryUiState();
         _startQuery.Focus();
@@ -3193,8 +3218,10 @@ public sealed partial class MainForm : DpiAwareForm
             !File.Exists(
                 _config.OutputCsv))
         {
-            _startPurposeStatus.Text =
-                "Local recovery cache is unavailable. Run an export first or switch to Live AD.";
+            UiStyle.SetStatus(
+                _startPurposeStatus,
+                "Local recovery cache is unavailable. Run an export first or switch to Live AD.",
+                UiStatusKind.Warning);
 
             MessageBox.Show(
                 this,
@@ -3248,10 +3275,12 @@ public sealed partial class MainForm : DpiAwareForm
                 "Reveal Recovery Key";
             ClearRecoveryCard();
 
-            _startPurposeStatus.Text =
+            UiStyle.SetStatus(
+                _startPurposeStatus,
                 localCache
                     ? "Searching local recovery metadata..."
-                    : "Searching Active Directory recovery metadata...";
+                    : "Searching Active Directory recovery metadata...",
+                UiStatusKind.Busy);
 
             UseWaitCursor = true;
 
@@ -3332,7 +3361,8 @@ public sealed partial class MainForm : DpiAwareForm
                     ? "local cache"
                     : _startScope!.Name;
 
-            _startPurposeStatus.Text =
+            UiStyle.SetStatus(
+                _startPurposeStatus,
                 rows.Count switch
                 {
                     0 =>
@@ -3341,13 +3371,18 @@ public sealed partial class MainForm : DpiAwareForm
                         "One recovery record found. Review the card below and reveal/copy only when needed.",
                     _ =>
                         $"Found {rows.Count} recovery records in {scopeLabel}. Select a row."
-                };
+                },
+                rows.Count == 0
+                    ? UiStatusKind.Warning
+                    : UiStatusKind.Success);
         }
         catch (Exception ex)
         {
-            _startPurposeStatus.Text =
+            UiStyle.SetStatus(
+                _startPurposeStatus,
                 "BitLocker search failed: " +
-                ex.Message;
+                ex.Message,
+                UiStatusKind.Error);
 
             MessageBox.Show(
                 this,
