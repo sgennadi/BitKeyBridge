@@ -37,7 +37,7 @@ public static class UiStyle
         new();
 
     public static Font BodyFont =>
-        SystemFonts.MessageBoxFont;
+        SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont;
 
     public static Font CreateBodyFont(
         float size) =>

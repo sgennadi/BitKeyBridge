@@ -48,6 +48,7 @@ public sealed partial class MainForm
         _mainTabs.Dock = DockStyle.Fill;
         _mainTabs.TabPages.Add(BuildRecoveryWorkspaceTab());
         _mainTabs.TabPages.Add(BuildDevicesWorkspaceTab());
+        _mainTabs.TabPages.Add(BuildLapsWorkspaceTab());
 
         if (AdministrationAllowed)
         {
@@ -420,7 +421,8 @@ public sealed partial class MainForm
             async (_, _) =>
                 await TestDirectoryConnectionAsync(
                     promptForOu: true,
-                    promptForSessionCredentials: true);
+                    promptForSessionCredentials: true,
+                    forceManualCredentials: true);
 
         _startSelectOu.Click +=
             async (_, _) =>
@@ -1103,6 +1105,10 @@ public sealed partial class MainForm
         ]);
         AddCloudAdminRow(root, 6, "Authentication:", _cloudAuthMode);
 
+        _cloudLapsPermissions.Text = "Include LAPS read permissions in setup";
+        _cloudLapsPermissions.AutoSize = true;
+        root.Controls.Add(_cloudLapsPermissions, 1, 7);
+
         var buttons = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -1132,7 +1138,7 @@ public sealed partial class MainForm
             rollover
         ]);
 
-        root.Controls.Add(buttons, 1, 7);
+        root.Controls.Add(buttons, 1, 8);
 
         UiStyle.ConfigureStatusLabel(
             _cloudStatus);
@@ -1140,7 +1146,7 @@ public sealed partial class MainForm
             "Microsoft Graph status";
         _cloudStatus.MaximumSize =
             new Size(900, 0);
-        root.Controls.Add(_cloudStatus, 1, 8);
+        root.Controls.Add(_cloudStatus, 1, 9);
 
         save.Click += (_, _) => SaveCloudFields();
         connect.Click += async (_, _) => await ConnectCloudAsync();

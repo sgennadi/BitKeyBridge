@@ -28,9 +28,12 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _cloudThumbprint = new();
     private readonly ComboBox _cloudAuthMode = new();
     private readonly UiStatusLabel _cloudStatus = new();
+    private readonly CheckBox _cloudLapsPermissions = new();
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
     private string _cloudTokenContext = string.Empty;
+    private bool _cloudTokenHasLaps;
+    private bool _cloudTokenHasRecovery;
     private readonly ListView _coverageResults = new();
     private readonly Label _coverageSummary = new();
     private readonly UiStatusLabel _coverageStatus = new();
@@ -318,7 +321,7 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task RunDcTestAsync()
     {
-        if (!EnsureSessionAdCredentialForConnection())
+        if (!EnsureSessionAdCredentialForConnection(forcePrompt: true))
             return;
 
         SaveDirectorySettings(
@@ -386,6 +389,7 @@ public sealed partial class MainForm : DpiAwareForm
         }
 
         _cloudConfig = ConfigService.LoadCloudConfig();
+        _cloudLapsPermissions.Checked = _cloudConfig.EnableLapsPermissions;
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
         _cloudUsername.Text = _cloudConfig.Username;
@@ -410,6 +414,7 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudConfig.TenantId = _cloudTenant.Text.Trim();
         _cloudConfig.ClientId = _cloudClient.Text.Trim();
         _cloudConfig.Username = _cloudUsername.Text.Trim();
+        _cloudConfig.EnableLapsPermissions = _cloudLapsPermissions.Checked;
         _cloudConfig.CertificateThumbprint = _cloudThumbprint.Text.Trim();
         _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex switch
         {
@@ -437,7 +442,7 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudPassword.Clear();
     }
 
-    private async Task<bool> ConnectCloudAsync()
+    private async Task<bool> ConnectCloudAsync(bool forLaps = false)
     {
         var passwordMode =
             _cloudAuthMode.SelectedIndex == 1;
@@ -468,25 +473,28 @@ public sealed partial class MainForm : DpiAwareForm
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
                                 _cloudUsername.Text,
-                                _cloudPassword.Text),
+                                _cloudPassword.Text, lapsOnly: forLaps),
                     _ =>
                         await graph
                             .AcquireDeviceCodeTokenAsync(
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
-                                ShowDeviceCodeAsync)
+                                ShowDeviceCodeAsync, lapsOnly: forLaps)
                 };
 
-            var count =
-                await graph.TestAccessAsync(
-                    _cloudToken.AccessToken);
+            var count = forLaps ? 0 :
+                await graph.TestAccessAsync(_cloudToken.AccessToken);
+
+            _cloudTokenHasLaps = forLaps;
+            _cloudTokenHasRecovery = !forLaps;
 
             _cloudTokenContext =
                 BuildCloudTokenContext();
 
             UiStyle.SetStatus(
                 _cloudStatus,
-                $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).",
+                forLaps ? $"Authenticated using {_cloudToken.AuthMode}. Ready to read Entra LAPS." :
+                    $"Connected using {_cloudToken.AuthMode}. First Graph page returned {count} recovery metadata item(s).",
                 UiStatusKind.Success);
 
             return true;
@@ -517,12 +525,13 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private async Task<bool> EnsureCloudTokenAsync()
+    private async Task<bool> EnsureCloudTokenAsync(bool forLaps = false)
     {
         var currentContext =
             BuildCloudTokenContext();
 
         if (_cloudToken is not null &&
+            (forLaps ? _cloudTokenHasLaps : _cloudTokenHasRecovery) &&
             _cloudToken.ExpiresAt >
                 DateTime.Now.AddMinutes(1) &&
             string.Equals(
@@ -537,7 +546,7 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudTokenContext =
             string.Empty;
 
-        return await ConnectCloudAsync();
+        return await ConnectCloudAsync(forLaps);
     }
 
     private string BuildCloudTokenContext()
@@ -628,7 +637,7 @@ public sealed partial class MainForm : DpiAwareForm
                 "BitKeyBridge",
                 _cloudConfig,
                 ShowDeviceCodeAsync,
-                progress);
+                progress, includeLapsPermissions: _cloudLapsPermissions.Checked);
             LoadCloudFields();
             _cloudAuthMode.SelectedIndex = 0;
             SaveCloudFields();
@@ -2739,10 +2748,11 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task TestDirectoryConnectionAsync(
         bool promptForOu = true,
-        bool promptForSessionCredentials = true)
+        bool promptForSessionCredentials = true,
+        bool forceManualCredentials = false)
     {
-        if (promptForSessionCredentials &&
-            !EnsureSessionAdCredentialForConnection())
+        if ((promptForSessionCredentials || forceManualCredentials) &&
+            !EnsureSessionAdCredentialForConnection(forcePrompt: forceManualCredentials))
         {
             return;
         }
@@ -2885,23 +2895,24 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private bool EnsureSessionAdCredentialForConnection()
+    private bool EnsureSessionAdCredentialForConnection(bool forcePrompt = false)
     {
-        if (!_adExplicitCredentials.Checked ||
+        if (!forcePrompt && (!_adExplicitCredentials.Checked ||
             !GetSelectedCredentialStorageMode()
                 .Equals(
                     "Session",
                     StringComparison.OrdinalIgnoreCase) ||
             AdSessionCredentials.HasPassword ||
             !string.IsNullOrEmpty(
-                _adPassword.Text))
+                _adPassword.Text)))
         {
             return true;
         }
 
         using var prompt =
             new AdCredentialPromptDialog(
-                _adUsername.Text.Trim());
+                _adUsername.Text.Trim(), _adDomain.Text.Trim(),
+                _adMode.SelectedIndex == 1 ? _adServer.Text.Trim() : string.Empty);
 
         if (prompt.ShowDialog(this) !=
             DialogResult.OK)
@@ -2923,13 +2934,25 @@ public sealed partial class MainForm : DpiAwareForm
 
         try
         {
+            ClearLapsResult();
+            ClearTrackedRecoveryClipboard();
+            ResetRecoverySearchState();
+            _deviceCurrentKey = null;
+            _deviceRecoveryKey.Clear();
+            _startResults.Items.Clear();
+            _recoveryAccessContexts.Clear();
+            _adDomain.Text = prompt.DomainName;
+            _adServer.Text = prompt.Server;
+            _adMode.SelectedIndex = string.IsNullOrWhiteSpace(prompt.Server) ? 0 : 1;
+            _adExplicitCredentials.Checked = !prompt.UseWindowsIdentity;
+            _adCredentialStorage.SelectedIndex = 0;
             _adUsername.Text =
                 username;
             _config.AdUsername =
                 username;
 
-            AdSessionCredentials.SetPassword(
-                password);
+            if (prompt.UseWindowsIdentity) AdSessionCredentials.Clear();
+            else AdSessionCredentials.SetPassword(password);
 
             _adPassword.Clear();
 
@@ -2937,12 +2960,13 @@ public sealed partial class MainForm : DpiAwareForm
                 "LoadAdSessionCredential",
                 source: "Session",
                 details:
-                    $"Storage=Session; User={username}; Trigger=Connect");
+                    $"Storage=Session; User={username}; WindowsIdentity={prompt.UseWindowsIdentity}; Trigger=Connect");
 
             RefreshCredentialVaultStatus();
 
             SetDirectoryConnectionStatus(
-                $"Session credential loaded for {username}. Connecting...",
+                prompt.UseWindowsIdentity ? "Connecting with the current Windows account..." :
+                    $"Session credential loaded for {username}. Connecting...",
                 UiStatusKind.Busy);
 
             return true;
@@ -4689,6 +4713,7 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void ClearSensitiveState()
     {
+        ClearLapsResult();
         ClearTrackedRecoveryClipboard();
 
         try
