@@ -171,26 +171,14 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
             };
 
         var cancel =
-            new Button
-            {
-                Text = "Cancel",
-                DialogResult =
-                    DialogResult.Cancel
-            };
-
-        UiStyle.ConfigureActionButton(
-            cancel);
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
 
         var connect =
-            new Button
-            {
-                Text = "Connect",
-                DialogResult =
-                    DialogResult.OK
-            };
-
-        UiStyle.ConfigureActionButton(
-            connect);
+            UiStyle.CreateActionButton(
+                "Connect",
+                DialogResult.OK);
 
         buttons.Controls.Add(
             cancel);
