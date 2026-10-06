@@ -395,6 +395,16 @@ public static class UiStyle
                             .Width,
                         view.DeviceDpi);
             };
+
+        view.FontChanged +=
+            (_, _) =>
+                RefreshListViewColumns(
+                    view);
+
+        view.HandleCreated +=
+            (_, _) =>
+                RefreshListViewColumns(
+                    view);
     }
 
     public static void RefreshListViewColumns(
@@ -453,7 +463,9 @@ public static class UiStyle
             TextRenderer.MeasureText(
                 headerText ?? string.Empty,
                 view.Font,
-                Size.Empty,
+                new Size(
+                    4096,
+                    1024),
                 TextFormatFlags.SingleLine |
                 TextFormatFlags.NoPrefix |
                 TextFormatFlags.NoPadding);
