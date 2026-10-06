@@ -103,6 +103,20 @@ public static class UiStyle
             label);
     }
 
+    public static void SetStatus(
+        UiStatusLabel label,
+        string text,
+        UiStatusKind kind)
+    {
+        label.StatusKind =
+            kind;
+        label.Text =
+            text;
+
+        RefreshStatusLabel(
+            label);
+    }
+
     public static void ApplyStatusLabel(
         UiStatusLabel label,
         UiStatusKind kind)
