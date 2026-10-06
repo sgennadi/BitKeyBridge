@@ -137,6 +137,23 @@ jobs:
             throw "Direct Button construction is not allowed outside UiStyle. Use UiStyle.CreateActionButton or a shared configured field."
           }
 
+          $directListViewColumnFiles = $uiFiles |
+            Where-Object { $_.Name -ne 'UiStyle.cs' }
+
+          $directListViewColumnFailures = @()
+          foreach ($file in $directListViewColumnFiles) {
+            $raw = Get-Content $file.FullName -Raw
+            if ($raw -match '\.Columns\.Add\s*\(' -or
+                $raw -match '\bnew\s+ColumnHeader\b') {
+              $directListViewColumnFailures += $file.FullName
+            }
+          }
+
+          if ($directListViewColumnFailures) {
+            $directListViewColumnFailures | ForEach-Object { Write-Host $_ }
+            throw "Direct ListView column construction is not allowed outside UiStyle. Use UiStyle.ConfigureListViewColumns."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
