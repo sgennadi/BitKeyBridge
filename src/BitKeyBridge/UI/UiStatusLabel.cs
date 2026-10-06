@@ -2,6 +2,9 @@ namespace BitKeyBridge;
 
 public sealed class UiStatusLabel : Label
 {
+    internal UiStatusKind StatusKind { get; set; } =
+        UiStatusKind.Neutral;
+
     public override Size GetPreferredSize(
         Size proposedSize)
     {
@@ -182,7 +185,18 @@ public sealed class UiStatusLabel : Label
         base.OnTextChanged(
             e);
 
-        Invalidate();
+        UiStyle.RefreshStatusLabel(
+            this);
+    }
+
+    protected override void OnSystemColorsChanged(
+        EventArgs e)
+    {
+        base.OnSystemColorsChanged(
+            e);
+
+        UiStyle.RefreshStatusLabel(
+            this);
     }
 
     protected override void OnFontChanged(
@@ -230,7 +244,9 @@ public sealed class UiStatusLabel : Label
                 ControlPaint.DrawBorder(
                     graphics,
                     ClientRectangle,
-                    SystemColors.ControlDark,
+                    SystemInformation.HighContrast
+                        ? SystemColors.WindowText
+                        : SystemColors.ControlDark,
                     ButtonBorderStyle.Solid);
                 break;
 
