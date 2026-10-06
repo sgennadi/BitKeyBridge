@@ -2,7 +2,7 @@ namespace BitKeyBridge;
 
 public sealed class UiStatusLabel : Label
 {
-    internal UiStatusKind StatusKind { get; set; } =
+    internal UiStatusKind StatusKind =
         UiStatusKind.Neutral;
 
     public override Size GetPreferredSize(
