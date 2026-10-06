@@ -1233,8 +1233,10 @@ public sealed partial class MainForm
                         : _config.LastRecoveryScopeName,
                     _config.LastRecoveryScopeSearchBase);
 
-            _startOuStatus.Text =
-                $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
+            UiStyle.SetStatus(
+                _startOuStatus,
+                $"Selected: {_startScope.Name}    {_startScope.SearchBase}",
+                UiStatusKind.Success);
         }
 
         UpdateRecoverySourceUi();
@@ -1270,13 +1272,17 @@ public sealed partial class MainForm
                     ? UiStatusKind.Neutral
                     : UiStatusKind.Warning);
 
-            _startOuStatus.Text =
-                "OU selection is not used for Local cache search.";
+            UiStyle.SetStatus(
+                _startOuStatus,
+                "OU selection is not used for Local cache search.",
+                UiStatusKind.Neutral);
         }
         else if (_startScope is not null)
         {
-            _startOuStatus.Text =
-                $"Selected: {_startScope.Name}    {_startScope.SearchBase}";
+            UiStyle.SetStatus(
+                _startOuStatus,
+                $"Selected: {_startScope.Name}    {_startScope.SearchBase}",
+                UiStatusKind.Success);
         }
     }
 
