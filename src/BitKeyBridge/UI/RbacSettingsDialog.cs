@@ -7,7 +7,7 @@ public sealed class RbacSettingsDialog : DpiAwareForm
     private readonly TextBox _readers = new();
     private readonly TextBox _rotators = new();
     private readonly TextBox _administrators = new();
-    private readonly Label _status = new();
+    private readonly UiStatusLabel _status = new();
 
     public bool RbacEnabled => _enabled.Checked;
     public bool AllowLocalAdministrators => _adminBypass.Checked;
@@ -105,11 +105,23 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             0,
             5);
 
-        _status.Text =
-            "Current identity: " + AuthorizationService.CurrentIdentityName();
-        _status.AutoSize = true;
-        _status.MaximumSize = new Size(750, 0);
-        _status.Margin = new Padding(0, 8, 0, 8);
+        UiStyle.ConfigureStatusLabel(
+            _status);
+        _status.AccessibleName =
+            "RBAC validation status";
+        _status.MaximumSize =
+            new Size(750, 0);
+        _status.Margin =
+            new Padding(
+                0,
+                8,
+                0,
+                8);
+        UiStyle.SetStatus(
+            _status,
+            "Current identity: " +
+            AuthorizationService.CurrentIdentityName(),
+            UiStatusKind.Neutral);
         root.Controls.Add(_status, 0, 6);
 
         var buttons = new FlowLayoutPanel
@@ -119,28 +131,25 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             WrapContents = true
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            AutoSize = true,
-            MinimumSize = new Size(105, 34)
-        };
-        var save = new Button
-        {
-            Text = "Save",
-            AutoSize = true,
-            MinimumSize = new Size(105, 34)
-        };
-        var validate = new Button
-        {
-            Text = "Validate",
-            AutoSize = true,
-            MinimumSize = new Size(110, 34)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var save =
+            UiStyle.CreateActionButton(
+                "Save");
+        var validate =
+            UiStyle.CreateActionButton(
+                "Validate");
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(save);
         buttons.Controls.Add(validate);
         root.Controls.Add(buttons, 0, 7);
+
+        AcceptButton =
+            save;
+        CancelButton =
+            cancel;
 
         validate.Click += (_, _) => ValidateSettings(showSuccess: true);
         save.Click += (_, _) =>
@@ -218,8 +227,10 @@ public sealed class RbacSettingsDialog : DpiAwareForm
             config.RbacRotationOperators.Count == 0 &&
             config.RbacAdministrators.Count == 0)
         {
-            _status.Text =
-                "Invalid: RBAC would deny all privileged actions.";
+            UiStyle.SetStatus(
+                _status,
+                "Invalid: RBAC would deny all privileged actions.",
+                UiStatusKind.Error);
             MessageBox.Show(
                 this,
                 _status.Text,
@@ -234,8 +245,10 @@ public sealed class RbacSettingsDialog : DpiAwareForm
 
         if (errors.Count > 0)
         {
-            _status.Text =
-                $"Validation failed: {errors.Count} unresolved principal(s).";
+            UiStyle.SetStatus(
+                _status,
+                $"Validation failed: {errors.Count} unresolved principal(s).",
+                UiStatusKind.Error);
             MessageBox.Show(
                 this,
                 string.Join(Environment.NewLine, errors),
@@ -250,11 +263,13 @@ public sealed class RbacSettingsDialog : DpiAwareForm
         var rotate = auth.Check(BitKeyBridgePermission.Rotate);
         var admin = auth.Check(BitKeyBridgePermission.Administrator);
 
-        _status.Text =
+        UiStyle.SetStatus(
+            _status,
             $"Current identity: {AuthorizationService.CurrentIdentityName()} | " +
             $"RecoveryRead={(read.Allowed ? "Allowed" : "Denied")} | " +
             $"Rotate={(rotate.Allowed ? "Allowed" : "Denied")} | " +
-            $"AdminUI={(admin.Allowed ? "Allowed" : "Denied")}";
+            $"AdminUI={(admin.Allowed ? "Allowed" : "Denied")}",
+            UiStatusKind.Success);
 
         if (showSuccess)
         {
