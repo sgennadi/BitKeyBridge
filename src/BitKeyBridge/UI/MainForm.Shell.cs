@@ -268,6 +268,10 @@ public sealed partial class MainForm
             2,
             0);
 
+        UiStyle.BindBalancedWidths(
+            _recoverySource,
+            _connectAdButton);
+
         _advancedConnectionButton.Name =
             "AdvancedConnectionButton";
         _advancedConnectionButton.AccessibleName =
@@ -581,6 +585,8 @@ public sealed partial class MainForm
 
     private void ConfigureAdvancedConnectionGroup()
     {
+        _advancedConnectionGroup.Name =
+            "AdvancedConnectionGroup";
         _advancedConnectionGroup.Text = "Advanced connection settings";
         _advancedConnectionGroup.Dock = DockStyle.Top;
         _advancedConnectionGroup.AutoSize = true;
