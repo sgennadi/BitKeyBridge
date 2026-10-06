@@ -5211,9 +5211,13 @@ public sealed partial class MainForm : DpiAwareForm
         _clipboardClearTimer.Start();
     }
 
-    private static void AddColumns(ListView view, params (string Name, int Width)[] columns)
+    private static void AddColumns(
+        ListView view,
+        params (string Name, int Width)[] columns)
     {
-        foreach (var (name, width) in columns) view.Columns.Add(name, width);
+        UiStyle.ConfigureListViewColumns(
+            view,
+            columns);
     }
 
     private void OpenPath(string path, string? executable = null)
