@@ -103,6 +103,26 @@ public static class UiStyle
             label);
     }
 
+    public static void ConfigureInlineStatusLabel(
+        UiStatusLabel label)
+    {
+        label.AutoSize =
+            true;
+        label.BorderStyle =
+            BorderStyle.None;
+        label.Padding =
+            Padding.Empty;
+        label.TextAlign =
+            ContentAlignment.MiddleLeft;
+        label.AccessibleRole =
+            AccessibleRole.StaticText;
+        label.TabStop =
+            false;
+
+        RefreshStatusLabel(
+            label);
+    }
+
     public static void SetStatus(
         UiStatusLabel label,
         string text,
