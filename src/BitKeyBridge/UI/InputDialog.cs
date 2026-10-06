@@ -51,20 +51,14 @@ public sealed class InputDialog : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 8, 0, 0)
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            MinimumSize = new Size(85, 32)
-        };
-        var ok = new Button
-        {
-            Text = "OK",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            MinimumSize = new Size(85, 32)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var ok =
+            UiStyle.CreateActionButton(
+                "OK",
+                DialogResult.OK);
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(ok);
         root.Controls.Add(buttons, 0, 2);
