@@ -10,14 +10,14 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
     private readonly TextBox _jitSubject = new();
     private readonly TextBox _jitReason = new();
     private readonly TextBox _jitGrantId = new();
-    private readonly Label _jitStatus = new();
+    private readonly UiStatusLabel _jitStatus = new();
 
     private readonly CheckBox _approvalEnabled = new();
     private readonly NumericUpDown _approvalMinutes = new();
     private readonly TextBox _approvers = new();
     private readonly TextBox _approvalSession = new();
     private readonly TextBox _approvalComment = new();
-    private readonly Label _approvalStatus = new();
+    private readonly UiStatusLabel _approvalStatus = new();
 
     private readonly CheckBox _siemEnabled = new();
     private readonly ComboBox _siemMode = new();
@@ -28,7 +28,7 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
     private readonly NumericUpDown _siemFlushMinutes = new();
     private readonly NumericUpDown _siemMaxOutbox = new();
     private readonly CheckBox _siemFailClosed = new();
-    private readonly Label _siemStatus = new();
+    private readonly UiStatusLabel _siemStatus = new();
 
     public PrivilegedAccessSettingsDialog(
         AppConfig config)
@@ -86,13 +86,11 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        var refresh = new Button
-        {
-            Text = "Refresh Status",
-            AutoSize = true,
-            MinimumSize = new Size(125, 34),
-            Anchor = AnchorStyles.Left
-        };
+        var refresh =
+            UiStyle.CreateActionButton(
+                "Refresh Status");
+        refresh.Anchor =
+            AnchorStyles.Left;
         footer.Controls.Add(refresh, 0, 0);
 
         var buttons = new FlowLayoutPanel
@@ -102,19 +100,13 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             Dock = DockStyle.Fill
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            MinimumSize = new Size(90, 34)
-        };
-        var save = new Button
-        {
-            Text = "Save & Apply",
-            AutoSize = true,
-            MinimumSize = new Size(110, 34)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var save =
+            UiStyle.CreateActionButton(
+                "Save & Apply");
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(save);
         footer.Controls.Add(buttons, 1, 0);
@@ -172,26 +164,31 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
             AutoSize = true,
             WrapContents = true
         };
-        var revoke = new Button
-        {
-            Text = "Revoke ID",
-            AutoSize = true,
-            MinimumSize = new Size(90, 30)
-        };
-        var grant = new Button
-        {
-            Text = "Grant",
-            AutoSize = true,
-            MinimumSize = new Size(90, 30)
-        };
+        var revoke =
+            UiStyle.CreateActionButton(
+                "Revoke ID");
+        var grant =
+            UiStyle.CreateActionButton(
+                "Grant");
         actions.Controls.Add(revoke);
         actions.Controls.Add(grant);
         layout.Controls.Add(actions, 2, 3);
         layout.SetColumnSpan(actions, 2);
 
-        _jitStatus.AutoSize = true;
-        _jitStatus.MaximumSize = new Size(940, 0);
-        _jitStatus.Margin = new Padding(0, 6, 0, 0);
+        UiStyle.ConfigureStatusLabel(
+            _jitStatus);
+        _jitStatus.AccessibleName =
+            "JIT recovery status";
+        _jitStatus.MaximumSize =
+            new Size(
+                940,
+                0);
+        _jitStatus.Margin =
+            new Padding(
+                0,
+                6,
+                0,
+                0);
         layout.Controls.Add(_jitStatus, 0, 4);
         layout.SetColumnSpan(_jitStatus, 4);
 
@@ -238,26 +235,31 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
             AutoSize = true,
             WrapContents = true
         };
-        var approve = new Button
-        {
-            Text = "Approve",
-            AutoSize = true,
-            MinimumSize = new Size(90, 30)
-        };
-        var deny = new Button
-        {
-            Text = "Deny",
-            AutoSize = true,
-            MinimumSize = new Size(90, 30)
-        };
+        var approve =
+            UiStyle.CreateActionButton(
+                "Approve");
+        var deny =
+            UiStyle.CreateActionButton(
+                "Deny");
         actions.Controls.Add(approve);
         actions.Controls.Add(deny);
         layout.Controls.Add(actions, 2, 3);
         layout.SetColumnSpan(actions, 2);
 
-        _approvalStatus.AutoSize = true;
-        _approvalStatus.MaximumSize = new Size(940, 0);
-        _approvalStatus.Margin = new Padding(0, 6, 0, 0);
+        UiStyle.ConfigureStatusLabel(
+            _approvalStatus);
+        _approvalStatus.AccessibleName =
+            "Two-person approval status";
+        _approvalStatus.MaximumSize =
+            new Size(
+                940,
+                0);
+        _approvalStatus.Margin =
+            new Padding(
+                0,
+                6,
+                0,
+                0);
         layout.Controls.Add(_approvalStatus, 0, 4);
         layout.SetColumnSpan(_approvalStatus, 4);
 
@@ -325,26 +327,31 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
             AutoSize = true,
             WrapContents = true
         };
-        var check = new Button
-        {
-            Text = "Test Readiness",
-            AutoSize = true,
-            MinimumSize = new Size(115, 30)
-        };
-        var flush = new Button
-        {
-            Text = "Flush Now",
-            AutoSize = true,
-            MinimumSize = new Size(100, 30)
-        };
+        var check =
+            UiStyle.CreateActionButton(
+                "Test Readiness");
+        var flush =
+            UiStyle.CreateActionButton(
+                "Flush Now");
         actions.Controls.Add(check);
         actions.Controls.Add(flush);
         layout.Controls.Add(actions, 2, 3);
         layout.SetColumnSpan(actions, 2);
 
-        _siemStatus.AutoSize = true;
-        _siemStatus.MaximumSize = new Size(940, 0);
-        _siemStatus.Margin = new Padding(0, 6, 0, 0);
+        UiStyle.ConfigureStatusLabel(
+            _siemStatus);
+        _siemStatus.AccessibleName =
+            "SIEM forwarding status";
+        _siemStatus.MaximumSize =
+            new Size(
+                940,
+                0);
+        _siemStatus.Margin =
+            new Padding(
+                0,
+                6,
+                0,
+                0);
         layout.Controls.Add(_siemStatus, 0, 4);
         layout.SetColumnSpan(_siemStatus, 4);
 
@@ -512,6 +519,11 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
+            UiStyle.SetStatus(
+                _jitStatus,
+                "JIT grant failed: " +
+                ex.Message,
+                UiStatusKind.Error);
             ShowError(ex);
         }
     }
@@ -541,6 +553,11 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
+            UiStyle.SetStatus(
+                _jitStatus,
+                "JIT revoke failed: " +
+                ex.Message,
+                UiStatusKind.Error);
             ShowError(ex);
         }
     }
@@ -571,6 +588,11 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
+            UiStyle.SetStatus(
+                _approvalStatus,
+                "Approval action failed: " +
+                ex.Message,
+                UiStatusKind.Error);
             ShowError(ex);
         }
     }
@@ -583,15 +605,27 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
                 new SiemForwardingService(_config)
                     .CheckReadiness();
 
-            _siemStatus.Text =
+            UiStyle.SetStatus(
+                _siemStatus,
                 $"Mode={status.Mode}; Ready={status.Ready}; " +
                 $"Pending={status.PendingEvents}; " +
                 (string.IsNullOrWhiteSpace(status.LastError)
                     ? "No error."
-                    : status.LastError);
+                    : status.LastError),
+                status.Ready
+                    ? UiStatusKind.Success
+                    : string.IsNullOrWhiteSpace(
+                        status.LastError)
+                        ? UiStatusKind.Warning
+                        : UiStatusKind.Error);
         }
         catch (Exception ex)
         {
+            UiStyle.SetStatus(
+                _siemStatus,
+                "SIEM readiness check failed: " +
+                ex.Message,
+                UiStatusKind.Error);
             ShowError(ex);
         }
     }
@@ -604,15 +638,26 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
                 await new SiemForwardingService(_config)
                     .FlushAsync();
 
-            _siemStatus.Text =
+            UiStyle.SetStatus(
+                _siemStatus,
                 $"Mode={status.Mode}; Ready={status.Ready}; " +
                 $"Pending={status.PendingEvents}; " +
                 (string.IsNullOrWhiteSpace(status.LastError)
                     ? "Flush completed."
-                    : status.LastError);
+                    : status.LastError),
+                status.Ready &&
+                string.IsNullOrWhiteSpace(
+                    status.LastError)
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Error);
         }
         catch (Exception ex)
         {
+            UiStyle.SetStatus(
+                _siemStatus,
+                "SIEM flush failed: " +
+                ex.Message,
+                UiStatusKind.Error);
             ShowError(ex);
         }
     }
@@ -625,28 +670,59 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
                 new PrivilegedAccessPolicyService(_config)
                     .GetStatus();
 
-            _jitStatus.Text =
+            UiStyle.SetStatus(
+                _jitStatus,
                 $"Enabled={status.JitEnabled}; Active valid grants={status.ActiveJitGrants}; " +
-                $"Current identity={AuthorizationService.CurrentIdentityName()}";
+                $"Current identity={AuthorizationService.CurrentIdentityName()}",
+                status.JitEnabled
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Neutral);
 
-            _approvalStatus.Text =
+            UiStyle.SetStatus(
+                _approvalStatus,
                 $"Enabled={status.TwoPersonApprovalEnabled}; Pending={status.PendingApprovalRequests}; " +
-                $"Active approvals={status.ActiveApprovals}";
+                $"Active approvals={status.ActiveApprovals}",
+                status.TwoPersonApprovalEnabled
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Neutral);
 
             var siem =
                 new SiemForwardingService(_config)
                     .CheckReadiness();
 
-            _siemStatus.Text =
+            UiStyle.SetStatus(
+                _siemStatus,
                 $"Enabled={_config.SiemEnabled}; Mode={siem.Mode}; Ready={siem.Ready}; " +
                 $"Pending={siem.PendingEvents}; " +
                 (string.IsNullOrWhiteSpace(siem.LastError)
                     ? "No error."
-                    : siem.LastError);
+                    : siem.LastError),
+                !_config.SiemEnabled
+                    ? UiStatusKind.Neutral
+                    : siem.Ready &&
+                      string.IsNullOrWhiteSpace(
+                          siem.LastError)
+                        ? UiStatusKind.Success
+                        : UiStatusKind.Error);
         }
         catch (Exception ex)
         {
-            _jitStatus.Text = "Status error: " + ex.Message;
+            var message =
+                "Status error: " +
+                ex.Message;
+
+            UiStyle.SetStatus(
+                _jitStatus,
+                message,
+                UiStatusKind.Error);
+            UiStyle.SetStatus(
+                _approvalStatus,
+                message,
+                UiStatusKind.Error);
+            UiStyle.SetStatus(
+                _siemStatus,
+                message,
+                UiStatusKind.Error);
         }
     }
 

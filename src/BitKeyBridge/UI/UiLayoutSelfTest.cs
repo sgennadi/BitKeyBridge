@@ -334,11 +334,40 @@ public static class UiLayoutSelfTest
         }
         else
         {
+            VerifyDialogKeyboardBehavior(
+                form,
+                formName,
+                scenario,
+                failures);
+
             VerifyControlTree(
                 form,
                 formName,
                 scenario,
                 failures);
+        }
+    }
+
+    private static void VerifyDialogKeyboardBehavior(
+        DpiAwareForm form,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        if (form is StorageMaintenanceDialog)
+            return;
+
+        if (form.CancelButton is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: modal dialog has no standard Escape/Cancel action.");
+        }
+
+        if (form is not RemoteApiScopedTokenDialog &&
+            form.AcceptButton is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: modal dialog has no standard Enter/Accept action.");
         }
     }
 
@@ -503,6 +532,19 @@ public static class UiLayoutSelfTest
                 var preferred =
                     button.GetPreferredSize(
                         Size.Empty);
+
+                if (!button.AutoSize)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: button '{button.Text}' is not using shared AutoSize behavior.");
+                }
+
+                if (button.MinimumSize.Height <
+                    UiStyle.MinimumButtonHeight)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: button '{button.Text}' minimum height is {button.MinimumSize.Height}, expected at least {UiStyle.MinimumButtonHeight}.");
+                }
 
                 if (!button.AutoSize &&
                     button.Dock !=

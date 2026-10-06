@@ -1362,23 +1362,18 @@ public sealed partial class MainForm
     private static Button NewActionButton(
         string text)
     {
-        return new Button
-        {
-            Text = text,
-            AutoSize = true,
-            Padding =
-                new Padding(
-                    7,
-                    2,
-                    7,
-                    2),
-            Margin =
-                new Padding(
-                    0,
-                    0,
-                    8,
-                    6)
-        };
+        var button =
+            UiStyle.CreateActionButton(
+                text);
+
+        button.Margin =
+            new Padding(
+                0,
+                0,
+                UiStyle.ControlGap,
+                6);
+
+        return button;
     }
 
     private static Label NewInlineLabel(

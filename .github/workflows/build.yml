@@ -121,6 +121,22 @@ jobs:
             throw "Direct Segoe UI/Consolas construction is not allowed outside UiStyle. Use shared typography tokens."
           }
 
+          $directButtonFiles = $uiFiles |
+            Where-Object { $_.Name -ne 'UiStyle.cs' }
+
+          $directButtonFailures = @()
+          foreach ($file in $directButtonFiles) {
+            $raw = Get-Content $file.FullName -Raw
+            if ($raw -match '\bnew\s+Button\b') {
+              $directButtonFailures += $file.FullName
+            }
+          }
+
+          if ($directButtonFailures) {
+            $directButtonFailures | ForEach-Object { Write-Host $_ }
+            throw "Direct Button construction is not allowed outside UiStyle. Use UiStyle.CreateActionButton or a shared configured field."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj

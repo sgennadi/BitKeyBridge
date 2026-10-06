@@ -72,20 +72,25 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         _session.DropDownStyle = ComboBoxStyle.DropDown;
         sessionRow.Controls.Add(_session, 1, 0);
 
-        var verify = new Button
-        {
-            Text = "Verify",
-            AutoSize = true,
-            MinimumSize = new Size(100, 32),
-            Margin = new Padding(8, 0, 0, 0)
-        };
-        var openBundle = new Button
-        {
-            Text = "Open Bundle",
-            AutoSize = true,
-            MinimumSize = new Size(120, 32),
-            Margin = new Padding(8, 0, 0, 0)
-        };
+        var verify =
+            UiStyle.CreateActionButton(
+                "Verify");
+        verify.Margin =
+            new Padding(
+                UiStyle.ControlGap,
+                0,
+                0,
+                0);
+
+        var openBundle =
+            UiStyle.CreateActionButton(
+                "Open Bundle");
+        openBundle.Margin =
+            new Padding(
+                UiStyle.ControlGap,
+                0,
+                0,
+                0);
         sessionRow.Controls.Add(verify, 2, 0);
         sessionRow.Controls.Add(openBundle, 3, 0);
         root.Controls.Add(sessionRow, 0, 2);
@@ -106,21 +111,21 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 10, 0, 0)
         };
-        var close = new Button
-        {
-            Text = "Close",
-            AutoSize = true,
-            MinimumSize = new Size(100, 32)
-        };
-        var openFolder = new Button
-        {
-            Text = "Open Incident Folder",
-            AutoSize = true,
-            MinimumSize = new Size(160, 32)
-        };
+        var close =
+            UiStyle.CreateActionButton(
+                "Close",
+                DialogResult.Cancel);
+        var openFolder =
+            UiStyle.CreateActionButton(
+                "Open Incident Folder");
         footer.Controls.Add(close);
         footer.Controls.Add(openFolder);
         root.Controls.Add(footer, 0, 4);
+
+        AcceptButton =
+            verify;
+        CancelButton =
+            close;
 
         verify.Click += (_, _) => VerifyCurrent();
         openBundle.Click += (_, _) => OpenCurrentBundle();

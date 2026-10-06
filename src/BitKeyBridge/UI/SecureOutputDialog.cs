@@ -85,13 +85,15 @@ public sealed class SecureOutputDialog : DpiAwareForm
             : currentOutputDirectory;
         fields.Controls.Add(_directory, 1, 0);
 
-        var browse = new Button
-        {
-            Text = "Browse...",
-            AutoSize = true,
-            MinimumSize = new Size(85, 31),
-            Margin = new Padding(8, 0, 0, 4)
-        };
+        var browse =
+            UiStyle.CreateActionButton(
+                "Browse...");
+        browse.Margin =
+            new Padding(
+                UiStyle.ControlGap,
+                0,
+                0,
+                4);
         fields.Controls.Add(browse, 2, 0);
 
         fields.Controls.Add(MakeFieldLabel("SMB share:"), 0, 1);
@@ -151,20 +153,14 @@ public sealed class SecureOutputDialog : DpiAwareForm
             WrapContents = true,
             Padding = new Padding(0, 10, 0, 0)
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            MinimumSize = new Size(95, 32)
-        };
-        var ok = new Button
-        {
-            Text = "Create Secure Output",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            MinimumSize = new Size(145, 32)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var ok =
+            UiStyle.CreateActionButton(
+                "Create Secure Output",
+                DialogResult.OK);
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(ok);
         root.Controls.Add(buttons, 0, 4);

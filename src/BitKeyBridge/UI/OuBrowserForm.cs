@@ -67,20 +67,14 @@ public sealed class OuBrowserForm : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 10, 0, 0)
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            MinimumSize = new Size(120, 34)
-        };
-        var ok = new Button
-        {
-            Text = "Select OU",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            MinimumSize = new Size(130, 34)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var ok =
+            UiStyle.CreateActionButton(
+                "Select OU",
+                DialogResult.OK);
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(ok);
         root.Controls.Add(buttons, 0, 2);
