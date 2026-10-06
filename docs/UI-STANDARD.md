@@ -16,6 +16,11 @@ WinForms style for related administrative utilities.
   padding at the 96-DPI logical baseline.
 - Primary and secondary buttons use `AutoSize` with a minimum logical size of
   88 x 32 and shared padding.
+- Action/dialog buttons are created through `UiStyle.CreateActionButton` or
+  explicitly configured through the shared button style. Direct per-window
+  `new Button` construction is prohibited.
+- Modal dialogs with a clear primary action provide standard keyboard semantics:
+  Enter invokes the primary action and Escape invokes Cancel/Close.
 - Connection/source selectors and their primary action should use balanced
   logical widths in the same `TableLayoutPanel`; long connection/error text belongs
   on a separate full-width status row rather than between controls.
@@ -102,6 +107,9 @@ The build checks enforce:
 - Fixed-position WinForms layout is rejected.
 - Fixed button Width/Height declarations are rejected.
 - Direct Segoe UI / Consolas construction outside `UiStyle` is rejected.
+- Direct `new Button` construction outside `UiStyle` is rejected.
+- Runtime validation checks action-button AutoSize/minimum height and modal
+  Enter/Escape behavior in addition to clipping and DPI layout.
 - The published win-x64 executable runs `--ui-self-test`, which constructs the
   real forms and validates compact and 150% large-text responsive-layout invariants.
 
