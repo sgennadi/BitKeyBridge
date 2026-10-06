@@ -54,6 +54,8 @@ public static class UiLayoutSelfTest
 
         VerifyStatusGlyphScaling(
             failures);
+        VerifyHighContrastStatusPalette(
+            failures);
 
         var factories =
             CreateFormFactories();
@@ -474,6 +476,40 @@ public static class UiLayoutSelfTest
             if (!control.Visible)
                 continue;
 
+            if (control is UiStatusLabel status)
+            {
+                if (status.TabStop)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: status '{ShortText(status.Text)}' participates in keyboard tab navigation.");
+                }
+
+                if (status.Image is null)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: status '{ShortText(status.Text)}' has no DPI-safe glyph.");
+                }
+
+                if (string.IsNullOrWhiteSpace(
+                        status.AccessibleName) ||
+                    string.IsNullOrWhiteSpace(
+                        status.AccessibleDescription))
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: status '{ShortText(status.Text)}' is missing accessibility metadata.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                        status.Text) &&
+                    !status.AccessibleDescription.Contains(
+                        status.Text,
+                        StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: status accessibility description is stale for '{ShortText(status.Text)}'.");
+                }
+            }
+
             if (control is FlowLayoutPanel flow &&
                 flow.FlowDirection is
                     FlowDirection.LeftToRight or
@@ -576,6 +612,28 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"Status glyph scaling is not DPI-safe: 96-DPI={normal.Width}x{normal.Height}; 192-DPI={scale200.Width}x{scale200.Height}.");
+        }
+    }
+
+    private static void VerifyHighContrastStatusPalette(
+        List<string> failures)
+    {
+        foreach (var kind in
+                 Enum.GetValues<UiStatusKind>())
+        {
+            var palette =
+                UiStyle.GetStatusPalette(
+                    kind,
+                    highContrast: true);
+
+            if (palette.BackColor !=
+                    SystemColors.Window ||
+                palette.ForeColor !=
+                    SystemColors.WindowText)
+            {
+                failures.Add(
+                    $"High Contrast palette for {kind} must use Windows system colors.");
+            }
         }
     }
 
