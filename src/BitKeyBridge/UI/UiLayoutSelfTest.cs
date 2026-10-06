@@ -58,6 +58,9 @@ public static class UiLayoutSelfTest
         VerifyHighContrastStatusPalette(
             failures);
 
+        VerifyListViewColumnScaling(
+            failures);
+
         var factories =
             CreateFormFactories();
 
@@ -515,6 +518,15 @@ public static class UiLayoutSelfTest
                     failures);
             }
 
+            if (control is ListView listView &&
+                listView.Columns.Count > 0 &&
+                !UiStyle.HasConfiguredListViewColumns(
+                    listView))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: ListView '{ControlName(listView)}' bypasses shared DPI-aware column configuration.");
+            }
+
             if (control is FlowLayoutPanel flow &&
                 flow.FlowDirection is
                     FlowDirection.LeftToRight or
@@ -665,6 +677,39 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"High Contrast status palette for {kind} does not use Windows system colors.");
             }
+        }
+    }
+
+    private static void VerifyListViewColumnScaling(
+        List<string> failures)
+    {
+        const int logical =
+            150;
+
+        var scale100 =
+            UiStyle.ScaleLogicalPixels(
+                logical,
+                UiStyle.BaselineDpi);
+        var scale150 =
+            UiStyle.ScaleLogicalPixels(
+                logical,
+                144);
+        var scale200 =
+            UiStyle.ScaleLogicalPixels(
+                logical,
+                192);
+        var roundTrip =
+            UiStyle.ToLogicalPixels(
+                scale200,
+                192);
+
+        if (scale100 != 150 ||
+            scale150 != 225 ||
+            scale200 != 300 ||
+            roundTrip != logical)
+        {
+            failures.Add(
+                $"ListView column scaling failed: logical={logical}; 100%={scale100}; 150%={scale150}; 200%={scale200}; round-trip={roundTrip}.");
         }
     }
 
