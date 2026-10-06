@@ -212,6 +212,10 @@ public sealed partial class MainForm
 
         _recoverySource.Name =
             "RecoverySourceSelector";
+        _recoverySource.AccessibleName =
+            "Recovery source";
+        _recoverySource.TabIndex =
+            0;
         _recoverySource.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _recoverySource.MinimumSize =
@@ -238,6 +242,10 @@ public sealed partial class MainForm
 
         _connectAdButton.Name =
             "ConnectAdButton";
+        _connectAdButton.AccessibleName =
+            "Connect to Active Directory";
+        _connectAdButton.TabIndex =
+            1;
         _connectAdButton.Text =
             "Connect to AD";
         UiStyle.ConfigureActionButton(
@@ -260,6 +268,10 @@ public sealed partial class MainForm
             2,
             0);
 
+        _advancedConnectionButton.AccessibleName =
+            "Advanced Active Directory connection settings";
+        _advancedConnectionButton.TabIndex =
+            2;
         _advancedConnectionButton.Text =
             "Advanced connection settings...";
         UiStyle.ConfigureActionButton(
@@ -276,26 +288,8 @@ public sealed partial class MainForm
 
         _adConnectionStatus.Name =
             "AdConnectionStatus";
-        _adConnectionStatus.AutoSize =
-            true;
-        _adConnectionStatus.Dock =
-            DockStyle.Fill;
-        _adConnectionStatus.BorderStyle =
-            BorderStyle.FixedSingle;
-        _adConnectionStatus.Padding =
-            new Padding(
-                UiStyle.ControlGap,
-                6,
-                UiStyle.ControlGap,
-                6);
-        _adConnectionStatus.Margin =
-            new Padding(
-                0,
-                UiStyle.ControlGap,
-                0,
-                0);
-        _adConnectionStatus.TextAlign =
-            ContentAlignment.MiddleLeft;
+        UiStyle.ConfigureStatusLabel(
+            _adConnectionStatus);
         connection.Controls.Add(
             _adConnectionStatus,
             0,
