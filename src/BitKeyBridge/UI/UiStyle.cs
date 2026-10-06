@@ -23,6 +23,19 @@ public static class UiStyle
     public const int MinimumButtonHeight = 32;
     public const int MinimumButtonWidth = 88;
 
+    private sealed class ListViewColumnState
+    {
+        public int[] LogicalWidths { get; set; } =
+            [];
+
+        public bool Updating { get; set; }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        ListView,
+        ListViewColumnState> ListViewColumnStates =
+        new();
+
     public static Font BodyFont =>
         SystemFonts.MessageBoxFont;
 
@@ -310,6 +323,159 @@ public static class UiStyle
 
         Refresh();
     }
+
+    public static void ConfigureListViewColumns(
+        ListView view,
+        params (string Name, int Width)[] columns)
+    {
+        if (columns.Length == 0)
+            return;
+
+        var state =
+            new ListViewColumnState
+            {
+                LogicalWidths =
+                    columns
+                        .Select(
+                            column =>
+                                Math.Max(
+                                    1,
+                                    column.Width))
+                        .ToArray()
+            };
+
+        ListViewColumnStates.Remove(
+            view);
+        ListViewColumnStates.Add(
+            view,
+            state);
+
+        state.Updating =
+            true;
+
+        try
+        {
+            view.Columns.Clear();
+
+            foreach (var column in
+                     columns)
+            {
+                view.Columns.Add(
+                    column.Name,
+                    ScaleLogicalPixels(
+                        column.Width,
+                        view.DeviceDpi));
+            }
+        }
+        finally
+        {
+            state.Updating =
+                false;
+        }
+
+        view.ColumnWidthChanged +=
+            (_, args) =>
+            {
+                if (state.Updating ||
+                    args.ColumnIndex < 0 ||
+                    args.ColumnIndex >=
+                        state.LogicalWidths.Length ||
+                    args.ColumnIndex >=
+                        view.Columns.Count)
+                {
+                    return;
+                }
+
+                state.LogicalWidths[
+                    args.ColumnIndex] =
+                    ToLogicalPixels(
+                        view.Columns[
+                            args.ColumnIndex]
+                            .Width,
+                        view.DeviceDpi);
+            };
+    }
+
+    public static void RefreshListViewColumns(
+        ListView view)
+    {
+        if (!ListViewColumnStates.TryGetValue(
+                view,
+                out var state))
+        {
+            return;
+        }
+
+        var count =
+            Math.Min(
+                view.Columns.Count,
+                state.LogicalWidths.Length);
+
+        if (count <= 0)
+            return;
+
+        state.Updating =
+            true;
+
+        try
+        {
+            for (var index = 0;
+                 index < count;
+                 index++)
+            {
+                var width =
+                    ScaleLogicalPixels(
+                        state.LogicalWidths[index],
+                        view.DeviceDpi);
+
+                if (view.Columns[index].Width !=
+                    width)
+                {
+                    view.Columns[index].Width =
+                        width;
+                }
+            }
+        }
+        finally
+        {
+            state.Updating =
+                false;
+        }
+    }
+
+    internal static bool HasConfiguredListViewColumns(
+        ListView view) =>
+        ListViewColumnStates.TryGetValue(
+            view,
+            out _);
+
+    internal static int ScaleLogicalPixels(
+        int logicalPixels,
+        int dpi) =>
+        Math.Max(
+            1,
+            (int)Math.Round(
+                Math.Max(
+                    1,
+                    logicalPixels) *
+                Math.Max(
+                    BaselineDpi,
+                    dpi) /
+                (double)BaselineDpi));
+
+    internal static int ToLogicalPixels(
+        int physicalPixels,
+        int dpi) =>
+        Math.Max(
+            1,
+            (int)Math.Round(
+                Math.Max(
+                    1,
+                    physicalPixels) *
+                BaselineDpi /
+                (double)Math.Max(
+                    BaselineDpi,
+                    dpi)));
 
     public static Button CreateActionButton(
         string text,
