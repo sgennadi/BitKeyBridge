@@ -55,6 +55,9 @@ public static class UiLayoutSelfTest
         VerifyStatusGlyphScaling(
             failures);
 
+        VerifyHighContrastStatusPalette(
+            failures);
+
         var factories =
             CreateFormFactories();
 
@@ -474,6 +477,15 @@ public static class UiLayoutSelfTest
             if (!control.Visible)
                 continue;
 
+            if (control is UiStatusLabel statusLabel)
+            {
+                VerifyStatusSurface(
+                    statusLabel,
+                    formName,
+                    scenario,
+                    failures);
+            }
+
             if (control is FlowLayoutPanel flow &&
                 flow.FlowDirection is
                     FlowDirection.LeftToRight or
@@ -550,6 +562,67 @@ public static class UiLayoutSelfTest
                 formName,
                 scenario,
                 failures);
+        }
+    }
+
+    private static void VerifyStatusSurface(
+        UiStatusLabel status,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        if (status.Image is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: status '{ControlName(status)}' has no DPI-safe glyph.");
+        }
+
+        if (status.TabStop)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: status '{ControlName(status)}' must not participate in keyboard tab navigation.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                status.AccessibleName) ||
+            string.IsNullOrWhiteSpace(
+                status.AccessibleDescription))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: status '{ControlName(status)}' is missing accessibility metadata.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                status.Text) &&
+            status.AccessibleDescription is not null &&
+            !status.AccessibleDescription.Contains(
+                status.Text,
+                StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: status '{ControlName(status)}' accessibility description is stale.");
+        }
+    }
+
+    private static void VerifyHighContrastStatusPalette(
+        List<string> failures)
+    {
+        foreach (var kind in
+                 Enum.GetValues<UiStatusKind>())
+        {
+            var highContrast =
+                UiStyle.ResolveStatusColors(
+                    kind,
+                    highContrast: true);
+
+            if (highContrast.BackColor !=
+                    SystemColors.Window ||
+                highContrast.ForeColor !=
+                    SystemColors.WindowText)
+            {
+                failures.Add(
+                    $"High Contrast status palette for {kind} does not use Windows system colors.");
+            }
         }
     }
 
@@ -662,23 +735,6 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: connection status must not participate in keyboard tab navigation.");
         }
 
-        if (status is Label statusLabel)
-        {
-            if (statusLabel.Image is null)
-            {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: connection status has no DPI-safe status glyph.");
-            }
-
-            if (string.IsNullOrWhiteSpace(
-                    statusLabel.AccessibleName) ||
-                string.IsNullOrWhiteSpace(
-                    statusLabel.AccessibleDescription))
-            {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: connection status is missing accessibility metadata.");
-            }
-        }
     }
 
     private static T? FindFirst<T>(

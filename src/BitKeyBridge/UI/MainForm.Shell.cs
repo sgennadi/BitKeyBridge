@@ -664,8 +664,12 @@ public sealed partial class MainForm
         grid.Controls.Add(actions, 1, 5);
         grid.SetColumnSpan(actions, 3);
 
-        _credentialVaultStatus.AutoSize = true;
-        _credentialVaultStatus.MaximumSize = new Size(900, 0);
+        UiStyle.ConfigureStatusLabel(
+            _credentialVaultStatus);
+        _credentialVaultStatus.AccessibleName =
+            "Active Directory credential status";
+        _credentialVaultStatus.MaximumSize =
+            new Size(900, 0);
         grid.Controls.Add(_credentialVaultStatus, 1, 6);
         grid.SetColumnSpan(_credentialVaultStatus, 3);
 
@@ -793,10 +797,17 @@ public sealed partial class MainForm
         search.Controls.Add(searchButton, 2, 0);
         root.Controls.Add(search, 0, 0);
 
-        _unifiedStatus.AutoSize = true;
-        _unifiedStatus.MaximumSize = new Size(1050, 0);
+        UiStyle.ConfigureStatusLabel(
+            _unifiedStatus);
+        _unifiedStatus.AccessibleName =
+            "Unified device search status";
+        _unifiedStatus.MaximumSize =
+            new Size(1050, 0);
         _unifiedStatus.Text =
             "One search combines AD, Entra BitLocker metadata, and Intune inventory.";
+        UiStyle.ApplyStatusLabel(
+            _unifiedStatus,
+            UiStatusKind.Neutral);
         root.Controls.Add(_unifiedStatus, 0, 1);
 
         _unifiedResults.View = View.Details;
@@ -1081,8 +1092,12 @@ public sealed partial class MainForm
 
         root.Controls.Add(buttons, 1, 7);
 
-        _cloudStatus.AutoSize = true;
-        _cloudStatus.MaximumSize = new Size(900, 0);
+        UiStyle.ConfigureStatusLabel(
+            _cloudStatus);
+        _cloudStatus.AccessibleName =
+            "Microsoft Graph status";
+        _cloudStatus.MaximumSize =
+            new Size(900, 0);
         root.Controls.Add(_cloudStatus, 1, 8);
 
         save.Click += (_, _) => SaveCloudFields();

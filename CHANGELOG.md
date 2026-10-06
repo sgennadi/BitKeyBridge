@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.18.7
+
+- Extended the shared `UiStatusLabel` visual system beyond Recovery to Cloud/Graph, unified device search, coverage, software updates, Remote API, credential vault, service health, machine cloud configuration, service identity, and audit signing.
+- Added semantic status states throughout those workflows: Busy for in-progress work, Success for healthy/completed operations, Warning for partial or missing configuration, Error for failures, and Neutral for informational/disabled states.
+- Added `UiStyle.SetStatus(...)` so visible text, semantic state, glyph, colors, and accessibility description update together.
+- Status state is now intrinsic to `UiStatusLabel`; the previous external weak-table state tracking was removed.
+- Accessibility descriptions now refresh whenever status text changes, preventing stale screen-reader descriptions.
+- Added Windows High Contrast support: status surfaces use system Window/WindowText colors while retaining distinct DPI-safe vector glyph shapes.
+- Added deterministic High Contrast palette validation to `--ui-self-test`.
+- Runtime UI validation now checks every visible shared status surface for a DPI-safe glyph, keyboard exclusion, accessibility name/description, and stale accessibility text.
+- Existing compact, 150%, and 200% layout validation remains enabled.
+- Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
+
+
 ## 0.18.6
 
 - Added shared DPI-safe vector status glyphs for neutral/info, connecting, success, warning, and error states. Glyphs are drawn at the target monitor DPI instead of scaling fixed PNG resources, so they remain sharp on HiDPI/4K displays.

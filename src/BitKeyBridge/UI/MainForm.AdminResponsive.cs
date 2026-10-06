@@ -37,10 +37,17 @@ public sealed partial class MainForm
         ]);
         updateGrid.Controls.Add(updateActions, 1, 3);
 
-        _updateStatus.AutoSize = true;
-        _updateStatus.MaximumSize = new Size(900, 0);
+        UiStyle.ConfigureStatusLabel(
+            _updateStatus);
+        _updateStatus.AccessibleName =
+            "Software update status";
+        _updateStatus.MaximumSize =
+            new Size(900, 0);
         _updateStatus.Text =
             "Update status has not been checked in this GUI session.";
+        UiStyle.ApplyStatusLabel(
+            _updateStatus,
+            UiStatusKind.Neutral);
         updateGrid.Controls.Add(_updateStatus, 1, 4);
         root.Controls.Add(updateGrid);
 
@@ -102,11 +109,17 @@ public sealed partial class MainForm
             1,
             2);
 
-        _remoteApiStatus.AutoSize = true;
+        UiStyle.ConfigureStatusLabel(
+            _remoteApiStatus);
+        _remoteApiStatus.AccessibleName =
+            "Remote API status";
         _remoteApiStatus.MaximumSize =
             new Size(900, 0);
         _remoteApiStatus.Text =
             "Remote API is disabled by default.";
+        UiStyle.ApplyStatusLabel(
+            _remoteApiStatus,
+            UiStatusKind.Neutral);
         remoteGrid.Controls.Add(
             _remoteApiStatus,
             1,
@@ -609,12 +622,17 @@ public sealed partial class MainForm
         root.Controls.Add(
             _coverageResults);
 
-        _coverageStatus.AutoSize =
-            true;
+        UiStyle.ConfigureStatusLabel(
+            _coverageStatus);
+        _coverageStatus.AccessibleName =
+            "Coverage report status";
         _coverageStatus.MaximumSize =
             new Size(1000, 0);
         _coverageStatus.Text =
             "Metadata-only report: recovery passwords are never requested.";
+        UiStyle.ApplyStatusLabel(
+            _coverageStatus,
+            UiStatusKind.Neutral);
         root.Controls.Add(
             _coverageStatus);
 
@@ -649,8 +667,10 @@ public sealed partial class MainForm
                 "BitKeyBridge Health & Service",
                 "Service automation, health endpoint and scheduled coverage."));
 
-        _dashboardStatus.AutoSize =
-            true;
+        UiStyle.ConfigureStatusLabel(
+            _dashboardStatus);
+        _dashboardStatus.AccessibleName =
+            "Service health status";
         _dashboardStatus.Font =
             UiStyle.CreateEmphasisFont(
                 11F);
@@ -658,6 +678,9 @@ public sealed partial class MainForm
             new Size(1000, 0);
         _dashboardStatus.Text =
             "Loading health status...";
+        UiStyle.ApplyStatusLabel(
+            _dashboardStatus,
+            UiStatusKind.Busy);
         root.Controls.Add(
             _dashboardStatus);
 
@@ -786,12 +809,17 @@ public sealed partial class MainForm
             1,
             7);
 
-        _machineCloudStatus.AutoSize =
-            true;
+        UiStyle.ConfigureStatusLabel(
+            _machineCloudStatus);
+        _machineCloudStatus.AccessibleName =
+            "Machine cloud configuration status";
         _machineCloudStatus.MaximumSize =
             new Size(900, 0);
         _machineCloudStatus.Text =
             "Machine cloud config has not been checked.";
+        UiStyle.ApplyStatusLabel(
+            _machineCloudStatus,
+            UiStatusKind.Neutral);
         settings.Controls.Add(
             _machineCloudStatus,
             1,
@@ -842,12 +870,17 @@ public sealed partial class MainForm
             1,
             3);
 
-        _serviceIdentityStatus.AutoSize =
-            true;
+        UiStyle.ConfigureStatusLabel(
+            _serviceIdentityStatus);
+        _serviceIdentityStatus.AccessibleName =
+            "Windows Service identity status";
         _serviceIdentityStatus.MaximumSize =
             new Size(900, 0);
         _serviceIdentityStatus.Text =
             "Service identity has not been queried.";
+        UiStyle.ApplyStatusLabel(
+            _serviceIdentityStatus,
+            UiStatusKind.Neutral);
         identity.Controls.Add(
             _serviceIdentityStatus,
             1,
@@ -1092,12 +1125,17 @@ public sealed partial class MainForm
                 "Tamper-Evident Recovery Audit",
                 "Recovery passwords are never written to audit. Entries are SHA-256 chained and can use signed checkpoints."));
 
-        _auditSigningStatus.AutoSize =
-            true;
+        UiStyle.ConfigureStatusLabel(
+            _auditSigningStatus);
+        _auditSigningStatus.AccessibleName =
+            "Audit signing status";
         _auditSigningStatus.MaximumSize =
             new Size(1000, 0);
         _auditSigningStatus.Text =
             "Audit signing status has not been checked.";
+        UiStyle.ApplyStatusLabel(
+            _auditSigningStatus,
+            UiStatusKind.Neutral);
         root.Controls.Add(
             _auditSigningStatus);
 
