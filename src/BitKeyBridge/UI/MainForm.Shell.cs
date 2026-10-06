@@ -151,11 +151,27 @@ public sealed partial class MainForm
         }, 0, 1);
         root.Controls.Add(titlePanel, 0, 0);
 
-        _startPurposeStatus.AutoSize = true;
-        _startPurposeStatus.Font = UiStyle.CreateEmphasisFont(10F);
-        _startPurposeStatus.Text =
-            "Ready — choose the source, connect if required, and search.";
-        _startPurposeStatus.Margin = new Padding(0, 0, 0, 10);
+        UiStyle.ConfigureInlineStatusLabel(
+            _startPurposeStatus);
+        _startPurposeStatus.AccessibleName =
+            "Recovery workflow status";
+        _startPurposeStatus.Font =
+            UiStyle.CreateEmphasisFont(
+                10F);
+        _startPurposeStatus.MaximumSize =
+            new Size(
+                1050,
+                0);
+        _startPurposeStatus.Margin =
+            new Padding(
+                0,
+                0,
+                0,
+                10);
+        UiStyle.SetStatus(
+            _startPurposeStatus,
+            "Ready — choose the source, connect if required, and search.",
+            UiStatusKind.Neutral);
         root.Controls.Add(_startPurposeStatus, 0, 1);
 
         var connection =
@@ -322,14 +338,26 @@ public sealed partial class MainForm
             FlowDirection = FlowDirection.LeftToRight,
             Margin = new Padding(0, 0, 0, 10)
         };
-        _startSelectOu.Text = "Select / Change OU...";
-        _startSelectOu.AutoSize = true;
-        _startSelectOu.Padding = new Padding(6, 2, 6, 2);
+        _startSelectOu.Text =
+            "Select / Change OU...";
+        UiStyle.ConfigureActionButton(
+            _startSelectOu);
         scopeFlow.Controls.Add(_startSelectOu);
 
-        _startOuStatus.AutoSize = true;
-        _startOuStatus.MaximumSize = new Size(850, 0);
-        _startOuStatus.Margin = new Padding(10, 8, 0, 0);
+        UiStyle.ConfigureInlineStatusLabel(
+            _startOuStatus);
+        _startOuStatus.AccessibleName =
+            "Recovery OU status";
+        _startOuStatus.MaximumSize =
+            new Size(
+                850,
+                0);
+        _startOuStatus.Margin =
+            new Padding(
+                10,
+                8,
+                0,
+                0);
         scopeFlow.Controls.Add(_startOuStatus);
         root.Controls.Add(scopeFlow, 0, 3);
 
@@ -358,9 +386,10 @@ public sealed partial class MainForm
         _startQuery.PlaceholderText = "PC-12345 or Recovery ID";
         searchGrid.Controls.Add(_startQuery, 1, 0);
 
-        _startSearch.Text = "Search BitLocker";
-        _startSearch.AutoSize = true;
-        _startSearch.Padding = new Padding(12, 3, 12, 3);
+        _startSearch.Text =
+            "Search BitLocker";
+        UiStyle.ConfigureActionButton(
+            _startSearch);
         _startSearch.Font =
             UiStyle.CreateEmphasisFont(
                 9.5F);
