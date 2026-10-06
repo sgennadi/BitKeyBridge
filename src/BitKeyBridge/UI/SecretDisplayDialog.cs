@@ -56,13 +56,15 @@ public sealed class SecretDisplayDialog : DpiAwareForm
         _secret.Font = UiStyle.CreateMonospaceFont(10F);
         secretRow.Controls.Add(_secret, 0, 0);
 
-        var copy = new Button
-        {
-            Text = "Copy",
-            AutoSize = true,
-            MinimumSize = new Size(95, 32),
-            Margin = new Padding(10, 0, 0, 0)
-        };
+        var copy =
+            UiStyle.CreateActionButton(
+                "Copy");
+        copy.Margin =
+            new Padding(
+                10,
+                0,
+                0,
+                0);
         secretRow.Controls.Add(copy, 1, 0);
         root.Controls.Add(secretRow, 0, 1);
 
@@ -81,13 +83,10 @@ public sealed class SecretDisplayDialog : DpiAwareForm
             WrapContents = true,
             Padding = new Padding(0, 10, 0, 0)
         };
-        var close = new Button
-        {
-            Text = "Close",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            MinimumSize = new Size(95, 32)
-        };
+        var close =
+            UiStyle.CreateActionButton(
+                "Close",
+                DialogResult.OK);
         buttons.Controls.Add(close);
         root.Controls.Add(buttons, 0, 3);
 
