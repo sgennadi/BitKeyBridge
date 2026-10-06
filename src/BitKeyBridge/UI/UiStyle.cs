@@ -15,6 +15,16 @@ public enum UiStatusKind
 /// </summary>
 public static class UiStyle
 {
+    private sealed class StatusState
+    {
+        public UiStatusKind Kind { get; set; }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        Label,
+        StatusState> StatusStates =
+        new();
+
     public const int BaselineDpi = 96;
     public const int WindowMargin = 16;
     public const int PagePadding = 18;
@@ -71,7 +81,71 @@ public static class UiStyle
             FontStyle.Regular,
             GraphicsUnit.Point);
 
+    public static void ConfigureStatusLabel(
+        Label label)
+    {
+        label.AutoSize =
+            true;
+        label.Dock =
+            DockStyle.Fill;
+        label.BorderStyle =
+            BorderStyle.FixedSingle;
+        label.Padding =
+            new Padding(
+                ControlGap,
+                6,
+                ControlGap,
+                6);
+        label.Margin =
+            new Padding(
+                0,
+                ControlGap,
+                0,
+                0);
+        label.TextAlign =
+            ContentAlignment.MiddleLeft;
+        label.ImageAlign =
+            ContentAlignment.MiddleLeft;
+        label.TextImageRelation =
+            TextImageRelation.ImageBeforeText;
+        label.AccessibleRole =
+            AccessibleRole.StaticText;
+        label.TabStop =
+            false;
+    }
+
     public static void ApplyStatusLabel(
+        Label label,
+        UiStatusKind kind)
+    {
+        var state =
+            StatusStates.GetOrCreateValue(
+                label);
+
+        state.Kind =
+            kind;
+
+        RefreshStatusLabel(
+            label,
+            kind);
+    }
+
+    public static void RefreshStatusLabel(
+        Label label)
+    {
+        if (!StatusStates.TryGetValue(
+                label,
+                out var state))
+        {
+            return;
+        }
+
+        RefreshStatusLabel(
+            label,
+            state.Kind);
+    }
+
+    private static void RefreshStatusLabel(
         Label label,
         UiStatusKind kind)
     {
@@ -99,6 +173,21 @@ public static class UiStyle
                         SystemColors.Window,
                         SystemColors.ControlText)
             };
+
+        label.Image =
+            UiStatusGlyphs.Get(
+                kind,
+                label.DeviceDpi,
+                label.ForeColor);
+
+        label.AccessibleName =
+            $"{kind} status";
+
+        label.AccessibleDescription =
+            string.IsNullOrWhiteSpace(
+                label.Text)
+                ? $"{kind} status."
+                : $"{kind} status. {label.Text}";
     }
 
     public static void ConfigureActionButton(
