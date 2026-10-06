@@ -22,6 +22,11 @@ WinForms style for related administrative utilities.
 - Status surfaces use the shared `UiStatusKind` / `UiStyle.ApplyStatusLabel`
   states: Neutral, Busy, Success, Warning and Error. Do not invent per-window
   status colors.
+- Status surfaces use DPI-safe vector glyphs from the shared UI layer. Do not add
+  fixed-resolution PNG status icons; glyphs must be regenerated for the active
+  monitor DPI and remain sharp at 200% scaling.
+- Informational status surfaces are not part of keyboard tab navigation and must
+  expose an AccessibleName and AccessibleDescription.
 - Direct Segoe UI / Consolas construction outside `UiStyle` is not allowed.
   Typography changes must flow through the shared style tokens.
 
@@ -66,6 +71,7 @@ Every significant GUI change should be reviewed against these scenarios:
 | HiDPI laptop | 2560 x 1440 @ 150% |
 | 4K desktop | 3840 x 2160 @ 150% |
 | 4K high scaling | 3840 x 2160 @ 200% |
+| Runtime stress | compact + 150% + 200% large-text/layout validation |
 | Compact / RDP | 1366 x 768 @ 100-150% |
 | Accessibility | Windows text size 125-150% |
 

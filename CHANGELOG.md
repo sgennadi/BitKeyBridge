@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.6
+
+- Added shared DPI-safe vector status glyphs for neutral/info, connecting, success, warning, and error states. Glyphs are drawn at the target monitor DPI instead of scaling fixed PNG resources, so they remain sharp on HiDPI/4K displays.
+- Extended `UiStyle` status handling to centralize border, spacing, text/image relation, colors, glyphs, keyboard behavior, and accessibility metadata.
+- Status glyphs are refreshed automatically during the shared per-monitor DPI relayout path when windows move between displays with different scaling.
+- Recovery connection status now uses the shared status component instead of local per-window styling.
+- Added explicit keyboard/accessibility metadata to the Recovery connection bar: Source -> Connect to AD -> Advanced settings, while the informational status row is excluded from tab navigation.
+- Added runtime assertions for status glyph presence, accessibility metadata, balanced connection controls, and keyboard order.
+- Added a 200% large-text/layout stress scenario to `--ui-self-test` in addition to compact and 150% scenarios.
+- Added a direct 96-DPI vs 192-DPI vector-glyph scaling check to prevent blurry fixed-size status graphics from being introduced later.
+- Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
+
+
 ## 0.18.5
 
 - Reworked the Recovery connection bar so **Source**, **Connect to AD**, **Advanced connection settings**, and AD connection status have a stable responsive layout. The long connection status now occupies its own full-width status row instead of being squeezed between controls.

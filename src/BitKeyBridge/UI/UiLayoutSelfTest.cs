@@ -20,7 +20,13 @@ public static class UiLayoutSelfTest
             new Size(
                 1050,
                 720),
-            1.50F)
+            1.50F),
+        new(
+            "Scale200Stress",
+            new Size(
+                1280,
+                800),
+            2.00F)
     ];
 
     public static int Run()
@@ -45,6 +51,9 @@ public static class UiLayoutSelfTest
 
         var failures =
             new List<string>();
+
+        VerifyStatusGlyphScaling(
+            failures);
 
         var factories =
             CreateFormFactories();
@@ -383,6 +392,24 @@ public static class UiLayoutSelfTest
 
                 page.CreateControl();
 
+                if (checkRecoveryConnection &&
+                    string.Equals(
+                        page.Text,
+                        "Recovery",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    var advanced =
+                        FindByName(
+                            page,
+                            "AdvancedConnectionGroup");
+
+                    if (advanced is not null)
+                    {
+                        advanced.Visible =
+                            true;
+                    }
+                }
+
                 // Tab selection and Dock=Fill layout are message-loop driven in
                 // WinForms. A headless WinExe can retain the framework's default
                 // 200x100 child size, so normalize Dock=Fill geometry before and
@@ -444,6 +471,9 @@ public static class UiLayoutSelfTest
         foreach (Control control in
                  root.Controls)
         {
+            if (!control.Visible)
+                continue;
+
             if (control is FlowLayoutPanel flow &&
                 flow.FlowDirection is
                     FlowDirection.LeftToRight or
@@ -523,6 +553,32 @@ public static class UiLayoutSelfTest
         }
     }
 
+    private static void VerifyStatusGlyphScaling(
+        List<string> failures)
+    {
+        var normal =
+            UiStatusGlyphs.Get(
+                UiStatusKind.Success,
+                UiStyle.BaselineDpi,
+                Color.DarkGreen);
+        var scale200 =
+            UiStatusGlyphs.Get(
+                UiStatusKind.Success,
+                UiStyle.BaselineDpi * 2,
+                Color.DarkGreen);
+
+        if (normal.Width <= 0 ||
+            normal.Height <= 0 ||
+            scale200.Width <
+                normal.Width * 2 - 1 ||
+            scale200.Height <
+                normal.Height * 2 - 1)
+        {
+            failures.Add(
+                $"Status glyph scaling is not DPI-safe: 96-DPI={normal.Width}x{normal.Height}; 192-DPI={scale200.Width}x{scale200.Height}.");
+        }
+    }
+
     private static void VerifyMainConnectionBar(
         Control root,
         string formName,
@@ -541,10 +597,15 @@ public static class UiLayoutSelfTest
             FindByName(
                 root,
                 "AdConnectionStatus");
+        var advanced =
+            FindByName(
+                root,
+                "AdvancedConnectionButton");
 
         if (source is null ||
             connect is null ||
-            status is null)
+            status is null ||
+            advanced is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: recovery connection controls were not found by name.");
@@ -558,6 +619,9 @@ public static class UiLayoutSelfTest
                 table) ||
             !ReferenceEquals(
                 status.Parent,
+                table) ||
+            !ReferenceEquals(
+                advanced.Parent,
                 table))
         {
             failures.Add(
@@ -582,6 +646,38 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Live AD selector and Connect button are not visually balanced.");
+        }
+
+        if (source.TabIndex != 0 ||
+            connect.TabIndex != 1 ||
+            advanced.TabIndex != 2)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: connection keyboard order must be Source -> Connect -> Advanced.");
+        }
+
+        if (status.TabStop)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: connection status must not participate in keyboard tab navigation.");
+        }
+
+        if (status is Label statusLabel)
+        {
+            if (statusLabel.Image is null)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: connection status has no DPI-safe status glyph.");
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    statusLabel.AccessibleName) ||
+                string.IsNullOrWhiteSpace(
+                    statusLabel.AccessibleDescription))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: connection status is missing accessibility metadata.");
+            }
         }
     }
 

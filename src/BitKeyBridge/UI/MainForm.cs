@@ -59,7 +59,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly Label _credentialVaultStatus = new();
     private readonly TextBox _outputRoot = new();
     private readonly TextBox _outputSubdirectory = new();
-    private readonly Label _adConnectionStatus = new();
+    private readonly UiStatusLabel _adConnectionStatus = new();
 
     private readonly Label _startPurposeStatus = new();
     private readonly Label _startOuStatus = new();
