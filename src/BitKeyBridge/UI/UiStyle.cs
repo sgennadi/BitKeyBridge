@@ -134,40 +134,10 @@ public static class UiStyle
         var kind =
             label.StatusKind;
 
-        if (SystemInformation.HighContrast)
-        {
-            label.BackColor =
-                SystemColors.Window;
-            label.ForeColor =
-                SystemColors.WindowText;
-        }
-        else
-        {
-            (label.BackColor, label.ForeColor) =
-                kind switch
-                {
-                    UiStatusKind.Busy =>
-                        (
-                            Color.LemonChiffon,
-                            Color.DarkGoldenrod),
-                    UiStatusKind.Success =>
-                        (
-                            Color.Honeydew,
-                            Color.DarkGreen),
-                    UiStatusKind.Warning =>
-                        (
-                            Color.LemonChiffon,
-                            Color.DarkOrange),
-                    UiStatusKind.Error =>
-                        (
-                            Color.MistyRose,
-                            Color.DarkRed),
-                    _ =>
-                        (
-                            SystemColors.Window,
-                            SystemColors.ControlText)
-                };
-        }
+        (label.BackColor, label.ForeColor) =
+            ResolveStatusColors(
+                kind,
+                SystemInformation.HighContrast);
 
         label.Image =
             UiStatusGlyphs.Get(
@@ -189,6 +159,45 @@ public static class UiStyle
                 : $"{kind} status. {label.Text}";
 
         label.Invalidate();
+    }
+
+    internal static (
+        Color BackColor,
+        Color ForeColor)
+        ResolveStatusColors(
+            UiStatusKind kind,
+            bool highContrast)
+    {
+        if (highContrast)
+        {
+            return (
+                SystemColors.Window,
+                SystemColors.WindowText);
+        }
+
+        return kind switch
+        {
+            UiStatusKind.Busy =>
+                (
+                    Color.LemonChiffon,
+                    Color.DarkGoldenrod),
+            UiStatusKind.Success =>
+                (
+                    Color.Honeydew,
+                    Color.DarkGreen),
+            UiStatusKind.Warning =>
+                (
+                    Color.LemonChiffon,
+                    Color.DarkOrange),
+            UiStatusKind.Error =>
+                (
+                    Color.MistyRose,
+                    Color.DarkRed),
+            _ =>
+                (
+                    SystemColors.Window,
+                    SystemColors.ControlText)
+        };
     }
 
     public static void BindBalancedWidths(
