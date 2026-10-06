@@ -27,13 +27,13 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _cloudPassword = new();
     private readonly TextBox _cloudThumbprint = new();
     private readonly ComboBox _cloudAuthMode = new();
-    private readonly Label _cloudStatus = new();
+    private readonly UiStatusLabel _cloudStatus = new();
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
     private string _cloudTokenContext = string.Empty;
     private readonly ListView _coverageResults = new();
     private readonly Label _coverageSummary = new();
-    private readonly Label _coverageStatus = new();
+    private readonly UiStatusLabel _coverageStatus = new();
     private readonly ComboBox _coverageFilter = new();
     private readonly NumericUpDown _coverageStaleDays = new();
     private readonly NumericUpDown _coverageOldKeyDays = new();
@@ -42,10 +42,10 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _unifiedQuery = new();
     private readonly ListView _unifiedResults = new();
     private readonly RichTextBox _unifiedDetails = new();
-    private readonly Label _unifiedStatus = new();
+    private readonly UiStatusLabel _unifiedStatus = new();
 
     private readonly ListView _auditResults = new();
-    private readonly Label _auditSigningStatus = new();
+    private readonly UiStatusLabel _auditSigningStatus = new();
 
     private readonly ComboBox _adMode = new();
     private readonly TextBox _adServer = new();
@@ -56,7 +56,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly CheckBox _adUseLdaps = new();
     private readonly CheckBox _adExplicitCredentials = new();
     private readonly ComboBox _adCredentialStorage = new();
-    private readonly Label _credentialVaultStatus = new();
+    private readonly UiStatusLabel _credentialVaultStatus = new();
     private readonly TextBox _outputRoot = new();
     private readonly TextBox _outputSubdirectory = new();
     private readonly UiStatusLabel _adConnectionStatus = new();
@@ -75,7 +75,7 @@ public sealed partial class MainForm : DpiAwareForm
     private string? _clipboardRecoveryKey;
     private System.Windows.Forms.Timer? _clipboardClearTimer;
 
-    private readonly Label _dashboardStatus = new();
+    private readonly UiStatusLabel _dashboardStatus = new();
     private readonly RichTextBox _dashboardDetails = new();
     private readonly NumericUpDown _serviceInterval = new();
     private readonly NumericUpDown _healthPort = new();
@@ -84,19 +84,19 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly CheckBox _serviceCoverageEnabled = new();
     private readonly NumericUpDown _serviceCoverageInterval = new();
     private readonly CheckBox _serviceCoverageRunOnStart = new();
-    private readonly Label _machineCloudStatus = new();
+    private readonly UiStatusLabel _machineCloudStatus = new();
     private readonly ComboBox _serviceIdentityMode = new();
     private readonly TextBox _serviceIdentityAccount = new();
     private readonly TextBox _serviceIdentityPassword = new();
-    private readonly Label _serviceIdentityStatus = new();
+    private readonly UiStatusLabel _serviceIdentityStatus = new();
 
-    private readonly Label _updateStatus = new();
+    private readonly UiStatusLabel _updateStatus = new();
     private readonly TextBox _updateRepository = new();
     private readonly CheckBox _checkUpdatesOnStart = new();
     private readonly CheckBox _allowPrereleaseUpdates = new();
     private UpdateInfo? _lastUpdateInfo;
 
-    private readonly Label _remoteApiStatus = new();
+    private readonly UiStatusLabel _remoteApiStatus = new();
     private readonly NumericUpDown _remoteApiPort = new();
     private readonly CheckBox _remoteApiManagement = new();
 
