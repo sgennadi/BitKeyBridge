@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.18.8
+
+- Added `UiStyle.CreateActionButton(...)` as the centralized factory for WinForms action/dialog buttons. AutoSize, minimum dimensions, padding, and Windows visual-style behavior now come from the shared UI layer.
+- Migrated dialog and workspace action buttons away from per-window `new Button` construction, including AD credentials, input prompts, OU browser, Recovery access, incident verification, secure output, secret display, Cloud/Graph administration, credential management, unified device search, Remote API scoped tokens, RBAC, and privileged-access workflows.
+- Added CI enforcement that rejects direct `new Button` construction anywhere in the UI layer outside `UiStyle`.
+- Extended runtime UI validation to require shared AutoSize behavior and the common minimum button height for every visible button.
+- Standardized modal keyboard behavior: Enter executes the primary action and Escape executes Cancel/Close where the dialog has a clear primary action.
+- Migrated RBAC and Remote API scoped-token state displays to shared `UiStatusLabel` surfaces with semantic Success/Error/Neutral states and accessibility metadata.
+- Migrated JIT recovery, two-person approval, and SIEM state displays in Privileged Access to the shared status system; failed actions now immediately replace stale healthy status with Error state.
+- Migrated the remaining Recovery workflow/OU status labels to shared inline `UiStatusLabel` styling. Search, connection, OU selection, empty-result, and failure states now use semantic Busy/Success/Warning/Error feedback without adding heavy framed panels.
+- `Select / Change OU` and `Search BitLocker` now use the centralized button sizing/style path.
+- Existing compact, 150%, 200%, High Contrast, accessibility, and DPI-safe glyph runtime validation remains enabled.
+- Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
+
+
 ## 0.18.7
 
 - Extended the shared `UiStatusLabel` visual system beyond Recovery to Cloud/Graph, unified device search, coverage, software updates, Remote API, credential vault, service health, machine cloud configuration, service identity, and audit signing.
