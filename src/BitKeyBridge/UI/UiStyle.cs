@@ -119,8 +119,10 @@ public static class UiStyle
         UiStatusKind kind)
     {
         var state =
-            StatusStates.GetOrCreateValue(
-                label);
+            StatusStates.GetValue(
+                label,
+                static _ =>
+                    new StatusState());
 
         state.Kind =
             kind;
