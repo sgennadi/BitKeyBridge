@@ -3,9 +3,9 @@ namespace BitKeyBridge;
 public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
 {
     private readonly AppConfig _config;
-    private readonly Label _readStatus = new();
-    private readonly Label _coverageStatus = new();
-    private readonly Label _exportStatus = new();
+    private readonly UiStatusLabel _readStatus = new();
+    private readonly UiStatusLabel _coverageStatus = new();
+    private readonly UiStatusLabel _exportStatus = new();
     private readonly TableLayoutPanel _scopeGrid = new();
 
     public RemoteApiScopedTokenDialog(
@@ -92,12 +92,12 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
             WrapContents = true,
             Padding = new Padding(0, 10, 0, 0)
         };
-        var close = new Button
-        {
-            Text = "Close",
-            AutoSize = true,
-            MinimumSize = new Size(100, 32)
-        };
+        var close =
+            UiStyle.CreateActionButton(
+                "Close",
+                DialogResult.Cancel);
+        CancelButton =
+            close;
         close.Click += (_, _) => Close();
         footer.Controls.Add(close);
         root.Controls.Add(footer, 0, 3);
@@ -109,7 +109,7 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         string title,
         string description,
         string scope,
-        Label status,
+        UiStatusLabel status,
         int row)
     {
         var titleLabel = new Label
@@ -135,27 +135,46 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
             AutoSize = true,
             MaximumSize = new Size(380, 0)
         });
-        status.AutoSize = true;
-        status.Margin = new Padding(0, 4, 0, 0);
+        UiStyle.ConfigureStatusLabel(
+            status);
+        status.AccessibleName =
+            $"{title} token status";
+        status.MaximumSize =
+            new Size(
+                380,
+                0);
+        status.Margin =
+            new Padding(
+                0,
+                4,
+                0,
+                0);
         details.Controls.Add(status);
         _scopeGrid.Controls.Add(details, 1, row);
 
-        var generate = new Button
-        {
-            Text = "Generate",
-            AutoSize = true,
-            MinimumSize = new Size(95, 32),
-            Anchor = AnchorStyles.Top,
-            Margin = new Padding(0, 4, 8, 10)
-        };
-        var revoke = new Button
-        {
-            Text = "Revoke",
-            AutoSize = true,
-            MinimumSize = new Size(95, 32),
-            Anchor = AnchorStyles.Top,
-            Margin = new Padding(0, 4, 0, 10)
-        };
+        var generate =
+            UiStyle.CreateActionButton(
+                "Generate");
+        generate.Anchor =
+            AnchorStyles.Top;
+        generate.Margin =
+            new Padding(
+                0,
+                4,
+                UiStyle.ControlGap,
+                10);
+
+        var revoke =
+            UiStyle.CreateActionButton(
+                "Revoke");
+        revoke.Anchor =
+            AnchorStyles.Top;
+        revoke.Margin =
+            new Padding(
+                0,
+                4,
+                0,
+                10);
 
         generate.Click += (_, _) => Generate(scope);
         revoke.Click += (_, _) => Revoke(scope);
@@ -253,25 +272,34 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
 
     private void RefreshStatuses()
     {
-        _readStatus.Text =
-            "Status: " +
-            State(
-                _config.RemoteApiReadTokenSha256);
-        _coverageStatus.Text =
-            "Status: " +
-            State(
-                _config.RemoteApiCoverageRunTokenSha256);
-        _exportStatus.Text =
-            "Status: " +
-            State(
-                _config.RemoteApiExportTokenSha256);
+        SetTokenStatus(
+            _readStatus,
+            _config.RemoteApiReadTokenSha256);
+        SetTokenStatus(
+            _coverageStatus,
+            _config.RemoteApiCoverageRunTokenSha256);
+        SetTokenStatus(
+            _exportStatus,
+            _config.RemoteApiExportTokenSha256);
     }
 
-    private static string State(
-        string hash) =>
-        string.IsNullOrWhiteSpace(hash)
-            ? "Not configured"
-            : "Configured";
+    private static void SetTokenStatus(
+        UiStatusLabel status,
+        string hash)
+    {
+        var configured =
+            !string.IsNullOrWhiteSpace(
+                hash);
+
+        UiStyle.SetStatus(
+            status,
+            configured
+                ? "Status: Configured"
+                : "Status: Not configured",
+            configured
+                ? UiStatusKind.Success
+                : UiStatusKind.Neutral);
+    }
 
     private static void RestartServiceIfRunning()
     {
