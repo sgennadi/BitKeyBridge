@@ -650,10 +650,18 @@ public sealed partial class MainForm
             WrapContents = true
         };
 
-        var save = new Button { Text = "Save settings", AutoSize = true };
-        var saveCredential = new Button { Text = "Save credential", AutoSize = true };
-        var deleteCredential = new Button { Text = "Delete stored credential", AutoSize = true };
-        var clearPassword = new Button { Text = "Clear session password", AutoSize = true };
+        var save =
+            UiStyle.CreateActionButton(
+                "Save settings");
+        var saveCredential =
+            UiStyle.CreateActionButton(
+                "Save credential");
+        var deleteCredential =
+            UiStyle.CreateActionButton(
+                "Delete stored credential");
+        var clearPassword =
+            UiStyle.CreateActionButton(
+                "Clear session password");
         actions.Controls.AddRange([
             save,
             saveCredential,
@@ -788,12 +796,9 @@ public sealed partial class MainForm
         _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);
 
-        var searchButton = new Button
-        {
-            Text = "Search AD + Cloud",
-            AutoSize = true,
-            Padding = new Padding(8, 2, 8, 2)
-        };
+        var searchButton =
+            UiStyle.CreateActionButton(
+                "Search AD + Cloud");
         search.Controls.Add(searchButton, 2, 0);
         root.Controls.Add(search, 0, 0);
 
@@ -953,11 +958,9 @@ public sealed partial class MainForm
             AutoSize = true,
             WrapContents = true
         };
-        var rotate = new Button
-        {
-            Text = "Rotate BitLocker Key in Intune",
-            AutoSize = true
-        };
+        var rotate =
+            UiStyle.CreateActionButton(
+                "Rotate BitLocker Key in Intune");
         actions.Controls.Add(rotate);
         root.Controls.Add(actions, 0, 5);
 
@@ -1077,11 +1080,21 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             WrapContents = true
         };
-        var save = new Button { Text = "Save Config", AutoSize = true };
-        var connect = new Button { Text = "Connect / Test", AutoSize = true };
-        var setup = new Button { Text = "First-Run / Repair", AutoSize = true };
-        var bootstrap = new Button { Text = "Bootstrap...", AutoSize = true };
-        var rollover = new Button { Text = "Rollover Certificate...", AutoSize = true };
+        var save =
+            UiStyle.CreateActionButton(
+                "Save Config");
+        var connect =
+            UiStyle.CreateActionButton(
+                "Connect / Test");
+        var setup =
+            UiStyle.CreateActionButton(
+                "First-Run / Repair");
+        var bootstrap =
+            UiStyle.CreateActionButton(
+                "Bootstrap...");
+        var rollover =
+            UiStyle.CreateActionButton(
+                "Rollover Certificate...");
         buttons.Controls.AddRange([
             save,
             connect,
