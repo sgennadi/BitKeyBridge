@@ -362,9 +362,10 @@ public static class UiStyle
             {
                 view.Columns.Add(
                     column.Name,
-                    ScaleLogicalPixels(
-                        column.Width,
-                        view.DeviceDpi));
+                    GetListViewColumnWidth(
+                        view,
+                        column.Name,
+                        column.Width));
             }
         }
         finally
@@ -424,9 +425,10 @@ public static class UiStyle
                  index++)
             {
                 var width =
-                    ScaleLogicalPixels(
-                        state.LogicalWidths[index],
-                        view.DeviceDpi);
+                    GetListViewColumnWidth(
+                        view,
+                        view.Columns[index].Text,
+                        state.LogicalWidths[index]);
 
                 if (view.Columns[index].Width !=
                     width)
@@ -442,6 +444,39 @@ public static class UiStyle
                 false;
         }
     }
+
+    internal static int GetMinimumListViewHeaderWidth(
+        ListView view,
+        string headerText)
+    {
+        var measured =
+            TextRenderer.MeasureText(
+                headerText ?? string.Empty,
+                view.Font,
+                Size.Empty,
+                TextFormatFlags.SingleLine |
+                TextFormatFlags.NoPrefix |
+                TextFormatFlags.NoPadding);
+
+        return Math.Max(
+            1,
+            measured.Width +
+            ScaleLogicalPixels(
+                24,
+                view.DeviceDpi));
+    }
+
+    private static int GetListViewColumnWidth(
+        ListView view,
+        string headerText,
+        int logicalWidth) =>
+        Math.Max(
+            ScaleLogicalPixels(
+                logicalWidth,
+                view.DeviceDpi),
+            GetMinimumListViewHeaderWidth(
+                view,
+                headerText));
 
     internal static bool HasConfiguredListViewColumns(
         ListView view) =>
