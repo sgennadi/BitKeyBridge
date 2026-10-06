@@ -126,6 +126,12 @@ public class DpiAwareForm : Form
                 statusLabel);
         }
 
+        if (root is ListView listView)
+        {
+            UiStyle.RefreshListViewColumns(
+                listView);
+        }
+
         if (root is Label label &&
             label.AutoSize &&
             label.MaximumSize.Width > 0)
