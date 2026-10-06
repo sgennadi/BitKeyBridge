@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.18.9
+
+- Added shared DPI-aware `ListView` column management through `UiStyle.ConfigureListViewColumns`.
+- Migrated all six details tables — Recovery results, unified Devices, Export scope results, Coverage, DC comparison, and Audit — to the shared logical-width column path.
+- Column widths are authored at the 96-DPI logical baseline and recalculated for the active monitor DPI instead of remaining fixed physical pixels.
+- Enlarged system text is included in the minimum header-width calculation, preventing column captions from being clipped at 150% / 200% large-text settings.
+- User column resizing is preserved as logical width, so moving the application between monitors with different scaling keeps the intended proportions.
+- `DpiAwareForm` refreshes configured ListView columns during the normal per-monitor DPI/font relayout path.
+- Runtime UI self-test now rejects any visible ListView that bypasses the shared configuration and verifies every header remains wide enough for its caption.
+- Added direct 100% / 150% / 200% scaling and logical-width round-trip regression checks for ListView columns.
+- CI now rejects direct `ListView.Columns.Add` and `ColumnHeader` construction outside `UiStyle`.
+- Updated the shared UI standard with the ListView/table-column rules.
+- Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
+
+
 ## 0.18.8
 
 - Added `UiStyle.CreateActionButton(...)` as the centralized factory for WinForms action/dialog buttons. AutoSize, minimum dimensions, padding, and Windows visual-style behavior now come from the shared UI layer.
