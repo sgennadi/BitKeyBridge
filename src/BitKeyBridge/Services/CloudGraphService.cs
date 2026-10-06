@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace BitKeyBridge;
 
-public sealed class CloudGraphService : IDisposable
+public sealed partial class CloudGraphService : IDisposable
 {
     private readonly HttpClient _http;
     private readonly CertificateService _certificates = new();
@@ -25,7 +25,8 @@ public sealed class CloudGraphService : IDisposable
         string clientId,
         string username,
         string password,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool lapsOnly = false)
     {
         Require(tenantId, nameof(tenantId));
         Require(clientId, nameof(clientId));
@@ -38,7 +39,8 @@ public sealed class CloudGraphService : IDisposable
             ["grant_type"] = "password",
             ["username"] = username.Trim(),
             ["password"] = password,
-            ["scope"] = "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All"
+            ["scope"] = lapsOnly ? LapsDelegatedScopes :
+                "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All"
         };
         return await AcquireTokenAsync(tenantId, body, "Password", username.Trim(), ct);
     }
@@ -47,14 +49,15 @@ public sealed class CloudGraphService : IDisposable
         string tenantId,
         string clientId,
         Func<DeviceCodeInfo, Task> showDeviceCode,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool lapsOnly = false)
     {
         Require(tenantId, nameof(tenantId));
         Require(clientId, nameof(clientId));
 
         var tenant = Uri.EscapeDataString(tenantId.Trim());
         var deviceUri = $"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/devicecode";
-        var scopes =
+        var scopes = lapsOnly ? LapsDelegatedScopes + " offline_access" :
             "https://graph.microsoft.com/BitlockerKey.Read.All " +
             "https://graph.microsoft.com/Device.Read.All " +
             "https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All offline_access";

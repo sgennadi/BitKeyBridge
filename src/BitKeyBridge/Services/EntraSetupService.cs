@@ -15,6 +15,7 @@ public sealed class EntraSetupService : IDisposable
     private const string BitLockerPermission = "BitlockerKey.Read.All";
     private const string DevicePermission = "Device.Read.All";
     private const string ManagedDevicesReadWritePermission = "DeviceManagementManagedDevices.ReadWrite.All";
+    private const string LapsPermission = "DeviceLocalCredential.Read.All";
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
     private readonly CertificateService _certificates = new();
@@ -27,7 +28,8 @@ public sealed class EntraSetupService : IDisposable
         Func<DeviceCodeInfo, Task> showDeviceCode,
         IProgress<string>? progress = null,
         bool rotateCertificate = false,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool includeLapsPermissions = false)
     {
         tenant = string.IsNullOrWhiteSpace(tenant) ? "organizations" : tenant.Trim();
         displayName = string.IsNullOrWhiteSpace(displayName) ? "BitKeyBridge" : displayName.Trim();
@@ -49,7 +51,7 @@ public sealed class EntraSetupService : IDisposable
         var graphSp = await GetMicrosoftGraphServicePrincipalAsync(managementToken, ct)
             ?? throw new InvalidOperationException("Microsoft Graph service principal was not found in the tenant.");
         var graphSpId = graphSp["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Graph service principal ID is missing.");
-        var permissionIds = ResolveGraphPermissionIds(graphSp);
+        var permissionIds = ResolveGraphPermissionIds(graphSp, includeLapsPermissions);
         progress?.Report("Resolved current Microsoft Graph permission identifiers dynamically.");
 
         JsonObject? application = null;
@@ -109,10 +111,13 @@ public sealed class EntraSetupService : IDisposable
         await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppBitLocker, ct);
         await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppDevice, ct);
         await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppManagedDevicesReadWrite, ct);
+        if (permissionIds.AppLaps is not null)
+            await EnsureAppRoleAssignmentAsync(managementToken, servicePrincipalId, graphSpId, permissionIds.AppLaps, ct);
 
         progress?.Report("Granting tenant-wide delegated admin consent...");
         await EnsureDelegatedGrantAsync(managementToken, servicePrincipalId, graphSpId,
-            $"{BitLockerPermission} {DevicePermission} {ManagedDevicesReadWritePermission}", ct);
+            $"{BitLockerPermission} {DevicePermission} {ManagedDevicesReadWritePermission}" +
+                (includeLapsPermissions ? $" {LapsPermission}" : string.Empty), ct);
 
         X509Certificate2 cert;
         if (!rotateCertificate && !string.IsNullOrWhiteSpace(existingConfig?.CertificateThumbprint))
@@ -147,7 +152,8 @@ public sealed class EntraSetupService : IDisposable
             Username = existingConfig?.Username ?? string.Empty,
             CertificateThumbprint = cert.Thumbprint,
             AuthMode = existingConfig?.AuthMode ?? "DeviceCode",
-            BootstrapClientId = effectiveBootstrapClientId
+            BootstrapClientId = effectiveBootstrapClientId,
+            EnableLapsPermissions = includeLapsPermissions
         };
         JsonStore.WriteAtomic(AppPaths.CloudConfigFile, config);
 
@@ -254,9 +260,11 @@ public sealed class EntraSetupService : IDisposable
         string AppBitLocker,
         string AppDevice,
         string DelegatedManagedDevicesReadWrite,
-        string AppManagedDevicesReadWrite);
+        string AppManagedDevicesReadWrite,
+        string? DelegatedLaps,
+        string? AppLaps);
 
-    private static GraphPermissionIds ResolveGraphPermissionIds(JsonObject graphServicePrincipal)
+    private static GraphPermissionIds ResolveGraphPermissionIds(JsonObject graphServicePrincipal, bool includeLaps = false)
     {
         return new GraphPermissionIds(
             ResolveDelegatedScopeId(graphServicePrincipal, BitLockerPermission),
@@ -264,7 +272,9 @@ public sealed class EntraSetupService : IDisposable
             ResolveApplicationRoleId(graphServicePrincipal, BitLockerPermission),
             ResolveApplicationRoleId(graphServicePrincipal, DevicePermission),
             ResolveDelegatedScopeId(graphServicePrincipal, ManagedDevicesReadWritePermission),
-            ResolveApplicationRoleId(graphServicePrincipal, ManagedDevicesReadWritePermission));
+            ResolveApplicationRoleId(graphServicePrincipal, ManagedDevicesReadWritePermission),
+            includeLaps ? ResolveDelegatedScopeId(graphServicePrincipal, LapsPermission) : null,
+            includeLaps ? ResolveApplicationRoleId(graphServicePrincipal, LapsPermission) : null);
     }
 
     private static string ResolveDelegatedScopeId(JsonObject graphServicePrincipal, string value)
@@ -300,8 +310,10 @@ public sealed class EntraSetupService : IDisposable
             ?? throw new InvalidOperationException($"Microsoft Graph application permission '{value}' was not found.");
     }
 
-    private static JsonArray BuildRequiredResourceAccess(GraphPermissionIds ids) =>
-        new()
+    private static JsonArray BuildRequiredResourceAccess(GraphPermissionIds ids)
+    {
+        var result =
+        new JsonArray()
         {
             new JsonObject
             {
@@ -317,6 +329,14 @@ public sealed class EntraSetupService : IDisposable
                 }
             }
         };
+        if (ids.DelegatedLaps is not null && ids.AppLaps is not null)
+        {
+            var access = (JsonArray)result[0]!["resourceAccess"]!;
+            access.Add(new JsonObject { ["id"] = ids.DelegatedLaps, ["type"] = "Scope" });
+            access.Add(new JsonObject { ["id"] = ids.AppLaps, ["type"] = "Role" });
+        }
+        return result;
+    }
 
     private static JsonArray MergeRequiredResourceAccess(JsonArray? existing, GraphPermissionIds ids)
     {
@@ -347,7 +367,7 @@ public sealed class EntraSetupService : IDisposable
             graphEntry["resourceAccess"] = access;
         }
 
-        var required = new (string Id, string Type)[]
+        var required = new List<(string Id, string Type)>
         {
             (ids.DelegatedBitLocker, "Scope"),
             (ids.DelegatedDevice, "Scope"),
@@ -356,6 +376,12 @@ public sealed class EntraSetupService : IDisposable
             (ids.DelegatedManagedDevicesReadWrite, "Scope"),
             (ids.AppManagedDevicesReadWrite, "Role")
         };
+
+        if (ids.DelegatedLaps is not null && ids.AppLaps is not null)
+        {
+            required.Add((ids.DelegatedLaps, "Scope"));
+            required.Add((ids.AppLaps, "Role"));
+        }
 
         foreach (var item in required)
         {

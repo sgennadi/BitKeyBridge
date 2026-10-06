@@ -11,16 +11,29 @@ public sealed class ActiveDirectoryService
 {
     private readonly TimeSpan _timeout = TimeSpan.FromSeconds(30);
     private readonly AppConfig _config;
+    private readonly NetworkCredential? _credentialOverride;
+    private readonly bool _useCredentialOverride;
 
-    public ActiveDirectoryService(AppConfig? config = null)
+    public ActiveDirectoryService(AppConfig? config = null,
+        NetworkCredential? credentialOverride = null, bool useCredentialOverride = false)
     {
         _config = config ?? ConfigService.LoadAppConfig();
+        _credentialOverride = credentialOverride;
+        _useCredentialOverride = useCredentialOverride;
     }
 
     public string GetCurrentDomainName()
     {
         if (!string.IsNullOrWhiteSpace(_config.AdDomain))
             return _config.AdDomain.Trim();
+
+        if (UseExplicitServer())
+        {
+            var root = GetRootDse(_config.AdServer.Trim());
+            if (root.TryGetValue("defaultNamingContext", out var namingContext) &&
+                !string.IsNullOrWhiteSpace(namingContext))
+                return DistinguishedNameToDnsName(namingContext);
+        }
 
         try
         {
@@ -124,12 +137,18 @@ public sealed class ActiveDirectoryService
 
     public Dictionary<string, string> GetRootDse(string server)
     {
-        var result = TryGetRootDse(server);
+        var result = ReadRootDse(server);
         if (result.Count == 0) throw new InvalidOperationException($"Could not read RootDSE from {server}.");
         return result;
     }
 
     private Dictionary<string, string> TryGetRootDse(string server)
+    {
+        try { return ReadRootDse(server); }
+        catch { return []; }
+    }
+
+    private Dictionary<string, string> ReadRootDse(string server)
     {
         try
         {
@@ -152,9 +171,9 @@ public sealed class ActiveDirectoryService
             }
             return dict;
         }
-        catch
+        catch (LdapException ex) when (ex.ErrorCode == 49)
         {
-            return [];
+            throw new InvalidOperationException("Active Directory rejected the supplied account or password. Check the domain and enter the credentials again.");
         }
     }
 
@@ -665,7 +684,7 @@ public sealed class ActiveDirectoryService
         DirectoryContextType type,
         string name)
     {
-        var credential = AdSessionCredentials.CreateNetworkCredential(_config);
+        var credential = GetConnectionCredential();
         return credential is null
             ? new DirectoryContext(type, name)
             : new DirectoryContext(
@@ -682,7 +701,7 @@ public sealed class ActiveDirectoryService
         return credential.UserName;
     }
 
-    private static string DistinguishedNameToDnsName(string distinguishedName)
+    internal static string DistinguishedNameToDnsName(string distinguishedName)
     {
         return string.Join(
             ".",
@@ -692,11 +711,11 @@ public sealed class ActiveDirectoryService
                 .Select(x => x[3..]));
     }
 
-    private LdapConnection CreateConnection(string server)
+    internal LdapConnection CreateConnection(string server)
     {
         var port = Math.Clamp(_config.AdPort, 1, 65535);
         var identifier = new LdapDirectoryIdentifier(server, port, true, false);
-        var credential = AdSessionCredentials.CreateNetworkCredential(_config);
+        var credential = GetConnectionCredential();
         var connection = credential is null
             ? new LdapConnection(identifier)
             : new LdapConnection(identifier, credential, AuthType.Negotiate);
@@ -715,9 +734,21 @@ public sealed class ActiveDirectoryService
             connection.SessionOptions.Sealing = true;
         }
 
-        connection.Bind();
-        return connection;
+        try
+        {
+            connection.Bind();
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
+
+    private NetworkCredential? GetConnectionCredential() => _useCredentialOverride
+        ? _credentialOverride
+        : AdSessionCredentials.CreateNetworkCredential(_config);
 
     private List<SearchResultEntry> SendPaged(LdapConnection connection, SearchRequest request)
     {
@@ -779,7 +810,7 @@ public sealed class ActiveDirectoryService
         catch { return null; }
     }
 
-    private static string EscapeLdapFilter(string value)
+    internal static string EscapeLdapFilter(string value)
     {
         var sb = new StringBuilder(value.Length + 8);
         foreach (var ch in value)

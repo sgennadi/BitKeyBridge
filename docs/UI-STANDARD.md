@@ -60,6 +60,14 @@ WinForms style for related administrative utilities.
   width/height.
 - Prefer `TableLayoutPanel`, `FlowLayoutPanel`, `Dock`, `Anchor`, `AutoSize`,
   and percentage columns.
+- `ListView` / details-table columns must be created through
+  `UiStyle.ConfigureListViewColumns`. Author widths as 96-DPI logical values;
+  the shared layer scales them for the active monitor DPI and enlarged system text.
+- Table headers must never be narrower than their measured caption. Horizontal
+  scrolling is preferable to clipping a header or silently collapsing a data column.
+- User-resized ListView widths are tracked in logical pixels so moving between
+  100%, 150%, and 200% monitors preserves the user's proportions instead of
+  restoring stale physical-pixel widths.
 
 ## Long text
 
@@ -106,6 +114,10 @@ The build checks enforce:
 - Application forms do not inherit directly from `Form`.
 - Fixed-position WinForms layout is rejected.
 - Fixed button Width/Height declarations are rejected.
+- Direct `ListView.Columns.Add` / `ColumnHeader` construction outside
+  `UiStyle` is rejected; all details-table columns use the shared DPI-aware path.
+- Runtime UI validation verifies every visible ListView uses the shared column
+  configuration and that every header fits at compact, 150%, and 200% scenarios.
 - Direct Segoe UI / Consolas construction outside `UiStyle` is rejected.
 - Direct `new Button` construction outside `UiStyle` is rejected.
 - Runtime validation checks action-button AutoSize/minimum height and modal

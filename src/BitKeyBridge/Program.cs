@@ -1495,6 +1495,8 @@ internal static class Program
         {
             Directory.CreateDirectory(tempDirectory);
 
+            failures.AddRange(LapsSelfTest.Run());
+
             try
             {
                 var parsed = ActiveDirectoryService.GetParentComputerName(@"CN={00000000-0000-0000-0000-000000000000},CN=PC\,LAB,OU=Computers,DC=example,DC=com");

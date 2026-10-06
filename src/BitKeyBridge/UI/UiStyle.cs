@@ -23,8 +23,21 @@ public static class UiStyle
     public const int MinimumButtonHeight = 32;
     public const int MinimumButtonWidth = 88;
 
+    private sealed class ListViewColumnState
+    {
+        public int[] LogicalWidths { get; set; } =
+            [];
+
+        public bool Updating { get; set; }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        ListView,
+        ListViewColumnState> ListViewColumnStates =
+        new();
+
     public static Font BodyFont =>
-        SystemFonts.MessageBoxFont;
+        SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont;
 
     public static Font CreateBodyFont(
         float size) =>
@@ -310,6 +323,206 @@ public static class UiStyle
 
         Refresh();
     }
+
+    public static void ConfigureListViewColumns(
+        ListView view,
+        params (string Name, int Width)[] columns)
+    {
+        if (columns.Length == 0)
+            return;
+
+        var state =
+            new ListViewColumnState
+            {
+                LogicalWidths =
+                    columns
+                        .Select(
+                            column =>
+                                Math.Max(
+                                    1,
+                                    column.Width))
+                        .ToArray()
+            };
+
+        ListViewColumnStates.Remove(
+            view);
+        ListViewColumnStates.Add(
+            view,
+            state);
+
+        state.Updating =
+            true;
+
+        try
+        {
+            view.Columns.Clear();
+
+            foreach (var column in
+                     columns)
+            {
+                view.Columns.Add(
+                    column.Name,
+                    GetListViewColumnWidth(
+                        view,
+                        column.Name,
+                        column.Width));
+            }
+        }
+        finally
+        {
+            state.Updating =
+                false;
+        }
+
+        view.ColumnWidthChanged +=
+            (_, args) =>
+            {
+                if (state.Updating ||
+                    args.ColumnIndex < 0 ||
+                    args.ColumnIndex >=
+                        state.LogicalWidths.Length ||
+                    args.ColumnIndex >=
+                        view.Columns.Count)
+                {
+                    return;
+                }
+
+                state.LogicalWidths[
+                    args.ColumnIndex] =
+                    ToLogicalPixels(
+                        view.Columns[
+                            args.ColumnIndex]
+                            .Width,
+                        view.DeviceDpi);
+            };
+
+        view.FontChanged +=
+            (_, _) =>
+                RefreshListViewColumns(
+                    view);
+
+        view.HandleCreated +=
+            (_, _) =>
+                RefreshListViewColumns(
+                    view);
+    }
+
+    public static void RefreshListViewColumns(
+        ListView view)
+    {
+        if (!ListViewColumnStates.TryGetValue(
+                view,
+                out var state))
+        {
+            return;
+        }
+
+        var count =
+            Math.Min(
+                view.Columns.Count,
+                state.LogicalWidths.Length);
+
+        if (count <= 0)
+            return;
+
+        state.Updating =
+            true;
+
+        try
+        {
+            for (var index = 0;
+                 index < count;
+                 index++)
+            {
+                var width =
+                    GetListViewColumnWidth(
+                        view,
+                        view.Columns[index].Text,
+                        state.LogicalWidths[index]);
+
+                if (view.Columns[index].Width !=
+                    width)
+                {
+                    view.Columns[index].Width =
+                        width;
+                }
+            }
+        }
+        finally
+        {
+            state.Updating =
+                false;
+        }
+    }
+
+    internal static int GetMinimumListViewHeaderWidth(
+        ListView view,
+        string headerText)
+    {
+        var measured =
+            TextRenderer.MeasureText(
+                headerText ?? string.Empty,
+                view.Font,
+                new Size(
+                    4096,
+                    1024),
+                TextFormatFlags.SingleLine |
+                TextFormatFlags.NoPrefix |
+                TextFormatFlags.NoPadding);
+
+        return Math.Max(
+            1,
+            measured.Width +
+            ScaleLogicalPixels(
+                24,
+                view.DeviceDpi));
+    }
+
+    private static int GetListViewColumnWidth(
+        ListView view,
+        string headerText,
+        int logicalWidth) =>
+        Math.Max(
+            ScaleLogicalPixels(
+                logicalWidth,
+                view.DeviceDpi),
+            GetMinimumListViewHeaderWidth(
+                view,
+                headerText));
+
+    internal static bool HasConfiguredListViewColumns(
+        ListView view) =>
+        ListViewColumnStates.TryGetValue(
+            view,
+            out _);
+
+    internal static int ScaleLogicalPixels(
+        int logicalPixels,
+        int dpi) =>
+        Math.Max(
+            1,
+            (int)Math.Round(
+                Math.Max(
+                    1,
+                    logicalPixels) *
+                Math.Max(
+                    BaselineDpi,
+                    dpi) /
+                (double)BaselineDpi));
+
+    internal static int ToLogicalPixels(
+        int physicalPixels,
+        int dpi) =>
+        Math.Max(
+            1,
+            (int)Math.Round(
+                Math.Max(
+                    1,
+                    physicalPixels) *
+                BaselineDpi /
+                (double)Math.Max(
+                    BaselineDpi,
+                    dpi)));
 
     public static Button CreateActionButton(
         string text,

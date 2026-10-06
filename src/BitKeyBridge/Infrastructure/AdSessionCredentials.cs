@@ -1,4 +1,8 @@
 using System.Net;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+using Microsoft.Win32.SafeHandles;
 
 namespace BitKeyBridge;
 
@@ -115,6 +119,33 @@ public static class AdSessionCredentials
             ? new NetworkCredential(username, password)
             : new NetworkCredential(username, password, domain);
     }
+
+    public static T RunWithNetworkIdentity<T>(NetworkCredential? credential, Func<T> action)
+    {
+        if (credential is null)
+            return action();
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Explicit Windows LAPS decryption requires Windows.");
+
+        var username = credential.UserName;
+        string? domain = username.Contains('@') ? null : credential.Domain;
+        // NEW_CREDENTIALS supports remote AD accounts on standalone workstations.
+        // LDAP bind validates the credentials before any LAPS read. Do not fall back
+        // to the process identity when impersonation or decryption fails.
+        if (!LogonUserW(username, domain, credential.Password, 9, 3, out var token))
+        {
+            var error = Marshal.GetLastWin32Error();
+            token?.Dispose();
+            throw new Win32Exception(error, "Could not use the explicit AD account for Windows LAPS decryption.");
+        }
+        using (token)
+            return WindowsIdentity.RunImpersonated(token, action);
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LogonUserW(string username, string? domain, string password,
+        int logonType, int provider, out SafeAccessTokenHandle token);
 
     private static void ZeroPasswordBuffer()
     {

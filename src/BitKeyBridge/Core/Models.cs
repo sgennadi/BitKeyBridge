@@ -129,6 +129,7 @@ public sealed class CloudAuthConfig
     public string CertificateThumbprint { get; set; } = string.Empty;
     public string AuthMode { get; set; } = "DeviceCode";
     public string BootstrapClientId { get; set; } = string.Empty;
+    public bool EnableLapsPermissions { get; set; }
 }
 
 public sealed class GraphToken

@@ -6,6 +6,20 @@
 
 В рабочем режиме PowerShell вообще не используется: AD читается напрямую по LDAP, репликация — через .NET DirectoryServices, Microsoft Graph — напрямую по HTTPS/OAuth, сертификаты — через Windows Certificate Store.
 
+## LAPS и ручное подключение — 0.19.0
+
+Новая вкладка **LAPS** поддерживает Legacy Microsoft LAPS, Windows LAPS с открытым или зашифрованным паролем, историю зашифрованных паролей, DSRM и его историю, а также LAPS в Entra ID. Выбери источник, введи точное имя компьютера или ID и нажми **Read LAPS**. Таблица показывает учётную запись, текущий пароль/историю, даты UTC и результат чтения/расшифровки. **Reveal password** и **Copy password** работают для выбранной записи.
+
+**Connect to AD** и **Discover DC** теперь всегда открывают окно ручного входа: домен, DC, `DOMAIN\user` или `user@domain`, пароль. По умолчанию используются введённые credentials; текущую Windows-учётную запись можно выбрать явно. Пустой DC включает автообнаружение. Пароль ручного входа остаётся в памяти процесса; Cancel сохраняет предыдущие credentials. При подключении к явному DC его домен имеет приоритет перед доменом рабочего компьютера.
+
+Legacy LAPS и Windows LAPS без шифрования не хранят историю. Для истории Windows LAPS/DSRM нужны включённые шифрование и хранение истории в AD. Права чтения атрибутов и права расшифровки — разные разрешения; программа показывает отказ для каждой возвращённой зашифрованной записи. Отсутствующий атрибут может означать отсутствие backup или недостаточные права чтения.
+
+Для Entra нужен **device ID**, а не object ID, и разрешение **DeviceLocalCredential.Read.All**. В Administration → Cloud есть необязательный флажок **Include LAPS read permissions in setup**: включи его перед First-Run / Repair, чтобы нативный мастер добавил нужные delegated/application permissions. Снятие флажка не отзывает ранее выданные права. Для delegated-входа также нужна соответствующая роль Entra.
+
+Read/Reveal/Copy проходят существующие RBAC и включённые JIT/approval/SIEM-проверки. Пароли LAPS не попадают в настройки, CSV или диагностику. Результаты очищаются через две минуты, при смене компьютера/источника/подключения/учётной записи, вручную и при закрытии; буфер обмена очищается через 60 секунд, если в нём всё ещё тот же пароль.
+
+Расшифровка выполняется через **NCryptUnprotectSecret** под той же введённой AD-учётной записью. LDAP, DPAPI-NG и Graph вызываются напрямую из C#; PowerShell и модули LAPS не требуются. Подробности: [LAPS.md](LAPS.md).
+
 ## Один EXE
 
 Release собирается как self-contained single-file отдельно для **win-x64**, **win-x86** и **win-arm64**.
@@ -508,4 +522,3 @@ Repair:
 Housekeeping и ACL status доступны в `/health/security`, `/metrics`, sanitized diagnostics и Windows Event Log без публикации recovery secrets, incident metadata, SID или service-account names.
 
 Application config теперь имеет **SchemaVersion 2**.
-

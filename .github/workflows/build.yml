@@ -21,6 +21,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  laps-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: LAPS encoding, history and secret lifecycle regression checks
+        run: dotnet run --project tests/LapsRegression -c Release
+
   build:
     runs-on: windows-latest
     strategy:
@@ -137,6 +149,23 @@ jobs:
             throw "Direct Button construction is not allowed outside UiStyle. Use UiStyle.CreateActionButton or a shared configured field."
           }
 
+          $directListViewColumnFiles = $uiFiles |
+            Where-Object { $_.Name -ne 'UiStyle.cs' }
+
+          $directListViewColumnFailures = @()
+          foreach ($file in $directListViewColumnFiles) {
+            $raw = Get-Content $file.FullName -Raw
+            if ($raw -match '\.Columns\.Add\s*\(' -or
+                $raw -match '\bnew\s+ColumnHeader\b') {
+              $directListViewColumnFailures += $file.FullName
+            }
+          }
+
+          if ($directListViewColumnFailures) {
+            $directListViewColumnFailures | ForEach-Object { Write-Host $_ }
+            throw "Direct ListView column construction is not allowed outside UiStyle. Use UiStyle.ConfigureListViewColumns."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
@@ -181,7 +210,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release v'))
-    needs: build
+    needs: [build, laps-regression]
     runs-on: windows-latest
 
     steps:

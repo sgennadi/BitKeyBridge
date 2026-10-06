@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.19.0
+
+- Added a native LAPS workspace for Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted passwords, encrypted AD history, DSRM passwords/history, and Microsoft Entra LAPS credentials/history.
+- Added native DPAPI-NG decryption with strict 16-byte Windows LAPS header validation, per-record access/decryption statuses, and UTF-16LE/UTF-8 JSON parsing. The explicit AD connection account is used for domain key retrieval through a bounded Windows impersonation scope.
+- AD lookup accepts an exact computer name, DNS name, SAM account name, object GUID or computer DN. Cloud lookup accepts an exact Entra device name or device ID and rejects ambiguous names.
+- Password history is sorted by UTC update/backup time rather than LDAP/Graph enumeration order. Windows Server 2025 logical password-version GUIDs are displayed when available.
+- Read, reveal and copy operations use existing RecoveryRead RBAC, optional JIT/two-person/SIEM policies and secret-free audit records. LAPS passwords are kept out of CSV exports, settings, diagnostics and serialized models.
+- Added timed password clearing, explicit clearing, clipboard clearing, disposal of managed secret buffers and zeroing of native decrypted buffers. Source, computer, connection or account changes discard loaded LAPS results and cancel pending reads.
+- Connect to AD and Discover DC now open the manual credential dialog regardless of the configured storage mode. The dialog accepts domain/DC/user/password, defaults to manual credentials, and offers an explicit current-Windows-account option; Cancel preserves the previous credentials.
+- Explicit DC domain resolution now takes precedence over the workstation's joined domain. Direct connection tests report rejected credentials instead of hiding bind errors behind generic RootDSE failures.
+- Added opt-in DeviceLocalCredential.Read.All provisioning in native First-Run / Repair setup. LAPS cloud authentication requests LAPS/device-read scopes independently of BitLocker/Intune write scopes.
+- Added portable LAPS regression checks and Windows offline DPAPI-NG roundtrip/tamper tests. Existing HiDPI/large-text/UI checks include the new workspace and expanded credential dialog.
+- Preserved the v0.18.9 shared DPI-aware ListView improvements. Release packages remain self-contained C#/.NET single-file builds for x64, x86 and ARM64; application runtime does not use PowerShell.
+
+## 0.18.9
+
+- Added shared DPI-aware `ListView` column management through `UiStyle.ConfigureListViewColumns`.
+- Migrated all six details tables — Recovery results, unified Devices, Export scope results, Coverage, DC comparison, and Audit — to the shared logical-width column path.
+- Column widths are authored at the 96-DPI logical baseline and recalculated for the active monitor DPI instead of remaining fixed physical pixels.
+- Enlarged system text is included in the minimum header-width calculation, preventing column captions from being clipped at 150% / 200% large-text settings.
+- User column resizing is preserved as logical width, so moving the application between monitors with different scaling keeps the intended proportions.
+- `DpiAwareForm` refreshes configured ListView columns during the normal per-monitor DPI/font relayout path.
+- Runtime UI self-test now rejects any visible ListView that bypasses the shared configuration and verifies every header remains wide enough for its caption.
+- Added direct 100% / 150% / 200% scaling and logical-width round-trip regression checks for ListView columns.
+- CI now rejects direct `ListView.Columns.Add` and `ColumnHeader` construction outside `UiStyle`.
+- Updated the shared UI standard with the ListView/table-column rules.
+- Release builds remain self-contained single-file packages for win-x64, win-x86 and win-arm64.
+
+
 ## 0.18.8
 
 - Added `UiStyle.CreateActionButton(...)` as the centralized factory for WinForms action/dialog buttons. AutoSize, minimum dimensions, padding, and Windows visual-style behavior now come from the shared UI layer.
