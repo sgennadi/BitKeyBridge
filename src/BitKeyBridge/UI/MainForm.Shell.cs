@@ -268,6 +268,8 @@ public sealed partial class MainForm
             2,
             0);
 
+        _advancedConnectionButton.Name =
+            "AdvancedConnectionButton";
         _advancedConnectionButton.AccessibleName =
             "Advanced Active Directory connection settings";
         _advancedConnectionButton.TabIndex =
@@ -290,6 +292,11 @@ public sealed partial class MainForm
             "AdConnectionStatus";
         UiStyle.ConfigureStatusLabel(
             _adConnectionStatus);
+        _adConnectionStatus.Text =
+            "Ready to connect to Active Directory.";
+        UiStyle.ApplyStatusLabel(
+            _adConnectionStatus,
+            UiStatusKind.Neutral);
         connection.Controls.Add(
             _adConnectionStatus,
             0,
