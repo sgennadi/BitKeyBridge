@@ -1060,20 +1060,14 @@ public sealed partial class MainForm : DpiAwareForm
             WrapContents = true,
             FlowDirection = FlowDirection.RightToLeft
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            MinimumSize = new Size(90, 32)
-        };
-        var save = new Button
-        {
-            Text = "Save",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-            MinimumSize = new Size(90, 32)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var save =
+            UiStyle.CreateActionButton(
+                "Save",
+                DialogResult.OK);
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(save);
         root.Controls.Add(buttons, 0, 3);
