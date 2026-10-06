@@ -82,7 +82,7 @@ public static class UiStyle
             GraphicsUnit.Point);
 
     public static void ConfigureStatusLabel(
-        Label label)
+        UiStatusLabel label)
     {
         label.AutoSize =
             true;
@@ -104,10 +104,6 @@ public static class UiStyle
                 0);
         label.TextAlign =
             ContentAlignment.MiddleLeft;
-        label.ImageAlign =
-            ContentAlignment.MiddleLeft;
-        label.TextImageRelation =
-            TextImageRelation.ImageBeforeText;
         label.AccessibleRole =
             AccessibleRole.StaticText;
         label.TabStop =
