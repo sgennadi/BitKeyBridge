@@ -61,8 +61,8 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _outputSubdirectory = new();
     private readonly UiStatusLabel _adConnectionStatus = new();
 
-    private readonly Label _startPurposeStatus = new();
-    private readonly Label _startOuStatus = new();
+    private readonly UiStatusLabel _startPurposeStatus = new();
+    private readonly UiStatusLabel _startOuStatus = new();
     private readonly Button _startSelectOu = new();
     private readonly TextBox _startQuery = new();
     private readonly Button _startSearch = new();
