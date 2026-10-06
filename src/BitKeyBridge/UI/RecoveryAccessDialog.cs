@@ -151,19 +151,13 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 8, 0, 0)
         };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-            MinimumSize = new Size(95, 34)
-        };
-        var ok = new Button
-        {
-            Text = "Continue",
-            AutoSize = true,
-            MinimumSize = new Size(95, 34)
-        };
+        var cancel =
+            UiStyle.CreateActionButton(
+                "Cancel",
+                DialogResult.Cancel);
+        var ok =
+            UiStyle.CreateActionButton(
+                "Continue");
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(ok);
         root.Controls.Add(buttons, 0, 5);
