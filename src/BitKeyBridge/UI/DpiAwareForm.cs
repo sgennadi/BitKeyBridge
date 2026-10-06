@@ -120,7 +120,7 @@ public class DpiAwareForm : Form
                         UiStyle.MinimumButtonHeight));
         }
 
-        if (root is Label statusLabel)
+        if (root is UiStatusLabel statusLabel)
         {
             UiStyle.RefreshStatusLabel(
                 statusLabel);
