@@ -519,12 +519,31 @@ public static class UiLayoutSelfTest
             }
 
             if (control is ListView listView &&
-                listView.Columns.Count > 0 &&
-                !UiStyle.HasConfiguredListViewColumns(
-                    listView))
+                listView.Columns.Count > 0)
             {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: ListView '{ControlName(listView)}' bypasses shared DPI-aware column configuration.");
+                if (!UiStyle.HasConfiguredListViewColumns(
+                        listView))
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: ListView '{ControlName(listView)}' bypasses shared DPI-aware column configuration.");
+                }
+
+                foreach (ColumnHeader column in
+                         listView.Columns)
+                {
+                    var minimumHeaderWidth =
+                        UiStyle.GetMinimumListViewHeaderWidth(
+                            listView,
+                            column.Text);
+
+                    if (column.Width <
+                        minimumHeaderWidth)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}: ListView header '{column.Text}' may clip at the active text/DPI scale " +
+                            $"(Width={column.Width}, Minimum={minimumHeaderWidth}).");
+                    }
+                }
             }
 
             if (control is FlowLayoutPanel flow &&
