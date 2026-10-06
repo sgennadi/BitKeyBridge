@@ -15,16 +15,6 @@ public enum UiStatusKind
 /// </summary>
 public static class UiStyle
 {
-    private sealed class StatusState
-    {
-        public UiStatusKind Kind { get; set; }
-    }
-
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
-        Label,
-        StatusState> StatusStates =
-        new();
-
     public const int BaselineDpi = 96;
     public const int WindowMargin = 16;
     public const int PagePadding = 18;
@@ -108,69 +98,62 @@ public static class UiStyle
             AccessibleRole.StaticText;
         label.TabStop =
             false;
+
+        RefreshStatusLabel(
+            label);
     }
 
     public static void ApplyStatusLabel(
-        Label label,
+        UiStatusLabel label,
         UiStatusKind kind)
     {
-        var state =
-            StatusStates.GetValue(
-                label,
-                static _ =>
-                    new StatusState());
-
-        state.Kind =
+        label.StatusKind =
             kind;
 
         RefreshStatusLabel(
-            label,
-            kind);
+            label);
     }
 
     public static void RefreshStatusLabel(
-        Label label)
+        UiStatusLabel label)
     {
-        if (!StatusStates.TryGetValue(
-                label,
-                out var state))
+        var kind =
+            label.StatusKind;
+
+        if (SystemInformation.HighContrast)
         {
-            return;
+            label.BackColor =
+                SystemColors.Window;
+            label.ForeColor =
+                SystemColors.WindowText;
         }
-
-        RefreshStatusLabel(
-            label,
-            state.Kind);
-    }
-
-    private static void RefreshStatusLabel(
-        Label label,
-        UiStatusKind kind)
-    {
-        (label.BackColor, label.ForeColor) =
-            kind switch
-            {
-                UiStatusKind.Busy =>
-                    (
-                        Color.LemonChiffon,
-                        Color.DarkGoldenrod),
-                UiStatusKind.Success =>
-                    (
-                        Color.Honeydew,
-                        Color.DarkGreen),
-                UiStatusKind.Warning =>
-                    (
-                        Color.LemonChiffon,
-                        Color.DarkOrange),
-                UiStatusKind.Error =>
-                    (
-                        Color.MistyRose,
-                        Color.DarkRed),
-                _ =>
-                    (
-                        SystemColors.Window,
-                        SystemColors.ControlText)
-            };
+        else
+        {
+            (label.BackColor, label.ForeColor) =
+                kind switch
+                {
+                    UiStatusKind.Busy =>
+                        (
+                            Color.LemonChiffon,
+                            Color.DarkGoldenrod),
+                    UiStatusKind.Success =>
+                        (
+                            Color.Honeydew,
+                            Color.DarkGreen),
+                    UiStatusKind.Warning =>
+                        (
+                            Color.LemonChiffon,
+                            Color.DarkOrange),
+                    UiStatusKind.Error =>
+                        (
+                            Color.MistyRose,
+                            Color.DarkRed),
+                    _ =>
+                        (
+                            SystemColors.Window,
+                            SystemColors.ControlText)
+                };
+        }
 
         label.Image =
             UiStatusGlyphs.Get(
@@ -178,14 +161,20 @@ public static class UiStyle
                 label.DeviceDpi,
                 label.ForeColor);
 
-        label.AccessibleName =
-            $"{kind} status";
+        if (string.IsNullOrWhiteSpace(
+                label.AccessibleName))
+        {
+            label.AccessibleName =
+                "Status";
+        }
 
         label.AccessibleDescription =
             string.IsNullOrWhiteSpace(
                 label.Text)
                 ? $"{kind} status."
                 : $"{kind} status. {label.Text}";
+
+        label.Invalidate();
     }
 
     public static void BindBalancedWidths(
