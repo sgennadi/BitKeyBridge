@@ -27,6 +27,11 @@ WinForms style for related administrative utilities.
   monitor DPI and remain sharp at 200% scaling.
 - Informational status surfaces are not part of keyboard tab navigation and must
   expose an AccessibleName and AccessibleDescription.
+- Status text and semantic state must be updated together through the shared
+  status API; screen-reader descriptions must never lag behind visible text.
+- Windows High Contrast is mandatory: status backgrounds/foregrounds fall back
+  to SystemColors.Window/SystemColors.WindowText, while state remains
+  distinguishable by vector glyph shape and text rather than color alone.
 - Direct Segoe UI / Consolas construction outside `UiStyle` is not allowed.
   Typography changes must flow through the shared style tokens.
 
@@ -72,6 +77,7 @@ Every significant GUI change should be reviewed against these scenarios:
 | 4K desktop | 3840 x 2160 @ 150% |
 | 4K high scaling | 3840 x 2160 @ 200% |
 | Runtime stress | compact + 150% + 200% large-text/layout validation |
+| Accessibility | keyboard order + status metadata + High Contrast palette |
 | Compact / RDP | 1366 x 768 @ 100-150% |
 | Accessibility | Windows text size 125-150% |
 
