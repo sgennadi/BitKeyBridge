@@ -10,7 +10,6 @@ public sealed class AppConfig
     public int SchemaVersion { get; set; } =
         ConfigSchema.CurrentVersion;
 
-    public string SysvolScriptsRoot { get; set; } = string.Empty;
     public string OutputRoot { get; set; } = string.Empty;
     public string OutputSubdirectory { get; set; } = string.Empty;
     public int StaleSuccessHours { get; set; } = 36;
