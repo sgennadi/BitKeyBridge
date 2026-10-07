@@ -1747,6 +1747,8 @@ public sealed partial class MainForm
         grid.Controls.Add(actions, 1, 5);
         grid.SetColumnSpan(actions, 3);
 
+        _credentialVaultStatus.Name =
+            "AdCredentialStatus";
         UiStyle.ConfigureStatusLabel(
             _credentialVaultStatus);
         _credentialVaultStatus.AccessibleName =

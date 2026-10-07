@@ -141,10 +141,20 @@ public class DpiAwareForm : Form
             {
                 _labelMaximumSizes[label] =
                     label.MaximumSize;
+                label.VisibleChanged +=
+                    ResponsiveLabelVisibleChanged;
+                label.Disposed +=
+                    ResponsiveLabelDisposed;
             }
 
-            RefreshResponsiveLabelWidth(
-                label);
+            // Hidden tabs/groups can temporarily report a very small layout
+            // width. Never let that transient geometry permanently shrink a
+            // wrapping label such as the AD credential-status surface.
+            if (label.Visible)
+            {
+                RefreshResponsiveLabelWidth(
+                    label);
+            }
         }
 
         foreach (Control child in
@@ -155,12 +165,52 @@ public class DpiAwareForm : Form
         }
     }
 
+    private void ResponsiveLabelVisibleChanged(
+        object? sender,
+        EventArgs e)
+    {
+        if (sender is not Label label ||
+            !label.Visible ||
+            label.IsDisposed ||
+            IsDisposed ||
+            !IsHandleCreated)
+        {
+            return;
+        }
+
+        BeginInvoke(
+            new MethodInvoker(
+                () =>
+                {
+                    if (label.IsDisposed ||
+                        !label.Visible ||
+                        IsDisposed)
+                    {
+                        return;
+                    }
+
+                    RefreshResponsiveLabelWidth(
+                        label);
+                    label.Parent?.PerformLayout();
+                }));
+    }
+
+    private void ResponsiveLabelDisposed(
+        object? sender,
+        EventArgs e)
+    {
+        if (sender is Label label)
+            _labelMaximumSizes.Remove(label);
+    }
+
     private void RefreshResponsiveLabelWidths()
     {
         foreach (var label in
                  _labelMaximumSizes.Keys
                      .Where(
-                         x => !x.IsDisposed)
+                         x =>
+                             !x.IsDisposed &&
+                             x.Visible)
                      .ToArray())
         {
             RefreshResponsiveLabelWidth(

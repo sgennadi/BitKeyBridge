@@ -472,6 +472,15 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: Start workspace is not selected by default.");
             }
+
+            if (FindByName(
+                    startPage,
+                    "AdCredentialStatus") is UiStatusLabel credentialStatus &&
+                credentialStatus.MaximumSize.Width < 300)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: hidden Advanced layout collapsed the AD credential status width to {credentialStatus.MaximumSize.Width}px.");
+            }
         }
 
         if (FindByName(
