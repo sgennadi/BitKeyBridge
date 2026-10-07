@@ -7,6 +7,8 @@ public static class UiLayoutSelfTest
         Size ClientSize,
         float FontScale);
 
+    private static string _progress = "Starting";
+    private static string _reportPath = string.Empty;
     private static int _verifiedControls;
     private static readonly List<string> Coverage = new();
 
@@ -56,6 +58,13 @@ public static class UiLayoutSelfTest
         {
         }
 
+        _reportPath = reportPath;
+        using var watchdog = new System.Threading.Timer(_ =>
+        {
+            File.AppendAllText(reportPath, $"UI-SELF-TEST FAILED: timeout at {_progress}\n");
+            Environment.Exit(2);
+        }, null, Timeout.Infinite, Timeout.Infinite);
+
         var failures =
             new List<string>();
 
@@ -84,12 +93,16 @@ public static class UiLayoutSelfTest
 
                 try
                 {
+                    watchdog.Change(TimeSpan.FromSeconds(90), Timeout.InfiniteTimeSpan);
+                    ReportProgress($"{factory.Name}/{scenario.Name}: create");
                     form =
                         factory.Factory();
 
                     _verifiedControls = 0;
                     form.ShowInTaskbar = false;
+                    ReportProgress($"{factory.Name}/{scenario.Name}: show");
                     form.Show();
+                    ReportProgress($"{factory.Name}/{scenario.Name}: message loop");
                     Application.DoEvents();
 
                     form.MinimumSize =
@@ -116,6 +129,7 @@ public static class UiLayoutSelfTest
                             scaledFont;
                     }
 
+                    ReportProgress($"{factory.Name}/{scenario.Name}: layout");
                     form.CreateControl();
                     NormalizeDockFillSizes(
                         form);
@@ -125,6 +139,7 @@ public static class UiLayoutSelfTest
                         form);
                     form.PrepareResponsiveLayoutForTesting();
 
+                    ReportProgress($"{factory.Name}/{scenario.Name}: verify");
                     VerifyForm(
                         form,
                         factory.Name,
@@ -143,6 +158,7 @@ public static class UiLayoutSelfTest
                 }
                 finally
                 {
+                    watchdog.Change(Timeout.Infinite, Timeout.Infinite);
                     form?.Dispose();
                     scaledFont?.Dispose();
                 }
@@ -275,6 +291,12 @@ public static class UiLayoutSelfTest
                     new PrivilegedAccessSettingsDialog(
                         NewConfig()))
         ];
+    }
+
+    private static void ReportProgress(string progress)
+    {
+        _progress = progress;
+        File.AppendAllText(_reportPath, progress + Environment.NewLine);
     }
 
     private static void CaptureLayout(Form form, string name, Scenario scenario)
@@ -454,6 +476,7 @@ public static class UiLayoutSelfTest
                 var pagePath =
                     $"{path}/{page.Text}";
 
+                ReportProgress($"{pagePath}/{scenario.Name}: tab layout");
                 page.CreateControl();
 
                 if (checkRecoveryConnection &&
