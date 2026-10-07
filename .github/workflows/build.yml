@@ -184,6 +184,8 @@ jobs:
         run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --self-test
 
       - name: Runtime UI layout self-test
+        env:
+          BITKEYBRIDGE_UI_ARTIFACTS: ${{ runner.temp }}/ui-review
         if: matrix.rid == 'win-x64'
         shell: pwsh
         run: |
@@ -196,6 +198,16 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
           }
+
+      - name: Upload UI review images and report
+        if: always() && matrix.rid == 'win-x64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-ui-review
+          path: |
+            ${{ runner.temp }}/ui-review/*.png
+            artifacts/${{ matrix.rid }}/ui-self-test.log
+          if-no-files-found: warn
 
       - name: Package architecture
         shell: cmd

@@ -37,6 +37,7 @@ public static class UiLayoutSelfTest
 
     public static int Run()
     {
+        Coverage.Clear();
         var reportPath =
             Path.Combine(
                 AppContext.BaseDirectory,
@@ -132,6 +133,8 @@ public static class UiLayoutSelfTest
                     if (_verifiedControls == 0)
                         failures.Add($"{factory.Name}/{scenario.Name}: no visible controls were checked.");
                     Coverage.Add($"{factory.Name}/{scenario.Name}: checked {_verifiedControls} visible controls.");
+                    if (form is not MainForm)
+                        CaptureLayout(form, factory.Name, scenario);
                 }
                 catch (Exception ex)
                 {
@@ -272,6 +275,18 @@ public static class UiLayoutSelfTest
                     new PrivilegedAccessSettingsDialog(
                         NewConfig()))
         ];
+    }
+
+    private static void CaptureLayout(Form form, string name, Scenario scenario)
+    {
+        var folder = Environment.GetEnvironmentVariable("BITKEYBRIDGE_UI_ARTIFACTS");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        Directory.CreateDirectory(folder);
+        var safeName = string.Concat(name.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
+        using var bitmap = new Bitmap(form.Width, form.Height);
+        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+        bitmap.Save(Path.Combine(folder, $"{scenario.Name}-{safeName}.png"),
+            System.Drawing.Imaging.ImageFormat.Png);
     }
 
     private static void NormalizeDockFillSizes(
@@ -484,6 +499,8 @@ public static class UiLayoutSelfTest
                     pagePath,
                     scenario,
                     failures);
+
+                CaptureLayout(form, pagePath, scenario);
 
                 if (checkRecoveryConnection &&
                     string.Equals(
