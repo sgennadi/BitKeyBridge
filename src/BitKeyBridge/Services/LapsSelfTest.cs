@@ -123,7 +123,7 @@ public static class LapsSelfTest
                     .ToArray();
 
             using (var document =
-                   CloudGraphService.ParseLapsJsonResponse(
+                   LapsGraphResponseCodec.ParseJsonResponse(
                        utf8,
                        "utf-8"))
             {
@@ -141,7 +141,7 @@ public static class LapsSelfTest
                     .ToArray();
 
             using (var document =
-                   CloudGraphService.ParseLapsJsonResponse(
+                   LapsGraphResponseCodec.ParseJsonResponse(
                        utf16,
                        "utf-16"))
             {
