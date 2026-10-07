@@ -1734,6 +1734,23 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task SearchUnifiedDevicesAsync()
     {
+        if (_unifiedCancellation is not null)
+            return;
+
+        using var cancellation =
+            new CancellationTokenSource();
+        _unifiedCancellation =
+            cancellation;
+        _unifiedSearch.Enabled =
+            false;
+        _unifiedCancel.Enabled =
+            true;
+        _unifiedQuery.Enabled =
+            false;
+        _unifiedProgress.Visible =
+            true;
+        _unifiedDiagnostics.Clear();
+
         try
         {
             UiStyle.SetStatus(
@@ -1758,7 +1775,12 @@ public sealed partial class MainForm : DpiAwareForm
 
             var cloudReady =
                 cloudConfigured &&
-                await EnsureCloudTokenAsync();
+                await EnsureCloudTokenAsync(
+                    ct:
+                        cancellation.Token);
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
 
             List<UnifiedDeviceInfo> rows;
 
@@ -1772,7 +1794,9 @@ public sealed partial class MainForm : DpiAwareForm
                 rows =
                     await service.SearchAsync(
                         _cloudToken!.AccessToken,
-                        _unifiedQuery.Text);
+                        _unifiedQuery.Text,
+                        ct:
+                            cancellation.Token);
             }
             else
             {
@@ -1785,8 +1809,13 @@ public sealed partial class MainForm : DpiAwareForm
 
                 rows =
                     await service.SearchAdOnlyAsync(
-                        _unifiedQuery.Text);
+                        _unifiedQuery.Text,
+                        ct:
+                            cancellation.Token);
             }
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
 
             foreach (var row in rows)
             {
@@ -1869,12 +1898,18 @@ public sealed partial class MainForm : DpiAwareForm
                 details:
                     $"Results={rows.Count}; CloudIncluded={cloudReady}");
         }
+        catch (OperationCanceledException)
+        {
+            UiStyle.SetStatus(
+                _unifiedStatus,
+                "Device search canceled.",
+                UiStatusKind.Warning);
+        }
         catch (Exception ex)
         {
             UiStyle.SetStatus(
                 _unifiedStatus,
-                "Device search failed: " +
-                ex.Message,
+                "Device search failed. Review diagnostics below.",
                 UiStatusKind.Error);
 
             _audit.Write(
@@ -1885,7 +1920,47 @@ public sealed partial class MainForm : DpiAwareForm
                     _cloudToken?.AuthMode,
                 details:
                     ex.Message);
+
+            _unifiedDiagnostics.ShowError(
+                "Device search failed.",
+                "UnifiedDeviceSearch",
+                ex,
+                ("Query", _unifiedQuery.Text),
+                ("CloudConfigured", (!string.IsNullOrWhiteSpace(_cloudConfig.TenantId) && !string.IsNullOrWhiteSpace(_cloudConfig.ClientId)).ToString()));
         }
+        finally
+        {
+            if (ReferenceEquals(
+                    _unifiedCancellation,
+                    cancellation))
+            {
+                _unifiedCancellation =
+                    null;
+            }
+
+            _unifiedSearch.Enabled =
+                true;
+            _unifiedCancel.Enabled =
+                false;
+            _unifiedQuery.Enabled =
+                true;
+            _unifiedProgress.Visible =
+                false;
+        }
+    }
+
+    private void CancelUnifiedDeviceSearch()
+    {
+        if (_unifiedCancellation is null)
+            return;
+
+        _unifiedCancel.Enabled =
+            false;
+        UiStyle.SetStatus(
+            _unifiedStatus,
+            "Cancelling device search...",
+            UiStatusKind.Busy);
+        _unifiedCancellation.Cancel();
     }
 
     private void ShowUnifiedDeviceDetails()
