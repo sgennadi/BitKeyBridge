@@ -1325,6 +1325,10 @@ public sealed partial class MainForm
             "Save Config";
         UiStyle.ConfigureActionButton(
             _cloudSaveButton);
+        _cloudWizardButton.Text =
+            "Intune / Entra Setup Wizard...";
+        UiStyle.ConfigureActionButton(
+            _cloudWizardButton);
         _cloudConnectButton.Text =
             "Connect / Test";
         UiStyle.ConfigureActionButton(
@@ -1348,6 +1352,7 @@ public sealed partial class MainForm
         UiStyle.ConfigureActionButton(
             _cloudRolloverButton);
         buttons.Controls.AddRange([
+            _cloudWizardButton,
             _cloudSaveButton,
             _cloudConnectButton,
             _cloudConnectCancelButton,
@@ -1394,6 +1399,7 @@ public sealed partial class MainForm
             1,
             11);
 
+        _cloudWizardButton.Click += async (_, _) => await OpenIntuneSetupWizardAsync();
         _cloudSaveButton.Click += (_, _) => SaveCloudFields();
         _cloudConnectButton.Click += async (_, _) => await ConnectCloudFromUiAsync();
         _cloudConnectCancelButton.Click += (_, _) => CancelCloudConnection();
