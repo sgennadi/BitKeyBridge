@@ -491,8 +491,13 @@ public sealed class StorageSecurityService
                 _statusPath,
                 status);
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Storage security status persistence failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4587,
+                "StorageSecurity");
         }
     }
 }
