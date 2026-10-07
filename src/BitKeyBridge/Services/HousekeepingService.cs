@@ -318,8 +318,14 @@ public sealed class HousekeepingService
                             correlationId:
                                 sessionId);
                     }
-                    catch
+                    catch (Exception auditException)
                     {
+                        WindowsEventLogService.TryWrite(
+                            "Housekeeping failure audit write failed: " +
+                            auditException.Message,
+                            EventLogSeverity.Error,
+                            4567,
+                            "Housekeeping");
                     }
                 }
             }
@@ -545,8 +551,13 @@ public sealed class HousekeepingService
                 _statusPath,
                 status);
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Housekeeping status persistence failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4568,
+                "Housekeeping");
         }
     }
 }
