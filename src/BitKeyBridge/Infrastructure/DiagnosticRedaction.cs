@@ -48,6 +48,18 @@ public static class DiagnosticRedaction
             RegexOptions.Compiled |
             RegexOptions.CultureInvariant);
 
+    private static readonly Regex LapsJsonPasswordRegex =
+        new(
+            @"(?i)(""p""\s*:\s*"")[^""]*("")",
+            RegexOptions.Compiled |
+            RegexOptions.CultureInvariant);
+
+    private static readonly Regex LapsPasswordLineRegex =
+        new(
+            @"(?im)^(\s*(?:LAPS\s+)?password\s*[:=]\s*).+$",
+            RegexOptions.Compiled |
+            RegexOptions.CultureInvariant);
+
     public static string Sanitize(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -87,6 +99,16 @@ public static class DiagnosticRedaction
             JwtRegex.Replace(
                 redacted,
                 "[REDACTED-JWT]");
+
+        redacted =
+            LapsJsonPasswordRegex.Replace(
+                redacted,
+                "$1" + Redacted + "$2");
+
+        redacted =
+            LapsPasswordLineRegex.Replace(
+                redacted,
+                "$1" + Redacted);
 
         return redacted;
     }
