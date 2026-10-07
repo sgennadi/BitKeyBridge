@@ -239,41 +239,41 @@ public sealed partial class MainForm
                 AutoScroll =
                     true,
                 Padding =
-                    new Padding(24),
+                    new Padding(
+                        UiStyle.PagePadding),
                 ColumnCount =
                     1,
                 RowCount =
-                    6
+                    10
             };
 
         root.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.Percent,
-                100F));
+
+        for (var index = 0;
+             index < 10;
+             index++)
+        {
+            root.RowStyles.Add(
+                new RowStyle(
+                    index == 6
+                        ? SizeType.Percent
+                        : index == 8
+                            ? SizeType.Percent
+                            : SizeType.AutoSize,
+                    index == 6
+                        ? 58F
+                        : index == 8
+                            ? 42F
+                            : 0F));
+        }
 
         tab.Controls.Add(
             root);
 
-        var title =
+        root.Controls.Add(
             new Label
             {
                 Text =
@@ -288,32 +288,29 @@ public sealed partial class MainForm
                         0,
                         0,
                         UiStyle.ControlGap)
-            };
-        root.Controls.Add(
-            title,
+            },
             0,
             0);
 
-        var intro =
+        root.Controls.Add(
             new Label
             {
                 Text =
-                    "Connect to Active Directory first, then choose the recovery task you need.",
+                    "Connect once, search once, then choose BitLocker or LAPS. " +
+                    "Search reads metadata only — secrets are still read on demand.",
                 AutoSize =
                     true,
                 MaximumSize =
                     new Size(
-                        1000,
+                        1100,
                         0),
                 Margin =
                     new Padding(
                         0,
                         0,
                         0,
-                        16)
-            };
-        root.Controls.Add(
-            intro,
+                        UiStyle.SectionGap)
+            },
             0,
             1);
 
@@ -333,7 +330,7 @@ public sealed partial class MainForm
                         0,
                         0,
                         0,
-                        18)
+                        UiStyle.SectionGap)
             };
 
         var connection =
@@ -346,25 +343,22 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    4
+                    5
             };
 
         connection.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
+
+        for (var index = 0;
+             index < 5;
+             index++)
+        {
+            connection.RowStyles.Add(
+                new RowStyle(
+                    SizeType.AutoSize));
+        }
 
         _homeConnectionStatus.Name =
             "HomeConnectionStatus";
@@ -374,7 +368,7 @@ public sealed partial class MainForm
             _homeConnectionStatus);
         _homeConnectionStatus.MaximumSize =
             new Size(
-                1000,
+                1100,
                 0);
         UiStyle.SetStatus(
             _homeConnectionStatus,
@@ -384,6 +378,48 @@ public sealed partial class MainForm
             _homeConnectionStatus,
             0,
             0);
+
+        var identity =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+
+        _homeUseWindowsIdentity.Name =
+            "HomeUseWindowsIdentity";
+        _homeUseWindowsIdentity.Text =
+            "Use current Windows account";
+        _homeUseWindowsIdentity.AutoSize =
+            true;
+
+        _homeUseOtherAccount.Name =
+            "HomeUseOtherAccount";
+        _homeUseOtherAccount.Text =
+            "Use another AD account";
+        _homeUseOtherAccount.AutoSize =
+            true;
+
+        identity.Controls.Add(
+            _homeUseWindowsIdentity);
+        identity.Controls.Add(
+            _homeUseOtherAccount);
+        connection.Controls.Add(
+            identity,
+            0,
+            1);
 
         _homeConnectionProgress.Name =
             "HomeConnectionProgress";
@@ -406,7 +442,7 @@ public sealed partial class MainForm
         connection.Controls.Add(
             _homeConnectionProgress,
             0,
-            1);
+            2);
 
         var connectionActions =
             new FlowLayoutPanel
@@ -441,7 +477,7 @@ public sealed partial class MainForm
 
         var connectionSettings =
             UiStyle.CreateActionButton(
-                "Connection settings...");
+                "Advanced...");
         connectionSettings.Name =
             "HomeConnectionSettingsButton";
 
@@ -450,23 +486,21 @@ public sealed partial class MainForm
             _homeDisconnectAdButton,
             connectionSettings
         ]);
-
         connection.Controls.Add(
             connectionActions,
             0,
-            2);
+            3);
 
-        var connectionHint =
+        connection.Controls.Add(
             new Label
             {
                 Text =
-                    "Current Windows identity or the configured protected AD credential is used automatically. " +
-                    "If a session password is required, Connect to AD will prompt for it.",
+                    "Most users only need the two account choices above. DC, port, LDAPS and credential storage remain under Advanced.",
                 AutoSize =
                     true,
                 MaximumSize =
                     new Size(
-                        1000,
+                        1100,
                         0),
                 Margin =
                     new Padding(
@@ -474,11 +508,9 @@ public sealed partial class MainForm
                         UiStyle.ControlGap,
                         0,
                         0)
-            };
-        connection.Controls.Add(
-            connectionHint,
+            },
             0,
-            3);
+            4);
 
         connectionGroup.Controls.Add(
             connection);
@@ -487,15 +519,23 @@ public sealed partial class MainForm
             0,
             2);
 
-        var chooseTitle =
-            new Label
+        ConfigureAdvancedConnectionGroup();
+        root.Controls.Add(
+            _advancedConnectionGroup,
+            0,
+            3);
+
+        var search =
+            new TableLayoutPanel
             {
-                Text =
-                    "Choose a task",
-                Font =
-                    UiStyle.CreateSectionTitleFont(),
+                Dock =
+                    DockStyle.Top,
                 AutoSize =
                     true,
+                ColumnCount =
+                    4,
+                RowCount =
+                    3,
                 Margin =
                     new Padding(
                         0,
@@ -503,12 +543,176 @@ public sealed partial class MainForm
                         0,
                         UiStyle.ControlGap)
             };
-        root.Controls.Add(
-            chooseTitle,
-            0,
-            3);
 
-        var tasks =
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        search.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Computer / Recovery ID / device ID:",
+                AutoSize =
+                    true,
+                Font =
+                    UiStyle.CreateEmphasisFont(
+                        9.5F),
+                Anchor =
+                    AnchorStyles.Left,
+                Margin =
+                    new Padding(
+                        0,
+                        7,
+                        UiStyle.ControlGap,
+                        0)
+            },
+            0,
+            0);
+
+        _homeQuery.Name =
+            "HomeUnifiedQuery";
+        _homeQuery.Dock =
+            DockStyle.Fill;
+        _homeQuery.Font =
+            UiStyle.CreateBodyFont(
+                11F);
+        _homeQuery.PlaceholderText =
+            "ACA-HADASWI, CLINIC-300418B, Recovery ID...";
+        search.Controls.Add(
+            _homeQuery,
+            1,
+            0);
+
+        _homeSearchButton.Name =
+            "HomeUnifiedSearchButton";
+        _homeSearchButton.Text =
+            "Search";
+        UiStyle.ConfigureActionButton(
+            _homeSearchButton);
+        search.Controls.Add(
+            _homeSearchButton,
+            2,
+            0);
+
+        _homeSearchCancelButton.Name =
+            "HomeUnifiedSearchCancelButton";
+        _homeSearchCancelButton.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _homeSearchCancelButton);
+        _homeSearchCancelButton.Enabled =
+            false;
+        search.Controls.Add(
+            _homeSearchCancelButton,
+            3,
+            0);
+
+        _homeSearchProgress.Name =
+            "HomeUnifiedSearchProgress";
+        _homeSearchProgress.Dock =
+            DockStyle.Top;
+        _homeSearchProgress.Style =
+            ProgressBarStyle.Marquee;
+        _homeSearchProgress.MarqueeAnimationSpeed =
+            25;
+        _homeSearchProgress.Visible =
+            false;
+        _homeSearchProgress.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        search.Controls.Add(
+            _homeSearchProgress,
+            0,
+            1);
+        search.SetColumnSpan(
+            _homeSearchProgress,
+            4);
+
+        UiStyle.ConfigureStatusLabel(
+            _homeSearchStatus);
+        _homeSearchStatus.Name =
+            "HomeUnifiedSearchStatus";
+        _homeSearchStatus.MaximumSize =
+            new Size(
+                1100,
+                0);
+        UiStyle.SetStatus(
+            _homeSearchStatus,
+            "Enter at least two characters. Live search starts after a short pause; Enter searches immediately.",
+            UiStatusKind.Neutral);
+        search.Controls.Add(
+            _homeSearchStatus,
+            0,
+            2);
+        search.SetColumnSpan(
+            _homeSearchStatus,
+            4);
+
+        root.Controls.Add(
+            search,
+            0,
+            4);
+
+        _homeSearchResults.Name =
+            "HomeUnifiedSearchResults";
+        _homeSearchResults.AccessibleName =
+            "Unified BitLocker and LAPS search results";
+        _homeSearchResults.Dock =
+            DockStyle.Fill;
+        _homeSearchResults.MinimumSize =
+            new Size(
+                0,
+                150);
+        UiStyle.ConfigureDataGridView(
+            _homeSearchResults);
+        _homeSearchResults.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Computer",
+                "Computer",
+                150),
+            UiStyle.CreateSortableTextColumn(
+                "BitLocker",
+                "BitLocker",
+                105),
+            UiStyle.CreateSortableTextColumn(
+                "BitLockerDate",
+                "BitLocker key date",
+                130),
+            UiStyle.CreateSortableTextColumn(
+                "Laps",
+                "LAPS",
+                105),
+            UiStyle.CreateSortableTextColumn(
+                "LapsDate",
+                "LAPS key date",
+                130)
+        ]);
+        _homeSearchResults.Columns["BitLockerDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        _homeSearchResults.Columns["LapsDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        root.Controls.Add(
+            _homeSearchResults,
+            0,
+            5);
+
+        var taskActions =
             new FlowLayoutPanel
             {
                 Dock =
@@ -522,9 +726,9 @@ public sealed partial class MainForm
                 Margin =
                     new Padding(
                         0,
+                        UiStyle.ControlGap,
                         0,
-                        0,
-                        12)
+                        UiStyle.SectionGap)
             };
 
         _homeBitLockerButton.Name =
@@ -533,11 +737,11 @@ public sealed partial class MainForm
             "BitLocker Recovery";
         _homeBitLockerButton.MinimumSize =
             new Size(
-                280,
-                64);
+                220,
+                48);
         _homeBitLockerButton.Font =
             UiStyle.CreateEmphasisFont(
-                11F);
+                10.5F);
         UiStyle.ConfigureActionButton(
             _homeBitLockerButton);
         _homeBitLockerButton.Enabled =
@@ -549,41 +753,98 @@ public sealed partial class MainForm
             "LAPS Passwords";
         _homeLapsButton.MinimumSize =
             new Size(
-                280,
-                64);
+                220,
+                48);
         _homeLapsButton.Font =
             UiStyle.CreateEmphasisFont(
-                11F);
+                10.5F);
         UiStyle.ConfigureActionButton(
             _homeLapsButton);
         _homeLapsButton.Enabled =
             false;
 
-        tasks.Controls.AddRange([
+        taskActions.Controls.AddRange([
             _homeBitLockerButton,
             _homeLapsButton
         ]);
         root.Controls.Add(
-            tasks,
+            taskActions,
             0,
-            4);
+            6);
 
         root.Controls.Add(
             new Label
             {
                 Text =
-                    "The Start workflow requires an AD connection. The top-level tabs remain available for Local cache or Entra-only scenarios.",
+                    "Recent computers",
+                Font =
+                    UiStyle.CreateSectionTitleFont(),
+                AutoSize =
+                    true,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            },
+            0,
+            7);
+
+        _homeRecentResults.Name =
+            "HomeRecentComputers";
+        _homeRecentResults.AccessibleName =
+            "Recent computers without stored secrets";
+        _homeRecentResults.Dock =
+            DockStyle.Fill;
+        _homeRecentResults.MinimumSize =
+            new Size(
+                0,
+                100);
+        UiStyle.ConfigureDataGridView(
+            _homeRecentResults);
+        _homeRecentResults.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Computer",
+                "Computer",
+                170),
+            UiStyle.CreateSortableTextColumn(
+                "LastAction",
+                "Last action",
+                120),
+            UiStyle.CreateSortableTextColumn(
+                "LastUsed",
+                "Last used",
+                130)
+        ]);
+        _homeRecentResults.Columns["LastUsed"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        root.Controls.Add(
+            _homeRecentResults,
+            0,
+            8);
+
+        root.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Recent stores computer/device identifiers and last action only. Recovery keys and LAPS passwords are never stored here.",
                 AutoSize =
                     true,
                 MaximumSize =
                     new Size(
-                        1000,
+                        1100,
                         0),
                 Margin =
-                    new Padding(0)
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
             },
             0,
-            5);
+            9);
 
         _homeConnectAdButton.Click +=
             async (_, _) =>
@@ -596,27 +857,141 @@ public sealed partial class MainForm
             (_, _) =>
                 DisconnectDirectorySession();
 
+        _homeUseWindowsIdentity.CheckedChanged +=
+            (_, _) =>
+            {
+                if (!_homeUseWindowsIdentity.Checked)
+                    return;
+
+                _adExplicitCredentials.Checked =
+                    false;
+                UpdateDirectoryConnectionUi();
+            };
+
+        _homeUseOtherAccount.CheckedChanged +=
+            (_, _) =>
+            {
+                if (!_homeUseOtherAccount.Checked)
+                    return;
+
+                _adExplicitCredentials.Checked =
+                    true;
+                UpdateDirectoryConnectionUi();
+            };
+
         connectionSettings.Click +=
             (_, _) =>
             {
-                if (_recoveryWorkspaceTab is null)
-                    return;
-
-                _mainTabs.SelectedTab =
-                    _recoveryWorkspaceTab;
                 _advancedConnectionGroup.Visible =
+                    !_advancedConnectionGroup.Visible;
+                connectionSettings.Text =
+                    _advancedConnectionGroup.Visible
+                        ? "Hide Advanced"
+                        : "Advanced...";
+            };
+
+        _homeSearchButton.Click +=
+            async (_, _) =>
+                await SearchHomeAsync(
+                    immediate: true);
+
+        _homeSearchCancelButton.Click +=
+            (_, _) =>
+                CancelHomeSearch();
+
+        _homeQuery.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode !=
+                    Keys.Enter)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
                     true;
-                _advancedConnectionButton.Text =
-                    "Hide advanced settings";
+                _homeSearchDebounceTimer?.Stop();
+                await SearchHomeAsync(
+                    immediate: true);
+            };
+
+        _homeQuery.TextChanged +=
+            (_, _) =>
+                QueueHomeSearch();
+
+        _homeSearchDebounceTimer ??=
+            new System.Windows.Forms.Timer
+            {
+                Interval =
+                    SearchText.DebounceMilliseconds
+            };
+
+        _homeSearchDebounceTimer.Tick +=
+            async (_, _) =>
+            {
+                _homeSearchDebounceTimer.Stop();
+
+                if (_homeQuery.Text.Trim().Length >=
+                    SearchText.MinimumLiveSearchCharacters)
+                {
+                    await SearchHomeAsync(
+                        immediate: false);
+                }
+            };
+
+        _homeSearchResults.SelectionChanged +=
+            (_, _) =>
+                UpdateHomeSearchSelection();
+
+        _homeSearchResults.CellDoubleClick +=
+            (_, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    OpenSelectedHomeDefaultAction();
+                }
+            };
+
+        _homeSearchResults.KeyDown +=
+            (_, e) =>
+            {
+                if (e.KeyCode ==
+                    Keys.Enter)
+                {
+                    e.SuppressKeyPress =
+                        true;
+                    OpenSelectedHomeDefaultAction();
+                }
             };
 
         _homeBitLockerButton.Click +=
             (_, _) =>
-                NavigateToRecoveryWorkspace();
+                OpenSelectedHomeBitLocker();
 
         _homeLapsButton.Click +=
-            (_, _) =>
-                NavigateToLapsWorkspace();
+            async (_, _) =>
+                await OpenSelectedHomeLapsAsync();
+
+        _homeRecentResults.CellDoubleClick +=
+            async (_, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    await SearchRecentComputerAsync();
+                }
+            };
+
+        _homeRecentResults.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode ==
+                    Keys.Enter)
+                {
+                    e.SuppressKeyPress =
+                        true;
+                    await SearchRecentComputerAsync();
+                }
+            };
 
         return tab;
     }
