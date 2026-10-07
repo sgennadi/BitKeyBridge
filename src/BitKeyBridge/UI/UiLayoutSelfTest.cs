@@ -223,6 +223,26 @@ public static class UiLayoutSelfTest
                     new RbacSettingsDialog(
                         NewConfig())),
             (
+                "RBAC setup wizard",
+                () =>
+                    new RbacSetupWizardDialog(
+                        NewConfig())),
+            (
+                "Intune setup wizard",
+                () =>
+                    new IntuneSetupWizardDialog(
+                        new CloudAuthConfig
+                        {
+                            TenantId =
+                                "contoso.onmicrosoft.com",
+                            ClientId =
+                                Guid.Empty.ToString(),
+                            EnableLapsPermissions =
+                                true
+                        },
+                        _ =>
+                            Task.CompletedTask)),
+            (
                 "Recovery access",
                 () =>
                     new RecoveryAccessDialog(
