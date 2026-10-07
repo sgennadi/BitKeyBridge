@@ -3491,14 +3491,16 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
-            SetDirectoryConnectionStatus(
-                $"Connected to {result.Server}. Ready to search BitLocker and LAPS.",
-                UiStatusKind.Success);
-
             _startDomainDn =
                 result.Root.GetValueOrDefault(
                     "defaultNamingContext",
                     string.Empty);
+
+            SetDirectoryConnectionStatus(
+                BuildDirectoryConnectedStatus(
+                    result.Server,
+                    _startDomainDn),
+                UiStatusKind.Success);
 
             _startSelectOu.Enabled =
                 true;
@@ -3651,6 +3653,115 @@ public sealed partial class MainForm : DpiAwareForm
             "Cancelling Active Directory connection...",
             UiStatusKind.Busy);
         _directoryConnectionCancellation.Cancel();
+    }
+
+    private void DisconnectDirectorySession()
+    {
+        _directoryConnectionCancellation?.Cancel();
+        _startSearchCancellation?.Cancel();
+        _lapsReadCancellation?.Cancel();
+
+        AdSessionCredentials.Clear();
+        _adPassword.Clear();
+        ClearLapsResult();
+        ClearTrackedRecoveryClipboard();
+
+        _startDomainDn =
+            string.Empty;
+        _startSelectOu.Enabled =
+            false;
+
+        if (_recoverySource.SelectedIndex != 1)
+        {
+            _startSearch.Enabled =
+                false;
+        }
+
+        _connectAdCancelButton.Enabled =
+            false;
+        _adConnectionProgress.Visible =
+            false;
+        _recoveryDiagnostics.Clear();
+
+        RefreshCredentialVaultStatus();
+
+        SetDirectoryConnectionStatus(
+            "Disconnected from Active Directory. Session password cleared; stored credentials were not deleted.",
+            UiStatusKind.Warning);
+
+        UiStyle.SetStatus(
+            _startPurposeStatus,
+            "Reconnect to Active Directory before using Live AD search.",
+            UiStatusKind.Warning);
+
+        _audit.Write(
+            "DisconnectActiveDirectory",
+            source:
+                "Session",
+            details:
+                $"User={_config.AdUsername}; Server={_config.AdServer}; CredentialStorage={_config.AdCredentialStorageMode}");
+    }
+
+    private string BuildDirectoryConnectedStatus(
+        string server,
+        string namingContext)
+    {
+        var protocol =
+            _config.AdUseLdaps ||
+            _config.AdPort == 636
+                ? "LDAPS"
+                : "LDAP";
+
+        var user =
+            _config.AdUseExplicitCredentials &&
+            !string.IsNullOrWhiteSpace(
+                _config.AdUsername)
+                ? _config.AdUsername.Trim()
+                : System.Security.Principal.WindowsIdentity
+                    .GetCurrent()
+                    .Name;
+
+        var domain =
+            !string.IsNullOrWhiteSpace(
+                _config.AdDomain)
+                ? _config.AdDomain.Trim()
+                : GetDnsDomainFromNamingContext(
+                    namingContext);
+
+        return
+            $"Connected: {server} | " +
+            $"{(string.IsNullOrWhiteSpace(domain) ? "domain unknown" : domain)} | " +
+            $"{user} | {protocol} {_config.AdPort}";
+    }
+
+    private static string GetDnsDomainFromNamingContext(
+        string namingContext)
+    {
+        if (string.IsNullOrWhiteSpace(
+                namingContext))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            ".",
+            namingContext
+                .Split(
+                    ',',
+                    StringSplitOptions.RemoveEmptyEntries |
+                    StringSplitOptions.TrimEntries)
+                .Where(
+                    part =>
+                        part.StartsWith(
+                            "DC=",
+                            StringComparison.OrdinalIgnoreCase))
+                .Select(
+                    part =>
+                        part[3..])
+                .Where(
+                    part =>
+                        !string.IsNullOrWhiteSpace(
+                            part)));
     }
 
     private bool EnsureSessionAdCredentialForConnection(bool forcePrompt = false)
