@@ -214,7 +214,14 @@ public sealed class CertificateService
                 !string.Equals(fqdn, Environment.MachineName, StringComparison.OrdinalIgnoreCase))
                 san.AddDnsName(fqdn);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Certificate SAN FQDN discovery failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4558,
+                "Certificate");
+        }
         san.AddDnsName("localhost");
         san.AddIpAddress(System.Net.IPAddress.Loopback);
         request.CertificateExtensions.Add(san.Build());
