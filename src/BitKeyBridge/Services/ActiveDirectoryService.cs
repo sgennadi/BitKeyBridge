@@ -200,7 +200,7 @@ public sealed class ActiveDirectoryService
                 "(objectClass=*)",
                 SearchScope.Base,
                 "defaultNamingContext", "rootDomainNamingContext", "configurationNamingContext",
-                "dnsHostName", "isRODC");
+                "schemaNamingContext", "dnsHostName", "isRODC");
             var response = (SearchResponse)connection.SendRequest(request, _timeout);
             var entry = response.Entries.Count > 0 ? response.Entries[0] : null;
             if (entry is null) return [];

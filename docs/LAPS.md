@@ -1,6 +1,6 @@
 # Native LAPS support
 
-BitKeyBridge 0.19.0 uses C#/.NET, signed/sealed LDAP (or certificate-validated LDAPS), native DPAPI-NG and Microsoft Graph. No PowerShell process, module, SDK or fallback is used by these features.
+BitKeyBridge 0.21.2 uses C#/.NET, signed/sealed LDAP (or certificate-validated LDAPS), native DPAPI-NG and Microsoft Graph. No PowerShell process, module, SDK or fallback is used by these features.
 
 | Source | Current password | History | Identity and permissions |
 | --- | --- | --- | --- |
@@ -15,6 +15,8 @@ AD timestamps use UTC FILETIME. Windows LAPS JSON stores `n` (account), `t` (hex
 The Windows Server 2025 `msLAPS-CurrentPasswordVersion` GUID is optional; older schemas remain supported. The legacy schema does not store the managed account name, so BitKeyBridge explicitly labels it as unknown instead of assuming `Administrator`.
 
 LDAP multi-valued attribute order is not chronological. AD rows sort current before history and then by update time within each source. Entra current/history is determined from the newest `backupDateTime`, including account changes; each returned account SID is preserved. A failed old encrypted value is shown with its own status and does not hide readable current or other history entries. Attributes omitted by LDAP cannot reliably distinguish missing backup, disabled retention and denied read access.
+
+Schema diagnostics read `schemaNamingContext` from RootDSE and fall back to `CN=Schema,<configurationNamingContext>` when necessary. A schema is reported as `NotDetected` only after a completed schema query; if inspection cannot complete, the state is `NotProbed` instead. Non-secret expiration/version metadata can positively confirm that the matching LAPS schema is installed. The safe **Check access** path still does not request password-bearing attributes or attempt DPAPI-NG decryption.
 
 ## Manual connection
 

@@ -76,6 +76,22 @@ public enum LapsAccessState
     Failed
 }
 
+public static class LapsAccessDiagnostics
+{
+    public static LapsAccessState ResolveSchemaState(
+        bool schemaInspectionCompleted,
+        bool schemaAttributeDetected,
+        bool metadataEvidence = false)
+    {
+        if (schemaAttributeDetected || metadataEvidence)
+            return LapsAccessState.Available;
+
+        return schemaInspectionCompleted
+            ? LapsAccessState.NotDetected
+            : LapsAccessState.NotProbed;
+    }
+}
+
 public sealed class LapsAccessCheckItem
 {
     public string Name { get; init; } = string.Empty;

@@ -151,6 +151,28 @@ public static class LapsSelfTest
             Assert(!sanitized.Contains("AnotherSecretValue", StringComparison.Ordinal));
             Assert(sanitized.Contains("[REDACTED]", StringComparison.Ordinal));
         });
+        Check("schema diagnostics do not invent NotDetected when inspection did not complete", () =>
+        {
+            Assert(
+                LapsAccessDiagnostics.ResolveSchemaState(
+                    schemaInspectionCompleted: false,
+                    schemaAttributeDetected: false) ==
+                LapsAccessState.NotProbed);
+        });
+        Check("schema diagnostics accept non-secret metadata as positive schema evidence", () =>
+        {
+            Assert(
+                LapsAccessDiagnostics.ResolveSchemaState(
+                    schemaInspectionCompleted: false,
+                    schemaAttributeDetected: false,
+                    metadataEvidence: true) ==
+                LapsAccessState.Available);
+            Assert(
+                LapsAccessDiagnostics.ResolveSchemaState(
+                    schemaInspectionCompleted: true,
+                    schemaAttributeDetected: false) ==
+                LapsAccessState.NotDetected);
+        });
         Check("multi-valued AD history sorts by time within each source", () =>
         {
             using var result = new LapsReadResult();

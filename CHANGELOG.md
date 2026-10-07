@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.21.2
+
+- Fixed **LAPS → Check access** incorrectly reporting Legacy/Windows LAPS schema as `NotDetected` when schema inspection had not actually run. RootDSE now requests `schemaNamingContext`, with a safe `CN=Schema,<configurationNamingContext>` fallback.
+- Expanded the secret-free schema probe to include the Legacy expiration attribute and Windows LAPS metadata/version attributes. Existing non-secret computer metadata can positively confirm the corresponding LAPS schema even if the separate schema lookup is unavailable.
+- A failed or unavailable schema inspection now produces `NotProbed` for schema absence instead of a false negative. A real `NotDetected` result is emitted only after a completed schema query.
+- Added portable regression checks for the `Available` / `NotDetected` / `NotProbed` decision logic. The safe access check still never requests a Legacy/plaintext password attribute and does not decrypt an encrypted LAPS value.
+
 ## 0.21.1
 
 - Added CI enforcement that every semantic-version heading in `CHANGELOG.md` is unique. The build now fails when a version appears more than once, preventing the duplicate-section problem that previously affected 0.18.4.
