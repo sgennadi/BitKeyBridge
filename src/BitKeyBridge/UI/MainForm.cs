@@ -92,7 +92,6 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _outputRoot = new();
     private readonly TextBox _outputSubdirectory = new();
     private readonly UiStatusLabel _adConnectionStatus = new();
-    private readonly Button _disconnectAdButton = new();
     private CancellationTokenSource? _directoryConnectionCancellation;
     private int _directoryConnectionGeneration;
     private bool _directoryConnecting;
