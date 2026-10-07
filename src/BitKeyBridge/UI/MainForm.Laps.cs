@@ -31,6 +31,7 @@ public sealed partial class MainForm
     private int _lapsGeneration;
     private int _lapsSearchGeneration;
     private bool _suppressLapsSearchQueue;
+    private bool _suppressLapsCandidateSelection;
     private bool _lapsReading;
     private string _lapsResourceId = string.Empty;
     private string _lapsAuditSource = string.Empty;
@@ -746,6 +747,9 @@ public sealed partial class MainForm
 
     private void SelectLapsSearchCandidate()
     {
+        if (_suppressLapsCandidateSelection)
+            return;
+
         var selected =
             GetSelectedLapsSearchResult();
 
@@ -914,18 +918,33 @@ public sealed partial class MainForm
                 return;
             }
 
-            _lapsSearchRows.Rows.Clear();
+            _suppressLapsCandidateSelection =
+                true;
 
-            foreach (var row in rows)
+            try
             {
-                var rowIndex =
-                    _lapsSearchRows.Rows.Add(
-                        row.ComputerName,
-                        row.ComputerId,
-                        row.Source);
+                _lapsSearchRows.Rows.Clear();
 
-                _lapsSearchRows.Rows[rowIndex].Tag =
-                    row;
+                foreach (var row in rows)
+                {
+                    var rowIndex =
+                        _lapsSearchRows.Rows.Add(
+                            row.ComputerName,
+                            row.ComputerId,
+                            row.Source);
+
+                    _lapsSearchRows.Rows[rowIndex].Tag =
+                        row;
+                }
+
+                _lapsSearchRows.ClearSelection();
+                _lapsSearchRows.CurrentCell =
+                    null;
+            }
+            finally
+            {
+                _suppressLapsCandidateSelection =
+                    false;
             }
 
             if (rows.Count == 1)
