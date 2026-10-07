@@ -7,8 +7,16 @@ public static class UiLayoutSelfTest
         Size ClientSize,
         float FontScale);
 
+    private static string _progress = "Starting";
+    private static string _reportPath = string.Empty;
+    private static int _verifiedControls;
+    private static readonly List<string> Coverage = new();
+
     private static readonly Scenario[] Scenarios =
     [
+        new("DesignedSize", Size.Empty, 1.0F),
+        new("Text125", new Size(1000, 700), 1.25F),
+        new("Text175", new Size(1100, 760), 1.75F),
         new(
             "Compact",
             new Size(
@@ -31,6 +39,7 @@ public static class UiLayoutSelfTest
 
     public static int Run()
     {
+        Coverage.Clear();
         var reportPath =
             Path.Combine(
                 AppContext.BaseDirectory,
@@ -48,6 +57,13 @@ public static class UiLayoutSelfTest
         catch
         {
         }
+
+        _reportPath = reportPath;
+        using var watchdog = new System.Threading.Timer(_ =>
+        {
+            File.AppendAllText(reportPath, $"UI-SELF-TEST FAILED: timeout at {_progress}\n");
+            Environment.Exit(2);
+        }, null, Timeout.Infinite, Timeout.Infinite);
 
         var failures =
             new List<string>();
@@ -77,15 +93,24 @@ public static class UiLayoutSelfTest
 
                 try
                 {
+                    watchdog.Change(TimeSpan.FromSeconds(90), Timeout.InfiniteTimeSpan);
+                    ReportProgress($"{factory.Name}/{scenario.Name}: create");
                     form =
                         factory.Factory();
+
+                    _verifiedControls = 0;
+                    form.ShowInTaskbar = false;
+                    ReportProgress($"{factory.Name}/{scenario.Name}: show");
+                    form.Show();
+                    ReportProgress($"{factory.Name}/{scenario.Name}: message loop");
+                    Application.DoEvents();
 
                     form.MinimumSize =
                         Size.Empty;
                     form.MaximumSize =
                         Size.Empty;
-                    form.ClientSize =
-                        scenario.ClientSize;
+                    if (!scenario.ClientSize.IsEmpty)
+                        form.ClientSize = scenario.ClientSize;
 
                     if (Math.Abs(
                             scenario.FontScale -
@@ -104,20 +129,23 @@ public static class UiLayoutSelfTest
                             scaledFont;
                     }
 
+                    ReportProgress($"{factory.Name}/{scenario.Name}: layout");
                     form.CreateControl();
-                    NormalizeDockFillSizes(
-                        form);
                     form.PrepareResponsiveLayoutForTesting();
                     form.PerformLayout();
-                    NormalizeDockFillSizes(
-                        form);
                     form.PrepareResponsiveLayoutForTesting();
 
+                    ReportProgress($"{factory.Name}/{scenario.Name}: verify");
                     VerifyForm(
                         form,
                         factory.Name,
                         scenario,
                         failures);
+                    if (_verifiedControls == 0)
+                        failures.Add($"{factory.Name}/{scenario.Name}: no visible controls were checked.");
+                    Coverage.Add($"{factory.Name}/{scenario.Name}: checked {_verifiedControls} visible controls.");
+                    if (form is not MainForm)
+                        CaptureLayout(form, factory.Name, scenario);
                 }
                 catch (Exception ex)
                 {
@@ -126,6 +154,7 @@ public static class UiLayoutSelfTest
                 }
                 finally
                 {
+                    watchdog.Change(Timeout.Infinite, Timeout.Infinite);
                     form?.Dispose();
                     scaledFont?.Dispose();
                 }
@@ -149,7 +178,7 @@ public static class UiLayoutSelfTest
         {
             File.WriteAllLines(
                 reportPath,
-                reportLines);
+                Coverage.Concat(reportLines));
         }
         catch
         {
@@ -260,52 +289,22 @@ public static class UiLayoutSelfTest
         ];
     }
 
-    private static void NormalizeDockFillSizes(
-        Control root)
+    private static void ReportProgress(string progress)
     {
-        if (root is TabControl tabs)
-        {
-            var pageTarget =
-                tabs.DisplayRectangle.Size;
+        _progress = progress;
+        File.AppendAllText(_reportPath, progress + Environment.NewLine);
+    }
 
-            if (pageTarget.Width > 0 &&
-                pageTarget.Height > 0)
-            {
-                foreach (TabPage page in
-                         tabs.TabPages)
-                {
-                    if (page.Size !=
-                        pageTarget)
-                    {
-                        page.Size =
-                            pageTarget;
-                    }
-                }
-            }
-        }
-
-        foreach (Control child in
-                 root.Controls)
-        {
-            if (child.Dock ==
-                    DockStyle.Fill &&
-                child.Parent is not null)
-            {
-                var target =
-                    child.Parent.DisplayRectangle.Size;
-
-                if (target.Width > 0 &&
-                    target.Height > 0 &&
-                    child.Size != target)
-                {
-                    child.Size =
-                        target;
-                }
-            }
-
-            NormalizeDockFillSizes(
-                child);
-        }
+    private static void CaptureLayout(Form form, string name, Scenario scenario)
+    {
+        var folder = Environment.GetEnvironmentVariable("BITKEYBRIDGE_UI_ARTIFACTS");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        Directory.CreateDirectory(folder);
+        var safeName = string.Concat(name.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
+        using var bitmap = new Bitmap(form.Width, form.Height);
+        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+        bitmap.Save(Path.Combine(folder, $"{scenario.Name}-{safeName}.png"),
+            System.Drawing.Imaging.ImageFormat.Png);
     }
 
     private static void VerifyForm(
@@ -425,6 +424,7 @@ public static class UiLayoutSelfTest
                 var pagePath =
                     $"{path}/{page.Text}";
 
+                ReportProgress($"{pagePath}/{scenario.Name}: tab layout");
                 page.CreateControl();
 
                 if (checkRecoveryConnection &&
@@ -445,31 +445,24 @@ public static class UiLayoutSelfTest
                     }
                 }
 
-                // Tab selection and Dock=Fill layout are message-loop driven in
-                // WinForms. A headless WinExe can retain the framework's default
-                // 200x100 child size, so normalize Dock=Fill geometry before and
-                // after pumping pending layout work.
-                NormalizeDockFillSizes(
-                    form);
+                // Exercise the actual visible-window layout and pending messages.
                 Application.DoEvents();
                 form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
-                NormalizeDockFillSizes(
-                    form);
                 form.PrepareResponsiveLayoutForTesting();
                 Application.DoEvents();
                 form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
-                NormalizeDockFillSizes(
-                    form);
 
                 VerifyControlTree(
                     page,
                     pagePath,
                     scenario,
                     failures);
+
+                CaptureLayout(form, pagePath, scenario);
 
                 if (checkRecoveryConnection &&
                     string.Equals(
@@ -508,6 +501,8 @@ public static class UiLayoutSelfTest
         {
             if (!control.Visible)
                 continue;
+
+            _verifiedControls++;
 
             if (control is UiStatusLabel statusLabel)
             {
@@ -577,8 +572,7 @@ public static class UiLayoutSelfTest
                         $"{formName}/{scenario.Name}: button '{button.Text}' minimum height is {button.MinimumSize.Height}, expected at least {UiStyle.MinimumButtonHeight}.");
                 }
 
-                if (!button.AutoSize &&
-                    button.Dock !=
+                if (button.Dock !=
                     DockStyle.Fill &&
                     (button.ClientSize.Width <
                          preferred.Width ||

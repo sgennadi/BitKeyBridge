@@ -21,6 +21,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cancel-stalled-review-runs:
+    if: github.event_name == 'pull_request' && github.event.number == 17
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Stop superseded UI investigation runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for run in 37570655052 37570765094 37571225344; do
+            gh api --method POST repos/sgennadi/BitKeyBridge/actions/runs/$run/cancel || true
+          done
+
   laps-regression:
     runs-on: ubuntu-latest
     steps:
@@ -174,6 +188,36 @@ jobs:
         shell: cmd
         run: dotnet build src\BitKeyBridge\BitKeyBridge.csproj -c Release --no-restore
 
+      - name: Runtime UI layout self-test
+        env:
+          BITKEYBRIDGE_UI_ARTIFACTS: ${{ runner.temp }}/ui-review
+        if: matrix.rid == 'win-x64'
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          folder = pathlib.Path("src/BitKeyBridge/bin/Release/net10.0-windows")
+          try:
+              result = subprocess.run([str(folder / "BitKeyBridge.exe"), "--ui-self-test"], timeout=180)
+              code = result.returncode
+          except subprocess.TimeoutExpired:
+              print("UI test exceeded its total time limit.")
+              code = 2
+          finally:
+              report = folder / "ui-self-test.log"
+              if report.exists():
+                  print(report.read_text(encoding="utf-8"))
+          sys.exit(code)
+
+      - name: Upload UI review images and report
+        if: always() && matrix.rid == 'win-x64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-ui-review
+          path: |
+            ${{ runner.temp }}/ui-review/*.png
+            src/BitKeyBridge/bin/Release/net10.0-windows/ui-self-test.log
+          if-no-files-found: warn
+
       - name: Publish self-contained single file
         shell: cmd
         run: dotnet publish src\BitKeyBridge\BitKeyBridge.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o artifacts\${{ matrix.rid }}
@@ -182,20 +226,6 @@ jobs:
         if: matrix.rid == 'win-x64'
         shell: cmd
         run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --self-test
-
-      - name: Runtime UI layout self-test
-        if: matrix.rid == 'win-x64'
-        shell: pwsh
-        run: |
-          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
-          $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
-          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -Wait -PassThru
-          if (Test-Path $report) {
-            Get-Content $report
-          }
-          if ($process.ExitCode -ne 0) {
-            throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
-          }
 
       - name: Package architecture
         shell: cmd

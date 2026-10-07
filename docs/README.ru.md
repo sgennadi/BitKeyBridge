@@ -106,7 +106,7 @@ BitKeyBridge.exe --dry-run --search-base "OU=Computers,DC=example,DC=com"
 
 ## Важно по безопасности
 
-Recovery CSV содержит секреты. Не клади его в GitHub. Проверь NTFS/share ACL. Если recovery passwords лежат в SYSVOL/NETLOGON, доступ к каталогу должен быть жёстко ограничен; лучше отдельный защищённый share.
+Recovery CSV содержит секреты. Не клади его в GitHub. Проверь NTFS/share ACL. Храни recovery passwords в отдельной папке или сетевом ресурсе с доступом только для уполномоченных администраторов восстановления.
 
 Файл с реальными внутренними OU тоже не надо коммитить в публичный репозиторий.
 
@@ -195,7 +195,7 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
   - LDAPS/TLS, обычно порт 636.
 - Добавлена кнопка **Test DC Connection**.
 - Export больше не требует, чтобы сама программа работала на DC: output root может быть локальной папкой или UNC path.
-- Если новый `OutputRoot` пустой, сохраняется старое поведение с `SysvolScriptsRoot`, поэтому WinPE/NETLOGON-сценарий не ломается.
+- Если `OutputRoot` пустой, используется `%ProgramData%\BitKeyBridge\RecoveryExport`. Для внешних потребителей укажи выбранную папку явно.
 - CLI получил `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, `--ad-ldaps`, `--ad-ldap` и `--ad-test`.
 - Microsoft 365 / Entra / Intune по-прежнему работает независимо от членства Windows-компьютера в домене.
 - CI теперь проверяет, что каждая версия из `.csproj` обязательно имеет секцию в `CHANGELOG.md`.

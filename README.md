@@ -100,7 +100,7 @@ The default export location is:
 %ProgramData%\BitKeyBridge\RecoveryExport
 ```
 
-There is no SYSVOL or forced `BL` subdirectory default.
+The output folder is configurable; no subdirectory is forced.
 
 ## GUI sections
 

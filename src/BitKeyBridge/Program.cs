@@ -35,6 +35,7 @@ internal static class Program
         {
             ConsoleHelper.EnsureConsole();
             ApplicationConfiguration.Initialize();
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             return UiLayoutSelfTest.Run();
         }
 
@@ -1772,8 +1773,6 @@ internal static class Program
                     new AppConfig();
 
                 if (!string.IsNullOrWhiteSpace(
-                        exportDefaults.SysvolScriptsRoot) ||
-                    !string.IsNullOrWhiteSpace(
                         exportDefaults.OutputSubdirectory) ||
                     !string.Equals(
                         exportDefaults.EffectiveOutputRoot,
@@ -1782,13 +1781,10 @@ internal static class Program
                     !string.Equals(
                         exportDefaults.OutputDirectory,
                         AppConfig.DefaultOutputRoot,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    exportDefaults.EffectiveOutputRoot.Contains(
-                        "SYSVOL",
                         StringComparison.OrdinalIgnoreCase))
                 {
                     failures.Add(
-                        "Default recovery export path unexpectedly uses SYSVOL or a forced subdirectory.");
+                        "Default recovery export path differs from the configured local default or forces a subdirectory.");
                 }
             }
             catch (Exception ex)
@@ -3225,7 +3221,7 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("GUI:");
         Console.WriteLine("  BitKeyBridge.exe");
-        Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout without showing the UI");
+        Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout using test windows");
         Console.WriteLine();
         Console.WriteLine("CLI:");
         Console.WriteLine("  --cli                 Export using saved scopes");
