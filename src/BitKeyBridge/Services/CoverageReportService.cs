@@ -83,8 +83,13 @@ public static class CoverageReportService
                 if (File.Exists(temp))
                     File.Delete(temp);
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Coverage CSV temporary file cleanup failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4561,
+                    "Coverage");
             }
         }
     }
