@@ -9,6 +9,7 @@ public sealed partial class MainForm
     private readonly TextBox _lapsQuery = new();
     private readonly CheckBox _lapsHistory = new();
     private readonly Button _lapsRead = new();
+    private readonly Button _lapsCancel = new();
     private readonly Button _lapsReveal = new();
     private readonly Button _lapsCopy = new();
     private readonly ListView _lapsRows = new();
@@ -74,6 +75,10 @@ public sealed partial class MainForm
         _lapsRead.Text = "Read LAPS";
         UiStyle.ConfigureActionButton(_lapsRead);
         actions.Controls.Add(_lapsRead);
+        _lapsCancel.Text = "Cancel";
+        UiStyle.ConfigureActionButton(_lapsCancel);
+        _lapsCancel.Enabled = false;
+        actions.Controls.Add(_lapsCancel);
         var connect = UiStyle.CreateActionButton("Connect to AD");
         var clear = UiStyle.CreateActionButton("Clear passwords");
         actions.Controls.Add(connect);
@@ -127,6 +132,7 @@ public sealed partial class MainForm
         root.Controls.Add(_lapsStatus, 0, 6);
 
         _lapsRead.Click += async (_, _) => await ReadLapsAsync();
+        _lapsCancel.Click += (_, _) => CancelLapsRead();
         _lapsQuery.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -188,6 +194,10 @@ public sealed partial class MainForm
         _lapsReadCancellation = cancellation;
         _lapsReading = true;
         _lapsRead.Enabled = false;
+        _lapsCancel.Enabled = true;
+        _lapsSource.Enabled = false;
+        _lapsQuery.Enabled = false;
+        _lapsHistory.Enabled = false;
         LapsReadResult? pending = null;
         try
         {
@@ -245,7 +255,11 @@ public sealed partial class MainForm
             _lapsClearTimer.Tick += (_, _) => ClearLapsResult();
             _lapsClearTimer.Start();
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            if (!IsDisposed && generation == _lapsGeneration)
+                UiStyle.SetStatus(_lapsStatus, "LAPS read canceled.", UiStatusKind.Warning);
+        }
         catch (Exception ex)
         {
             if (IsDisposed || generation != _lapsGeneration) return;
@@ -258,8 +272,25 @@ public sealed partial class MainForm
             pending?.Dispose();
             if (ReferenceEquals(_lapsReadCancellation, cancellation)) _lapsReadCancellation = null;
             _lapsReading = false;
-            if (!IsDisposed) _lapsRead.Enabled = true;
+            if (!IsDisposed)
+            {
+                _lapsRead.Enabled = true;
+                _lapsCancel.Enabled = false;
+                _lapsSource.Enabled = true;
+                _lapsQuery.Enabled = true;
+                _lapsHistory.Enabled = true;
+            }
         }
+    }
+
+    private void CancelLapsRead()
+    {
+        if (!_lapsReading || _lapsReadCancellation is null)
+            return;
+
+        _lapsCancel.Enabled = false;
+        UiStyle.SetStatus(_lapsStatus, "Cancelling LAPS read...", UiStatusKind.Busy);
+        _lapsReadCancellation.Cancel();
     }
 
     private RecoveryAccessContext? AuthorizeLapsAccess(string action, string computer, string resourceId, string source)
