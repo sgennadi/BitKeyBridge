@@ -5156,6 +5156,11 @@ public sealed partial class MainForm : DpiAwareForm
             computerName: row.ComputerName,
             recoveryId: row.RecoveryId,
             source: auditSource);
+
+        RecordRecentComputer(
+            row.ComputerName,
+            string.Empty,
+            "BitLocker reveal");
     }
 
     private async Task CopyStartRecoveryKeyAsync()
@@ -5219,6 +5224,11 @@ public sealed partial class MainForm : DpiAwareForm
             computerName: row.ComputerName,
             recoveryId: row.RecoveryId,
             source: auditSource);
+
+        RecordRecentComputer(
+            row.ComputerName,
+            string.Empty,
+            "BitLocker copy");
 
         CopyKeyWithAutoClear(
             key);
