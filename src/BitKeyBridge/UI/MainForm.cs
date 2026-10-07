@@ -16,6 +16,10 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly CheckBox _forcePublish = new();
     private readonly Button _runExport = new();
     private readonly Button _dryRun = new();
+    private readonly Button _exportCancel = new();
+    private readonly ProgressBar _exportProgress = new();
+    private readonly UiDiagnosticPanel _exportDiagnostics = new();
+    private CancellationTokenSource? _exportCancellation;
 
     private readonly ListView _dcResults = new();
     private readonly RichTextBox _dcDetails = new();
@@ -39,6 +43,7 @@ public sealed partial class MainForm : DpiAwareForm
     private CancellationTokenSource? _cloudConnectCancellation;
     private bool _cloudConnecting;
     private readonly CheckBox _cloudLapsPermissions = new();
+    private CancellationTokenSource? _cloudMaintenanceCancellation;
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
     private string _cloudTokenContext = string.Empty;
@@ -47,6 +52,11 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly ListView _coverageResults = new();
     private readonly Label _coverageSummary = new();
     private readonly UiStatusLabel _coverageStatus = new();
+    private readonly Button _coverageRun = new();
+    private readonly Button _coverageCancel = new();
+    private readonly ProgressBar _coverageProgress = new();
+    private readonly UiDiagnosticPanel _coverageDiagnostics = new();
+    private CancellationTokenSource? _coverageCancellation;
     private readonly ComboBox _coverageFilter = new();
     private readonly NumericUpDown _coverageStaleDays = new();
     private readonly NumericUpDown _coverageOldKeyDays = new();
@@ -56,6 +66,11 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly ListView _unifiedResults = new();
     private readonly RichTextBox _unifiedDetails = new();
     private readonly UiStatusLabel _unifiedStatus = new();
+    private readonly Button _unifiedSearch = new();
+    private readonly Button _unifiedCancel = new();
+    private readonly ProgressBar _unifiedProgress = new();
+    private readonly UiDiagnosticPanel _unifiedDiagnostics = new();
+    private CancellationTokenSource? _unifiedCancellation;
 
     private readonly ListView _auditResults = new();
     private readonly UiStatusLabel _auditSigningStatus = new();
@@ -82,6 +97,10 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly Button _startSelectOu = new();
     private readonly TextBox _startQuery = new();
     private readonly Button _startSearch = new();
+    private readonly Button _startCancel = new();
+    private readonly ProgressBar _startProgress = new();
+    private readonly UiDiagnosticPanel _startDiagnostics = new();
+    private CancellationTokenSource? _startSearchCancellation;
     private readonly ListView _startResults = new();
     private readonly TextBox _startKey = new();
     private readonly Button _startShow = new();
