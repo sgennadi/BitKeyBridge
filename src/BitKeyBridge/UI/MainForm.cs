@@ -3925,6 +3925,7 @@ public sealed partial class MainForm : DpiAwareForm
     {
         _directoryConnectionCancellation?.Cancel();
         _startSearchCancellation?.Cancel();
+        _homeSearchCancellation?.Cancel();
         _lapsReadCancellation?.Cancel();
 
         AdSessionCredentials.Clear();
@@ -3944,6 +3945,9 @@ public sealed partial class MainForm : DpiAwareForm
         _startOuStatus.Text =
             string.Empty;
         _startResults.Rows.Clear();
+        _homeSearchResults.Rows.Clear();
+        _homeSearchStatus.Text =
+            "Connect to Active Directory before using the unified search.";
         
         _startCurrentKey =
             null;
