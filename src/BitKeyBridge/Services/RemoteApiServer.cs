@@ -99,11 +99,17 @@ public sealed class RemoteApiServer : IDisposable
                     ct);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            System.Diagnostics.Debug.WriteLine(
+                "Remote API accept loop canceled: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
+            System.Diagnostics.Debug.WriteLine(
+                "Remote API listener disposed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 
