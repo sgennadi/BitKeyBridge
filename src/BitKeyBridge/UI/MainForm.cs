@@ -3882,6 +3882,19 @@ public sealed partial class MainForm : DpiAwareForm
             kind);
     }
 
+    private void ShowAppError(
+        string summary,
+        string operation,
+        Exception exception,
+        params (string Name, string? Value)[] context)
+    {
+        _appDiagnostics.ShowError(
+            summary,
+            operation,
+            exception,
+            context);
+    }
+
     private async Task SelectStartOuAsync()
     {
         try
