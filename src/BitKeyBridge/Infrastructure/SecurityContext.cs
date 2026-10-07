@@ -55,6 +55,11 @@ public static class ConsoleHelper
             Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
             Console.SetError(new StreamWriter(Console.OpenStandardError()) { AutoFlush = true });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Console encoding/output initialization failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 }
