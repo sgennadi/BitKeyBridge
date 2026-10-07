@@ -638,6 +638,23 @@ public sealed partial class MainForm
         HomeSearchResult selected,
         string action)
     {
+        RecordRecentComputer(
+            selected.ComputerName,
+            selected.ComputerId,
+            action);
+    }
+
+    private void RecordRecentComputer(
+        string computerName,
+        string computerId,
+        string action)
+    {
+        if (string.IsNullOrWhiteSpace(
+                computerName))
+        {
+            return;
+        }
+
         try
         {
             var rows =
@@ -648,7 +665,7 @@ public sealed partial class MainForm
             rows.RemoveAll(
                 row =>
                     row.ComputerName.Equals(
-                        selected.ComputerName,
+                        computerName,
                         StringComparison.OrdinalIgnoreCase));
 
             rows.Insert(
@@ -656,9 +673,9 @@ public sealed partial class MainForm
                 new RecentComputerEntry
                 {
                     ComputerName =
-                        selected.ComputerName,
+                        computerName,
                     ComputerId =
-                        selected.ComputerId,
+                        computerId,
                     LastAction =
                         action,
                     LastUsedUtc =
