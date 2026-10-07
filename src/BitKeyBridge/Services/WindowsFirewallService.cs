@@ -34,7 +34,12 @@ public static class WindowsFirewallService
                 if (existing is not null && Marshal.IsComObject(existing))
                     Marshal.FinalReleaseComObject(existing);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "Existing firewall rule removal failed before replacement: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
 
             var ruleType = Type.GetTypeFromProgID("HNetCfg.FWRule")
                 ?? throw new InvalidOperationException("Windows Firewall rule COM API is unavailable.");
@@ -75,7 +80,16 @@ public static class WindowsFirewallService
             if (policy is null) return;
             dynamic p = policy;
             rules = p.Rules;
-            try { ((dynamic)rules).Remove(RuleName); } catch { }
+            try
+            {
+                ((dynamic)rules).Remove(RuleName);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "Firewall rule removal failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
         }
         finally
         {
@@ -87,6 +101,15 @@ public static class WindowsFirewallService
     private static void ReleaseCom(object? value)
     {
         if (value is null || !Marshal.IsComObject(value)) return;
-        try { Marshal.FinalReleaseComObject(value); } catch { }
+        try
+        {
+            Marshal.FinalReleaseComObject(value);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Firewall COM release failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 }
