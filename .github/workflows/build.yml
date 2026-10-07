@@ -81,6 +81,18 @@ jobs:
             throw "Silent empty catch blocks are not allowed. Handle, log, or explicitly report non-fatal failures."
           }
 
+      - name: Reject blocking error MessageBoxes
+        shell: pwsh
+        run: |
+          $uiFiles = Get-ChildItem src\BitKeyBridge\UI -Filter *.cs -File
+          $matches = $uiFiles | Select-String -Pattern 'MessageBoxIcon\.Error'
+          if ($matches) {
+            $matches | ForEach-Object {
+              Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())"
+            }
+            throw "Blocking error MessageBoxes are not allowed. Use UiDiagnosticPanel for errors; reserve modal dialogs for confirmations and user decisions."
+          }
+
       - name: Reject fixed-position WinForms layout
         shell: pwsh
         run: |
