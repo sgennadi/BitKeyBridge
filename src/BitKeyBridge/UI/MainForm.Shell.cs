@@ -1280,9 +1280,10 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             WrapContents = true
         };
-        var save =
-            UiStyle.CreateActionButton(
-                "Save Config");
+        _cloudSaveButton.Text =
+            "Save Config";
+        UiStyle.ConfigureActionButton(
+            _cloudSaveButton);
         _cloudConnectButton.Text =
             "Connect / Test";
         UiStyle.ConfigureActionButton(
@@ -1293,22 +1294,25 @@ public sealed partial class MainForm
             _cloudConnectCancelButton);
         _cloudConnectCancelButton.Enabled =
             false;
-        var setup =
-            UiStyle.CreateActionButton(
-                "First-Run / Repair");
-        var bootstrap =
-            UiStyle.CreateActionButton(
-                "Bootstrap...");
-        var rollover =
-            UiStyle.CreateActionButton(
-                "Rollover Certificate...");
+        _cloudSetupButton.Text =
+            "First-Run / Repair";
+        UiStyle.ConfigureActionButton(
+            _cloudSetupButton);
+        _cloudBootstrapButton.Text =
+            "Bootstrap...";
+        UiStyle.ConfigureActionButton(
+            _cloudBootstrapButton);
+        _cloudRolloverButton.Text =
+            "Rollover Certificate...";
+        UiStyle.ConfigureActionButton(
+            _cloudRolloverButton);
         buttons.Controls.AddRange([
-            save,
+            _cloudSaveButton,
             _cloudConnectButton,
             _cloudConnectCancelButton,
-            setup,
-            bootstrap,
-            rollover
+            _cloudSetupButton,
+            _cloudBootstrapButton,
+            _cloudRolloverButton
         ]);
 
         root.Controls.Add(buttons, 1, 8);
@@ -1349,12 +1353,12 @@ public sealed partial class MainForm
             1,
             11);
 
-        save.Click += (_, _) => SaveCloudFields();
+        _cloudSaveButton.Click += (_, _) => SaveCloudFields();
         _cloudConnectButton.Click += async (_, _) => await ConnectCloudFromUiAsync();
         _cloudConnectCancelButton.Click += (_, _) => CancelCloudConnection();
-        setup.Click += async (_, _) => await RunNativeAutoSetupAsync();
-        bootstrap.Click += (_, _) => ConfigureCustomBootstrap();
-        rollover.Click += async (_, _) => await RolloverEntraCertificateGuiAsync();
+        _cloudSetupButton.Click += async (_, _) => await RunNativeAutoSetupAsync();
+        _cloudBootstrapButton.Click += (_, _) => ConfigureCustomBootstrap();
+        _cloudRolloverButton.Click += async (_, _) => await RolloverEntraCertificateGuiAsync();
         _cloudAuthMode.SelectedIndexChanged += (_, _) => UpdateCloudAuthUi();
 
         return page;
