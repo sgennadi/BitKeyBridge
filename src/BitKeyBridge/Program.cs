@@ -1646,6 +1646,20 @@ internal static class Program
                 if (parsedVersion.Major != 0 || parsedVersion.Minor != 4 || parsedVersion.Build != 0)
                     failures.Add("Updater version normalization failed.");
 
+                if (!UpdateService.ReleaseVersionsMatch(
+                        "0.24.0.0",
+                        "0.24.0") ||
+                    !UpdateService.ReleaseVersionsMatch(
+                        "v0.24.1",
+                        "0.24.1.0") ||
+                    UpdateService.ReleaseVersionsMatch(
+                        "0.24.1.0",
+                        "0.24.2"))
+                {
+                    failures.Add(
+                        "Updater release-version equivalence failed.");
+                }
+
                 var rid = UpdateService.GetRid();
                 if (rid is not "win-x64" and not "win-x86" and not "win-arm64")
                     failures.Add("Updater architecture RID detection returned an unexpected value.");
