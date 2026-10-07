@@ -265,7 +265,19 @@ public sealed class UpdateService : IDisposable
         catch (Exception ex)
         {
             info.Error = ex.Message;
-            try { JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info); } catch { }
+            try
+            {
+                JsonStore.WriteAtomic(
+                    AppPaths.UpdateStatusFile,
+                    info);
+            }
+            catch (Exception statusException)
+            {
+                Debug.WriteLine(
+                    "Update status persistence failed: " +
+                    DiagnosticRedaction.Sanitize(
+                        statusException.Message));
+            }
             return info;
         }
     }
@@ -528,13 +540,29 @@ public sealed class UpdateService : IDisposable
                 using var process = Process.GetProcessById(plan.WaitForProcessId);
                 process.WaitForExit(60000);
             }
-            catch (ArgumentException) { }
+            catch (ArgumentException ex)
+            {
+                Debug.WriteLine(
+                    "Updater wait target process already exited: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
         }
 
         if (plan.RestartService)
         {
-            try { WindowsServiceHost.Stop(); }
-            catch { }
+            try
+            {
+                WindowsServiceHost.Stop();
+            }
+            catch (Exception ex)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Updater could not stop the BitKeyBridge service before replacement: " +
+                    ex.Message,
+                    EventLogSeverity.Warning,
+                    4591,
+                    "Update");
+            }
         }
 
         var backups = new List<(string Target, string Backup)>();
@@ -598,7 +626,16 @@ public sealed class UpdateService : IDisposable
 
             foreach (var (_, backup) in backups)
             {
-                try { File.Delete(backup); } catch { }
+                try
+                {
+                    File.Delete(backup);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(
+                        "Updater backup cleanup failed: " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
             }
 
             TryScheduleHelperCleanup(plan.CleanupDirectory);
@@ -613,7 +650,17 @@ public sealed class UpdateService : IDisposable
                     if (File.Exists(backup))
                         File.Copy(backup, target, true);
                 }
-                catch { }
+                catch (Exception rollbackException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater file rollback failed for " +
+                        target +
+                        ": " +
+                        rollbackException.Message,
+                        EventLogSeverity.Error,
+                        4592,
+                        "Update");
+                }
             }
 
             WindowsEventLogService.TryWrite(
@@ -625,7 +672,15 @@ public sealed class UpdateService : IDisposable
                 if (plan.RestartService)
                     WindowsServiceHost.Start();
             }
-            catch { }
+            catch (Exception restartException)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Updater could not restart the BitKeyBridge service after failure: " +
+                    restartException.Message,
+                    EventLogSeverity.Error,
+                    4593,
+                    "Update");
+            }
             return 1;
         }
     }
@@ -1146,7 +1201,19 @@ public sealed class UpdateService : IDisposable
                              "*",
                              SearchOption.AllDirectories))
                 {
-                    try { MoveFileEx(file, null, MoveFileDelayUntilReboot); } catch { }
+                    try
+                    {
+                        MoveFileEx(
+                            file,
+                            null,
+                            MoveFileDelayUntilReboot);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(
+                            "Updater delayed file cleanup scheduling failed: " +
+                            DiagnosticRedaction.Sanitize(ex.Message));
+                    }
                 }
 
                 foreach (var child in Directory.EnumerateDirectories(
@@ -1155,13 +1222,42 @@ public sealed class UpdateService : IDisposable
                              SearchOption.AllDirectories)
                          .OrderByDescending(x => x.Length))
                 {
-                    try { MoveFileEx(child, null, MoveFileDelayUntilReboot); } catch { }
+                    try
+                    {
+                        MoveFileEx(
+                            child,
+                            null,
+                            MoveFileDelayUntilReboot);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(
+                            "Updater delayed directory cleanup scheduling failed: " +
+                            DiagnosticRedaction.Sanitize(ex.Message));
+                    }
                 }
 
-                try { MoveFileEx(directory, null, MoveFileDelayUntilReboot); } catch { }
+                try
+                {
+                    MoveFileEx(
+                        directory,
+                        null,
+                        MoveFileDelayUntilReboot);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(
+                        "Updater delayed root cleanup scheduling failed: " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(
+                "Updater helper cleanup scheduling failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private static async Task RunStagedSelfTestAsync(string executable, CancellationToken ct)
