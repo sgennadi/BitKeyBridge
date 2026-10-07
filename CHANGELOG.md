@@ -248,7 +248,7 @@
 - Main GUI title now reads the assembly version instead of a hard-coded version string.
 - Reworked the first GUI tab into a guided **BitLocker Recovery Search** workflow: connect to AD, automatically open the OU selector, then search live AD by computer name or Recovery ID.
 - Added live scoped AD recovery lookup so the first screen can retrieve matching BitLocker recovery records directly from the selected OU without requiring a prior CSV export.
-- Removed legacy SYSVOL and `BL` defaults. New installations use `%ProgramData%\BitKeyBridge\RecoveryExport` as the internal default export root with no forced subdirectory.
+- Standardized the internal default export root as `%ProgramData%\BitKeyBridge\RecoveryExport`, while keeping the optional output subdirectory empty unless explicitly configured.
 - Application configuration schema remains v3 for the optional privileged-access/SIEM settings.
 
 ## 0.15.0
@@ -432,7 +432,7 @@
 - Added a Directory Connection GUI tab with DC connection test and session-password clearing.
 - Added CLI connection overrides: `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, and `--ad-test`.
 - Added configurable local/UNC export root so BitLocker recovery export no longer requires BitKeyBridge itself to run on a domain controller.
-- Kept the legacy SYSVOL root as a backward-compatible fallback when `OutputRoot` is empty.
+- Added configurable local/UNC output-root behavior for workstation, server, and service deployments.
 - Microsoft 365 / Entra / Intune workflows remain independent of Windows domain membership.
 - Added a CI gate requiring every project version to have a matching CHANGELOG section.
 
