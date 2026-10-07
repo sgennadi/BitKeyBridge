@@ -324,6 +324,62 @@ public static class UiStyle
         Refresh();
     }
 
+    public static void ConfigureDataGridView(
+        DataGridView grid)
+    {
+        grid.AutoGenerateColumns =
+            false;
+        grid.AllowUserToAddRows =
+            false;
+        grid.AllowUserToDeleteRows =
+            false;
+        grid.AllowUserToResizeRows =
+            false;
+        grid.MultiSelect =
+            false;
+        grid.ReadOnly =
+            true;
+        grid.RowHeadersVisible =
+            false;
+        grid.SelectionMode =
+            DataGridViewSelectionMode.FullRowSelect;
+        grid.AutoSizeRowsMode =
+            DataGridViewAutoSizeRowsMode.None;
+        grid.ColumnHeadersHeightSizeMode =
+            DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+        grid.BackgroundColor =
+            SystemColors.Window;
+        grid.BorderStyle =
+            BorderStyle.FixedSingle;
+        grid.Font =
+            BodyFont;
+        grid.DefaultCellStyle.Font =
+            BodyFont;
+        grid.ColumnHeadersDefaultCellStyle.Font =
+            CreateEmphasisFont();
+        grid.DefaultCellStyle.SelectionBackColor =
+            SystemColors.Highlight;
+        grid.DefaultCellStyle.SelectionForeColor =
+            SystemColors.HighlightText;
+    }
+
+    public static DataGridViewTextBoxColumn CreateSortableTextColumn(
+        string name,
+        string headerText,
+        int fillWeight = 100)
+    {
+        return new DataGridViewTextBoxColumn
+        {
+            Name = name,
+            HeaderText = headerText,
+            SortMode = DataGridViewColumnSortMode.Automatic,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            FillWeight = Math.Max(
+                1,
+                fillWeight)
+        };
+    }
+
     public static void ConfigureListViewColumns(
         ListView view,
         params (string Name, int Width)[] columns)
