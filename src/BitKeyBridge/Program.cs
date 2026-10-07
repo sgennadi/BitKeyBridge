@@ -1768,6 +1768,37 @@ internal static class Program
 
             try
             {
+                var clipboardData =
+                    SecureClipboard.CreateSensitiveTextDataObject(
+                        "BitKeyBridge-self-test-secret");
+
+                var formats =
+                    clipboardData.GetFormats(
+                        autoConvert: false);
+
+                if (!formats.Contains(
+                        SecureClipboard.ExcludeFromMonitorFormat,
+                        StringComparer.Ordinal) ||
+                    !formats.Contains(
+                        SecureClipboard.IncludeInHistoryFormat,
+                        StringComparer.Ordinal) ||
+                    !formats.Contains(
+                        SecureClipboard.UploadToCloudFormat,
+                        StringComparer.Ordinal))
+                {
+                    failures.Add(
+                        "Secure clipboard history/cloud exclusion formats are missing.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Secure clipboard format test: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var exportDefaults =
                     new AppConfig();
 
