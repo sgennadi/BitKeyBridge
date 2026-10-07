@@ -231,12 +231,6 @@ public sealed class RbacSettingsDialog : DpiAwareForm
                 _status,
                 "Invalid: RBAC would deny all privileged actions.",
                 UiStatusKind.Error);
-            MessageBox.Show(
-                this,
-                _status.Text,
-                "RBAC Validation",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
             return false;
         }
 
@@ -249,12 +243,18 @@ public sealed class RbacSettingsDialog : DpiAwareForm
                 _status,
                 $"Validation failed: {errors.Count} unresolved principal(s).",
                 UiStatusKind.Error);
-            MessageBox.Show(
-                this,
-                string.Join(Environment.NewLine, errors),
-                "RBAC Validation",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            UiStyle.SetStatus(
+                _status,
+                "Validation failed:" +
+                Environment.NewLine +
+                string.Join(
+                    Environment.NewLine,
+                    errors.Take(5)) +
+                (errors.Count > 5
+                    ? Environment.NewLine +
+                      $"... and {errors.Count - 5} more."
+                    : string.Empty),
+                UiStatusKind.Error);
             return false;
         }
 
@@ -273,14 +273,11 @@ public sealed class RbacSettingsDialog : DpiAwareForm
 
         if (showSuccess)
         {
-            MessageBox.Show(
-                this,
-                "RBAC principals resolved successfully." +
-                Environment.NewLine + Environment.NewLine +
+            UiStyle.SetStatus(
+                _status,
+                "RBAC principals resolved successfully. " +
                 _status.Text,
-                "RBAC Validation",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                UiStatusKind.Success);
         }
 
         return true;
