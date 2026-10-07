@@ -448,6 +448,16 @@ public sealed partial class MainForm
             _startSelectOu);
         scopeFlow.Controls.Add(_startSelectOu);
 
+        var recoveryAccessHelp =
+            UiStyle.CreateActionButton(
+                "AD access help...");
+        scopeFlow.Controls.Add(
+            recoveryAccessHelp);
+        recoveryAccessHelp.Click +=
+            (_, _) =>
+                ShowAdAccessTroubleshooting(
+                    "BitLocker recovery in Active Directory");
+
         UiStyle.ConfigureInlineStatusLabel(
             _startOuStatus);
         _startOuStatus.AccessibleName =
