@@ -6,6 +6,9 @@ public sealed partial class MainForm
     private readonly ComboBox _recoverySource = new();
     private readonly CheckBox _autoConnectOnStart = new();
     private readonly Button _connectAdButton = new();
+    private readonly Button _connectAdCancelButton = new();
+    private readonly ProgressBar _adConnectionProgress = new();
+    private readonly UiDiagnosticPanel _recoveryDiagnostics = new();
     private readonly Button _advancedConnectionButton = new();
     private readonly GroupBox _advancedConnectionGroup = new();
     private readonly GroupBox _recoveryCard = new();
@@ -180,8 +183,8 @@ public sealed partial class MainForm
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 4,
-                RowCount = 2,
+                ColumnCount = 5,
+                RowCount = 4,
                 Margin =
                     new Padding(
                         0,
@@ -201,8 +204,17 @@ public sealed partial class MainForm
                 SizeType.AutoSize));
         connection.ColumnStyles.Add(
             new ColumnStyle(
+                SizeType.AutoSize));
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
                 SizeType.Percent,
                 100F));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
         connection.RowStyles.Add(
             new RowStyle(
                 SizeType.AutoSize));
@@ -289,12 +301,35 @@ public sealed partial class MainForm
             _recoverySource,
             _connectAdButton);
 
+        _connectAdCancelButton.Name =
+            "ConnectAdCancelButton";
+        _connectAdCancelButton.AccessibleName =
+            "Cancel Active Directory connection";
+        _connectAdCancelButton.TabIndex =
+            2;
+        _connectAdCancelButton.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _connectAdCancelButton);
+        _connectAdCancelButton.Enabled =
+            false;
+        _connectAdCancelButton.Margin =
+            new Padding(
+                0,
+                0,
+                UiStyle.ControlGap,
+                0);
+        connection.Controls.Add(
+            _connectAdCancelButton,
+            3,
+            0);
+
         _advancedConnectionButton.Name =
             "AdvancedConnectionButton";
         _advancedConnectionButton.AccessibleName =
             "Advanced Active Directory connection settings";
         _advancedConnectionButton.TabIndex =
-            2;
+            3;
         _advancedConnectionButton.Text =
             "Advanced connection settings...";
         UiStyle.ConfigureActionButton(
@@ -306,7 +341,7 @@ public sealed partial class MainForm
                 0);
         connection.Controls.Add(
             _advancedConnectionButton,
-            3,
+            4,
             0);
 
         _adConnectionStatus.Name =
@@ -324,7 +359,37 @@ public sealed partial class MainForm
             1);
         connection.SetColumnSpan(
             _adConnectionStatus,
-            4);
+            5);
+
+        _adConnectionProgress.Name =
+            "AdConnectionProgress";
+        _adConnectionProgress.AccessibleName =
+            "Active Directory connection progress";
+        _adConnectionProgress.Dock =
+            DockStyle.Top;
+        _adConnectionProgress.Style =
+            ProgressBarStyle.Marquee;
+        _adConnectionProgress.MarqueeAnimationSpeed =
+            25;
+        _adConnectionProgress.Visible =
+            false;
+        _adConnectionProgress.Margin =
+            new Padding(0, UiStyle.ControlGap, 0, 0);
+        connection.Controls.Add(
+            _adConnectionProgress,
+            0,
+            2);
+        connection.SetColumnSpan(
+            _adConnectionProgress,
+            5);
+
+        connection.Controls.Add(
+            _recoveryDiagnostics,
+            0,
+            3);
+        connection.SetColumnSpan(
+            _recoveryDiagnostics,
+            5);
 
         root.Controls.Add(
             connection,
@@ -423,6 +488,9 @@ public sealed partial class MainForm
                     promptForOu: true,
                     promptForSessionCredentials: true,
                     forceManualCredentials: true);
+
+        _connectAdCancelButton.Click +=
+            (_, _) => CancelDirectoryConnection();
 
         _startSelectOu.Click +=
             async (_, _) =>
