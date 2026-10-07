@@ -31,7 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for run in 37570655052 37570765094 37571142464 37571225344; do
+          for run in 37570655052 37570765094 37571225344; do
             gh api --method POST repos/sgennadi/BitKeyBridge/actions/runs/$run/cancel || true
           done
 
