@@ -449,6 +449,8 @@ public static class UiLayoutSelfTest
                     "HomeUnifiedQuery",
                     "HomeUnifiedSearchResults",
                     "HomeRecentComputers",
+                    "HomeUseWindowsIdentity",
+                    "HomeUseOtherAccount",
                     "AdvancedConnectionGroup"
                 };
 
@@ -469,6 +471,14 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: Start workspace is not selected by default.");
             }
+        }
+
+        if (FindByName(
+                form,
+                "GlobalStatusBar") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: global connection status bar was not found.");
         }
 
         VerifyTabControlPages(
