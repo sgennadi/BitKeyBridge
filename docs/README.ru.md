@@ -1,6 +1,6 @@
 # BitKeyBridge — кратко
 
-**Актуальная ветка релиза: 0.23.x.** Главное изменение — новый стартовый экран: сначала состояние подключения к AD, затем выбор **BitLocker Recovery** или **LAPS Passwords**. Живой поиск/DataGridView из 0.22, мастера, RBAC, диагностика и сборки x64/x86/ARM64 сохранены.
+**Актуальная ветка релиза: 0.24.x.** Start стал основным helpdesk-dashboard: один metadata-поиск для BitLocker + LAPS, контекстные действия, Recent без секретов, упрощённый выбор AD account, Advanced-настройки подключения на Start, постоянная connection bar и компактные LAPS details. Расширенные Recovery/LAPS/Devices/Administration workflows сохранены.
 
 BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
@@ -63,23 +63,24 @@ Release pipeline после публикации запускает живой x
 - И discovery-результаты LAPS, и список LAPS current/history теперь сортируемые DataGridView. Для записей пароля показываются **Key date** и **Latest**.
 - Если AD не даёт точную дату создания/backup текущего LAPS-пароля без чтения секрета, поле даты остаётся пустым — программа не подменяет его expiration time.
 
-## Стартовый экран и подключение — 0.23.0
+## Единый Start helpdesk-dashboard — 0.24.0
 
-При запуске GUI первой открывается вкладка **Start**.
+При запуске GUI первой открывается вкладка **Start**. Обычный операторский сценарий теперь: **подключиться → найти компьютер один раз → выбрать BitLocker или LAPS**.
 
-Обычный helpdesk workflow теперь такой:
+- Для credentials на Start остаются две понятные опции: **Use current Windows account** и **Use another AD account**.
+- DC/FQDN, domain, port, LDAPS, Credential Manager / machine-DPAPI storage и vault-actions находятся в сворачиваемом **Advanced** на Start. Из Recovery эти detailed connection settings убраны.
+- После подключения одно поле ищет одновременно BitLocker и LAPS metadata по части имени компьютера, Recovery ID и device/object ID. Ввод от двух символов использует debounce 450 мс, **Enter** запускает поиск сразу.
+- Результат показывает компьютер, BitLocker status/date и LAPS status/metadata date в одной sortable DataGridView.
+- Для BitLocker используются понятные состояния **Available**, **Multiple keys**, **Old key**, **No backup**. Для LAPS metadata — **Detected**, **Expired**, **No backup**. После реального LAPS read дополнительно возможны **Access denied**, **Decrypt denied**, **Invalid data**.
+- Если для выбранного компьютера нет BitLocker backup, кнопка BitLocker блокируется; если нет LAPS indicator — блокируется LAPS. Не надо переходить в пустой workflow.
+- Search на Start остаётся metadata-only: BitLocker recovery password и LAPS password во время поиска не читаются.
+- **Recent computers** хранит только имя/ID компьютера, последнее действие и время в профиле текущего пользователя. Ключи и пароли туда не записываются.
+- Нижняя connection/status bar видна во всех разделах и показывает текущую AD session и версию BitKeyBridge. Нажатие возвращает на Start и раскрывает Advanced.
+- В LAPS technical details скрыты за **Details...** при нормальном успехе и автоматически раскрываются только при проблеме.
+- **Enter** означает следующий логичный шаг: поиск сразу, LAPS selected device → Read LAPS, BitLocker exact computer → автоматически выбирается Latest recovery record. Секрет BitLocker при этом всё равно не раскрывается автоматически.
+- Если history не вернулась, статус коротко говорит **History unavailable (disabled, not retained, or not readable)**.
 
-1. BitKeyBridge показывает состояние подключения к Active Directory.
-2. Если auto-connect включён, программа сама пробует текущую Windows identity или сохранённые защищённые AD credentials.
-3. После успешного bind активируются две большие кнопки: **BitLocker Recovery** и **LAPS Passwords**.
-4. **BitLocker Recovery** открывает Recovery в режиме **Live AD** и ставит курсор в поиск.
-5. **LAPS Passwords** открывает LAPS с источником **Active Directory** и ставит курсор в поиск.
-
-Если используется **Session** credential и пароль ещё не загружен, программа при старте не показывает внезапный password prompt. На Start будет указано, что требуется подключение; кнопка **Connect to AD** открывает обычное окно credentials.
-
-**Disconnect** очищает session credential и снова блокирует две основные кнопки. **Connection settings...** переводит к существующим расширенным настройкам подключения.
-
-Старые верхние вкладки не удалены: напрямую можно открыть Recovery/Local cache, Entra LAPS, Devices, Administration и Health & Audit. Start — это основной, но не единственный путь.
+Прямые вкладки Recovery, Devices, LAPS, Administration и Health & Audit остаются доступными для Local cache, Entra/Intune и advanced-сценариев.
 
 ## Упрощённый LAPS workflow — 0.22.1
 
@@ -99,7 +100,7 @@ Release pipeline после публикации запускает живой x
 
 Вкладка **LAPS** поддерживает Legacy Microsoft LAPS, Windows LAPS с открытым или зашифрованным паролем, историю зашифрованных паролей, DSRM и его историю, а также LAPS в Entra ID. Живой поиск работает только с metadata. После выбора компьютера **Enter** или double-click сразу выполняет **Read LAPS**; кнопка **Search** только ищет кандидатов. Таблица имеет фильтры **All / Current / History** и показывает источник/версию, учётную запись, key date, latest/current, возраст пароля, срок действия и результат чтения/расшифровки. Просроченный current password помечается **Available / Expired**. **Copy account** отделён от **Reveal password** / **Copy password**; для записи с ошибкой чтения или расшифровки действия с паролем недоступны.
 
-**Connect to AD** и **Discover DC** всегда открывают окно ручного входа: домен, DC, `DOMAIN\user` или `user@domain`, пароль. По умолчанию используются введённые credentials; текущую Windows-учётную запись можно выбрать явно. Пустой DC включает автообнаружение. После подключения строка состояния показывает DC, домен, Windows/explicit identity и LDAP sign/seal либо LDAPS с портом. **Disconnect / Forget session** очищает только пароль/identity текущей сессии и загруженные Recovery/LAPS данные, не удаляя Credential Manager или machine-DPAPI credentials.
+Для обычной on-premises работы подключайся на **Start**: выбери текущую Windows-учётную запись или другой AD account и нажми **Connect to AD**, если auto-connect не сработал. Если нужен session password, откроется credential prompt. DC/FQDN, domain, port, LDAPS и защищённое хранение credentials находятся в **Start → Advanced**. **Disconnect** очищает только in-memory session identity и загруженные Recovery/LAPS данные, не удаляя Credential Manager или machine-DPAPI credentials.
 
 Legacy LAPS и Windows LAPS без шифрования не хранят историю. Для истории Windows LAPS/DSRM нужны включённые шифрование и хранение истории в AD. Права чтения атрибутов и права расшифровки — разные разрешения; программа показывает отказ для каждой возвращённой зашифрованной записи. Отсутствующий атрибут может означать отсутствие backup или недостаточные права чтения.
 

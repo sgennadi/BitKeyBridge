@@ -214,12 +214,15 @@ public sealed partial class MainForm : DpiAwareForm
         LoadCloudFields();
         LoadDashboardSettings();
         LoadOperationsSettings();
+        LoadRecentComputers();
         RefreshDashboard();
 
         FormClosing +=
             (_, _) =>
             {
                 _startSearchDebounceTimer?.Stop();
+                _homeSearchDebounceTimer?.Stop();
+                _homeSearchCancellation?.Cancel();
                 ClearSensitiveState();
             };
 
@@ -3221,6 +3224,10 @@ public sealed partial class MainForm : DpiAwareForm
             _config.AdPort == 636;
         _adExplicitCredentials.Checked =
             _config.AdUseExplicitCredentials;
+        _homeUseWindowsIdentity.Checked =
+            !_config.AdUseExplicitCredentials;
+        _homeUseOtherAccount.Checked =
+            _config.AdUseExplicitCredentials;
         _adCredentialStorage.SelectedIndex =
             _config.AdCredentialStorageMode.Equals(
                 "CurrentUser",
@@ -3918,6 +3925,7 @@ public sealed partial class MainForm : DpiAwareForm
     {
         _directoryConnectionCancellation?.Cancel();
         _startSearchCancellation?.Cancel();
+        _homeSearchCancellation?.Cancel();
         _lapsReadCancellation?.Cancel();
 
         AdSessionCredentials.Clear();
@@ -3937,6 +3945,9 @@ public sealed partial class MainForm : DpiAwareForm
         _startOuStatus.Text =
             string.Empty;
         _startResults.Rows.Clear();
+        _homeSearchResults.Rows.Clear();
+        _homeSearchStatus.Text =
+            "Connect to Active Directory before using the unified search.";
         
         _startCurrentKey =
             null;
@@ -4140,6 +4151,14 @@ public sealed partial class MainForm : DpiAwareForm
                 kind);
         }
 
+        if (!_globalConnectionStatus.IsDisposed)
+        {
+            _globalConnectionStatus.Text =
+                _directoryConnected
+                    ? "AD: " + text
+                    : "AD: disconnected — " + text;
+        }
+
         RefreshHomeConnectionUi();
     }
 
@@ -4159,13 +4178,33 @@ public sealed partial class MainForm : DpiAwareForm
             !_directoryConnecting &&
             _directoryConnected;
 
-        _homeBitLockerButton.Enabled =
+        var ready =
             !_directoryConnecting &&
             _directoryConnected;
 
-        _homeLapsButton.Enabled =
+        _homeQuery.Enabled =
+            ready;
+        _homeSearchButton.Enabled =
+            ready;
+        _homeUseWindowsIdentity.Enabled =
             !_directoryConnecting &&
-            _directoryConnected;
+            !_directoryConnected;
+        _homeUseOtherAccount.Enabled =
+            !_directoryConnecting &&
+            !_directoryConnected;
+
+        _homeBitLockerButton.Enabled =
+            ready;
+        _homeLapsButton.Enabled =
+            ready;
+
+        if (!ready)
+        {
+            _homeSearchCancelButton.Enabled =
+                false;
+            _homeSearchProgress.Visible =
+                false;
+        }
     }
 
     private void ShowAppError(
@@ -4729,13 +4768,52 @@ public sealed partial class MainForm : DpiAwareForm
                     row;
             }
 
-            if (rows.Count == 1)
+            var oneComputer =
+                rows.Count > 0 &&
+                rows
+                    .Select(
+                        row =>
+                            row.ComputerName)
+                    .Distinct(
+                        StringComparer.OrdinalIgnoreCase)
+                    .Count() == 1;
+
+            var preferredIndex =
+                rows.Count == 1
+                    ? 0
+                    : oneComputer
+                        ? rows.FindIndex(
+                            row =>
+                                row.IsLatest == true)
+                        : -1;
+
+            if (preferredIndex < 0 &&
+                oneComputer &&
+                rows.Count > 0)
+            {
+                preferredIndex =
+                    rows
+                        .Select(
+                            (row, index) =>
+                                new
+                                {
+                                    Row = row,
+                                    Index = index
+                                })
+                        .OrderByDescending(
+                            item =>
+                                item.Row.KeyDate)
+                        .First()
+                        .Index;
+            }
+
+            if (preferredIndex >= 0)
             {
                 _startResults.ClearSelection();
-                _startResults.Rows[0].Selected =
+                _startResults.Rows[preferredIndex].Selected =
                     true;
                 _startResults.CurrentCell =
-                    _startResults.Rows[0].Cells[0];
+                    _startResults.Rows[preferredIndex].Cells[0];
                 SelectStartRecoveryRecord();
             }
             else
@@ -5082,6 +5160,11 @@ public sealed partial class MainForm : DpiAwareForm
             computerName: row.ComputerName,
             recoveryId: row.RecoveryId,
             source: auditSource);
+
+        RecordRecentComputer(
+            row.ComputerName,
+            string.Empty,
+            "BitLocker reveal");
     }
 
     private async Task CopyStartRecoveryKeyAsync()
@@ -5145,6 +5228,11 @@ public sealed partial class MainForm : DpiAwareForm
             computerName: row.ComputerName,
             recoveryId: row.RecoveryId,
             source: auditSource);
+
+        RecordRecentComputer(
+            row.ComputerName,
+            string.Empty,
+            "BitLocker copy");
 
         CopyKeyWithAutoClear(
             key);

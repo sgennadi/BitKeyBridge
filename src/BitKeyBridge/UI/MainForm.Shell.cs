@@ -11,7 +11,6 @@ public sealed partial class MainForm
     private readonly Button _disconnectAdButton = new();
     private readonly ProgressBar _adConnectionProgress = new();
     private readonly UiDiagnosticPanel _recoveryDiagnostics = new();
-    private readonly Button _advancedConnectionButton = new();
     private readonly GroupBox _advancedConnectionGroup = new();
     private readonly GroupBox _recoveryCard = new();
     private readonly Label _recoveryCardComputer = new();
@@ -27,6 +26,21 @@ public sealed partial class MainForm
     private readonly Button _homeBitLockerButton = new();
     private readonly Button _homeLapsButton = new();
     private readonly ProgressBar _homeConnectionProgress = new();
+    private readonly TextBox _homeQuery = new();
+    private readonly Button _homeSearchButton = new();
+    private readonly Button _homeSearchCancelButton = new();
+    private readonly ProgressBar _homeSearchProgress = new();
+    private readonly UiStatusLabel _homeSearchStatus = new();
+    private readonly DataGridView _homeSearchResults = new();
+    private readonly DataGridView _homeRecentResults = new();
+    private readonly RadioButton _homeUseWindowsIdentity = new();
+    private readonly RadioButton _homeUseOtherAccount = new();
+    private readonly Button _homeAdvancedButton = new();
+    private readonly ToolStripStatusLabel _globalConnectionStatus = new();
+    private readonly ToolStripStatusLabel _globalVersionStatus = new();
+    private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
+    private CancellationTokenSource? _homeSearchCancellation;
+    private int _homeSearchGeneration;
     private TabPage? _homeWorkspaceTab;
     private TabPage? _recoveryWorkspaceTab;
     private TabPage? _lapsWorkspaceTab;
@@ -49,7 +63,7 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(0),
             Margin = new Padding(0)
         };
@@ -57,6 +71,7 @@ public sealed partial class MainForm
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var menu = BuildMainMenu();
         root.Controls.Add(menu, 0, 0);
@@ -110,8 +125,65 @@ public sealed partial class MainForm
             _homeWorkspaceTab;
 
         root.Controls.Add(_mainTabs, 0, 2);
+        root.Controls.Add(
+            BuildGlobalStatusBar(),
+            0,
+            3);
         MainMenuStrip = menu;
         return root;
+    }
+
+    private StatusStrip BuildGlobalStatusBar()
+    {
+        var status =
+            new StatusStrip
+            {
+                Name =
+                    "GlobalStatusBar",
+                SizingGrip =
+                    false
+            };
+
+        _globalConnectionStatus.Name =
+            "GlobalConnectionStatus";
+        _globalConnectionStatus.Text =
+            "AD: disconnected";
+        _globalConnectionStatus.IsLink =
+            true;
+        _globalConnectionStatus.Spring =
+            true;
+        _globalConnectionStatus.TextAlign =
+            ContentAlignment.MiddleLeft;
+        _globalConnectionStatus.ToolTipText =
+            "Open Start / connection settings";
+
+        _globalVersionStatus.Name =
+            "GlobalVersionStatus";
+        _globalVersionStatus.Text =
+            "v" +
+            (GetType().Assembly.GetName().Version?.ToString(3) ??
+             "unknown");
+
+        status.Items.Add(
+            _globalConnectionStatus);
+        status.Items.Add(
+            _globalVersionStatus);
+
+        _globalConnectionStatus.Click +=
+            (_, _) =>
+            {
+                if (_homeWorkspaceTab is not null)
+                {
+                    _mainTabs.SelectedTab =
+                        _homeWorkspaceTab;
+                    _advancedConnectionGroup.Visible =
+                        true;
+                    _homeAdvancedButton.Text =
+                        "Hide Advanced";
+                }
+            };
+
+        return status;
     }
 
     private MenuStrip BuildMainMenu()
@@ -171,41 +243,41 @@ public sealed partial class MainForm
                 AutoScroll =
                     true,
                 Padding =
-                    new Padding(24),
+                    new Padding(
+                        UiStyle.PagePadding),
                 ColumnCount =
                     1,
                 RowCount =
-                    6
+                    10
             };
 
         root.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
-                SizeType.Percent,
-                100F));
+
+        for (var index = 0;
+             index < 10;
+             index++)
+        {
+            root.RowStyles.Add(
+                new RowStyle(
+                    index == 5
+                        ? SizeType.Percent
+                        : index == 8
+                            ? SizeType.Percent
+                            : SizeType.AutoSize,
+                    index == 5
+                        ? 58F
+                        : index == 8
+                            ? 42F
+                            : 0F));
+        }
 
         tab.Controls.Add(
             root);
 
-        var title =
+        root.Controls.Add(
             new Label
             {
                 Text =
@@ -220,32 +292,29 @@ public sealed partial class MainForm
                         0,
                         0,
                         UiStyle.ControlGap)
-            };
-        root.Controls.Add(
-            title,
+            },
             0,
             0);
 
-        var intro =
+        root.Controls.Add(
             new Label
             {
                 Text =
-                    "Connect to Active Directory first, then choose the recovery task you need.",
+                    "Connect once, search once, then choose BitLocker or LAPS. " +
+                    "Search reads metadata only — secrets are still read on demand.",
                 AutoSize =
                     true,
                 MaximumSize =
                     new Size(
-                        1000,
+                        1100,
                         0),
                 Margin =
                     new Padding(
                         0,
                         0,
                         0,
-                        16)
-            };
-        root.Controls.Add(
-            intro,
+                        UiStyle.SectionGap)
+            },
             0,
             1);
 
@@ -265,7 +334,7 @@ public sealed partial class MainForm
                         0,
                         0,
                         0,
-                        18)
+                        UiStyle.SectionGap)
             };
 
         var connection =
@@ -278,25 +347,22 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    4
+                    6
             };
 
         connection.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
+
+        for (var index = 0;
+             index < 6;
+             index++)
+        {
+            connection.RowStyles.Add(
+                new RowStyle(
+                    SizeType.AutoSize));
+        }
 
         _homeConnectionStatus.Name =
             "HomeConnectionStatus";
@@ -306,7 +372,7 @@ public sealed partial class MainForm
             _homeConnectionStatus);
         _homeConnectionStatus.MaximumSize =
             new Size(
-                1000,
+                1100,
                 0);
         UiStyle.SetStatus(
             _homeConnectionStatus,
@@ -316,6 +382,48 @@ public sealed partial class MainForm
             _homeConnectionStatus,
             0,
             0);
+
+        var identity =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+
+        _homeUseWindowsIdentity.Name =
+            "HomeUseWindowsIdentity";
+        _homeUseWindowsIdentity.Text =
+            "Use current Windows account";
+        _homeUseWindowsIdentity.AutoSize =
+            true;
+
+        _homeUseOtherAccount.Name =
+            "HomeUseOtherAccount";
+        _homeUseOtherAccount.Text =
+            "Use another AD account";
+        _homeUseOtherAccount.AutoSize =
+            true;
+
+        identity.Controls.Add(
+            _homeUseWindowsIdentity);
+        identity.Controls.Add(
+            _homeUseOtherAccount);
+        connection.Controls.Add(
+            identity,
+            0,
+            1);
 
         _homeConnectionProgress.Name =
             "HomeConnectionProgress";
@@ -338,7 +446,7 @@ public sealed partial class MainForm
         connection.Controls.Add(
             _homeConnectionProgress,
             0,
-            1);
+            2);
 
         var connectionActions =
             new FlowLayoutPanel
@@ -371,34 +479,33 @@ public sealed partial class MainForm
         _homeDisconnectAdButton.Enabled =
             false;
 
-        var connectionSettings =
-            UiStyle.CreateActionButton(
-                "Connection settings...");
-        connectionSettings.Name =
+        _homeAdvancedButton.Text =
+            "Advanced...";
+        _homeAdvancedButton.Name =
             "HomeConnectionSettingsButton";
+        UiStyle.ConfigureActionButton(
+            _homeAdvancedButton);
 
         connectionActions.Controls.AddRange([
             _homeConnectAdButton,
             _homeDisconnectAdButton,
-            connectionSettings
+            _homeAdvancedButton
         ]);
-
         connection.Controls.Add(
             connectionActions,
             0,
-            2);
+            3);
 
-        var connectionHint =
+        connection.Controls.Add(
             new Label
             {
                 Text =
-                    "Current Windows identity or the configured protected AD credential is used automatically. " +
-                    "If a session password is required, Connect to AD will prompt for it.",
+                    "Most users only need the two account choices above. DC, port, LDAPS and credential storage remain under Advanced.",
                 AutoSize =
                     true,
                 MaximumSize =
                     new Size(
-                        1000,
+                        1100,
                         0),
                 Margin =
                     new Padding(
@@ -406,11 +513,14 @@ public sealed partial class MainForm
                         UiStyle.ControlGap,
                         0,
                         0)
-            };
-        connection.Controls.Add(
-            connectionHint,
+            },
             0,
-            3);
+            4);
+
+        connection.Controls.Add(
+            _recoveryDiagnostics,
+            0,
+            5);
 
         connectionGroup.Controls.Add(
             connection);
@@ -419,15 +529,23 @@ public sealed partial class MainForm
             0,
             2);
 
-        var chooseTitle =
-            new Label
+        ConfigureAdvancedConnectionGroup();
+        root.Controls.Add(
+            _advancedConnectionGroup,
+            0,
+            3);
+
+        var search =
+            new TableLayoutPanel
             {
-                Text =
-                    "Choose a task",
-                Font =
-                    UiStyle.CreateSectionTitleFont(),
+                Dock =
+                    DockStyle.Top,
                 AutoSize =
                     true,
+                ColumnCount =
+                    4,
+                RowCount =
+                    3,
                 Margin =
                     new Padding(
                         0,
@@ -435,12 +553,176 @@ public sealed partial class MainForm
                         0,
                         UiStyle.ControlGap)
             };
-        root.Controls.Add(
-            chooseTitle,
-            0,
-            3);
 
-        var tasks =
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        search.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Computer / Recovery ID / device ID:",
+                AutoSize =
+                    true,
+                Font =
+                    UiStyle.CreateEmphasisFont(
+                        9.5F),
+                Anchor =
+                    AnchorStyles.Left,
+                Margin =
+                    new Padding(
+                        0,
+                        7,
+                        UiStyle.ControlGap,
+                        0)
+            },
+            0,
+            0);
+
+        _homeQuery.Name =
+            "HomeUnifiedQuery";
+        _homeQuery.Dock =
+            DockStyle.Fill;
+        _homeQuery.Font =
+            UiStyle.CreateBodyFont(
+                11F);
+        _homeQuery.PlaceholderText =
+            "ACA-HADASWI, CLINIC-300418B, Recovery ID...";
+        search.Controls.Add(
+            _homeQuery,
+            1,
+            0);
+
+        _homeSearchButton.Name =
+            "HomeUnifiedSearchButton";
+        _homeSearchButton.Text =
+            "Search";
+        UiStyle.ConfigureActionButton(
+            _homeSearchButton);
+        search.Controls.Add(
+            _homeSearchButton,
+            2,
+            0);
+
+        _homeSearchCancelButton.Name =
+            "HomeUnifiedSearchCancelButton";
+        _homeSearchCancelButton.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _homeSearchCancelButton);
+        _homeSearchCancelButton.Enabled =
+            false;
+        search.Controls.Add(
+            _homeSearchCancelButton,
+            3,
+            0);
+
+        _homeSearchProgress.Name =
+            "HomeUnifiedSearchProgress";
+        _homeSearchProgress.Dock =
+            DockStyle.Top;
+        _homeSearchProgress.Style =
+            ProgressBarStyle.Marquee;
+        _homeSearchProgress.MarqueeAnimationSpeed =
+            25;
+        _homeSearchProgress.Visible =
+            false;
+        _homeSearchProgress.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        search.Controls.Add(
+            _homeSearchProgress,
+            0,
+            1);
+        search.SetColumnSpan(
+            _homeSearchProgress,
+            4);
+
+        UiStyle.ConfigureStatusLabel(
+            _homeSearchStatus);
+        _homeSearchStatus.Name =
+            "HomeUnifiedSearchStatus";
+        _homeSearchStatus.MaximumSize =
+            new Size(
+                1100,
+                0);
+        UiStyle.SetStatus(
+            _homeSearchStatus,
+            "Enter at least two characters. Live search starts after a short pause; Enter searches immediately.",
+            UiStatusKind.Neutral);
+        search.Controls.Add(
+            _homeSearchStatus,
+            0,
+            2);
+        search.SetColumnSpan(
+            _homeSearchStatus,
+            4);
+
+        root.Controls.Add(
+            search,
+            0,
+            4);
+
+        _homeSearchResults.Name =
+            "HomeUnifiedSearchResults";
+        _homeSearchResults.AccessibleName =
+            "Unified BitLocker and LAPS search results";
+        _homeSearchResults.Dock =
+            DockStyle.Fill;
+        _homeSearchResults.MinimumSize =
+            new Size(
+                0,
+                150);
+        UiStyle.ConfigureDataGridView(
+            _homeSearchResults);
+        _homeSearchResults.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Computer",
+                "Computer",
+                150),
+            UiStyle.CreateSortableTextColumn(
+                "BitLocker",
+                "BitLocker",
+                105),
+            UiStyle.CreateSortableTextColumn(
+                "BitLockerDate",
+                "BitLocker key date",
+                130),
+            UiStyle.CreateSortableTextColumn(
+                "Laps",
+                "LAPS",
+                105),
+            UiStyle.CreateSortableTextColumn(
+                "LapsDate",
+                "LAPS metadata date",
+                130)
+        ]);
+        _homeSearchResults.Columns["BitLockerDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        _homeSearchResults.Columns["LapsDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        root.Controls.Add(
+            _homeSearchResults,
+            0,
+            5);
+
+        var taskActions =
             new FlowLayoutPanel
             {
                 Dock =
@@ -454,9 +736,9 @@ public sealed partial class MainForm
                 Margin =
                     new Padding(
                         0,
+                        UiStyle.ControlGap,
                         0,
-                        0,
-                        12)
+                        UiStyle.SectionGap)
             };
 
         _homeBitLockerButton.Name =
@@ -465,11 +747,11 @@ public sealed partial class MainForm
             "BitLocker Recovery";
         _homeBitLockerButton.MinimumSize =
             new Size(
-                280,
-                64);
+                220,
+                48);
         _homeBitLockerButton.Font =
             UiStyle.CreateEmphasisFont(
-                11F);
+                10.5F);
         UiStyle.ConfigureActionButton(
             _homeBitLockerButton);
         _homeBitLockerButton.Enabled =
@@ -481,41 +763,98 @@ public sealed partial class MainForm
             "LAPS Passwords";
         _homeLapsButton.MinimumSize =
             new Size(
-                280,
-                64);
+                220,
+                48);
         _homeLapsButton.Font =
             UiStyle.CreateEmphasisFont(
-                11F);
+                10.5F);
         UiStyle.ConfigureActionButton(
             _homeLapsButton);
         _homeLapsButton.Enabled =
             false;
 
-        tasks.Controls.AddRange([
+        taskActions.Controls.AddRange([
             _homeBitLockerButton,
             _homeLapsButton
         ]);
         root.Controls.Add(
-            tasks,
+            taskActions,
             0,
-            4);
+            6);
 
         root.Controls.Add(
             new Label
             {
                 Text =
-                    "The Start workflow requires an AD connection. The top-level tabs remain available for Local cache or Entra-only scenarios.",
+                    "Recent computers",
+                Font =
+                    UiStyle.CreateSectionTitleFont(),
+                AutoSize =
+                    true,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            },
+            0,
+            7);
+
+        _homeRecentResults.Name =
+            "HomeRecentComputers";
+        _homeRecentResults.AccessibleName =
+            "Recent computers without stored secrets";
+        _homeRecentResults.Dock =
+            DockStyle.Fill;
+        _homeRecentResults.MinimumSize =
+            new Size(
+                0,
+                100);
+        UiStyle.ConfigureDataGridView(
+            _homeRecentResults);
+        _homeRecentResults.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Computer",
+                "Computer",
+                170),
+            UiStyle.CreateSortableTextColumn(
+                "LastAction",
+                "Last action",
+                120),
+            UiStyle.CreateSortableTextColumn(
+                "LastUsed",
+                "Last used",
+                130)
+        ]);
+        _homeRecentResults.Columns["LastUsed"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        root.Controls.Add(
+            _homeRecentResults,
+            0,
+            8);
+
+        root.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Recent stores computer/device identifiers and last action only. Recovery keys and LAPS passwords are never stored here.",
                 AutoSize =
                     true,
                 MaximumSize =
                     new Size(
-                        1000,
+                        1100,
                         0),
                 Margin =
-                    new Padding(0)
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
             },
             0,
-            5);
+            9);
 
         _homeConnectAdButton.Click +=
             async (_, _) =>
@@ -528,27 +867,141 @@ public sealed partial class MainForm
             (_, _) =>
                 DisconnectDirectorySession();
 
-        connectionSettings.Click +=
+        _homeUseWindowsIdentity.CheckedChanged +=
             (_, _) =>
             {
-                if (_recoveryWorkspaceTab is null)
+                if (!_homeUseWindowsIdentity.Checked)
                     return;
 
-                _mainTabs.SelectedTab =
-                    _recoveryWorkspaceTab;
-                _advancedConnectionGroup.Visible =
+                _adExplicitCredentials.Checked =
+                    false;
+                UpdateDirectoryConnectionUi();
+            };
+
+        _homeUseOtherAccount.CheckedChanged +=
+            (_, _) =>
+            {
+                if (!_homeUseOtherAccount.Checked)
+                    return;
+
+                _adExplicitCredentials.Checked =
                     true;
-                _advancedConnectionButton.Text =
-                    "Hide advanced settings";
+                UpdateDirectoryConnectionUi();
+            };
+
+        _homeAdvancedButton.Click +=
+            (_, _) =>
+            {
+                _advancedConnectionGroup.Visible =
+                    !_advancedConnectionGroup.Visible;
+                _homeAdvancedButton.Text =
+                    _advancedConnectionGroup.Visible
+                        ? "Hide Advanced"
+                        : "Advanced...";
+            };
+
+        _homeSearchButton.Click +=
+            async (_, _) =>
+                await SearchHomeAsync(
+                    immediate: true);
+
+        _homeSearchCancelButton.Click +=
+            (_, _) =>
+                CancelHomeSearch();
+
+        _homeQuery.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode !=
+                    Keys.Enter)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
+                    true;
+                _homeSearchDebounceTimer?.Stop();
+                await SearchHomeAsync(
+                    immediate: true);
+            };
+
+        _homeQuery.TextChanged +=
+            (_, _) =>
+                QueueHomeSearch();
+
+        _homeSearchDebounceTimer ??=
+            new System.Windows.Forms.Timer
+            {
+                Interval =
+                    SearchText.DebounceMilliseconds
+            };
+
+        _homeSearchDebounceTimer.Tick +=
+            async (_, _) =>
+            {
+                _homeSearchDebounceTimer.Stop();
+
+                if (_homeQuery.Text.Trim().Length >=
+                    SearchText.MinimumLiveSearchCharacters)
+                {
+                    await SearchHomeAsync(
+                        immediate: false);
+                }
+            };
+
+        _homeSearchResults.SelectionChanged +=
+            (_, _) =>
+                UpdateHomeSearchSelection();
+
+        _homeSearchResults.CellDoubleClick +=
+            (_, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    OpenSelectedHomeDefaultAction();
+                }
+            };
+
+        _homeSearchResults.KeyDown +=
+            (_, e) =>
+            {
+                if (e.KeyCode ==
+                    Keys.Enter)
+                {
+                    e.SuppressKeyPress =
+                        true;
+                    OpenSelectedHomeDefaultAction();
+                }
             };
 
         _homeBitLockerButton.Click +=
             (_, _) =>
-                NavigateToRecoveryWorkspace();
+                OpenSelectedHomeBitLocker();
 
         _homeLapsButton.Click +=
-            (_, _) =>
-                NavigateToLapsWorkspace();
+            async (_, _) =>
+                await OpenSelectedHomeLapsAsync();
+
+        _homeRecentResults.CellDoubleClick +=
+            async (_, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    await SearchRecentComputerAsync();
+                }
+            };
+
+        _homeRecentResults.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode ==
+                    Keys.Enter)
+                {
+                    e.SuppressKeyPress =
+                        true;
+                    await SearchRecentComputerAsync();
+                }
+            };
 
         return tab;
     }
@@ -595,7 +1048,7 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 9
+            RowCount = 7
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -604,7 +1057,6 @@ public sealed partial class MainForm
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         tab.Controls.Add(root);
 
@@ -656,13 +1108,17 @@ public sealed partial class MainForm
             UiStatusKind.Neutral);
         root.Controls.Add(_startPurposeStatus, 0, 1);
 
-        var connection =
-            new TableLayoutPanel
+        var sourceFlow =
+            new FlowLayoutPanel
             {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 6,
-                RowCount = 4,
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
                 Margin =
                     new Padding(
                         0,
@@ -671,234 +1127,60 @@ public sealed partial class MainForm
                         UiStyle.ControlGap)
             };
 
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                100F));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-
-        connection.Controls.Add(
+        sourceFlow.Controls.Add(
             new Label
             {
-                Text = "Source:",
-                AutoSize = true,
-                Anchor =
-                    AnchorStyles.Left,
+                Text =
+                    "Source:",
+                AutoSize =
+                    true,
                 Margin =
                     new Padding(
                         0,
                         8,
                         UiStyle.ControlGap,
-                        4)
-            },
-            0,
-            0);
+                        0)
+            });
 
         _recoverySource.Name =
             "RecoverySourceSelector";
         _recoverySource.AccessibleName =
             "Recovery source";
-        _recoverySource.TabIndex =
-            0;
         _recoverySource.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _recoverySource.MinimumSize =
             new Size(
-                160,
+                180,
                 0);
-        _recoverySource.Anchor =
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        _recoverySource.Margin =
-            new Padding(
-                0,
-                3,
-                UiStyle.ControlGap,
-                3);
         _recoverySource.Items.AddRange([
             "Live AD",
             "Local cache"
         ]);
-        connection.Controls.Add(
-            _recoverySource,
-            1,
-            0);
+        sourceFlow.Controls.Add(
+            _recoverySource);
 
-        _connectAdButton.Name =
-            "ConnectAdButton";
-        _connectAdButton.AccessibleName =
-            "Connect to Active Directory";
-        _connectAdButton.TabIndex =
-            1;
-        _connectAdButton.Text =
-            "Connect to AD";
-        UiStyle.ConfigureActionButton(
-            _connectAdButton);
-        _connectAdButton.MinimumSize =
-            new Size(
-                160,
-                UiStyle.MinimumButtonHeight);
-        _connectAdButton.Anchor =
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        _connectAdButton.Margin =
-            new Padding(
-                0,
-                0,
-                UiStyle.ControlGap,
-                0);
-        connection.Controls.Add(
-            _connectAdButton,
-            2,
-            0);
-
-        UiStyle.BindBalancedWidths(
-            _recoverySource,
-            _connectAdButton);
-
-        _connectAdCancelButton.Name =
-            "ConnectAdCancelButton";
-        _connectAdCancelButton.AccessibleName =
-            "Cancel Active Directory connection";
-        _connectAdCancelButton.TabIndex =
-            2;
-        _connectAdCancelButton.Text =
-            "Cancel";
-        UiStyle.ConfigureActionButton(
-            _connectAdCancelButton);
-        _connectAdCancelButton.Enabled =
-            false;
-        _connectAdCancelButton.Margin =
-            new Padding(
-                0,
-                0,
-                UiStyle.ControlGap,
-                0);
-        connection.Controls.Add(
-            _connectAdCancelButton,
-            3,
-            0);
-
-        _disconnectAdButton.Name =
-            "DisconnectAdButton";
-        _disconnectAdButton.AccessibleName =
-            "Disconnect Active Directory and forget session credentials";
-        _disconnectAdButton.TabIndex =
-            3;
-        _disconnectAdButton.Text =
-            "Disconnect / Forget session";
-        UiStyle.ConfigureActionButton(
-            _disconnectAdButton);
-        _disconnectAdButton.Enabled =
-            false;
-        _disconnectAdButton.Margin =
-            new Padding(
-                0,
-                0,
-                UiStyle.ControlGap,
-                0);
-        connection.Controls.Add(
-            _disconnectAdButton,
-            4,
-            0);
-
-        _advancedConnectionButton.Name =
-            "AdvancedConnectionButton";
-        _advancedConnectionButton.AccessibleName =
-            "Advanced Active Directory connection settings";
-        _advancedConnectionButton.TabIndex =
-            4;
-        _advancedConnectionButton.Text =
-            "Advanced connection settings...";
-        UiStyle.ConfigureActionButton(
-            _advancedConnectionButton);
-        _advancedConnectionButton.Anchor =
-            AnchorStyles.Left;
-        _advancedConnectionButton.Margin =
-            new Padding(
-                0);
-        connection.Controls.Add(
-            _advancedConnectionButton,
-            5,
-            0);
-
-        _adConnectionStatus.Name =
-            "AdConnectionStatus";
-        UiStyle.ConfigureStatusLabel(
-            _adConnectionStatus);
-        _adConnectionStatus.Text =
-            "Ready to connect to Active Directory.";
-        UiStyle.ApplyStatusLabel(
-            _adConnectionStatus,
-            UiStatusKind.Neutral);
-        connection.Controls.Add(
-            _adConnectionStatus,
-            0,
-            1);
-        connection.SetColumnSpan(
-            _adConnectionStatus,
-            6);
-
-        _adConnectionProgress.Name =
-            "AdConnectionProgress";
-        _adConnectionProgress.AccessibleName =
-            "Active Directory connection progress";
-        _adConnectionProgress.Dock =
-            DockStyle.Top;
-        _adConnectionProgress.Style =
-            ProgressBarStyle.Marquee;
-        _adConnectionProgress.MarqueeAnimationSpeed =
-            25;
-        _adConnectionProgress.Visible =
-            false;
-        _adConnectionProgress.Margin =
-            new Padding(0, UiStyle.ControlGap, 0, 0);
-        connection.Controls.Add(
-            _adConnectionProgress,
-            0,
-            2);
-        connection.SetColumnSpan(
-            _adConnectionProgress,
-            6);
-
-        connection.Controls.Add(
-            _recoveryDiagnostics,
-            0,
-            3);
-        connection.SetColumnSpan(
-            _recoveryDiagnostics,
-            6);
+        var startConnection =
+            UiStyle.CreateActionButton(
+                "Connection on Start");
+        startConnection.Name =
+            "RecoveryOpenStartButton";
+        sourceFlow.Controls.Add(
+            startConnection);
 
         root.Controls.Add(
-            connection,
+            sourceFlow,
             0,
             2);
+
+        startConnection.Click +=
+            (_, _) =>
+            {
+                if (_homeWorkspaceTab is not null)
+                {
+                    _mainTabs.SelectedTab =
+                        _homeWorkspaceTab;
+                }
+            };
 
         var scopeFlow = new FlowLayoutPanel
         {
@@ -1070,9 +1352,6 @@ public sealed partial class MainForm
         ConfigureRecoveryCard();
         root.Controls.Add(_recoveryCard, 0, 6);
 
-        ConfigureAdvancedConnectionGroup();
-        root.Controls.Add(_advancedConnectionGroup, 0, 7);
-
         _connectAdButton.Click +=
             async (_, _) =>
                 await TestDirectoryConnectionAsync(
@@ -1142,6 +1421,22 @@ public sealed partial class MainForm
             (_, _) =>
                 SelectStartRecoveryRecord();
 
+        _startResults.KeyDown +=
+            (_, e) =>
+            {
+                if (e.KeyCode !=
+                        Keys.Enter ||
+                    _startResults.SelectedRows.Count ==
+                        0)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
+                    true;
+                SelectStartRecoveryRecord();
+            };
+
         _startShow.Click +=
             async (_, _) =>
                 await RevealStartRecoveryKeyAsync();
@@ -1156,18 +1451,6 @@ public sealed partial class MainForm
                 ResetRecoverySearchState();
                 UpdateRecoverySourceUi();
                 TrySaveRecoveryUiState();
-            };
-
-        _advancedConnectionButton.Click +=
-            (_, _) =>
-            {
-                _advancedConnectionGroup.Visible =
-                    !_advancedConnectionGroup.Visible;
-
-                _advancedConnectionButton.Text =
-                    _advancedConnectionGroup.Visible
-                        ? "Hide advanced settings"
-                        : "Advanced connection settings...";
             };
 
         return tab;
@@ -1413,7 +1696,14 @@ public sealed partial class MainForm
         _adMode.SelectedIndexChanged +=
             (_, _) => UpdateDirectoryConnectionUi();
         _adExplicitCredentials.CheckedChanged +=
-            (_, _) => UpdateDirectoryConnectionUi();
+            (_, _) =>
+            {
+                _homeUseOtherAccount.Checked =
+                    _adExplicitCredentials.Checked;
+                _homeUseWindowsIdentity.Checked =
+                    !_adExplicitCredentials.Checked;
+                UpdateDirectoryConnectionUi();
+            };
         _adCredentialStorage.SelectedIndexChanged +=
             (_, _) =>
             {
