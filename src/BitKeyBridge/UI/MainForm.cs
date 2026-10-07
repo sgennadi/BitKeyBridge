@@ -999,7 +999,7 @@ public sealed partial class MainForm : DpiAwareForm
                     _cloudConfig,
                     ShowDeviceCodeAsync,
                     progress,
-                    cancellationToken:
+                    ct:
                         cancellation.Token,
                     includeLapsPermissions:
                         _cloudLapsPermissions.Checked);
