@@ -8,10 +8,13 @@ public sealed partial class MainForm
     private readonly ComboBox _lapsSource = new();
     private readonly TextBox _lapsQuery = new();
     private readonly CheckBox _lapsHistory = new();
+    private readonly ComboBox _lapsView = new();
+    private readonly Button _lapsAccessCheck = new();
     private readonly Button _lapsRead = new();
     private readonly Button _lapsCancel = new();
     private readonly Button _lapsReveal = new();
     private readonly Button _lapsCopy = new();
+    private readonly Button _lapsCopyAccount = new();
     private readonly ListView _lapsRows = new();
     private readonly TextBox _lapsPassword = new();
     private readonly RichTextBox _lapsDetails = new();
@@ -74,6 +77,34 @@ public sealed partial class MainForm
         _lapsHistory.AutoSize = true;
         _lapsHistory.Checked = true;
         actions.Controls.Add(_lapsHistory);
+
+        actions.Controls.Add(
+            new Label
+            {
+                Text = "View:",
+                AutoSize = true,
+                Margin = new Padding(
+                    UiStyle.ControlGap,
+                    8,
+                    4,
+                    0)
+            });
+        _lapsView.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _lapsView.Items.AddRange([
+            "All",
+            "Current",
+            "History"
+        ]);
+        _lapsView.SelectedIndex = 0;
+        _lapsView.MinimumSize =
+            new Size(105, 0);
+        actions.Controls.Add(_lapsView);
+
+        _lapsAccessCheck.Text = "Check access";
+        UiStyle.ConfigureActionButton(_lapsAccessCheck);
+        actions.Controls.Add(_lapsAccessCheck);
+
         _lapsRead.Text = "Read LAPS";
         UiStyle.ConfigureActionButton(_lapsRead);
         actions.Controls.Add(_lapsRead);
@@ -94,8 +125,15 @@ public sealed partial class MainForm
         _lapsRows.MultiSelect = false;
         _lapsRows.HideSelection = false;
         _lapsRows.GridLines = true;
-        AddColumns(_lapsRows, ("Source / version", 210), ("Current / history", 150),
-            ("Account", 190), ("Updated (UTC)", 175), ("Expires (UTC)", 175), ("Status", 150));
+        AddColumns(
+            _lapsRows,
+            ("Source / version", 210),
+            ("Current / history", 150),
+            ("Account", 190),
+            ("Updated (UTC)", 175),
+            ("Age", 100),
+            ("Expires (UTC)", 175),
+            ("Status", 150));
         root.Controls.Add(_lapsRows, 0, 3);
 
         _lapsDetails.Dock = DockStyle.Top;
@@ -122,11 +160,15 @@ public sealed partial class MainForm
         var secretActions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
         _lapsReveal.Text = "Reveal password";
         _lapsCopy.Text = "Copy password";
+        _lapsCopyAccount.Text = "Copy account";
         UiStyle.ConfigureActionButton(_lapsReveal);
         UiStyle.ConfigureActionButton(_lapsCopy);
+        UiStyle.ConfigureActionButton(_lapsCopyAccount);
         _lapsReveal.Enabled = _lapsCopy.Enabled = false;
+        _lapsCopyAccount.Enabled = false;
         secretActions.Controls.Add(_lapsReveal);
         secretActions.Controls.Add(_lapsCopy);
+        secretActions.Controls.Add(_lapsCopyAccount);
         secret.Controls.Add(secretActions, 1, 1);
         root.Controls.Add(secret, 0, 5);
         _lapsStatus.Dock = DockStyle.Top;
@@ -144,8 +186,10 @@ public sealed partial class MainForm
 
         root.Controls.Add(_lapsDiagnostics, 0, 8);
 
+        _lapsAccessCheck.Click += async (_, _) => await CheckLapsAccessAsync();
         _lapsRead.Click += async (_, _) => await ReadLapsAsync();
         _lapsCancel.Click += (_, _) => CancelLapsRead();
+        _lapsView.SelectedIndexChanged += (_, _) => RenderLapsRows();
         _lapsQuery.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -176,6 +220,7 @@ public sealed partial class MainForm
         _lapsRows.SelectedIndexChanged += (_, _) => SelectLapsEntry();
         _lapsReveal.Click += (_, _) => RevealLapsPassword(copy: false);
         _lapsCopy.Click += (_, _) => RevealLapsPassword(copy: true);
+        _lapsCopyAccount.Click += (_, _) => CopySelectedLapsAccount();
         FormClosed += (_, _) => ClearLapsResult();
         return tab;
     }
@@ -206,6 +251,7 @@ public sealed partial class MainForm
         using var cancellation = new CancellationTokenSource();
         _lapsReadCancellation = cancellation;
         _lapsReading = true;
+        _lapsAccessCheck.Enabled = false;
         _lapsRead.Enabled = false;
         _lapsCancel.Enabled = true;
         _lapsProgress.Visible = true;
@@ -278,17 +324,7 @@ public sealed partial class MainForm
             pending = null;
             _lapsResourceId = resourceId;
             _lapsAuditSource = source;
-            foreach (var row in _lapsResult.OrderedEntries)
-            {
-                var item = new ListViewItem(row.Source);
-                item.SubItems.Add(row.IsHistory ? "History" : "Current");
-                item.SubItems.Add(row.AccountName);
-                item.SubItems.Add(row.UpdatedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not stored");
-                item.SubItems.Add(row.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not stored");
-                item.SubItems.Add(row.Status.ToString());
-                item.Tag = row;
-                _lapsRows.Items.Add(item);
-            }
+            RenderLapsRows();
             var available = _lapsResult.Entries.Count(x => x.HasPassword);
             WriteRecoveryAudit("ReadLapsPasswords", context,
                 result: available == 0 ? "NoReadablePasswords" : available == _lapsResult.Entries.Count ? "Success" : "Partial",
@@ -332,6 +368,7 @@ public sealed partial class MainForm
             _lapsReading = false;
             if (!IsDisposed)
             {
+                _lapsAccessCheck.Enabled = true;
                 _lapsRead.Enabled = true;
                 _lapsCancel.Enabled = false;
                 _lapsSource.Enabled = true;
@@ -366,11 +403,31 @@ public sealed partial class MainForm
         _lapsPassword.UseSystemPasswordChar = true;
         _lapsReveal.Text = "Reveal password";
         var row = _lapsRows.SelectedItems.Count == 1 ? _lapsRows.SelectedItems[0].Tag as LapsPasswordEntry : null;
-        _lapsReveal.Enabled = _lapsCopy.Enabled = row?.HasPassword == true;
-        if (row is null || _lapsResult is null) return;
-        _lapsDetails.Text = $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
+        var readable =
+            row is
+            {
+                HasPassword: true,
+                Status: LapsPasswordStatus.Available
+            };
+        _lapsReveal.Enabled =
+            _lapsCopy.Enabled =
+                readable;
+        _lapsCopyAccount.Enabled =
+            row is not null &&
+            !string.IsNullOrWhiteSpace(
+                row.AccountName);
+
+        if (row is null ||
+            _lapsResult is null)
+        {
+            return;
+        }
+
+        _lapsDetails.Text =
+            $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
             $"Attribute: {row.Attribute} | Account SID: {row.AccountSid} | Password version: {_lapsResult.PasswordVersion}\r\n" +
-            $"{row.StatusDetail}\r\n{_lapsResult.Note}";
+            $"Type: {(row.IsHistory ? "History" : "Current")} | Age: {FormatLapsAge(row.UpdatedAtUtc)} | Expires: {row.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Not stored"}\r\n" +
+            $"Status: {row.Status}. {row.StatusDetail}\r\n{_lapsResult.Note}";
     }
 
     private void RevealLapsPassword(bool copy)
@@ -383,7 +440,14 @@ public sealed partial class MainForm
             return;
         }
         if (_lapsResult is null || _lapsRows.SelectedItems.Count != 1 ||
-            _lapsRows.SelectedItems[0].Tag is not LapsPasswordEntry { HasPassword: true } row) return;
+            _lapsRows.SelectedItems[0].Tag is not LapsPasswordEntry
+            {
+                HasPassword: true,
+                Status: LapsPasswordStatus.Available
+            } row)
+        {
+            return;
+        }
         var action = copy ? "CopyLapsPassword" : "RevealLapsPassword";
         var context = AuthorizeLapsAccess(action, _lapsResult.ComputerName, _lapsResourceId, _lapsAuditSource);
         if (context is null) return;
@@ -391,14 +455,447 @@ public sealed partial class MainForm
             source: _lapsAuditSource, details: $"Attribute={row.Attribute}; Account={row.AccountName}; History={row.IsHistory}; Updated={row.UpdatedAtUtc:O}");
         if (copy)
         {
-            try { CopyKeyWithAutoClear(row.CopyPassword()); }
-            catch { UiStyle.SetStatus(_lapsStatus, "The password could not be copied to the clipboard.", UiStatusKind.Warning); }
+            try
+            {
+                CopyKeyWithAutoClear(
+                    row.CopyPassword());
+            }
+            catch (Exception ex)
+            {
+                UiStyle.SetStatus(
+                    _lapsStatus,
+                    "The password could not be copied to the clipboard.",
+                    UiStatusKind.Warning);
+                WindowsEventLogService.TryWrite(
+                    "LAPS password clipboard copy failed: " +
+                    ex.Message,
+                    EventLogSeverity.Warning,
+                    4579,
+                    "Clipboard");
+            }
         }
         else
         {
             _lapsPassword.Text = row.CopyPassword();
             _lapsPassword.UseSystemPasswordChar = false;
             _lapsReveal.Text = "Hide password";
+        }
+    }
+
+    private void RenderLapsRows()
+    {
+        if (_lapsRows.IsDisposed)
+            return;
+
+        _lapsRows.BeginUpdate();
+        try
+        {
+            _lapsRows.Items.Clear();
+
+            if (_lapsResult is null)
+                return;
+
+            var mode =
+                _lapsView.SelectedIndex;
+
+            foreach (var row in
+                     _lapsResult.OrderedEntries)
+            {
+                if (mode == 1 &&
+                    row.IsHistory)
+                {
+                    continue;
+                }
+
+                if (mode == 2 &&
+                    !row.IsHistory)
+                {
+                    continue;
+                }
+
+                var item =
+                    new ListViewItem(
+                        row.Source);
+                item.SubItems.Add(
+                    row.IsHistory
+                        ? "History"
+                        : "Current");
+                item.SubItems.Add(
+                    row.AccountName);
+                item.SubItems.Add(
+                    row.UpdatedAtUtc?
+                        .ToString(
+                            "yyyy-MM-dd HH:mm:ss") ??
+                    "Not stored");
+                item.SubItems.Add(
+                    FormatLapsAge(
+                        row.UpdatedAtUtc));
+                item.SubItems.Add(
+                    row.ExpiresAtUtc?
+                        .ToString(
+                            "yyyy-MM-dd HH:mm:ss") ??
+                    "Not stored");
+                item.SubItems.Add(
+                    row.Status.ToString());
+                item.Tag =
+                    row;
+                _lapsRows.Items.Add(
+                    item);
+            }
+        }
+        finally
+        {
+            _lapsRows.EndUpdate();
+        }
+    }
+
+    private static string FormatLapsAge(
+        DateTime? updatedAtUtc)
+    {
+        if (!updatedAtUtc.HasValue)
+            return "Unknown";
+
+        var age =
+            DateTime.UtcNow -
+            updatedAtUtc.Value.ToUniversalTime();
+
+        if (age < TimeSpan.Zero)
+            age = TimeSpan.Zero;
+
+        if (age.TotalDays >= 1)
+            return $"{age.TotalDays:0.#} d";
+
+        if (age.TotalHours >= 1)
+            return $"{age.TotalHours:0.#} h";
+
+        return $"{Math.Max(0, age.TotalMinutes):0} min";
+    }
+
+    private void CopySelectedLapsAccount()
+    {
+        if (_lapsRows.SelectedItems.Count != 1 ||
+            _lapsRows.SelectedItems[0].Tag is not LapsPasswordEntry row ||
+            string.IsNullOrWhiteSpace(
+                row.AccountName))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(
+                row.AccountName);
+            UiStyle.SetStatus(
+                _lapsStatus,
+                "Account name copied.",
+                UiStatusKind.Success);
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(
+                _lapsStatus,
+                "The account name could not be copied.",
+                UiStatusKind.Warning);
+            WindowsEventLogService.TryWrite(
+                "LAPS account clipboard copy failed: " +
+                ex.Message,
+                EventLogSeverity.Warning,
+                4580,
+                "Clipboard");
+        }
+    }
+
+    private async Task CheckLapsAccessAsync()
+    {
+        if (_lapsReading)
+            return;
+
+        var query =
+            _lapsQuery.Text.Trim();
+
+        if (query.Length == 0)
+        {
+            UiStyle.SetStatus(
+                _lapsStatus,
+                "Enter the exact computer name or device ID.",
+                UiStatusKind.Warning);
+            return;
+        }
+
+        var cloud =
+            _lapsSource.SelectedIndex == 1;
+
+        if (!cloud)
+        {
+            if (!EnsureSessionAdCredentialForConnection())
+                return;
+
+            SaveDirectorySettings(
+                showConfirmation: false,
+                allowInMemoryFallback: true);
+        }
+
+        var source =
+            cloud
+                ? "LAPS-Entra"
+                : "LAPS-AD";
+
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                "CheckLapsAccess",
+                computerName: query,
+                source: source))
+        {
+            return;
+        }
+
+        ClearLapsResult();
+        var generation =
+            _lapsGeneration;
+
+        using var cancellation =
+            new CancellationTokenSource();
+        _lapsReadCancellation =
+            cancellation;
+        _lapsReading =
+            true;
+        _lapsAccessCheck.Enabled =
+            false;
+        _lapsRead.Enabled =
+            false;
+        _lapsCancel.Enabled =
+            true;
+        _lapsProgress.Visible =
+            true;
+        _lapsDiagnostics.Clear();
+        _lapsSource.Enabled =
+            false;
+        _lapsQuery.Enabled =
+            false;
+        _lapsHistory.Enabled =
+            false;
+        _lapsView.Enabled =
+            false;
+
+        try
+        {
+            UiStyle.SetStatus(
+                _lapsStatus,
+                "Checking LAPS access without requesting a password...",
+                UiStatusKind.Busy);
+
+            LapsAccessCheckResult result;
+
+            if (cloud)
+            {
+                if (!await EnsureCloudTokenAsync(
+                        forLaps: true,
+                        cancellation.Token))
+                {
+                    return;
+                }
+
+                using var graph =
+                    new CloudGraphService();
+
+                result =
+                    await graph.CheckLapsAccessAsync(
+                        _cloudToken!.AccessToken,
+                        query,
+                        cancellation.Token);
+            }
+            else
+            {
+                var snapshot =
+                    new AppConfig
+                    {
+                        AdConnectionMode =
+                            _config.AdConnectionMode,
+                        AdDomain =
+                            _config.AdDomain,
+                        AdServer =
+                            _config.AdServer,
+                        AdPort =
+                            _config.AdPort,
+                        AdUseLdaps =
+                            _config.AdUseLdaps
+                    };
+                var credential =
+                    AdSessionCredentials
+                        .CreateNetworkCredential(
+                            _config);
+                var service =
+                    new LapsDirectoryService(
+                        snapshot,
+                        credential);
+                var worker =
+                    Task.Run(
+                        () =>
+                            service.CheckAccess(
+                                query,
+                                cancellation.Token));
+
+                var cancelSignal =
+                    Task.Delay(
+                        Timeout.InfiniteTimeSpan,
+                        cancellation.Token);
+
+                if (await Task.WhenAny(
+                        worker,
+                        cancelSignal) !=
+                    worker)
+                {
+                    _ = worker.ContinueWith(
+                        static task =>
+                        {
+                            _ = task.Exception;
+                        },
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted |
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+
+                    throw new OperationCanceledException(
+                        cancellation.Token);
+                }
+
+                result =
+                    await worker;
+            }
+
+            if (IsDisposed ||
+                cancellation.IsCancellationRequested ||
+                generation != _lapsGeneration)
+            {
+                return;
+            }
+
+            var builder =
+                new StringBuilder();
+            builder.AppendLine(
+                $"Computer: {result.ComputerName}");
+            builder.AppendLine(
+                $"ID: {result.ComputerId}");
+            builder.AppendLine(
+                $"Source: {result.Source}");
+            builder.AppendLine(
+                $"Directory: {result.DirectoryServer}");
+            builder.AppendLine();
+
+            foreach (var check in
+                     result.Checks)
+            {
+                builder.AppendLine(
+                    $"{check.Name}: {check.State}");
+                builder.AppendLine(
+                    $"  {check.Detail}");
+            }
+
+            _lapsDetails.Text =
+                builder.ToString();
+
+            var failed =
+                result.Checks.Count(
+                    x =>
+                        x.State ==
+                        LapsAccessState.Failed);
+
+            _audit.Write(
+                "CheckLapsAccess",
+                failed == 0
+                    ? "Success"
+                    : "Partial",
+                computerName:
+                    result.ComputerName,
+                source:
+                    source,
+                details:
+                    $"Checks={result.Checks.Count}; Failed={failed}; PasswordRequested=False");
+
+            UiStyle.SetStatus(
+                _lapsStatus,
+                failed == 0
+                    ? "LAPS access diagnostics completed without requesting a password."
+                    : "LAPS access diagnostics completed with one or more failures. See details.",
+                failed == 0
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!IsDisposed &&
+                generation == _lapsGeneration)
+            {
+                UiStyle.SetStatus(
+                    _lapsStatus,
+                    "LAPS access check canceled.",
+                    UiStatusKind.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (IsDisposed ||
+                generation != _lapsGeneration)
+            {
+                return;
+            }
+
+            _audit.Write(
+                "CheckLapsAccess",
+                "Failed",
+                computerName:
+                    query,
+                source:
+                    source,
+                details:
+                    ex.Message);
+
+            UiStyle.SetStatus(
+                _lapsStatus,
+                "LAPS access check failed. Review diagnostics below.",
+                UiStatusKind.Error);
+
+            _lapsDiagnostics.ShowError(
+                "LAPS access check failed.",
+                "CheckLapsAccess",
+                ex,
+                ("Source", source),
+                ("Lookup", query),
+                ("Server", _config.AdServer),
+                ("Domain", _config.AdDomain));
+        }
+        finally
+        {
+            if (ReferenceEquals(
+                    _lapsReadCancellation,
+                    cancellation))
+            {
+                _lapsReadCancellation =
+                    null;
+            }
+
+            _lapsReading =
+                false;
+
+            if (!IsDisposed)
+            {
+                _lapsAccessCheck.Enabled =
+                    true;
+                _lapsRead.Enabled =
+                    true;
+                _lapsCancel.Enabled =
+                    false;
+                _lapsProgress.Visible =
+                    false;
+                _lapsSource.Enabled =
+                    true;
+                _lapsQuery.Enabled =
+                    true;
+                _lapsHistory.Enabled =
+                    true;
+                _lapsView.Enabled =
+                    true;
+            }
         }
     }
 
@@ -418,6 +915,7 @@ public sealed partial class MainForm
         _lapsDiagnostics.Clear();
         _lapsReveal.Text = "Reveal password";
         _lapsReveal.Enabled = _lapsCopy.Enabled = false;
+        _lapsCopyAccount.Enabled = false;
         _lapsResult?.Dispose();
         _lapsResult = null;
         _lapsResourceId = _lapsAuditSource = string.Empty;
