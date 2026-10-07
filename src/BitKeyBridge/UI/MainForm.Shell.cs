@@ -1316,7 +1316,7 @@ public sealed partial class MainForm
         _cloudAuthMode.DropDownStyle = ComboBoxStyle.DropDownList;
         _cloudAuthMode.Items.AddRange([
             "Device Code (MFA / Conditional Access)",
-            "Username + Password (ROPC legacy)",
+            "DEPRECATED — Username + Password (ROPC, no MFA)",
             "App registration + certificate"
         ]);
         AddCloudAdminRow(root, 6, "Authentication:", _cloudAuthMode);
