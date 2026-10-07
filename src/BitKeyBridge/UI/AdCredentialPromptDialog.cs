@@ -7,6 +7,7 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
     private readonly TextBox _domain = new();
     private readonly TextBox _server = new();
     private readonly CheckBox _windowsIdentity = new();
+    private readonly UiStatusLabel _status = new();
 
     public string Username => _username.Text.Trim();
     public string DomainName => _domain.Text.Trim();
@@ -27,10 +28,10 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(UiStyle.PagePadding),
-            ColumnCount = 1, RowCount = 5
+            ColumnCount = 1, RowCount = 6
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 5; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 6; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
         root.Controls.Add(new Label
         {
@@ -74,6 +75,19 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
         };
         root.Controls.Add(_windowsIdentity, 0, 3);
 
+        UiStyle.ConfigureStatusLabel(
+            _status);
+        _status.AccessibleName =
+            "Active Directory credential validation status";
+        UiStyle.SetStatus(
+            _status,
+            "Enter manual credentials or select the current Windows account.",
+            UiStatusKind.Neutral);
+        root.Controls.Add(
+            _status,
+            0,
+            4);
+
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.RightToLeft,
@@ -83,7 +97,7 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
         var connect = UiStyle.CreateActionButton("Connect", DialogResult.OK);
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(connect);
-        root.Controls.Add(buttons, 0, 4);
+        root.Controls.Add(buttons, 0, 5);
         AcceptButton = connect;
         CancelButton = cancel;
         connect.Click += (_, _) =>
@@ -91,8 +105,20 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
             if (UseWindowsIdentity || (!string.IsNullOrWhiteSpace(_username.Text) && !string.IsNullOrEmpty(_password.Text)))
                 return;
             DialogResult = DialogResult.None;
-            MessageBox.Show(this, "Enter both the AD user and password, or select the current Windows account.",
-                "Active Directory Credentials", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            UiStyle.SetStatus(
+                _status,
+                "Enter both the AD user and password, or select the current Windows account.",
+                UiStatusKind.Warning);
+
+            if (string.IsNullOrWhiteSpace(
+                    _username.Text))
+            {
+                _username.Focus();
+            }
+            else
+            {
+                _password.Focus();
+            }
         };
         Shown += (_, _) =>
         {
