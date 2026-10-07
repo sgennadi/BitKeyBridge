@@ -1,5 +1,7 @@
 # BitKeyBridge — кратко
 
+**Актуальная ветка релиза: 0.21.x.** В ней уже есть BitLocker Recovery, Legacy/Windows/Entra LAPS current/history, ручные AD credentials, мастера Intune/Entra и RBAC, Cancel/progress, безопасная диагностика и сборки x64/x86/ARM64.
+
 BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
 Программа написана на **C# / .NET 10 / WinForms** и напрямую использует LDAP, Microsoft Graph, Windows API, DPAPI-NG, Credential Manager и Windows Certificate Store.
@@ -24,7 +26,7 @@ PowerShell в рабочем режиме не используется вооб
 Перед сохранением мастер показывает effective access текущей identity и не даёт применить очевидную lockout-конфигурацию, при которой текущий администратор потеряет доступ к BitKeyBridge Administration без bypass. Изменения применяются только после **Finish**. JIT, two-person approval и SIEM этим мастером не включаются и остаются отдельными opt-in настройками в **Privileged Access...**.
 
 Старые **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...** и **Privileged Access...** оставлены как advanced/repair путь.
-## LAPS и ручное подключение — 0.20.0
+## LAPS и ручное подключение
 
 Вкладка **LAPS** поддерживает Legacy Microsoft LAPS, Windows LAPS с открытым или зашифрованным паролем, историю зашифрованных паролей, DSRM и его историю, а также LAPS в Entra ID. **Check access** выполняет безопасную проверку без чтения самого секрета, а **Read LAPS** получает разрешённые записи. Таблица имеет фильтры **All / Current / History** и показывает источник/версию, учётную запись, время изменения, возраст пароля, срок действия и результат чтения/расшифровки. **Copy account** отделён от **Reveal password** / **Copy password**; для записи с ошибкой чтения или расшифровки действия с паролем недоступны.
 
@@ -34,9 +36,11 @@ Legacy LAPS и Windows LAPS без шифрования не хранят ист
 
 Для Entra нужен **device ID**, а не object ID, и разрешение **DeviceLocalCredential.Read.All**. В Administration → Cloud есть необязательный флажок **Include LAPS read permissions in setup**: включи его перед First-Run / Repair, чтобы нативный мастер добавил нужные delegated/application permissions. Снятие флажка не отзывает ранее выданные права. Для delegated-входа также нужна соответствующая роль Entra.
 
-Read/Reveal/Copy проходят существующие RBAC и включённые JIT/approval/SIEM-проверки. Пароли LAPS не попадают в настройки, CSV или диагностику. Результаты очищаются через две минуты, при смене компьютера/источника/подключения/учётной записи, вручную и при закрытии. Секреты копируются через защищённый clipboard path: они исключаются из истории Win+V/cloud clipboard и очищаются по таймеру только если в буфере всё ещё находится тот же секрет. RBAC/JIT/two-person/SIEM defaults в 0.20.0 не менялись и остаются opt-in.
+Read/Reveal/Copy проходят существующие RBAC и включённые JIT/approval/SIEM-проверки. Пароли LAPS не попадают в настройки, CSV или диагностику. Результаты очищаются через две минуты, при смене компьютера/источника/подключения/учётной записи, вручную и при закрытии. Секреты копируются через защищённый clipboard path: они исключаются из истории Win+V/cloud clipboard и очищаются по таймеру только если в буфере всё ещё находится тот же секрет. RBAC/JIT/two-person/SIEM defaults не меняются автоматически и остаются opt-in.
 
 Расшифровка выполняется через **NCryptUnprotectSecret** под той же введённой AD-учётной записью. LDAP, DPAPI-NG и Graph вызываются напрямую из C#; PowerShell и модули LAPS не требуются. Подробности: [LAPS.md](LAPS.md).
+
+Если BitLocker/LAPS/LAPS history возвращает `Access denied` или атрибуты не видны, см. [AD access troubleshooting](ACCESS-TROUBLESHOOTING.md). Те же подсказки и шаблоны команд доступны прямо в GUI через **AD access help...**.
 
 ## Один EXE
 
@@ -96,7 +100,7 @@ BitKeyBridge.exe --dry-run --search-base "OU=Computers,DC=example,DC=com"
 Есть три режима:
 
 1. **Device Code** — основной интерактивный режим; поддерживает MFA и Conditional Access.
-2. **Username + Password (ROPC)** — legacy-вариант; MFA/Conditional Access его часто блокирует.
+2. **Username + Password (ROPC)** — **deprecated compatibility mode**; MFA не поддерживается, Conditional Access часто блокирует этот режим. Для новых настроек используй Device Code или certificate authentication.
 3. **App Registration + certificate** — режим для unattended/автоматизации.
 
 Поиск в облаке получает metadata. Сам recovery password запрашивается только после **Get Key from Entra**.
