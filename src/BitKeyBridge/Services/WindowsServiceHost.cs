@@ -1130,7 +1130,12 @@ public static class WindowsServiceHost
                 .GetAwaiter()
                 .GetResult();
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException ex)
+        {
+            _serviceLog.Info(
+                "BitKeyBridge service worker canceled: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
         catch (Exception ex)
         {
             _serviceLog.Error(ex.ToString());
