@@ -1617,12 +1617,10 @@ public sealed partial class MainForm
                 out var recoveryId) ||
             row is null)
         {
-            MessageBox.Show(
-                this,
+            UiStyle.SetStatus(
+                _unifiedStatus,
                 "Select a device and an Entra Recovery ID first.",
-                "Devices",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                UiStatusKind.Warning);
             return null;
         }
 
