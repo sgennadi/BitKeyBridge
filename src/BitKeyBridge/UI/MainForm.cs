@@ -4698,6 +4698,12 @@ public sealed partial class MainForm : DpiAwareForm
                     _startResults.Rows[0].Cells[0];
                 SelectStartRecoveryRecord();
             }
+            else
+            {
+                _startResults.ClearSelection();
+                _startResults.CurrentCell =
+                    null;
+            }
 
             var scopeLabel =
                 localCache
@@ -4751,21 +4757,26 @@ public sealed partial class MainForm : DpiAwareForm
                     null;
             }
 
-            _startSearch.Enabled =
-                localCache
-                    ? File.Exists(
-                        _config.OutputCsv)
-                    : _startScope is not null;
-            _startCancel.Enabled =
-                false;
-            _startProgress.Visible =
-                false;
-            _recoverySource.Enabled =
-                true;
-            _startSelectOu.Enabled =
-                !localCache &&
-                !string.IsNullOrWhiteSpace(
-                    _startDomainDn);
+            if (!IsDisposed &&
+                generation ==
+                    _startSearchGeneration)
+            {
+                _startSearch.Enabled =
+                    localCache
+                        ? File.Exists(
+                            _config.OutputCsv)
+                        : _startScope is not null;
+                _startCancel.Enabled =
+                    false;
+                _startProgress.Visible =
+                    false;
+                _recoverySource.Enabled =
+                    true;
+                _startSelectOu.Enabled =
+                    !localCache &&
+                    !string.IsNullOrWhiteSpace(
+                        _startDomainDn);
+            }
         }
     }
 
