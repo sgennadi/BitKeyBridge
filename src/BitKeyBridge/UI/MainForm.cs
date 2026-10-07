@@ -459,7 +459,7 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudPassword.Clear();
     }
 
-    private async Task<bool> ConnectCloudAsync(bool forLaps = false)
+    private async Task<bool> ConnectCloudAsync(bool forLaps = false, CancellationToken ct = default)
     {
         var passwordMode =
             _cloudAuthMode.SelectedIndex == 1;
@@ -483,24 +483,29 @@ public sealed partial class MainForm : DpiAwareForm
                             .AcquireCertificateTokenAsync(
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
-                                _cloudThumbprint.Text),
+                                _cloudThumbprint.Text,
+                                ct),
                     1 =>
                         await graph
                             .AcquirePasswordTokenAsync(
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
                                 _cloudUsername.Text,
-                                _cloudPassword.Text, lapsOnly: forLaps),
+                                _cloudPassword.Text,
+                                ct,
+                                lapsOnly: forLaps),
                     _ =>
                         await graph
                             .AcquireDeviceCodeTokenAsync(
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
-                                ShowDeviceCodeAsync, lapsOnly: forLaps)
+                                ShowDeviceCodeAsync,
+                                ct,
+                                lapsOnly: forLaps)
                 };
 
             var count = forLaps ? 0 :
-                await graph.TestAccessAsync(_cloudToken.AccessToken);
+                await graph.TestAccessAsync(_cloudToken.AccessToken, ct);
 
             _cloudTokenHasLaps = forLaps;
             _cloudTokenHasRecovery = !forLaps;
@@ -516,22 +521,33 @@ public sealed partial class MainForm : DpiAwareForm
 
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            _cloudToken = null;
+            _cloudTokenContext = string.Empty;
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Microsoft Graph connection canceled.",
+                UiStatusKind.Warning);
+            return false;
+        }
         catch (Exception ex)
         {
             _cloudToken = null;
             _cloudTokenContext = string.Empty;
             UiStyle.SetStatus(
                 _cloudStatus,
-                "Connection failed: " +
-                ex.Message,
+                "Connection failed. Review diagnostics below.",
                 UiStatusKind.Error);
-
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Microsoft Graph",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _cloudDiagnostics.ShowError(
+                "Microsoft Graph connection failed.",
+                "ConnectMicrosoftGraph",
+                ex,
+                ("Tenant", _cloudTenant.Text),
+                ("ClientId", _cloudClient.Text),
+                ("Authentication", _cloudAuthMode.Text),
+                ("Username", _cloudUsername.Text),
+                ("LapsOnly", forLaps.ToString()));
 
             return false;
         }
@@ -542,7 +558,74 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private async Task<bool> EnsureCloudTokenAsync(bool forLaps = false)
+    private async Task ConnectCloudFromUiAsync()
+    {
+        if (_cloudConnecting)
+            return;
+
+        using var cancellation =
+            new CancellationTokenSource();
+        _cloudConnectCancellation =
+            cancellation;
+        _cloudConnecting =
+            true;
+        _cloudConnectButton.Enabled =
+            false;
+        _cloudConnectCancelButton.Enabled =
+            true;
+        _cloudProgress.Visible =
+            true;
+        _cloudDiagnostics.Clear();
+
+        try
+        {
+            await ConnectCloudAsync(
+                forLaps: false,
+                cancellation.Token);
+        }
+        finally
+        {
+            if (ReferenceEquals(
+                    _cloudConnectCancellation,
+                    cancellation))
+            {
+                _cloudConnectCancellation =
+                    null;
+            }
+
+            _cloudConnecting =
+                false;
+
+            if (!IsDisposed)
+            {
+                _cloudConnectButton.Enabled =
+                    true;
+                _cloudConnectCancelButton.Enabled =
+                    false;
+                _cloudProgress.Visible =
+                    false;
+            }
+        }
+    }
+
+    private void CancelCloudConnection()
+    {
+        if (!_cloudConnecting ||
+            _cloudConnectCancellation is null)
+        {
+            return;
+        }
+
+        _cloudConnectCancelButton.Enabled =
+            false;
+        UiStyle.SetStatus(
+            _cloudStatus,
+            "Cancelling Microsoft Graph connection...",
+            UiStatusKind.Busy);
+        _cloudConnectCancellation.Cancel();
+    }
+
+    private async Task<bool> EnsureCloudTokenAsync(bool forLaps = false, CancellationToken ct = default)
     {
         var currentContext =
             BuildCloudTokenContext();
@@ -563,7 +646,7 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudTokenContext =
             string.Empty;
 
-        return await ConnectCloudAsync(forLaps);
+        return await ConnectCloudAsync(forLaps, ct);
     }
 
     private string BuildCloudTokenContext()
