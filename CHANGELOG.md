@@ -3,6 +3,7 @@
 ## 0.21.1
 
 - Added CI enforcement that every semantic-version heading in `CHANGELOG.md` is unique. The build now fails when a version appears more than once, preventing the duplicate-section problem that previously affected 0.18.4.
+- Repaired the CHANGELOG validation workflow itself and kept the uniqueness check in the normal Windows build matrix before compilation.
 - Includes the complete 0.21 feature set: Intune / Entra Setup Wizard, RBAC Setup Wizard, current README/documentation, deprecated ROPC labeling, scoped AD access troubleshooting for BitLocker/LAPS/history, and the new troubleshooting regression/UI tests.
 - Runtime remains native C#/.NET with no PowerShell execution; PowerShell snippets shown in AD access troubleshooting are administrator-side examples only and are never executed by BitKeyBridge.
 
