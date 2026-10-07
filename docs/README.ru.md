@@ -1,6 +1,6 @@
 # BitKeyBridge — кратко
 
-**Актуальная ветка релиза: 0.22.x.** В ней добавлены живой поиск с debounce и сортируемые DataGridView для BitLocker и LAPS, поиск по части имени/ID, дата ключа и пометка последнего ключа; остальные возможности BitLocker/LAPS, мастера, RBAC, диагностика и сборки x64/x86/ARM64 сохранены.
+**Актуальная ветка релиза: 0.23.x.** Главное изменение — новый стартовый экран: сначала состояние подключения к AD, затем выбор **BitLocker Recovery** или **LAPS Passwords**. Живой поиск/DataGridView из 0.22, мастера, RBAC, диагностика и сборки x64/x86/ARM64 сохранены.
 
 BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
@@ -62,6 +62,24 @@ Release pipeline после публикации запускает живой x
 - Entra LAPS search запрашивает только metadata `lastBackupDateTime/refreshDateTime` без `credentials`; AD LAPS search не запрашивает password-bearing attributes.
 - И discovery-результаты LAPS, и список LAPS current/history теперь сортируемые DataGridView. Для записей пароля показываются **Key date** и **Latest**.
 - Если AD не даёт точную дату создания/backup текущего LAPS-пароля без чтения секрета, поле даты остаётся пустым — программа не подменяет его expiration time.
+
+## Стартовый экран и подключение — 0.23.0
+
+При запуске GUI первой открывается вкладка **Start**.
+
+Обычный helpdesk workflow теперь такой:
+
+1. BitKeyBridge показывает состояние подключения к Active Directory.
+2. Если auto-connect включён, программа сама пробует текущую Windows identity или сохранённые защищённые AD credentials.
+3. После успешного bind активируются две большие кнопки: **BitLocker Recovery** и **LAPS Passwords**.
+4. **BitLocker Recovery** открывает Recovery в режиме **Live AD** и ставит курсор в поиск.
+5. **LAPS Passwords** открывает LAPS с источником **Active Directory** и ставит курсор в поиск.
+
+Если используется **Session** credential и пароль ещё не загружен, программа при старте не показывает внезапный password prompt. На Start будет указано, что требуется подключение; кнопка **Connect to AD** открывает обычное окно credentials.
+
+**Disconnect** очищает session credential и снова блокирует две основные кнопки. **Connection settings...** переводит к существующим расширенным настройкам подключения.
+
+Старые верхние вкладки не удалены: напрямую можно открыть Recovery/Local cache, Entra LAPS, Devices, Administration и Health & Audit. Start — это основной, но не единственный путь.
 
 ## Упрощённый LAPS workflow — 0.22.1
 
