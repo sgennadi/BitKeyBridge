@@ -36,8 +36,12 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _cloudThumbprint = new();
     private readonly ComboBox _cloudAuthMode = new();
     private readonly UiStatusLabel _cloudStatus = new();
+    private readonly Button _cloudSaveButton = new();
     private readonly Button _cloudConnectButton = new();
     private readonly Button _cloudConnectCancelButton = new();
+    private readonly Button _cloudSetupButton = new();
+    private readonly Button _cloudBootstrapButton = new();
+    private readonly Button _cloudRolloverButton = new();
     private readonly ProgressBar _cloudProgress = new();
     private readonly UiDiagnosticPanel _cloudDiagnostics = new();
     private CancellationTokenSource? _cloudConnectCancellation;
