@@ -1274,6 +1274,14 @@ public sealed partial class MainForm
                 computerName: _lapsResult.ComputerName,
                 recoveryId: resourceId, source: source,
                 details: $"Records={_lapsResult.Entries.Count}; Available={available}; IncludeHistory={history}; DC={_lapsResult.DirectoryServer}");
+
+            if (available > 0)
+            {
+                RecordRecentComputer(
+                    _lapsResult.ComputerName,
+                    _lapsResult.ComputerId,
+                    "LAPS read");
+            }
             _lapsDetails.Text =
                 BuildLapsSummaryText(
                     _lapsResult);
@@ -1304,7 +1312,7 @@ public sealed partial class MainForm
             if (historyMissing)
             {
                 readMessages.Add(
-                    "No password history was returned by the selected source.");
+                    "History unavailable (disabled, not retained, or not readable).");
             }
 
             if (expiredCurrent)
