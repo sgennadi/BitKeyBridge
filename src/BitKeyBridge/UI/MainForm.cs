@@ -597,7 +597,7 @@ public sealed partial class MainForm : DpiAwareForm
                 ComboBoxStyle.DropDownList;
             _cloudAuthMode.Items.AddRange([
                 "Device Code (MFA / Conditional Access)",
-                "Username + Password (ROPC legacy)",
+                "DEPRECATED — Username + Password (ROPC, no MFA)",
                 "App registration + certificate"
             ]);
         }
@@ -653,7 +653,16 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudThumbprint.Enabled = cert;
 
         if (!password)
+        {
             _cloudPassword.Clear();
+        }
+        else
+        {
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Deprecated compatibility mode: ROPC doesn't support MFA and is commonly blocked by Conditional Access. Use Device Code or certificate authentication for new deployments.",
+                UiStatusKind.Warning);
+        }
     }
 
     private async Task<bool> ConnectCloudAsync(bool forLaps = false, CancellationToken ct = default)
