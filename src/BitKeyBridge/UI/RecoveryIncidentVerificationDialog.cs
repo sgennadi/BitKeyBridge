@@ -6,6 +6,7 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
 {
     private readonly ComboBox _session = new();
     private readonly TextBox _result = new();
+    private readonly UiDiagnosticPanel _diagnostics = new();
 
     public RecoveryIncidentVerificationDialog(
         string? initialSessionId = null)
@@ -21,13 +22,14 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
             Dock = DockStyle.Fill,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 5
+            RowCount = 6
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
 
@@ -120,7 +122,8 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
                 "Open Incident Folder");
         footer.Controls.Add(close);
         footer.Controls.Add(openFolder);
-        root.Controls.Add(footer, 0, 4);
+        root.Controls.Add(_diagnostics, 0, 4);
+        root.Controls.Add(footer, 0, 5);
 
         AcceptButton =
             verify;
@@ -288,12 +291,10 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Recovery Incident Verification",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _diagnostics.ShowError(
+                "Recovery incident operation failed.",
+                "RecoveryIncidentVerification",
+                ex);
         }
     }
 
@@ -313,12 +314,10 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Recovery Incident Verification",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _diagnostics.ShowError(
+                "Recovery incident operation failed.",
+                "RecoveryIncidentVerification",
+                ex);
         }
     }
 }
