@@ -97,29 +97,34 @@ public sealed class SecretDisplayDialog : DpiAwareForm
         {
             try
             {
-                Clipboard.SetText(_secret.Text);
+                SecureClipboard.SetSensitiveText(
+                    _secret.Text);
                 copy.Text = "Copied";
                 await Task.Delay(120000);
                 try
                 {
-                    if (Clipboard.ContainsText() &&
-                        string.Equals(
-                            Clipboard.GetText(),
-                            _secret.Text,
-                            StringComparison.Ordinal))
-                    {
-                        Clipboard.Clear();
-                    }
+                    SecureClipboard.ClearIfMatches(
+                        _secret.Text);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    WindowsEventLogService.TryWrite(
+                        "Secret clipboard timed cleanup failed: " + ex.Message,
+                        EventLogSeverity.Warning,
+                        4574,
+                        "Clipboard");
                 }
 
                 if (!IsDisposed)
                     copy.Text = "Copy";
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Sensitive clipboard copy failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4575,
+                    "Clipboard");
             }
         };
 
@@ -127,17 +132,16 @@ public sealed class SecretDisplayDialog : DpiAwareForm
         {
             try
             {
-                if (Clipboard.ContainsText() &&
-                    string.Equals(
-                        Clipboard.GetText(),
-                        _secret.Text,
-                        StringComparison.Ordinal))
-                {
-                    Clipboard.Clear();
-                }
+                SecureClipboard.ClearIfMatches(
+                    _secret.Text);
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Secret clipboard close cleanup failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4576,
+                    "Clipboard");
             }
 
             _secret.Clear();
