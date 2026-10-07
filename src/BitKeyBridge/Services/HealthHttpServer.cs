@@ -37,8 +37,18 @@ public sealed class HealthHttpServer : IDisposable
                 _ = HandleClientAsync(client, ct);
             }
         }
-        catch (OperationCanceledException) { }
-        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Health HTTP server accept loop canceled: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+        catch (ObjectDisposedException ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Health HTTP server listener disposed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
