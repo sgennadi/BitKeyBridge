@@ -526,7 +526,7 @@ public sealed partial class MainForm
 
         if (selected is null)
         {
-            NavigateToRecoveryWorkspace();
+            NavigateToRecoveryWorkspace(fromStart: true);
             return;
         }
 
@@ -534,7 +534,7 @@ public sealed partial class MainForm
             selected,
             "BitLocker");
 
-        NavigateToRecoveryWorkspace();
+        NavigateToRecoveryWorkspace(fromStart: true);
         _startQuery.Text =
             selected.ComputerName;
 
@@ -555,7 +555,7 @@ public sealed partial class MainForm
 
         if (selected is null)
         {
-            NavigateToLapsWorkspace();
+            NavigateToLapsWorkspace(fromStart: true);
             return;
         }
 
@@ -563,7 +563,7 @@ public sealed partial class MainForm
             selected,
             "LAPS");
 
-        NavigateToLapsWorkspace();
+        NavigateToLapsWorkspace(fromStart: true);
 
         _suppressLapsSearchQueue =
             true;
