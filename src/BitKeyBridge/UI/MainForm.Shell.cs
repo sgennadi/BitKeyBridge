@@ -176,6 +176,8 @@ public sealed partial class MainForm
                 {
                     _mainTabs.SelectedTab =
                         _homeWorkspaceTab;
+                    _advancedConnectionGroup.Visible =
+                        true;
                 }
             };
 
@@ -258,12 +260,12 @@ public sealed partial class MainForm
         {
             root.RowStyles.Add(
                 new RowStyle(
-                    index == 6
+                    index == 5
                         ? SizeType.Percent
                         : index == 8
                             ? SizeType.Percent
                             : SizeType.AutoSize,
-                    index == 6
+                    index == 5
                         ? 58F
                         : index == 8
                             ? 42F
