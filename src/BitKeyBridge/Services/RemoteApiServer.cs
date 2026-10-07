@@ -81,8 +81,14 @@ public sealed class RemoteApiServer : IDisposable
                     {
                         client.Dispose();
                     }
-                    catch
+                    catch (Exception disposeException)
                     {
+                        WindowsEventLogService.TryWrite(
+                            "Remote API client disposal failed: " +
+                            disposeException.Message,
+                            EventLogSeverity.Warning,
+                            4577,
+                            "RemoteApi");
                     }
 
                     continue;
@@ -133,8 +139,14 @@ public sealed class RemoteApiServer : IDisposable
             {
                 client.Dispose();
             }
-            catch
+            catch (Exception disposeException)
             {
+                WindowsEventLogService.TryWrite(
+                    "Remote API client disposal failed after cancellation: " +
+                    disposeException.Message,
+                    EventLogSeverity.Warning,
+                    4578,
+                    "RemoteApi");
             }
         }
         catch (AuthenticationException)
@@ -143,8 +155,14 @@ public sealed class RemoteApiServer : IDisposable
             {
                 client.Dispose();
             }
-            catch
+            catch (Exception disposeException)
             {
+                WindowsEventLogService.TryWrite(
+                    "Remote API client disposal failed after TLS authentication error: " +
+                    disposeException.Message,
+                    EventLogSeverity.Warning,
+                    4579,
+                    "RemoteApi");
             }
         }
         catch (Exception ex)
@@ -160,8 +178,14 @@ public sealed class RemoteApiServer : IDisposable
             {
                 client.Dispose();
             }
-            catch
+            catch (Exception disposeException)
             {
+                WindowsEventLogService.TryWrite(
+                    "Remote API client disposal failed after request error: " +
+                    disposeException.Message,
+                    EventLogSeverity.Warning,
+                    4580,
+                    "RemoteApi");
             }
         }
     }
@@ -829,9 +853,44 @@ public sealed class RemoteApiServer : IDisposable
 
     public void Dispose()
     {
-        try { _cts?.Cancel(); } catch { }
-        try { _listener.Stop(); } catch { }
-        try { _loop?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Remote API cancellation failed during dispose: " + ex.Message,
+                EventLogSeverity.Warning,
+                4581,
+                "RemoteApi");
+        }
+
+        try
+        {
+            _listener.Stop();
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Remote API listener stop failed during dispose: " + ex.Message,
+                EventLogSeverity.Warning,
+                4582,
+                "RemoteApi");
+        }
+
+        try
+        {
+            _loop?.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Remote API loop wait failed during dispose: " + ex.Message,
+                EventLogSeverity.Warning,
+                4583,
+                "RemoteApi");
+        }
         _cts?.Dispose();
         _certificate.Dispose();
     }
