@@ -11,7 +11,6 @@ public sealed partial class MainForm
     private readonly Button _disconnectAdButton = new();
     private readonly ProgressBar _adConnectionProgress = new();
     private readonly UiDiagnosticPanel _recoveryDiagnostics = new();
-    private readonly Button _advancedConnectionButton = new();
     private readonly GroupBox _advancedConnectionGroup = new();
     private readonly GroupBox _recoveryCard = new();
     private readonly Label _recoveryCardComputer = new();
