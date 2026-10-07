@@ -191,12 +191,10 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
         if (string.IsNullOrWhiteSpace(
                 sessionId))
         {
-            MessageBox.Show(
-                this,
-                "Enter or select a recovery Session ID.",
-                "Recovery Incident Verification",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            _diagnostics.ShowMessage(
+                "Recovery Session ID is required.",
+                "Enter or select a recovery Session ID before verification.");
+            _session.Focus();
             return;
         }
 
@@ -272,12 +270,11 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
 
             if (!File.Exists(path))
             {
-                MessageBox.Show(
-                    this,
+                _diagnostics.ShowMessage(
                     "Incident bundle does not exist.",
-                    "Recovery Incident Verification",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    "Session ID: " +
+                    DiagnosticRedaction.Sanitize(
+                        sessionId));
                 return;
             }
 
