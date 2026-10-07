@@ -4380,44 +4380,89 @@ public sealed partial class MainForm : DpiAwareForm
                                 computer.DistinguishedName));
                     }
 
-                    if (computers.Count == 0)
+                    ct.ThrowIfCancellationRequested();
+
+                    var idQuery =
+                        query
+                            .Trim()
+                            .Trim(
+                                '{',
+                                '}');
+                    var normalizedIdQuery =
+                        SearchText.NormalizeIdentifierFragment(
+                            idQuery);
+
+                    if (normalizedIdQuery.Length >= 4)
                     {
-                        ct.ThrowIfCancellationRequested();
-
-                        var idQuery =
-                            query
-                                .Trim()
-                                .Trim(
-                                    '{',
-                                    '}');
-
-                        if (idQuery.Length >= 4)
-                        {
-                            found.AddRange(
-                                service.SearchRecoveryMetadataInScope(
-                                    dc,
-                                    scope,
-                                    idQuery,
-                                    200));
-                        }
+                        found.AddRange(
+                            service.SearchRecoveryMetadataInScope(
+                                dc,
+                                scope,
+                                idQuery,
+                                200));
                     }
 
                     ct.ThrowIfCancellationRequested();
 
-                    return found
-                        .GroupBy(
-                            x =>
-                                x.ComputerName +
-                                "|" +
-                                x.RecoveryId,
-                            StringComparer.OrdinalIgnoreCase)
-                        .Select(
-                            x =>
-                                x.First())
+                    var merged =
+                        found
+                            .GroupBy(
+                                x =>
+                                    x.ComputerName +
+                                    "|" +
+                                    x.RecoveryId,
+                                StringComparer.OrdinalIgnoreCase)
+                            .Select(
+                                x =>
+                                    x.First())
+                            .ToList();
+
+                    foreach (var group in
+                             merged.GroupBy(
+                                 x =>
+                                     x.ComputerDistinguishedName,
+                                 StringComparer.OrdinalIgnoreCase))
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var computerDn =
+                            group.Key;
+
+                        if (string.IsNullOrWhiteSpace(
+                                computerDn))
+                        {
+                            continue;
+                        }
+
+                        var allForComputer =
+                            service.GetRecoveryMetadataForComputer(
+                                dc,
+                                computerDn);
+
+                        var latestId =
+                            allForComputer
+                                .FirstOrDefault(
+                                    x =>
+                                        x.IsLatest ==
+                                        true)
+                                ?.RecoveryId;
+
+                        foreach (var row in group)
+                        {
+                            row.IsLatest =
+                                !string.IsNullOrWhiteSpace(
+                                    latestId) &&
+                                string.Equals(
+                                    row.RecoveryId,
+                                    latestId,
+                                    StringComparison.OrdinalIgnoreCase);
+                        }
+                    }
+
+                    return merged
                         .OrderByDescending(
                             x =>
-                                x.CreatedDateTime ??
-                                x.LastChecked)
+                                x.KeyDate)
                         .Take(200)
                         .ToList();
                 });
