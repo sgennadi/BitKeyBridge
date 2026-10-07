@@ -731,7 +731,7 @@ public sealed partial class MainForm
         grid.Controls.Add(
             keyLayout,
             1,
-            6);
+            5);
 
         grid.Controls.Add(new Label
         {
