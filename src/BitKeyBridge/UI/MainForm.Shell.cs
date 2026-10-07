@@ -1564,6 +1564,22 @@ public sealed partial class MainForm
             (_, _) =>
                 SelectStartRecoveryRecord();
 
+        _startResults.KeyDown +=
+            (_, e) =>
+            {
+                if (e.KeyCode !=
+                        Keys.Enter ||
+                    _startResults.SelectedRows.Count ==
+                        0)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
+                    true;
+                SelectStartRecoveryRecord();
+            };
+
         _startShow.Click +=
             async (_, _) =>
                 await RevealStartRecoveryKeyAsync();
