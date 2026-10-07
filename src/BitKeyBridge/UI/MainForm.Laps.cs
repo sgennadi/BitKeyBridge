@@ -20,6 +20,7 @@ public sealed partial class MainForm
     private readonly DataGridView _lapsRows = new();
     private readonly TextBox _lapsPassword = new();
     private readonly RichTextBox _lapsDetails = new();
+    private readonly Button _lapsDetailsToggle = new();
     private readonly UiStatusLabel _lapsStatus = new();
     private readonly ProgressBar _lapsProgress = new();
     private readonly UiDiagnosticPanel _lapsDiagnostics = new();
@@ -392,6 +393,48 @@ public sealed partial class MainForm
             0,
             4);
 
+        var detailsPanel =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    1,
+                RowCount =
+                    2,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+        detailsPanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        detailsPanel.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        detailsPanel.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+
+        _lapsDetailsToggle.Name =
+            "LapsDetailsToggle";
+        _lapsDetailsToggle.Text =
+            "Details...";
+        UiStyle.ConfigureActionButton(
+            _lapsDetailsToggle);
+        _lapsDetailsToggle.Anchor =
+            AnchorStyles.Left;
+        detailsPanel.Controls.Add(
+            _lapsDetailsToggle,
+            0,
+            0);
+
         _lapsDetails.Dock =
             DockStyle.Top;
         _lapsDetails.ReadOnly =
@@ -403,8 +446,15 @@ public sealed partial class MainForm
         _lapsDetails.Font =
             UiStyle.CreateMonospaceFont(
                 9F);
-        root.Controls.Add(
+        _lapsDetails.Visible =
+            false;
+        detailsPanel.Controls.Add(
             _lapsDetails,
+            0,
+            1);
+
+        root.Controls.Add(
+            detailsPanel,
             0,
             5);
 
@@ -549,6 +599,17 @@ public sealed partial class MainForm
             _lapsDiagnostics,
             0,
             9);
+
+        _lapsDetailsToggle.Click +=
+            (_, _) =>
+            {
+                _lapsDetails.Visible =
+                    !_lapsDetails.Visible;
+                _lapsDetailsToggle.Text =
+                    _lapsDetails.Visible
+                        ? "Hide details"
+                        : "Details...";
+            };
 
         _lapsRead.Click +=
             async (_, _) =>
@@ -1459,6 +1520,17 @@ public sealed partial class MainForm
             string.Join(
                 Environment.NewLine,
                 details);
+
+        var showTechnicalDetails =
+            row.Status !=
+                LapsPasswordStatus.Available;
+
+        _lapsDetails.Visible =
+            showTechnicalDetails;
+        _lapsDetailsToggle.Text =
+            showTechnicalDetails
+                ? "Hide details"
+                : "Details...";
     }
 
     private void RevealLapsPassword(bool copy)
@@ -1557,10 +1629,8 @@ public sealed partial class MainForm
                     FormatLapsAge(
                         row.UpdatedAtUtc),
                     row.ExpiresAtUtc,
-                    IsLapsExpired(
-                        row)
-                        ? row.Status + " / Expired"
-                        : row.Status.ToString());
+                    HelpdeskStatus.LapsEntry(
+                        row));
 
             _lapsRows.Rows[rowIndex].Tag =
                 row;
