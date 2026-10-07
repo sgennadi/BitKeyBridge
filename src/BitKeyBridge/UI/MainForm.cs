@@ -260,7 +260,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Default Scopes", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Saving default OU scopes failed.",
+                "SaveDefaultScopes",
+                ex);
         }
     }
 
@@ -281,7 +284,12 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "OU Browser Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "OU discovery failed.",
+                "BrowseOrganizationalUnits",
+                ex,
+                ("Server", _config.AdServer),
+                ("Domain", _config.AdDomain));
         }
         finally { UseWaitCursor = false; }
     }
@@ -2528,12 +2536,11 @@ public sealed partial class MainForm : DpiAwareForm
                 "Failed",
                 source: "GitHub",
                 details: ex.Message);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Install Verified Update",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Preparing the verified update failed.",
+                "PrepareVerifiedUpdate",
+                ex,
+                ("Repository", _config.UpdateRepository));
         }
     }
 
@@ -2548,7 +2555,11 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "GitHub Release", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Opening the GitHub release page failed.",
+                "OpenLatestRelease",
+                ex,
+                ("Repository", _config.UpdateRepository));
         }
     }
 
@@ -2594,7 +2605,12 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("EnableRemoteApi", "Failed", source: "RemoteAPI", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Remote API operation failed.",
+                "RemoteApi",
+                ex,
+                ("Port", _config.RemoteApiPort.ToString()),
+                ("Management", _config.RemoteApiAllowManagement.ToString()));
         }
     }
 
@@ -2730,12 +2746,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Configuration Backup",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Configuration backup failed.",
+                "BackupConfiguration",
+                ex);
         }
     }
 
@@ -2822,12 +2836,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Configuration Restore",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Configuration restore failed.",
+                "RestoreConfiguration",
+                ex);
         }
     }
 
@@ -2879,12 +2891,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Diagnostics Bundle",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Creating the diagnostics bundle failed.",
+                "CreateDiagnosticsBundle",
+                ex);
         }
     }
 
@@ -2936,7 +2946,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Windows Event Log", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Opening Windows Event Log failed.",
+                "OpenWindowsEventLog",
+                ex);
         }
     }
 
@@ -3256,12 +3269,12 @@ public sealed partial class MainForm : DpiAwareForm
                 "Failed",
                 source: "CredentialVault",
                 details: ex.Message);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Credential Vault",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _recoveryDiagnostics.ShowError(
+                "Credential vault operation failed.",
+                "CredentialVault",
+                ex,
+                ("Storage", GetSelectedCredentialStorageMode()),
+                ("User", _adUsername.Text));
         }
     }
 
@@ -4563,12 +4576,17 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Recovery Key",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _startDiagnostics.ShowError(
+                "BitLocker recovery-key retrieval failed.",
+                "GetRecoveryKey",
+                ex,
+                ("Computer", computerName),
+                ("RecoveryId", recoveryId),
+                ("Source", source));
+            UiStyle.SetStatus(
+                _startPurposeStatus,
+                "Recovery-key retrieval failed. Review diagnostics below.",
+                UiStatusKind.Error);
             return null;
         }
         finally
@@ -4812,12 +4830,14 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Service Settings",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Saving Windows Service settings failed.",
+                "SaveServiceSettings",
+                ex);
+            UiStyle.SetStatus(
+                _dashboardStatus,
+                "Service settings could not be saved.",
+                UiStatusKind.Error);
 
             return false;
         }
@@ -4864,7 +4884,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("InstallOrUpdateService", "Failed", source: "WindowsService", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Windows Service operation failed.",
+                "WindowsService",
+                ex);
             RefreshDashboard();
         }
     }
@@ -4983,12 +5006,10 @@ public sealed partial class MainForm : DpiAwareForm
                 "Failed",
                 source: "Local",
                 details: ex.Message);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Machine Cloud Configuration",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Machine cloud configuration operation failed.",
+                "MachineCloudConfiguration",
+                ex);
             RefreshMachineCloudStatus();
         }
     }
@@ -5271,12 +5292,12 @@ public sealed partial class MainForm : DpiAwareForm
                 "Failed",
                 source: "WindowsService",
                 details: ex.Message);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Service Identity",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Windows Service identity configuration failed.",
+                "ConfigureServiceIdentity",
+                ex,
+                ("Mode", GetSelectedServiceIdentityMode()),
+                ("Account", _serviceIdentityAccount.Text));
             RefreshServiceIdentityStatus();
         }
     }
@@ -5344,7 +5365,11 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Health Endpoint", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Opening the health endpoint failed.",
+                "OpenHealthEndpoint",
+                ex,
+                ("Port", _config.HealthEndpointPort.ToString()));
         }
     }
 
@@ -5483,7 +5508,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("CreateSecureOutput", "Failed", source: "WindowsACL", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "Secure BitLocker Output", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Creating protected BitLocker output failed.",
+                "CreateSecureOutput",
+                ex);
         }
     }
 
@@ -6294,7 +6322,11 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Open", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Opening the requested path failed.",
+                "OpenPath",
+                ex,
+                ("Path", path));
         }
     }
 }
