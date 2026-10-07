@@ -4726,13 +4726,25 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (OperationCanceledException)
         {
-            UiStyle.SetStatus(
-                _startPurposeStatus,
-                "BitLocker recovery search canceled.",
-                UiStatusKind.Warning);
+            if (!IsDisposed &&
+                generation ==
+                    _startSearchGeneration)
+            {
+                UiStyle.SetStatus(
+                    _startPurposeStatus,
+                    "BitLocker recovery search canceled.",
+                    UiStatusKind.Warning);
+            }
         }
         catch (Exception ex)
         {
+            if (IsDisposed ||
+                generation !=
+                    _startSearchGeneration)
+            {
+                return;
+            }
+
             UiStyle.SetStatus(
                 _startPurposeStatus,
                 "BitLocker search failed. Review diagnostics below.",
