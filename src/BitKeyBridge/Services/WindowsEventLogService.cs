@@ -49,9 +49,12 @@ public static class WindowsEventLogService
                 type,
                 Math.Clamp(eventId, 1, 65535));
         }
-        catch
+        catch (Exception ex)
         {
             // Event Log must never break BitKeyBridge's primary workflow.
+            Debug.WriteLine(
+                "BitKeyBridge Event Log write failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 
