@@ -89,6 +89,9 @@ public sealed class LapsDirectoryService
                         computerId,
                     KeyDateUtc =
                         null,
+                    ExpiresAtUtc =
+                        windowsExpiry ??
+                        legacyExpiry,
                     IsLatest =
                         legacyExpiry.HasValue ||
                         windowsExpiry.HasValue ||
