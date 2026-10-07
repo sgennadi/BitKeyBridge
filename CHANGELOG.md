@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.1
+
+- Added an explicit **Cancel** button to the LAPS workspace for in-flight Active Directory and Microsoft Graph reads.
+- While a LAPS read is running, source/query/history controls are temporarily disabled to prevent connection identity or target changes mid-operation; they are restored when the operation completes or is canceled.
+- Cancellation now reports a non-blocking `LAPS read canceled` status and uses the existing `CancellationToken` path for Graph calls and for discarding pending LDAP results safely.
+- Preserved the v0.19.0 native implementation: no PowerShell process, module, SDK, or fallback is used.
+
+
 ## 0.19.0
 
 - Added a native LAPS workspace for Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted passwords, encrypted AD history, DSRM passwords/history, and Microsoft Entra LAPS credentials/history.
