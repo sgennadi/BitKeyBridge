@@ -68,6 +68,8 @@ public sealed class LapsSearchResult
 
     public DateTime? KeyDateUtc { get; set; }
 
+    public DateTime? ExpiresAtUtc { get; set; }
+
     public bool? IsLatest { get; set; }
 
     public string Source { get; set; } =
