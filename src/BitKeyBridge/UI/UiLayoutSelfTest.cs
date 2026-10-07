@@ -208,6 +208,13 @@ public static class UiLayoutSelfTest
                     new AdCredentialPromptDialog(
                         @"DOMAIN\helpdesk")),
             (
+                "AD access troubleshooting",
+                () =>
+                    new AdAccessTroubleshootingDialog(
+                        "OU=Workstations,DC=example,DC=com",
+                        @"DOMAIN\BitKeyBridge-Recovery-Readers",
+                        "BitLocker / LAPS self-test")),
+            (
                 "Input",
                 () =>
                     new InputDialog(
