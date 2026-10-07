@@ -106,7 +106,14 @@ public sealed class AuditService
                         var entry = JsonSerializer.Deserialize<AuditEntry>(line);
                         if (entry is not null) result.Add(entry);
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Audit entry parse failed while reading recent entries: " + ex.Message,
+                            EventLogSeverity.Warning,
+                            4559,
+                            "Audit");
+                    }
                 }
                 result.Reverse();
                 return result;
