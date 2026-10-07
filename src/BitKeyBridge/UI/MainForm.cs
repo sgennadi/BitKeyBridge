@@ -3753,89 +3753,127 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task<List<RecoverySearchResult>> SearchLiveAdRecoveryMetadataAsync(
         string query,
-        BitLockerScope scope)
+        BitLockerScope scope,
+        CancellationToken ct)
     {
-        return await Task.Run(
-            () =>
-            {
-                var service =
-                    new ActiveDirectoryService(
-                        _config);
-                var dc =
-                    service.GetPreferredWritableDc();
-
-                var computers =
-                    service.SearchComputersInScope(
-                        dc,
-                        scope,
-                        query,
-                        100);
-
-                var found =
-                    new List<RecoverySearchResult>();
-
-                foreach (var computer in
-                         computers)
+        var worker =
+            Task.Run(
+                () =>
                 {
-                    found.AddRange(
-                        service.GetRecoveryMetadataForComputer(
+                    ct.ThrowIfCancellationRequested();
+
+                    var service =
+                        new ActiveDirectoryService(
+                            _config);
+                    var dc =
+                        service.GetPreferredWritableDc();
+
+                    var computers =
+                        service.SearchComputersInScope(
                             dc,
-                            computer.DistinguishedName));
-                }
+                            scope,
+                            query,
+                            100);
 
-                if (computers.Count == 0)
-                {
-                    var idQuery =
-                        query
-                            .Trim()
-                            .Trim(
-                                '{',
-                                '}');
+                    ct.ThrowIfCancellationRequested();
 
-                    if (idQuery.Length >= 4)
+                    var found =
+                        new List<RecoverySearchResult>();
+
+                    foreach (var computer in
+                             computers)
                     {
+                        ct.ThrowIfCancellationRequested();
                         found.AddRange(
-                            service.SearchRecoveryMetadataInScope(
+                            service.GetRecoveryMetadataForComputer(
                                 dc,
-                                scope,
-                                idQuery,
-                                200));
+                                computer.DistinguishedName));
                     }
-                }
 
-                return found
-                    .GroupBy(
-                        x =>
-                            x.ComputerName +
-                            "|" +
-                            x.RecoveryId,
-                        StringComparer.OrdinalIgnoreCase)
-                    .Select(
-                        x =>
-                            x.First())
-                    .OrderByDescending(
-                        x =>
-                            x.CreatedDateTime ??
-                            x.LastChecked)
-                    .Take(200)
-                    .ToList();
-            });
+                    if (computers.Count == 0)
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var idQuery =
+                            query
+                                .Trim()
+                                .Trim(
+                                    '{',
+                                    '}');
+
+                        if (idQuery.Length >= 4)
+                        {
+                            found.AddRange(
+                                service.SearchRecoveryMetadataInScope(
+                                    dc,
+                                    scope,
+                                    idQuery,
+                                    200));
+                        }
+                    }
+
+                    ct.ThrowIfCancellationRequested();
+
+                    return found
+                        .GroupBy(
+                            x =>
+                                x.ComputerName +
+                                "|" +
+                                x.RecoveryId,
+                            StringComparer.OrdinalIgnoreCase)
+                        .Select(
+                            x =>
+                                x.First())
+                        .OrderByDescending(
+                            x =>
+                                x.CreatedDateTime ??
+                                x.LastChecked)
+                        .Take(200)
+                        .ToList();
+                });
+
+        var cancelSignal =
+            Task.Delay(
+                Timeout.InfiniteTimeSpan,
+                ct);
+
+        if (await Task.WhenAny(
+                worker,
+                cancelSignal) !=
+            worker)
+        {
+            _ = worker.ContinueWith(
+                static task =>
+                {
+                    _ = task.Exception;
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted |
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            throw new OperationCanceledException(
+                ct);
+        }
+
+        return await worker;
     }
 
     private async Task SearchStartRecoveryAsync()
     {
+        if (_startSearchCancellation is not null)
+            return;
+
         var localCache =
             _recoverySource.SelectedIndex == 1;
 
         if (!localCache &&
             _startScope is null)
         {
-            MessageBox.Show(
-                this,
+            UiStyle.SetStatus(
+                _startPurposeStatus,
                 "Connect to Active Directory and select an OU first.",
-                "BitLocker Recovery",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                UiStatusKind.Warning);
             return;
         }
 
@@ -3847,16 +3885,11 @@ public sealed partial class MainForm : DpiAwareForm
                 _startPurposeStatus,
                 "Local recovery cache is unavailable. Run an export first or switch to Live AD.",
                 UiStatusKind.Warning);
-
-            MessageBox.Show(
-                this,
-                "The local recovery export CSV does not exist." +
-                Environment.NewLine +
-                Environment.NewLine +
-                _config.OutputCsv,
-                "Local Recovery Cache",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            _startDiagnostics.ShowMessage(
+                "Local recovery cache is unavailable.",
+                "Expected cache path: " +
+                DiagnosticRedaction.Sanitize(
+                    _config.OutputCsv));
             return;
         }
 
@@ -3866,12 +3899,10 @@ public sealed partial class MainForm : DpiAwareForm
         if (string.IsNullOrWhiteSpace(
                 query))
         {
-            MessageBox.Show(
-                this,
+            UiStyle.SetStatus(
+                _startPurposeStatus,
                 "Enter a computer name or Recovery ID.",
-                "BitLocker Recovery",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                UiStatusKind.Warning);
             return;
         }
 
@@ -3888,9 +3919,26 @@ public sealed partial class MainForm : DpiAwareForm
             return;
         }
 
+        using var cancellation =
+            new CancellationTokenSource();
+        _startSearchCancellation =
+            cancellation;
+        _startSearch.Enabled =
+            false;
+        _startCancel.Enabled =
+            true;
+        _startProgress.Visible =
+            true;
+        _startDiagnostics.Clear();
+        _startQuery.Enabled =
+            false;
+        _recoverySource.Enabled =
+            false;
+        _startSelectOu.Enabled =
+            false;
+
         try
         {
-            _startSearch.Enabled = false;
             _startResults.Items.Clear();
             _startResults.Visible = true;
             _startCurrentKey = null;
@@ -3907,19 +3955,44 @@ public sealed partial class MainForm : DpiAwareForm
                     : "Searching Active Directory recovery metadata...",
                 UiStatusKind.Busy);
 
-            UseWaitCursor = true;
-
             List<RecoverySearchResult> rows;
 
             if (localCache)
             {
-                rows =
-                    await Task.Run(
+                var worker =
+                    Task.Run(
                         () =>
                             CsvUtility.ReadRecoveryMetadata(
                                 _config.OutputCsv,
                                 query,
                                 200));
+
+                var cancelSignal =
+                    Task.Delay(
+                        Timeout.InfiniteTimeSpan,
+                        cancellation.Token);
+
+                if (await Task.WhenAny(
+                        worker,
+                        cancelSignal) !=
+                    worker)
+                {
+                    _ = worker.ContinueWith(
+                        static task =>
+                        {
+                            _ = task.Exception;
+                        },
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted |
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+
+                    throw new OperationCanceledException(
+                        cancellation.Token);
+                }
+
+                rows =
+                    await worker;
             }
             else
             {
@@ -3931,7 +4004,12 @@ public sealed partial class MainForm : DpiAwareForm
                     rows =
                         await SearchLiveAdRecoveryMetadataAsync(
                             query,
-                            scope);
+                            scope,
+                            cancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch when (
                     !scope.SearchBase.Equals(
@@ -3943,9 +4021,13 @@ public sealed partial class MainForm : DpiAwareForm
                     rows =
                         await SearchLiveAdRecoveryMetadataAsync(
                             query,
-                            _startScope!);
+                            _startScope!,
+                            cancellation.Token);
                 }
             }
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
 
             foreach (var row in rows)
             {
@@ -4001,30 +4083,70 @@ public sealed partial class MainForm : DpiAwareForm
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
         }
+        catch (OperationCanceledException)
+        {
+            UiStyle.SetStatus(
+                _startPurposeStatus,
+                "BitLocker recovery search canceled.",
+                UiStatusKind.Warning);
+        }
         catch (Exception ex)
         {
             UiStyle.SetStatus(
                 _startPurposeStatus,
-                "BitLocker search failed: " +
-                ex.Message,
+                "BitLocker search failed. Review diagnostics below.",
                 UiStatusKind.Error);
 
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "BitLocker Recovery",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _startDiagnostics.ShowError(
+                "BitLocker recovery search failed.",
+                "SearchRecoveryMetadata",
+                ex,
+                ("Source", searchSource),
+                ("Query", query),
+                ("Scope", _startScope?.SearchBase));
         }
         finally
         {
+            if (ReferenceEquals(
+                    _startSearchCancellation,
+                    cancellation))
+            {
+                _startSearchCancellation =
+                    null;
+            }
+
             _startSearch.Enabled =
                 localCache
                     ? File.Exists(
                         _config.OutputCsv)
                     : _startScope is not null;
-            UseWaitCursor = false;
+            _startCancel.Enabled =
+                false;
+            _startProgress.Visible =
+                false;
+            _startQuery.Enabled =
+                true;
+            _recoverySource.Enabled =
+                true;
+            _startSelectOu.Enabled =
+                !localCache &&
+                !string.IsNullOrWhiteSpace(
+                    _startDomainDn);
         }
+    }
+
+    private void CancelStartRecoverySearch()
+    {
+        if (_startSearchCancellation is null)
+            return;
+
+        _startCancel.Enabled =
+            false;
+        UiStyle.SetStatus(
+            _startPurposeStatus,
+            "Cancelling BitLocker recovery search...",
+            UiStatusKind.Busy);
+        _startSearchCancellation.Cancel();
     }
 
     private void SelectStartRecoveryRecord()
