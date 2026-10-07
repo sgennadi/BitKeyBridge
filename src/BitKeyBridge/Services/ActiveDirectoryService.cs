@@ -420,9 +420,21 @@ public sealed class ActiveDirectoryService
             });
         }
 
-        return rows
-            .OrderByDescending(x => x.CreatedDateTime)
-            .ToList();
+        var ordered =
+            rows
+                .OrderByDescending(
+                    x => x.CreatedDateTime)
+                .ToList();
+
+        for (var index = 0;
+             index < ordered.Count;
+             index++)
+        {
+            ordered[index].IsLatest =
+                index == 0;
+        }
+
+        return ordered;
     }
 
     public string GetRecoveryPasswordByDistinguishedName(
@@ -534,27 +546,34 @@ public sealed class ActiveDirectoryService
         string recoveryIdQuery,
         int maximumItems = 200)
     {
-        var query =
+        var rawQuery =
             (recoveryIdQuery ?? string.Empty)
                 .Trim()
                 .Trim('{', '}');
+        var query =
+            SearchText.NormalizeIdentifierFragment(
+                rawQuery);
 
-        if (string.IsNullOrWhiteSpace(query))
+        if (query.Length < 4)
             return [];
-
-        var escaped =
-            EscapeLdapFilter(query);
 
         using var connection =
             CreateConnection(server);
 
-        // msFVE-RecoveryInformation object CNs include the recovery GUID.
-        // Searching the CN server-side avoids enumerating every recovery
-        // object in a large OU just to match a partial Recovery ID.
+        // Recovery object CNs contain the GUID with punctuation. Put LDAP
+        // wildcards between normalized hex characters so compact fragments
+        // such as B1E42056D492 still match the dashed/braced CN form.
+        var serverPattern =
+            string.Join(
+                "*",
+                query.Select(
+                    static ch =>
+                        ch.ToString()));
+
         var request =
             new SearchRequest(
                 scope.SearchBase,
-                $"(&(objectClass=msFVE-RecoveryInformation)(name=*{escaped}*))",
+                $"(&(objectClass=msFVE-RecoveryInformation)(name=*{serverPattern}*))",
                 SearchScope.Subtree,
                 "msFVE-RecoveryGuid",
                 "whenCreated");
@@ -581,9 +600,9 @@ public sealed class ActiveDirectoryService
                     guidBytes)
                     .ToString("D");
 
-            if (!recoveryId.Contains(
-                    query,
-                    StringComparison.OrdinalIgnoreCase))
+            if (!SearchText.IdentifierContains(
+                    recoveryId,
+                    rawQuery))
             {
                 continue;
             }
