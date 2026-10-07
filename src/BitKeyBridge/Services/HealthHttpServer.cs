@@ -325,9 +325,45 @@ public sealed class HealthHttpServer : IDisposable
 
     public void Dispose()
     {
-        try { _cts?.Cancel(); } catch { }
-        try { _listener.Stop(); } catch { }
-        try { _loop?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Health server cancellation failed during dispose: " + ex.Message,
+                EventLogSeverity.Warning,
+                4564,
+                "Health");
+        }
+
+        try
+        {
+            _listener.Stop();
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Health listener stop failed during dispose: " + ex.Message,
+                EventLogSeverity.Warning,
+                4565,
+                "Health");
+        }
+
+        try
+        {
+            _loop?.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Health server loop wait failed during dispose: " + ex.Message,
+                EventLogSeverity.Warning,
+                4566,
+                "Health");
+        }
+
         _cts?.Dispose();
     }
 }
