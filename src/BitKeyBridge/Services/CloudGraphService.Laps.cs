@@ -173,42 +173,128 @@ public sealed partial class CloudGraphService
                 50000,
                 ct);
 
-        return devices
-            .Select(
-                item =>
-                    new LapsSearchResult
+        var rows =
+            devices
+                .Select(
+                    item =>
+                        new LapsSearchResult
+                        {
+                            ComputerName =
+                                GetString(
+                                    item,
+                                    "displayName"),
+                            ComputerId =
+                                GetString(
+                                    item,
+                                    "deviceId"),
+                            Source =
+                                "Microsoft Entra ID",
+                            DirectoryServer =
+                                "Microsoft Graph"
+                        })
+                .Where(
+                    row =>
+                        row.ComputerName.Contains(
+                            query,
+                            StringComparison.OrdinalIgnoreCase) ||
+                        SearchText.IdentifierContains(
+                            row.ComputerId,
+                            query))
+                .OrderBy(
+                    row =>
+                        row.ComputerName,
+                    StringComparer.OrdinalIgnoreCase)
+                .Take(
+                    Math.Clamp(
+                        maximumItems,
+                        1,
+                        500))
+                .ToList();
+
+        using var limiter =
+            new SemaphoreSlim(
+                8,
+                8);
+
+        var metadataTasks =
+            rows.Select(
+                async row =>
+                {
+                    await limiter.WaitAsync(
+                        ct);
+
+                    try
                     {
-                        ComputerName =
+                        var uri =
+                            $"https://graph.microsoft.com/v1.0/directory/deviceLocalCredentials/{Uri.EscapeDataString(row.ComputerId)}?$select=id,deviceName,lastBackupDateTime,refreshDateTime";
+
+                        using var request =
+                            new HttpRequestMessage(
+                                HttpMethod.Get,
+                                uri);
+                        request.Headers.Authorization =
+                            new AuthenticationHeaderValue(
+                                "Bearer",
+                                token);
+
+                        using var response =
+                            await _http.SendAsync(
+                                request,
+                                ct);
+
+                        if (!response.IsSuccessStatusCode)
+                            return;
+
+                        using var json =
+                            await JsonDocument.ParseAsync(
+                                await response.Content.ReadAsStreamAsync(
+                                    ct),
+                                cancellationToken:
+                                    ct);
+
+                        var lastBackup =
                             GetString(
-                                item,
-                                "displayName"),
-                        ComputerId =
+                                json.RootElement,
+                                "lastBackupDateTime");
+                        var refresh =
                             GetString(
-                                item,
-                                "deviceId"),
-                        Source =
-                            "Microsoft Entra ID",
-                        DirectoryServer =
-                            "Microsoft Graph"
-                    })
-            .Where(
-                row =>
-                    row.ComputerName.Contains(
-                        query,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    SearchText.IdentifierContains(
-                        row.ComputerId,
-                        query))
-            .OrderBy(
-                row =>
-                    row.ComputerName,
-                StringComparer.OrdinalIgnoreCase)
-            .Take(
-                Math.Clamp(
-                    maximumItems,
-                    1,
-                    500))
-            .ToList();
+                                json.RootElement,
+                                "refreshDateTime");
+
+                        if (DateTime.TryParse(
+                                lastBackup,
+                                out var backupDate))
+                        {
+                            row.KeyDateUtc =
+                                backupDate.ToUniversalTime();
+                            row.IsLatest =
+                                true;
+                        }
+                        else if (DateTime.TryParse(
+                                     refresh,
+                                     out var refreshDate))
+                        {
+                            row.KeyDateUtc =
+                                refreshDate.ToUniversalTime();
+                            row.IsLatest =
+                                true;
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        // Discovery remains usable even when one metadata
+                        // object is malformed. Passwords are never requested.
+                    }
+                    finally
+                    {
+                        limiter.Release();
+                    }
+                });
+
+        await Task.WhenAll(
+            metadataTasks);
+
+        return rows;
     }
 
     private async Task<(string DeviceId, string DeviceName)> ResolveLapsDeviceAsync(
