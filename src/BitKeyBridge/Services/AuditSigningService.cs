@@ -295,8 +295,14 @@ public sealed class AuditSigningService
                 ConfigService.SaveAppConfig(
                     _config);
             }
-            catch
+            catch (Exception rollbackConfigException)
             {
+                WindowsEventLogService.TryWrite(
+                    "Audit-signing rollover config rollback failed: " +
+                    rollbackConfigException.Message,
+                    EventLogSeverity.Error,
+                    4556,
+                    "AuditSigning");
             }
 
             try
@@ -305,8 +311,14 @@ public sealed class AuditSigningService
                     AppPaths.AuditSigningCheckpointFile,
                     previousCheckpoint);
             }
-            catch
+            catch (Exception rollbackCheckpointException)
             {
+                WindowsEventLogService.TryWrite(
+                    "Audit-signing rollover checkpoint rollback failed: " +
+                    rollbackCheckpointException.Message,
+                    EventLogSeverity.Error,
+                    4557,
+                    "AuditSigning");
             }
 
             WindowsEventLogService.TryWrite(
