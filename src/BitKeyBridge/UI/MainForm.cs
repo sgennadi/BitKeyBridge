@@ -2643,7 +2643,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("RotateRemoteApiToken", "Failed", source: "RemoteAPI", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Remote API failed.",
+                "RemoteAPI",
+                ex);
         }
     }
 
@@ -2670,7 +2673,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("DisableRemoteApi", "Failed", source: "RemoteAPI", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "Remote API failed.",
+                "RemoteAPI",
+                ex);
         }
     }
 
@@ -3320,12 +3326,10 @@ public sealed partial class MainForm : DpiAwareForm
                 "Failed",
                 source: "CredentialVault",
                 details: ex.Message);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Credential Vault",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Credential Vault failed.",
+                "CredentialVault",
+                ex);
         }
     }
 
@@ -5088,12 +5092,10 @@ public sealed partial class MainForm : DpiAwareForm
                 source: "WindowsService",
                 details: ex.Message);
 
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Service Access",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Service Access failed.",
+                "ServiceAccess",
+                ex);
 
             RefreshCredentialVaultStatus();
             RefreshMachineCloudStatus();
@@ -5123,12 +5125,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Machine Cloud Configuration",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Machine Cloud Configuration failed.",
+                "MachineCloudConfiguration",
+                ex);
             RefreshMachineCloudStatus();
         }
     }
@@ -5312,7 +5312,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("StartService", "Failed", source: "WindowsService", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "BitKeyBridge Service failed.",
+                "BitKeyBridgeService",
+                ex);
         }
         RefreshDashboard();
     }
@@ -5327,7 +5330,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("StopService", "Failed", source: "WindowsService", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "BitKeyBridge Service failed.",
+                "BitKeyBridgeService",
+                ex);
         }
         RefreshDashboard();
     }
@@ -5351,7 +5357,10 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _audit.Write("UninstallService", "Failed", source: "WindowsService", details: ex.Message);
-            MessageBox.Show(this, ex.Message, "BitKeyBridge Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowAppError(
+                "BitKeyBridge Service failed.",
+                "BitKeyBridgeService",
+                ex);
         }
         RefreshDashboard();
     }
@@ -5907,12 +5916,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Audit Signing",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Audit Signing failed.",
+                "AuditSigning",
+                ex);
             RefreshAuditSigningStatus();
         }
     }
@@ -5939,12 +5946,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Audit Signing",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Audit Signing failed.",
+                "AuditSigning",
+                ex);
             RefreshAuditSigningStatus();
         }
     }
@@ -5982,12 +5987,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Audit Signature Verification",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Audit Signature Verification failed.",
+                "AuditSignatureVerification",
+                ex);
         }
     }
 
@@ -6087,12 +6090,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Audit Signing Rollover",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Audit Signing Rollover failed.",
+                "AuditSigningRollover",
+                ex);
             RefreshAuditSigningStatus();
         }
     }
@@ -6162,12 +6163,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Audit Signing",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Audit Signing failed.",
+                "AuditSigning",
+                ex);
             RefreshAuditSigningStatus();
         }
     }
@@ -6202,12 +6201,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Audit Integrity",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowAppError(
+                "Audit Integrity failed.",
+                "AuditIntegrity",
+                ex);
         }
     }
 
