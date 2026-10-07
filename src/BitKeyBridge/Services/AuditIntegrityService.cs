@@ -74,8 +74,13 @@ public static class AuditIntegrityService
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Audit chain-head read failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4554,
+                "AuditIntegrity");
         }
 
         return string.Empty;
@@ -395,8 +400,13 @@ public static class AuditIntegrityService
                 if (latest is null || value > latest)
                     latest = value;
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Audit last-write timestamp lookup failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4555,
+                    "AuditIntegrity");
             }
         }
 
