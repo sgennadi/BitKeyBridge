@@ -431,12 +431,17 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            ColumnCount = 3,
+            ColumnCount = 4,
+            RowCount = 3,
             Margin = new Padding(0, 0, 0, 10)
         };
         searchGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         searchGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         searchGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        searchGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        searchGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        searchGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        searchGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         searchGrid.Controls.Add(new Label
         {
@@ -460,6 +465,52 @@ public sealed partial class MainForm
             UiStyle.CreateEmphasisFont(
                 9.5F);
         searchGrid.Controls.Add(_startSearch, 2, 0);
+
+        _startCancel.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _startCancel);
+        _startCancel.Enabled =
+            false;
+        searchGrid.Controls.Add(
+            _startCancel,
+            3,
+            0);
+
+        _startProgress.Name =
+            "RecoverySearchProgress";
+        _startProgress.AccessibleName =
+            "BitLocker recovery search progress";
+        _startProgress.Dock =
+            DockStyle.Top;
+        _startProgress.Style =
+            ProgressBarStyle.Marquee;
+        _startProgress.MarqueeAnimationSpeed =
+            25;
+        _startProgress.Visible =
+            false;
+        _startProgress.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        searchGrid.Controls.Add(
+            _startProgress,
+            0,
+            1);
+        searchGrid.SetColumnSpan(
+            _startProgress,
+            4);
+
+        searchGrid.Controls.Add(
+            _startDiagnostics,
+            0,
+            2);
+        searchGrid.SetColumnSpan(
+            _startDiagnostics,
+            4);
+
         root.Controls.Add(searchGrid, 0, 4);
 
         _startResults.View = View.Details;
@@ -499,6 +550,10 @@ public sealed partial class MainForm
         _startSearch.Click +=
             async (_, _) =>
                 await SearchStartRecoveryAsync();
+
+        _startCancel.Click +=
+            (_, _) =>
+                CancelStartRecoverySearch();
 
         _startQuery.KeyDown +=
             async (_, e) =>
