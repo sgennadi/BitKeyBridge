@@ -57,6 +57,7 @@ public sealed class UnifiedDeviceService
         string accessToken,
         string query,
         int maximumItems = 250,
+        bool includeActiveDirectory = true,
         CancellationToken ct = default)
     {
         query = query?.Trim() ?? string.Empty;
@@ -67,26 +68,29 @@ public sealed class UnifiedDeviceService
         // restart. That must not make Entra/Intune search fail.
         string? dc = null;
         Task<List<AdComputerInfo>>? adTask = null;
-        try
+        if (includeActiveDirectory)
         {
-            dc = _ad.GetPreferredWritableDc();
-            adTask =
-                Task.Run(
-                    () =>
-                        _ad.SearchComputers(
-                            dc,
-                            query,
-                            maximumItems),
-                    ct);
-        }
-        catch (Exception ex) when (
-            ex is not OperationCanceledException)
-        {
-            WindowsEventLogService.TryWrite(
-                "Unified device AD search was skipped: " + ex.Message,
-                EventLogSeverity.Warning,
-                4576,
-                "Devices");
+            try
+            {
+                dc = _ad.GetPreferredWritableDc();
+                adTask =
+                    Task.Run(
+                        () =>
+                            _ad.SearchComputers(
+                                dc,
+                                query,
+                                maximumItems),
+                        ct);
+            }
+            catch (Exception ex) when (
+                ex is not OperationCanceledException)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Unified device AD search was skipped: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4576,
+                    "Devices");
+            }
         }
 
         using var graph = new CloudGraphService();
