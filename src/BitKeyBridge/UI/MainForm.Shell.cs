@@ -863,9 +863,11 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             Padding = new Padding(16),
             ColumnCount = 1,
-            RowCount = 6
+            RowCount = 8
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 58F));
@@ -878,10 +880,11 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            ColumnCount = 3
+            ColumnCount = 4
         };
         search.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        search.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         search.Controls.Add(new Label
@@ -895,10 +898,25 @@ public sealed partial class MainForm
         _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);
 
-        var searchButton =
-            UiStyle.CreateActionButton(
-                "Search AD + Cloud");
-        search.Controls.Add(searchButton, 2, 0);
+        _unifiedSearch.Text =
+            "Search AD + Cloud";
+        UiStyle.ConfigureActionButton(
+            _unifiedSearch);
+        search.Controls.Add(
+            _unifiedSearch,
+            2,
+            0);
+
+        _unifiedCancel.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _unifiedCancel);
+        _unifiedCancel.Enabled =
+            false;
+        search.Controls.Add(
+            _unifiedCancel,
+            3,
+            0);
         root.Controls.Add(search, 0, 0);
 
         UiStyle.ConfigureStatusLabel(
@@ -913,6 +931,28 @@ public sealed partial class MainForm
             _unifiedStatus,
             UiStatusKind.Neutral);
         root.Controls.Add(_unifiedStatus, 0, 1);
+
+        _unifiedProgress.Name =
+            "UnifiedSearchProgress";
+        _unifiedProgress.AccessibleName =
+            "Device search progress";
+        _unifiedProgress.Dock =
+            DockStyle.Top;
+        _unifiedProgress.Style =
+            ProgressBarStyle.Marquee;
+        _unifiedProgress.MarqueeAnimationSpeed =
+            25;
+        _unifiedProgress.Visible =
+            false;
+        root.Controls.Add(
+            _unifiedProgress,
+            0,
+            2);
+
+        root.Controls.Add(
+            _unifiedDiagnostics,
+            0,
+            3);
 
         _unifiedResults.View = View.Details;
         _unifiedResults.FullRowSelect = true;
@@ -933,12 +973,12 @@ public sealed partial class MainForm
             ("Encrypted", 70),
             ("Last Sync", 140),
             ("Keys", 45));
-        root.Controls.Add(_unifiedResults, 0, 2);
+        root.Controls.Add(_unifiedResults, 0, 4);
 
         _unifiedDetails.ReadOnly = true;
         _unifiedDetails.Font = UiStyle.CreateMonospaceFont(9F);
         _unifiedDetails.Dock = DockStyle.Fill;
-        root.Controls.Add(_unifiedDetails, 0, 3);
+        root.Controls.Add(_unifiedDetails, 0, 5);
 
         var keyPanel =
             new TableLayoutPanel
@@ -1049,7 +1089,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             keyPanel,
             0,
-            4);
+            6);
 
         var actions = new FlowLayoutPanel
         {
@@ -1061,10 +1101,12 @@ public sealed partial class MainForm
             UiStyle.CreateActionButton(
                 "Rotate BitLocker Key in Intune");
         actions.Controls.Add(rotate);
-        root.Controls.Add(actions, 0, 5);
+        root.Controls.Add(actions, 0, 7);
 
-        searchButton.Click +=
+        _unifiedSearch.Click +=
             async (_, _) => await SearchUnifiedDevicesAsync();
+        _unifiedCancel.Click +=
+            (_, _) => CancelUnifiedDeviceSearch();
         _unifiedQuery.KeyDown +=
             async (_, e) =>
             {
