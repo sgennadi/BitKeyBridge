@@ -6,9 +6,9 @@ The application is written in **C# / .NET 10 / WinForms**. Runtime operation doe
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## LAPS and manual AD connections (0.19.1)
+## LAPS and manual AD connections (0.19.2)
 
-The **LAPS** workspace reads Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted AD history, DSRM passwords/history, and Entra credentials/history. Select the source, enter an exact computer/device name or ID, and click **Read LAPS**. While a read is active, **Cancel** stops Graph requests immediately and safely discards pending LDAP results. Select a record and use **Reveal password** or **Copy password**. Each record shows its account, current/history state, UTC dates and read/decryption status. The AD logical password-version GUID is shown when the Windows Server 2025 attribute is available.
+The **LAPS** workspace reads Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted AD history, DSRM passwords/history, and Entra credentials/history. Select the source, enter an exact computer/device name or ID, and click **Read LAPS**. While a read is active, **Cancel** stops Graph requests immediately and releases the UI without waiting for a slow LDAP timeout; any later LDAP result is discarded. Recovery AD connection uses the same cancellable pattern and shows progress inline. Select a record and use **Reveal password** or **Copy password**. Each record shows its account, current/history state, UTC dates and read/decryption status. The AD logical password-version GUID is shown when the Windows Server 2025 attribute is available.
 
 **Connect to AD** and **Discover DC** always open the manual connection dialog. Enter `DOMAIN\user` or `user@domain`, the password, and optionally the domain/DC. An empty DC selects automatic discovery. The dialog explicitly offers the current Windows account as an alternative. Manual connection passwords stay in process memory; protected credential storage remains available in Advanced settings. A selected DC determines the remote domain even on a workstation joined to another domain.
 
@@ -16,7 +16,7 @@ Legacy LAPS and unencrypted Windows LAPS do not provide password history. Window
 
 For Entra, enter the **device ID**, not the object ID. The caller needs **DeviceLocalCredential.Read.All** and an applicable Entra role/admin consent. Opt in to **Include LAPS read permissions in setup** on Administration → Cloud before First-Run / Repair to provision the application's delegated/application permissions. Existing permissions are preserved when the option is disabled. LAPS requests its own read scopes and does not depend on a successful BitLocker access test.
 
-LAPS Read/Reveal/Copy use the existing RecoveryRead role, optional privileged-access policies and audit trail. Passwords are never included in exports, settings or diagnostics. Loaded passwords clear after two minutes, on source/computer/account changes, on reconnect, on explicit clearing, and when the window closes; copied passwords use the existing 60-second clipboard timeout. Only retained records returned by AD/Entra can be displayed.
+LAPS Read/Reveal/Copy use the existing RecoveryRead role, optional privileged-access policies and audit trail. Passwords are never included in exports, settings or diagnostics. Recovery/LAPS failures use non-blocking inline diagnostics with a redacted **Copy diagnostics** action instead of blocking error dialogs. Loaded passwords clear after two minutes, on source/computer/account changes, on reconnect, on explicit clearing, and when the window closes; copied passwords use the existing 60-second clipboard timeout. Only retained records returned by AD/Entra can be displayed.
 
 Technical details and permission references: [LAPS guide](docs/LAPS.md).
 
