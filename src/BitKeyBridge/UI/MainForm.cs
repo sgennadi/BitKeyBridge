@@ -63,6 +63,9 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly TextBox _outputRoot = new();
     private readonly TextBox _outputSubdirectory = new();
     private readonly UiStatusLabel _adConnectionStatus = new();
+    private CancellationTokenSource? _directoryConnectionCancellation;
+    private int _directoryConnectionGeneration;
+    private bool _directoryConnecting;
 
     private readonly UiStatusLabel _startPurposeStatus = new();
     private readonly UiStatusLabel _startOuStatus = new();
@@ -2751,11 +2754,23 @@ public sealed partial class MainForm : DpiAwareForm
         bool promptForSessionCredentials = true,
         bool forceManualCredentials = false)
     {
+        if (_directoryConnecting)
+            return;
+
         if ((promptForSessionCredentials || forceManualCredentials) &&
             !EnsureSessionAdCredentialForConnection(forcePrompt: forceManualCredentials))
         {
             return;
         }
+
+        using var cancellation = new CancellationTokenSource();
+        var generation = ++_directoryConnectionGeneration;
+        _directoryConnectionCancellation = cancellation;
+        _directoryConnecting = true;
+        _connectAdButton.Enabled = false;
+        _connectAdCancelButton.Enabled = true;
+        _adConnectionProgress.Visible = true;
+        _recoveryDiagnostics.Clear();
 
         try
         {
@@ -2766,11 +2781,9 @@ public sealed partial class MainForm : DpiAwareForm
             SetDirectoryConnectionStatus(
                 "Connecting to Active Directory...",
                 UiStatusKind.Busy);
-            UseWaitCursor =
-                true;
 
-            var result =
-                await Task.Run(
+            var worker =
+                Task.Run(
                     () =>
                     {
                         var service =
@@ -2786,8 +2799,55 @@ public sealed partial class MainForm : DpiAwareForm
                             Root: root);
                     });
 
+            var cancelSignal =
+                Task.Delay(
+                    Timeout.InfiniteTimeSpan,
+                    cancellation.Token);
+
+            var completed =
+                await Task.WhenAny(
+                    worker,
+                    cancelSignal);
+
+            if (completed != worker)
+            {
+                _ = worker.ContinueWith(
+                    static task =>
+                    {
+                        _ = task.Exception;
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted |
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+
+                if (!IsDisposed &&
+                    generation == _directoryConnectionGeneration)
+                {
+                    SetDirectoryConnectionStatus(
+                        "Active Directory connection canceled.",
+                        UiStatusKind.Warning);
+                    UiStyle.SetStatus(
+                        _startPurposeStatus,
+                        "Connection canceled. Existing settings and credentials were preserved.",
+                        UiStatusKind.Warning);
+                }
+
+                return;
+            }
+
+            var result =
+                await worker;
+
+            if (cancellation.IsCancellationRequested ||
+                generation != _directoryConnectionGeneration ||
+                IsDisposed)
+            {
+                return;
+            }
+
             SetDirectoryConnectionStatus(
-                $"Connected to {result.Server}. Ready to search BitLocker.",
+                $"Connected to {result.Server}. Ready to search BitLocker and LAPS.",
                 UiStatusKind.Success);
 
             _startDomainDn =
@@ -2855,8 +2915,24 @@ public sealed partial class MainForm : DpiAwareForm
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            if (!IsDisposed &&
+                generation == _directoryConnectionGeneration)
+            {
+                SetDirectoryConnectionStatus(
+                    "Active Directory connection canceled.",
+                    UiStatusKind.Warning);
+            }
+        }
         catch (Exception ex)
         {
+            if (IsDisposed ||
+                generation != _directoryConnectionGeneration)
+            {
+                return;
+            }
+
             _startDomainDn =
                 string.Empty;
             _startSelectOu.Enabled =
@@ -2875,24 +2951,61 @@ public sealed partial class MainForm : DpiAwareForm
 
             UiStyle.SetStatus(
                 _startPurposeStatus,
-                "Active Directory connection failed. Open Advanced settings if explicit DC/credentials are required.",
+                "Active Directory connection failed. Review the diagnostic panel or adjust Advanced connection settings.",
                 UiStatusKind.Error);
 
-            if (promptForOu)
-            {
-                MessageBox.Show(
-                    this,
-                    ex.Message,
-                    "Active Directory Connection",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-            }
+            _recoveryDiagnostics.ShowError(
+                "Active Directory connection failed.",
+                "ConnectToActiveDirectory",
+                ex,
+                ("Mode", _config.AdConnectionMode),
+                ("Server", _config.AdServer),
+                ("Domain", _config.AdDomain),
+                ("Port", _config.AdPort.ToString()),
+                ("LDAPS", _config.AdUseLdaps.ToString()),
+                ("ExplicitCredentials", _config.AdUseExplicitCredentials.ToString()),
+                ("CredentialStorage", _config.AdCredentialStorageMode),
+                ("User", _config.AdUsername));
         }
         finally
         {
-            UseWaitCursor =
+            if (ReferenceEquals(
+                    _directoryConnectionCancellation,
+                    cancellation))
+            {
+                _directoryConnectionCancellation =
+                    null;
+            }
+
+            _directoryConnecting =
                 false;
+
+            if (!IsDisposed)
+            {
+                _connectAdButton.Enabled =
+                    _recoverySource.SelectedIndex != 1;
+                _connectAdCancelButton.Enabled =
+                    false;
+                _adConnectionProgress.Visible =
+                    false;
+            }
         }
+    }
+
+    private void CancelDirectoryConnection()
+    {
+        if (!_directoryConnecting ||
+            _directoryConnectionCancellation is null)
+        {
+            return;
+        }
+
+        _connectAdCancelButton.Enabled =
+            false;
+        SetDirectoryConnectionStatus(
+            "Cancelling Active Directory connection...",
+            UiStatusKind.Busy);
+        _directoryConnectionCancellation.Cancel();
     }
 
     private bool EnsureSessionAdCredentialForConnection(bool forcePrompt = false)
@@ -3093,12 +3206,14 @@ public sealed partial class MainForm : DpiAwareForm
                 ex.Message,
                 UiStatusKind.Error);
 
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Select Active Directory OU",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _recoveryDiagnostics.ShowError(
+                "Active Directory OU discovery failed.",
+                "SelectActiveDirectoryOu",
+                ex,
+                ("Server", _config.AdServer),
+                ("Domain", _config.AdDomain),
+                ("Port", _config.AdPort.ToString()),
+                ("LDAPS", _config.AdUseLdaps.ToString()));
         }
         finally
         {
