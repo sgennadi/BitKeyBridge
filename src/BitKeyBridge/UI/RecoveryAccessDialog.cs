@@ -5,6 +5,7 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
     private readonly TextBox _reference = new();
     private readonly TextBox _reason = new();
     private readonly CheckBox _rotationReminder = new();
+    private readonly UiStatusLabel _status = new();
     private readonly bool _requireReference;
 
     public RecoveryAccessContext Context => new()
@@ -143,6 +144,21 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
         details.Controls.Add(auditNote, 1, 2);
         root.Controls.Add(details, 0, 3);
 
+        UiStyle.ConfigureStatusLabel(
+            _status);
+        _status.AccessibleName =
+            "Recovery access validation status";
+        UiStyle.SetStatus(
+            _status,
+            requireReference
+                ? "A ticket/reference is required."
+                : "Ticket/reference is optional.",
+            UiStatusKind.Neutral);
+        root.Controls.Add(
+            _status,
+            0,
+            4);
+
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -169,12 +185,10 @@ public sealed class RecoveryAccessDialog : DpiAwareForm
         {
             if (_requireReference && string.IsNullOrWhiteSpace(_reference.Text))
             {
-                MessageBox.Show(
-                    this,
+                UiStyle.SetStatus(
+                    _status,
                     "A ticket/reference is required before a recovery key can be accessed.",
-                    "Recovery Access Context",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                    UiStatusKind.Warning);
                 _reference.Focus();
                 return;
             }
