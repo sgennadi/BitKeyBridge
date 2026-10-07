@@ -451,6 +451,7 @@ public static class UiLayoutSelfTest
                     "HomeRecentComputers",
                     "HomeUseWindowsIdentity",
                     "HomeUseOtherAccount",
+                    "HomeConnectionSettingsButton",
                     "AdvancedConnectionGroup"
                 };
 
