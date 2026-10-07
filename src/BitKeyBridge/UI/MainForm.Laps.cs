@@ -214,16 +214,27 @@ public sealed partial class MainForm
             UiStyle.CreateSortableTextColumn(
                 "Computer",
                 "Computer",
-                160),
+                145),
             UiStyle.CreateSortableTextColumn(
                 "ComputerId",
                 "Device / AD object ID",
-                240),
+                210),
+            UiStyle.CreateSortableTextColumn(
+                "KeyDate",
+                "Key date",
+                120),
+            UiStyle.CreateSortableTextColumn(
+                "Latest",
+                "Latest",
+                60),
             UiStyle.CreateSortableTextColumn(
                 "Source",
                 "Source",
-                100)
+                90)
         ]);
+        _lapsSearchRows.Columns["KeyDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
         root.Controls.Add(
             _lapsSearchRows,
             0,
@@ -931,6 +942,12 @@ public sealed partial class MainForm
                         _lapsSearchRows.Rows.Add(
                             row.ComputerName,
                             row.ComputerId,
+                            row.KeyDateUtc,
+                            row.IsLatest is null
+                                ? "-"
+                                : row.IsLatest.Value
+                                    ? "Yes"
+                                    : "No",
                             row.Source);
 
                     _lapsSearchRows.Rows[rowIndex].Tag =
