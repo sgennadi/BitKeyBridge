@@ -7,6 +7,10 @@
 - Added a guided **RBAC Setup Wizard** for Recovery Readers, Intune Rotation Operators, BitKeyBridge Administrators, local-Administrators bypass, and RBAC enable/disable state. The wizard can add the current Windows identity to selected roles, validates every configured Windows principal, previews effective access, and blocks an obvious current-admin lockout before saving.
 - RBAC policy defaults remain unchanged: the wizard does not silently enable RBAC, JIT recovery, two-person approval, or SIEM. Changes are committed only after **Finish**; advanced RBAC and Privileged Access dialogs remain available.
 - Added both setup wizards to compact, 150% large-text and 200% UI layout self-tests. The existing native C#/.NET, no-PowerShell architecture and x64/x86/ARM64 release model remain unchanged.
+- Added **AD access troubleshooting** in Recovery and LAPS with scoped command templates for BitLocker `msFVE-RecoveryPassword`, Windows LAPS, and Legacy Microsoft LAPS. The guidance explicitly separates Windows LAPS read ACL, DPAPI-NG decrypt authorization (`ADPasswordEncryptionPrincipal`), and encrypted-history retention (`ADEncryptedPasswordHistorySize`).
+- Added `docs/ACCESS-TROUBLESHOOTING.md` and contextual hints when BitLocker/LAPS secret retrieval or encrypted LAPS decryption fails. Runtime remains PowerShell-free; PowerShell snippets shown by the troubleshooting UI are optional administrator-side delegation commands only.
+- Marked Username + Password / ROPC as a **deprecated compatibility mode** in the Cloud UI and documentation because it doesn't support MFA and is commonly blocked by Conditional Access. Device Code and certificate authentication are the recommended modes.
+- Cleaned the release documentation: README now describes the current 0.21.x BitLocker/LAPS/wizard feature set, and the duplicate 0.18.4 CHANGELOG section was merged into one canonical entry.
 
 ## 0.20.0
 
@@ -139,31 +143,15 @@
 ## 0.18.4
 
 - Added a shared WinForms UI standard and `UiStyle` baseline for consistent typography, spacing, buttons, administrative workspaces, and machine-oriented monospace fields.
-- Strengthened HiDPI behavior for 4K, mixed-DPI monitors, RDP, large text, and 100-200% Windows scaling. All forms inherit the shared DPI-aware base, horizontal action rows wrap automatically, windows are constrained to the active monitor work area, and responsive admin sections follow the available client width instead of a fixed 1040-pixel workspace.
-- Added CI guards for `PerMonitorV2`, `AutoScaleMode.Dpi`, `DpiAwareForm` inheritance, fixed-position UI, and fixed button dimensions.
-- Centralized diagnostic secret redaction across service logs, Windows Event Log, diagnostics bundles, and SIEM status/error text. The diagnostics bundle also strips Remote API token hashes and redacts SIEM webhook path/query material.
+- Strengthened HiDPI behavior for 4K, mixed-DPI monitors, RDP, large text, and 100-200% Windows scaling. All forms inherit the shared DPI-aware base, horizontal action rows wrap automatically, windows are constrained to the active monitor work area, and responsive admin sections follow the available client width instead of a fixed workspace.
+- Added CI guards for `PerMonitorV2`, `AutoScaleMode.Dpi`, `DpiAwareForm` inheritance, fixed-position UI, fixed button dimensions, and centralized font construction.
+- Centralized diagnostic secret redaction across service logs, Windows Event Log, diagnostics bundles, SIEM metadata/status, and diagnostics error files. Diagnostics bundles also strip Remote API token hashes and redact SIEM webhook path/query material.
 - Hardened SIEM webhook delivery by disabling automatic HTTP redirects so metadata is never forwarded to an unexpected redirect target.
-- Hardened Remote API bearer handling: tokens must decode to exactly 256 bits, duplicate Authorization headers are rejected, and scoped-token generation/revocation rolls back in-memory configuration if persistence fails.
-- Added fail-closed validation for enabled Remote API configuration and all stored Remote API SHA-256 token hashes.
-- Hardened self-update release trust. Release page and asset URLs are bound to the configured GitHub repository/tag, download redirects must remain on trusted HTTPS GitHub hosts, release asset sizes are enforced, checksum-file metadata/digest is validated, GitHub asset digest and `SHA256SUMS.txt` must agree when both are present, and release metadata is revalidated immediately before download.
-- Staged update packages must now contain exactly one root-level `BitKeyBridge.exe`, and the staged executable version must exactly match the selected release both before self-test and again in the elevated apply helper.
-- Added offline regression coverage for diagnostic redaction, GitHub release URL/digest validation, Remote API token-hash validation, and existing tamper-resistant update-plan checks.
-- Version bumped to 0.18.4; release builds remain self-contained single-file win-x64, win-x86 and win-arm64 packages.
-
-
-## 0.18.4
-
-- Centralized diagnostic secret redaction and applied it to Windows Event Log messages, service logs, SIEM metadata, diagnostics JSON/TXT payloads, and diagnostics error files.
-- Diagnostics bundles now redact the configured SIEM webhook down to scheme/host only, preventing webhook path/query credential material from being exported.
-- SIEM webhook delivery no longer follows HTTP redirects, preventing metadata from being forwarded to an unexpected redirect target.
-- Remote API bearer parsing now rejects decoded tokens that are not exactly 256 bits and rejects duplicate Authorization headers.
-- Scoped Remote API token generation/revocation is transactional: failed configuration persistence restores the previous in-memory token hash.
-- Application configuration now validates every Remote API token hash as SHA-256 and refuses an enabled Remote API with no TLS thumbprint or no configured bearer-token hash.
-- Self-update now binds release asset URLs to the configured GitHub repository, release tag, and exact asset name; redirected downloads must remain HTTPS on GitHub/GitHubusercontent.
-- Update checks validate release asset sizes, verify the SHA256SUMS asset against its GitHub digest when present, require a valid checksum entry when SHA256SUMS is published, and reject disagreement between checksum sources.
-- Update installation revalidates release metadata immediately before download, enforces the exact GitHub-declared ZIP byte size, requires exactly one package-root BitKeyBridge.exe, and requires the staged EXE version to exactly match the selected release.
-- The elevated updater repeats the exact staged-version check before replacement.
-- Added offline regression tests for diagnostics redaction, GitHub release URL/digest validation, and invalid Remote API token-hash configuration.
+- Hardened Remote API bearer handling: decoded tokens must be exactly 256 bits, duplicate Authorization headers are rejected, scoped-token changes are transactional, and enabled Remote API configuration fails closed when TLS/token-hash requirements are invalid.
+- Hardened self-update release trust: release page and asset URLs are bound to the configured GitHub repository/tag/name, redirects must remain on trusted HTTPS GitHub hosts, declared asset sizes are enforced, `SHA256SUMS.txt` metadata/digest is validated, checksum entries are required when published, and GitHub asset digest/checksum sources must agree.
+- Update installation revalidates release metadata immediately before download, requires exactly one root-level `BitKeyBridge.exe`, requires the staged EXE version to exactly match the selected release, and repeats the exact version check in the elevated updater before replacement.
+- Added offline regression coverage for diagnostic redaction, GitHub release URL/digest validation, Remote API token-hash validation, and tamper-resistant update-plan checks.
+- Release builds remain self-contained single-file win-x64, win-x86 and win-arm64 packages.
 
 ## 0.18.3
 
