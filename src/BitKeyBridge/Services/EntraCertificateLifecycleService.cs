@@ -238,8 +238,13 @@ public sealed class EntraCertificateLifecycleService : IDisposable
             ConfigService.SaveCloudConfig(
                 config);
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Entra certificate rollover user-config restore failed: " + ex.Message,
+                EventLogSeverity.Error,
+                4562,
+                "EntraCertificate");
         }
     }
 
