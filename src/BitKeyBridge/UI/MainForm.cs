@@ -1326,61 +1326,15 @@ public sealed partial class MainForm : DpiAwareForm
             UiStatusKind.Success);
     }
 
-    private async Task ShowDeviceCodeAsync(DeviceCodeInfo info)
+    private async Task ShowDeviceCodeAsync(
+        DeviceCodeInfo info)
     {
-        var copied = false;
-        var browserOpened = false;
+        using var dialog =
+            new DeviceCodeDialog(
+                info);
 
-        try
-        {
-            Clipboard.SetText(info.UserCode);
-            copied = true;
-        }
-        catch (Exception ex)
-        {
-            WindowsEventLogService.TryWrite(
-                "Device Code clipboard copy failed: " + ex.Message,
-                EventLogSeverity.Warning,
-                4542,
-                "Entra");
-        }
-
-        try
-        {
-            Process.Start(
-                new ProcessStartInfo(
-                    info.VerificationUri)
-                {
-                    UseShellExecute = true
-                });
-            browserOpened = true;
-        }
-        catch (Exception ex)
-        {
-            WindowsEventLogService.TryWrite(
-                "Device Code browser launch failed: " + ex.Message,
-                EventLogSeverity.Warning,
-                4543,
-                "Entra");
-        }
-
-        MessageBox.Show(
-            this,
-            info.Message +
-            Environment.NewLine +
-            Environment.NewLine +
-            (copied
-                ? "The code has been copied to the clipboard."
-                : "The code could not be copied automatically; use the code shown above.") +
-            Environment.NewLine +
-            (browserOpened
-                ? "Complete sign-in in the browser, then return to BitKeyBridge."
-                : "Open the verification URL manually, complete sign-in, then return to BitKeyBridge."),
-            "Microsoft Entra Device Code",
-            MessageBoxButtons.OK,
-            copied && browserOpened
-                ? MessageBoxIcon.Information
-                : MessageBoxIcon.Warning);
+        dialog.ShowDialog(
+            this);
 
         await Task.CompletedTask;
     }
