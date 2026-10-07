@@ -162,8 +162,13 @@ public static class WindowsServiceHost
         {
             Stop();
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Service stop before uninstall failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4588,
+                "WindowsService");
         }
 
         if (!DeleteService(
@@ -1006,8 +1011,11 @@ public static class WindowsServiceHost
                     .NormalizeServiceIdentity(
                         right);
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine(
+                "Service identity normalization failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
 
         return string.Equals(
@@ -1145,7 +1153,18 @@ public static class WindowsServiceHost
         if (control is ServiceControlStop or ServiceControlShutdown)
         {
             SetRuntimeStatus(ServiceStopPending, 0, 15000);
-            try { _serviceCts?.Cancel(); } catch { }
+            try
+            {
+                _serviceCts?.Cancel();
+            }
+            catch (Exception ex)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Service cancellation signal failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4589,
+                    "WindowsService");
+            }
         }
         return 0;
     }
