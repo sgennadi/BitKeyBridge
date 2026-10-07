@@ -280,28 +280,121 @@ public sealed partial class MainForm : DpiAwareForm
         finally { UseWaitCursor = false; }
     }
 
-    private async Task RunExportAsync(bool dryRun)
+    private async Task RunExportAsync(
+        bool dryRun)
     {
-        SetExportRunning(true);
+        if (_exportCancellation is not null)
+            return;
+
+        using var cancellation =
+            new CancellationTokenSource();
+        _exportCancellation =
+            cancellation;
+
+        SetExportRunning(
+            true);
+        _exportProgress.Visible =
+            true;
+        _exportDiagnostics.Clear();
         _exportLog.Clear();
         _scopeResults.Items.Clear();
+
         try
         {
-            var progress = new Progress<string>(AppendExportLog);
-            var service = new ExportService(_config);
-            var result = await service.RunAsync(dryRun, _forcePublish.Checked, GetSelectedScopes(), progress);
-            ShowExportResult(result);
+            var progress =
+                new Progress<string>(
+                    AppendExportLog);
+            var service =
+                new ExportService(
+                    _config);
+            var result =
+                await service.RunAsync(
+                    dryRun,
+                    _forcePublish.Checked,
+                    GetSelectedScopes(),
+                    progress,
+                    cancellation.Token);
+
+            ShowExportResult(
+                result);
+
+            if (cancellation.IsCancellationRequested ||
+                result.ExitCode == 2)
+            {
+                AppendExportLog(
+                    "Operation canceled.");
+            }
+            else if (!result.Success &&
+                     !string.IsNullOrWhiteSpace(
+                         result.ErrorMessage))
+            {
+                _exportDiagnostics.ShowMessage(
+                    dryRun
+                        ? "Dry Run failed."
+                        : "Export failed.",
+                    "Operation: " +
+                    (dryRun
+                        ? "DryRun"
+                        : "Export") +
+                    Environment.NewLine +
+                    "Reason: " +
+                    DiagnosticRedaction.Sanitize(
+                        result.ErrorMessage));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            AppendExportLog(
+                "Operation canceled.");
+        }
+        catch (Exception ex)
+        {
+            AppendExportLog(
+                "ERROR: " +
+                DiagnosticRedaction.Sanitize(
+                    ex.Message));
+            _exportDiagnostics.ShowError(
+                dryRun
+                    ? "Dry Run failed."
+                    : "Export failed.",
+                dryRun
+                    ? "DryRun"
+                    : "Export",
+                ex);
         }
         finally
         {
-            SetExportRunning(false);
+            if (ReferenceEquals(
+                    _exportCancellation,
+                    cancellation))
+            {
+                _exportCancellation =
+                    null;
+            }
+
+            SetExportRunning(
+                false);
+            _exportProgress.Visible =
+                false;
             RefreshLastSuccess();
         }
     }
 
+    private void CancelExport()
+    {
+        if (_exportCancellation is null)
+            return;
+
+        _exportCancel.Enabled =
+            false;
+        AppendExportLog(
+            "Cancellation requested...");
+        _exportCancellation.Cancel();
+    }
+
     private void ShowExportResult(ExportResult result)
     {
-        var state = result.Success ? (result.DryRun ? "DRY RUN OK" : "SUCCESS") : "FAILED";
+        var state = result.Success ? (result.DryRun ? "DRY RUN OK" : "SUCCESS") : result.ExitCode == 2 ? "CANCELED" : "FAILED";
         _exportSummary.Text = $"Status: {state}    DC: {result.AdServer}    Previous: {result.PreviousRows}    New: {result.ValidRows}    Objects: {result.ObjectsFound}    Duplicates: {result.Duplicates}    Invalid: {result.InvalidObjects}    Duration: {result.DurationSeconds:0.00}s";
         if (!string.IsNullOrWhiteSpace(result.ErrorMessage)) _exportSummary.Text += Environment.NewLine + "Error: " + result.ErrorMessage;
         else if (!string.IsNullOrWhiteSpace(result.RowCountWarning)) _exportSummary.Text += Environment.NewLine + "Warning: " + result.RowCountWarning;
@@ -326,6 +419,7 @@ public sealed partial class MainForm : DpiAwareForm
         _runExport.Enabled = !running;
         _dryRun.Enabled = !running;
         _forcePublish.Enabled = !running;
+        _exportCancel.Enabled = running;
     }
 
     private void AppendExportLog(string message)
@@ -1103,22 +1197,41 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task RunCoverageAsync()
     {
-        if (!await EnsureCloudTokenAsync())
+        if (_coverageCancellation is not null)
             return;
+
+        using var cancellation =
+            new CancellationTokenSource();
+        _coverageCancellation =
+            cancellation;
+        _coverageRun.Enabled =
+            false;
+        _coverageCancel.Enabled =
+            true;
+        _coverageProgress.Visible =
+            true;
+        _coverageDiagnostics.Clear();
 
         try
         {
+            if (!await EnsureCloudTokenAsync(
+                    ct:
+                        cancellation.Token))
+            {
+                return;
+            }
+
             _config.CoverageStaleIntuneDays =
                 (int)_coverageStaleDays.Value;
             _config.CoverageOldCloudKeyDays =
                 (int)_coverageOldKeyDays.Value;
-            ConfigService.SaveAppConfig(_config);
+            ConfigService.SaveAppConfig(
+                _config);
 
             UiStyle.SetStatus(
                 _coverageStatus,
                 "Starting metadata-only coverage analysis...",
                 UiStatusKind.Busy);
-            UseWaitCursor = true;
 
             var progress =
                 new Progress<string>(
@@ -1128,16 +1241,24 @@ public sealed partial class MainForm : DpiAwareForm
                             message,
                             UiStatusKind.Busy));
 
-            var service = new CoverageService(_config);
-            _coverageCurrent = await service.RunAsync(
-                _cloudToken!.AccessToken,
-                GetSelectedScopes(),
-                progress);
+            var service =
+                new CoverageService(
+                    _config);
+            _coverageCurrent =
+                await service.RunAsync(
+                    _cloudToken!.AccessToken,
+                    GetSelectedScopes(),
+                    progress,
+                    cancellation.Token);
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
 
             RenderCoverageSummary();
             RenderCoverageRows();
 
-            var s = _coverageCurrent.Summary;
+            var s =
+                _coverageCurrent.Summary;
             _audit.Write(
                 "RunCoverageReport",
                 source: "AD+Entra+Intune",
@@ -1151,29 +1272,63 @@ public sealed partial class MainForm : DpiAwareForm
                 $"DC={_coverageCurrent.DomainController}. Recovery passwords were not requested.",
                 UiStatusKind.Success);
         }
+        catch (OperationCanceledException)
+        {
+            UiStyle.SetStatus(
+                _coverageStatus,
+                "Coverage analysis canceled.",
+                UiStatusKind.Warning);
+        }
         catch (Exception ex)
         {
             UiStyle.SetStatus(
                 _coverageStatus,
-                "Coverage failed: " + ex.Message,
+                "Coverage failed. Review diagnostics below.",
                 UiStatusKind.Error);
             _audit.Write(
                 "RunCoverageReport",
                 "Failed",
                 source: "AD+Entra+Intune",
-                authMode: _cloudToken?.AuthMode,
-                details: ex.Message);
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "BitLocker Coverage",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+                authMode:
+                    _cloudToken?.AuthMode,
+                details:
+                    ex.Message);
+            _coverageDiagnostics.ShowError(
+                "BitLocker Coverage failed.",
+                "RunCoverageReport",
+                ex);
         }
         finally
         {
-            UseWaitCursor = false;
+            if (ReferenceEquals(
+                    _coverageCancellation,
+                    cancellation))
+            {
+                _coverageCancellation =
+                    null;
+            }
+
+            _coverageRun.Enabled =
+                true;
+            _coverageCancel.Enabled =
+                false;
+            _coverageProgress.Visible =
+                false;
         }
+    }
+
+    private void CancelCoverage()
+    {
+        if (_coverageCancellation is null)
+            return;
+
+        _coverageCancel.Enabled =
+            false;
+        UiStyle.SetStatus(
+            _coverageStatus,
+            "Cancelling coverage analysis...",
+            UiStatusKind.Busy);
+        _coverageCancellation.Cancel();
     }
 
     private void RenderCoverageSummary()
@@ -1566,12 +1721,14 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Coverage CSV Export",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            UiStyle.SetStatus(
+                _coverageStatus,
+                "Coverage CSV export failed. Review diagnostics below.",
+                UiStatusKind.Error);
+            _coverageDiagnostics.ShowError(
+                "Coverage CSV export failed.",
+                "ExportCoverageCsv",
+                ex);
         }
     }
 
