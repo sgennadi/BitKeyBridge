@@ -16,6 +16,7 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
     private readonly NumericUpDown _tempRetentionDays = new();
     private readonly Label _aclEnforcement = new();
     private readonly RichTextBox _status = new();
+    private readonly UiDiagnosticPanel _diagnostics = new();
 
     public StorageMaintenanceDialog(
         AppConfig config)
@@ -34,7 +35,7 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 7
+            RowCount = 8
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -43,6 +44,7 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
 
@@ -208,7 +210,8 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
         var close = ActionButton("Close", 100);
         close.Click += (_, _) => Close();
         footer.Controls.Add(close);
-        root.Controls.Add(footer, 0, 6);
+        root.Controls.Add(_diagnostics, 0, 6);
+        root.Controls.Add(footer, 0, 7);
 
         save.Click += (_, _) => SavePolicy();
         dryRun.Click += (_, _) => RunHousekeeping(dryRun: true);
@@ -635,11 +638,9 @@ public sealed class StorageMaintenanceDialog : DpiAwareForm
     private void ShowError(
         Exception ex)
     {
-        MessageBox.Show(
-            this,
-            ex.Message,
-            "Housekeeping / Protected Storage",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error);
+        _diagnostics.ShowError(
+            "Housekeeping / protected-storage operation failed.",
+            "StorageMaintenance",
+            ex);
     }
 }
