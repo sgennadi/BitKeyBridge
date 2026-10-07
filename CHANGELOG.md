@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.3
+
+- Moved the verified updater out of **Administration → Security & Settings** into its own **Administration → Updates** tab.
+- Added explicit **Check for Updates**, **Update Now**, **Save Update Settings**, **Enable/Disable Automatic Checks**, and **Open Release Page** actions.
+- Disabling automatic checks now affects only the GUI-start check; manual update checks and manual updates remain available.
+- Split updater persistence from generic Operations settings so an update check no longer saves unrelated Remote API or helpdesk settings.
+- Added CLI controls `--update-checks-status`, `--update-checks-enable`, and `--update-checks-disable` alongside existing `--check-update` and `--update`.
+- Added a post-release x64 updater smoke test that checks published GitHub release metadata, persists automatic-check disable/enable state, and exercises the safe current-version `--update` no-op path.
+- Existing updater verification remains in place: architecture-specific packages, SHA-256, GitHub asset digest when available, exact staged EXE version, staged `--self-test`, hashed elevated apply plan, rollback, and x64/x86/ARM64 publishing.
+
 ## 0.21.2
 
 - Fixed **LAPS → Check access** incorrectly reporting Legacy/Windows LAPS schema as `NotDetected` when schema inspection had not actually run. RootDSE now requests `schemaNamingContext`, with a safe `CN=Schema,<configurationNamingContext>` fallback.
