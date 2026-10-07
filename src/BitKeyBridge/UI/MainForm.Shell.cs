@@ -347,7 +347,7 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    5
+                    6
             };
 
         connection.ColumnStyles.Add(
@@ -356,7 +356,7 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 5;
+             index < 6;
              index++)
         {
             connection.RowStyles.Add(
@@ -516,6 +516,11 @@ public sealed partial class MainForm
             },
             0,
             4);
+
+        connection.Controls.Add(
+            _recoveryDiagnostics,
+            0,
+            5);
 
         connectionGroup.Controls.Add(
             connection);
@@ -1043,10 +1048,9 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 9
+            RowCount = 7
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -1104,13 +1108,17 @@ public sealed partial class MainForm
             UiStatusKind.Neutral);
         root.Controls.Add(_startPurposeStatus, 0, 1);
 
-        var connection =
-            new TableLayoutPanel
+        var sourceFlow =
+            new FlowLayoutPanel
             {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 6,
-                RowCount = 4,
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
                 Margin =
                     new Padding(
                         0,
@@ -1119,214 +1127,60 @@ public sealed partial class MainForm
                         UiStyle.ControlGap)
             };
 
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        connection.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                100F));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        connection.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-
-        connection.Controls.Add(
+        sourceFlow.Controls.Add(
             new Label
             {
-                Text = "Source:",
-                AutoSize = true,
-                Anchor =
-                    AnchorStyles.Left,
+                Text =
+                    "Source:",
+                AutoSize =
+                    true,
                 Margin =
                     new Padding(
                         0,
                         8,
                         UiStyle.ControlGap,
-                        4)
-            },
-            0,
-            0);
+                        0)
+            });
 
         _recoverySource.Name =
             "RecoverySourceSelector";
         _recoverySource.AccessibleName =
             "Recovery source";
-        _recoverySource.TabIndex =
-            0;
         _recoverySource.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _recoverySource.MinimumSize =
             new Size(
-                160,
+                180,
                 0);
-        _recoverySource.Anchor =
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        _recoverySource.Margin =
-            new Padding(
-                0,
-                3,
-                UiStyle.ControlGap,
-                3);
         _recoverySource.Items.AddRange([
             "Live AD",
             "Local cache"
         ]);
-        connection.Controls.Add(
-            _recoverySource,
-            1,
-            0);
+        sourceFlow.Controls.Add(
+            _recoverySource);
 
-        _connectAdButton.Name =
-            "ConnectAdButton";
-        _connectAdButton.AccessibleName =
-            "Connect to Active Directory";
-        _connectAdButton.TabIndex =
-            1;
-        _connectAdButton.Text =
-            "Connect to AD";
-        UiStyle.ConfigureActionButton(
-            _connectAdButton);
-        _connectAdButton.MinimumSize =
-            new Size(
-                160,
-                UiStyle.MinimumButtonHeight);
-        _connectAdButton.Anchor =
-            AnchorStyles.Left |
-            AnchorStyles.Right;
-        _connectAdButton.Margin =
-            new Padding(
-                0,
-                0,
-                UiStyle.ControlGap,
-                0);
-        connection.Controls.Add(
-            _connectAdButton,
-            2,
-            0);
-
-        UiStyle.BindBalancedWidths(
-            _recoverySource,
-            _connectAdButton);
-
-        _connectAdCancelButton.Name =
-            "ConnectAdCancelButton";
-        _connectAdCancelButton.AccessibleName =
-            "Cancel Active Directory connection";
-        _connectAdCancelButton.TabIndex =
-            2;
-        _connectAdCancelButton.Text =
-            "Cancel";
-        UiStyle.ConfigureActionButton(
-            _connectAdCancelButton);
-        _connectAdCancelButton.Enabled =
-            false;
-        _connectAdCancelButton.Margin =
-            new Padding(
-                0,
-                0,
-                UiStyle.ControlGap,
-                0);
-        connection.Controls.Add(
-            _connectAdCancelButton,
-            3,
-            0);
-
-        _disconnectAdButton.Name =
-            "DisconnectAdButton";
-        _disconnectAdButton.AccessibleName =
-            "Disconnect Active Directory and forget session credentials";
-        _disconnectAdButton.TabIndex =
-            3;
-        _disconnectAdButton.Text =
-            "Disconnect / Forget session";
-        UiStyle.ConfigureActionButton(
-            _disconnectAdButton);
-        _disconnectAdButton.Enabled =
-            false;
-        _disconnectAdButton.Margin =
-            new Padding(
-                0,
-                0,
-                UiStyle.ControlGap,
-                0);
-        connection.Controls.Add(
-            _disconnectAdButton,
-            4,
-            0);
-
-        _adConnectionStatus.Name =
-            "AdConnectionStatus";
-        UiStyle.ConfigureStatusLabel(
-            _adConnectionStatus);
-        _adConnectionStatus.Text =
-            "Ready to connect to Active Directory.";
-        UiStyle.ApplyStatusLabel(
-            _adConnectionStatus,
-            UiStatusKind.Neutral);
-        connection.Controls.Add(
-            _adConnectionStatus,
-            0,
-            1);
-        connection.SetColumnSpan(
-            _adConnectionStatus,
-            6);
-
-        _adConnectionProgress.Name =
-            "AdConnectionProgress";
-        _adConnectionProgress.AccessibleName =
-            "Active Directory connection progress";
-        _adConnectionProgress.Dock =
-            DockStyle.Top;
-        _adConnectionProgress.Style =
-            ProgressBarStyle.Marquee;
-        _adConnectionProgress.MarqueeAnimationSpeed =
-            25;
-        _adConnectionProgress.Visible =
-            false;
-        _adConnectionProgress.Margin =
-            new Padding(0, UiStyle.ControlGap, 0, 0);
-        connection.Controls.Add(
-            _adConnectionProgress,
-            0,
-            2);
-        connection.SetColumnSpan(
-            _adConnectionProgress,
-            6);
-
-        connection.Controls.Add(
-            _recoveryDiagnostics,
-            0,
-            3);
-        connection.SetColumnSpan(
-            _recoveryDiagnostics,
-            6);
+        var startConnection =
+            UiStyle.CreateActionButton(
+                "Connection on Start");
+        startConnection.Name =
+            "RecoveryOpenStartButton";
+        sourceFlow.Controls.Add(
+            startConnection);
 
         root.Controls.Add(
-            connection,
+            sourceFlow,
             0,
             2);
+
+        startConnection.Click +=
+            (_, _) =>
+            {
+                if (_homeWorkspaceTab is not null)
+                {
+                    _mainTabs.SelectedTab =
+                        _homeWorkspaceTab;
+                }
+            };
 
         var scopeFlow = new FlowLayoutPanel
         {
