@@ -35,6 +35,7 @@ public sealed partial class MainForm
     private readonly DataGridView _homeRecentResults = new();
     private readonly RadioButton _homeUseWindowsIdentity = new();
     private readonly RadioButton _homeUseOtherAccount = new();
+    private readonly Button _homeAdvancedButton = new();
     private readonly ToolStripStatusLabel _globalConnectionStatus = new();
     private readonly ToolStripStatusLabel _globalVersionStatus = new();
     private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
@@ -177,6 +178,8 @@ public sealed partial class MainForm
                         _homeWorkspaceTab;
                     _advancedConnectionGroup.Visible =
                         true;
+                    _homeAdvancedButton.Text =
+                        "Hide Advanced";
                 }
             };
 
@@ -476,16 +479,17 @@ public sealed partial class MainForm
         _homeDisconnectAdButton.Enabled =
             false;
 
-        var connectionSettings =
-            UiStyle.CreateActionButton(
-                "Advanced...");
-        connectionSettings.Name =
+        _homeAdvancedButton.Text =
+            "Advanced...";
+        _homeAdvancedButton.Name =
             "HomeConnectionSettingsButton";
+        UiStyle.ConfigureActionButton(
+            _homeAdvancedButton);
 
         connectionActions.Controls.AddRange([
             _homeConnectAdButton,
             _homeDisconnectAdButton,
-            connectionSettings
+            _homeAdvancedButton
         ]);
         connection.Controls.Add(
             connectionActions,
@@ -880,12 +884,12 @@ public sealed partial class MainForm
                 UpdateDirectoryConnectionUi();
             };
 
-        connectionSettings.Click +=
+        _homeAdvancedButton.Click +=
             (_, _) =>
             {
                 _advancedConnectionGroup.Visible =
                     !_advancedConnectionGroup.Visible;
-                connectionSettings.Text =
+                _homeAdvancedButton.Text =
                     _advancedConnectionGroup.Visible
                         ? "Hide Advanced"
                         : "Advanced...";
