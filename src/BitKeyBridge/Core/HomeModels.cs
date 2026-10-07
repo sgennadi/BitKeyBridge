@@ -97,6 +97,13 @@ public static class HelpdeskStatus
             return "Expired";
         }
 
+        if (row.IsLatest != true &&
+            !row.ExpiresAtUtc.HasValue &&
+            !row.KeyDateUtc.HasValue)
+        {
+            return "No backup";
+        }
+
         return "Detected";
     }
 
