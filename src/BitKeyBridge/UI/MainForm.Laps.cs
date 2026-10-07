@@ -2095,6 +2095,10 @@ public sealed partial class MainForm
         _lapsPassword.UseSystemPasswordChar = true;
         _lapsRows.Rows.Clear();
         _lapsDetails.Clear();
+        _lapsDetails.Visible =
+            false;
+        _lapsDetailsToggle.Text =
+            "Details...";
         _lapsDiagnostics.Clear();
         _lapsReveal.Text = "Reveal password";
         _lapsReveal.Enabled = _lapsCopy.Enabled = false;
