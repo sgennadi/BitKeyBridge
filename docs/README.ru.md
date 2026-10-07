@@ -1,10 +1,10 @@
 # BitKeyBridge — кратко
 
-Это native Windows-версия прежнего PowerShell-инструмента, переписанная на **C# / .NET 10 LTS / WinForms**.
+BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
-Релиз — **self-contained single-file .NET EXE**, а не NativeAOT. Под «native» здесь имеется в виду, что программа напрямую использует Windows/LDAP/Graph API и не запускает PowerShell. Для WinForms/DirectoryServices это практичнее и проще сопровождать.
+Программа написана на **C# / .NET 10 / WinForms** и напрямую использует LDAP, Microsoft Graph, Windows API, DPAPI-NG, Credential Manager и Windows Certificate Store.
 
-В рабочем режиме PowerShell вообще не используется: AD читается напрямую по LDAP, репликация — через .NET DirectoryServices, Microsoft Graph — напрямую по HTTPS/OAuth, сертификаты — через Windows Certificate Store.
+PowerShell в рабочем режиме не используется вообще: нет запуска powershell.exe/pwsh.exe, ActiveDirectory PowerShell module, Microsoft Graph PowerShell SDK или shell fallback.
 
 ## LAPS и ручное подключение — 0.19.0
 
@@ -106,7 +106,7 @@ BitKeyBridge.exe --dry-run --search-base "OU=Computers,DC=example,DC=com"
 
 ## Важно по безопасности
 
-Recovery CSV содержит секреты. Не клади его в GitHub. Проверь NTFS/share ACL. Если recovery passwords лежат в SYSVOL/NETLOGON, доступ к каталогу должен быть жёстко ограничен; лучше отдельный защищённый share.
+Recovery CSV содержит секреты. Не клади его в GitHub. Для выбранного output path обязательно проверь NTFS/share ACL и разрешай чтение только тем учётным записям и группам, которым действительно нужен доступ к recovery data.
 
 Файл с реальными внутренними OU тоже не надо коммитить в публичный репозиторий.
 
@@ -195,7 +195,6 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
   - LDAPS/TLS, обычно порт 636.
 - Добавлена кнопка **Test DC Connection**.
 - Export больше не требует, чтобы сама программа работала на DC: output root может быть локальной папкой или UNC path.
-- Если новый `OutputRoot` пустой, сохраняется старое поведение с `SysvolScriptsRoot`, поэтому WinPE/NETLOGON-сценарий не ломается.
 - CLI получил `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, `--ad-ldaps`, `--ad-ldap` и `--ad-test`.
 - Microsoft 365 / Entra / Intune по-прежнему работает независимо от членства Windows-компьютера в домене.
 - CI теперь проверяет, что каждая версия из `.csproj` обязательно имеет секцию в `CHANGELOG.md`.
