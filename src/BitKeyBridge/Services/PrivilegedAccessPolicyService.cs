@@ -302,8 +302,13 @@ public sealed class PrivilegedAccessPolicyService
                     .PrivilegedAccessStatusFile,
                 status);
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Privileged-access status persistence failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4570,
+                "PrivilegedAccess");
         }
 
         return status;
