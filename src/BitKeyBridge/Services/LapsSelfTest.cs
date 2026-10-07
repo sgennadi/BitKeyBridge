@@ -139,6 +139,18 @@ public static class LapsSelfTest
             using var result = LapsCloudCodec.Read(document.RootElement, "device-id", "fallback", true);
             Assert(result.Entries.Count == 0 && result.Note.Contains("ReadBasic.All", StringComparison.Ordinal));
         });
+        Check("diagnostic redaction removes LAPS secrets", () =>
+        {
+            var raw =
+                "Password: Super-Secret-LAPS-Value" +
+                Environment.NewLine +
+                "{\"n\":\"admin\",\"p\":\"AnotherSecretValue\",\"t\":\"01\"}";
+            var sanitized =
+                DiagnosticRedaction.Sanitize(raw);
+            Assert(!sanitized.Contains("Super-Secret-LAPS-Value", StringComparison.Ordinal));
+            Assert(!sanitized.Contains("AnotherSecretValue", StringComparison.Ordinal));
+            Assert(sanitized.Contains("[REDACTED]", StringComparison.Ordinal));
+        });
         Check("multi-valued AD history sorts by time within each source", () =>
         {
             using var result = new LapsReadResult();
