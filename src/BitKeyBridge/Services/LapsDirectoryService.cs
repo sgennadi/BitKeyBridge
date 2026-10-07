@@ -109,20 +109,23 @@ public sealed class LapsDirectoryService
                     '}'),
                 out var exactId))
         {
-            var filter =
+            var objectGuidFilter =
                 "(&(objectCategory=computer)(objectGUID=" +
                 string.Concat(
                     exactId
                         .ToByteArray()
                         .Select(
                             static value =>
-                                $"\\{value:x2}")) +
+                                "\\" +
+                                value.ToString(
+                                    "x2",
+                                    CultureInfo.InvariantCulture))) +
                 "))";
 
             var exactRequest =
                 new SearchRequest(
                     baseDn,
-                    filter,
+                    objectGuidFilter,
                     SearchScope.Subtree,
                     "name",
                     "objectGUID",
@@ -554,10 +557,17 @@ public sealed class LapsDirectoryService
 }
 ));
 
+            var nameFilter =
+                "(&(objectCategory=computer)(|(name=*" +
+                escaped +
+                "*)(dNSHostName=*" +
+                escaped +
+                "*)))";
+
             var nameRequest =
                 new SearchRequest(
                     baseDn,
-                    $"(&(objectCategory=computer)(|(name=*{escaped}*)(dNSHostName=*{escaped}*)))",
+                    nameFilter,
                     SearchScope.Subtree,
                     "name",
                     "objectGUID",
