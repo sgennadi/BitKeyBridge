@@ -297,13 +297,6 @@ public sealed partial class MainForm
         actions.Controls.Add(
             _lapsView);
 
-        _lapsAccessCheck.Text =
-            "Check access";
-        UiStyle.ConfigureActionButton(
-            _lapsAccessCheck);
-        actions.Controls.Add(
-            _lapsAccessCheck);
-
         _lapsRead.Text =
             "Read LAPS";
         UiStyle.ConfigureActionButton(
@@ -522,7 +515,7 @@ public sealed partial class MainForm
             DockStyle.Top;
         UiStyle.SetStatus(
             _lapsStatus,
-            "Type at least two characters for live metadata search, or press Enter to search immediately. Select a device, then use Check access or Read LAPS.",
+            "Type at least two characters for live metadata search. Select a device and press Enter or double-click to read LAPS. Search never reads passwords.",
             UiStatusKind.Neutral);
         root.Controls.Add(
             _lapsStatus,
@@ -557,9 +550,6 @@ public sealed partial class MainForm
             0,
             9);
 
-        _lapsAccessCheck.Click +=
-            async (_, _) =>
-                await CheckLapsAccessAsync();
         _lapsRead.Click +=
             async (_, _) =>
                 await ReadLapsAsync();
@@ -576,7 +566,8 @@ public sealed partial class MainForm
         _lapsSearchButton.Click +=
             async (_, _) =>
                 await SearchLapsCandidatesAsync(
-                    allowInteractiveAuth: true);
+                    allowInteractiveAuth: true,
+                    readExactMatch: false);
 
         _lapsQuery.KeyDown +=
             async (_, e) =>
@@ -590,8 +581,17 @@ public sealed partial class MainForm
                 e.SuppressKeyPress =
                     true;
                 _lapsSearchDebounceTimer?.Stop();
+
+                if (GetSelectedLapsSearchResult() is not null)
+                {
+                    SelectLapsSearchCandidate();
+                    await ReadLapsAsync();
+                    return;
+                }
+
                 await SearchLapsCandidatesAsync(
-                    allowInteractiveAuth: true);
+                    allowInteractiveAuth: true,
+                    readExactMatch: true);
             };
 
         _lapsQuery.TextChanged +=
@@ -620,7 +620,8 @@ public sealed partial class MainForm
                     SearchText.MinimumLiveSearchCharacters)
                 {
                     await SearchLapsCandidatesAsync(
-                        allowInteractiveAuth: false);
+                        allowInteractiveAuth: false,
+                        readExactMatch: false);
                 }
             };
 
@@ -636,6 +637,22 @@ public sealed partial class MainForm
                     SelectLapsSearchCandidate();
                     await ReadLapsAsync();
                 }
+            };
+
+        _lapsSearchRows.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode !=
+                        Keys.Enter ||
+                    GetSelectedLapsSearchResult() is null)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
+                    true;
+                SelectLapsSearchCandidate();
+                await ReadLapsAsync();
             };
 
         _adUsername.TextChanged +=
@@ -787,12 +804,13 @@ public sealed partial class MainForm
 
         UiStyle.SetStatus(
             _lapsStatus,
-            $"Selected {selected.ComputerName}. Use Check access or Read LAPS.",
+            $"Selected {selected.ComputerName}. Press Enter or double-click to read LAPS.",
             UiStatusKind.Neutral);
     }
 
     private async Task SearchLapsCandidatesAsync(
-        bool allowInteractiveAuth)
+        bool allowInteractiveAuth,
+        bool readExactMatch = false)
     {
         _lapsSearchDebounceTimer?.Stop();
 
@@ -964,14 +982,53 @@ public sealed partial class MainForm
                     false;
             }
 
-            if (rows.Count == 1)
+            var normalizedQuery =
+                SearchText.NormalizeIdentifierFragment(
+                    query);
+
+            var exactMatches =
+                rows
+                    .Select(
+                        (row, index) =>
+                            new
+                            {
+                                Row = row,
+                                Index = index
+                            })
+                    .Where(
+                        item =>
+                            item.Row.ComputerName.Equals(
+                                query,
+                                StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrWhiteSpace(
+                                 normalizedQuery) &&
+                             SearchText.NormalizeIdentifierFragment(
+                                 item.Row.ComputerId)
+                                 .Equals(
+                                     normalizedQuery,
+                                     StringComparison.Ordinal)))
+                    .ToList();
+
+            var selectedIndex =
+                rows.Count == 1
+                    ? 0
+                    : exactMatches.Count == 1
+                        ? exactMatches[0].Index
+                        : -1;
+
+            if (selectedIndex >= 0)
             {
                 _lapsSearchRows.ClearSelection();
-                _lapsSearchRows.Rows[0].Selected =
+                _lapsSearchRows.Rows[selectedIndex].Selected =
                     true;
                 _lapsSearchRows.CurrentCell =
-                    _lapsSearchRows.Rows[0].Cells[0];
+                    _lapsSearchRows.Rows[selectedIndex].Cells[0];
                 SelectLapsSearchCandidate();
+
+                if (readExactMatch)
+                {
+                    await ReadLapsAsync();
+                }
             }
             else
             {
@@ -979,7 +1036,7 @@ public sealed partial class MainForm
                     _lapsStatus,
                     rows.Count == 0
                         ? "No matching LAPS device was found."
-                        : $"Found {rows.Count} matching device(s). Select one, then use Check access or Read LAPS.",
+                        : $"Found {rows.Count} matching device(s). Select one and press Enter or double-click to read LAPS.",
                     rows.Count == 0
                         ? UiStatusKind.Warning
                         : UiStatusKind.Success);
