@@ -1799,6 +1799,44 @@ internal static class Program
 
             try
             {
+                var accessGuidance =
+                    AdAccessTroubleshootingDialog.BuildGuidance(
+                        "OU=Workstations,DC=example,DC=com",
+                        @"EXAMPLE\BitKeyBridge-Recovery-Readers");
+
+                var requiredGuidance =
+                    new[]
+                    {
+                        "CA;msFVE-RecoveryPassword;msFVE-RecoveryInformation",
+                        "Set-LapsADReadPasswordPermission",
+                        "ADPasswordEncryptionPrincipal",
+                        "ADEncryptedPasswordHistorySize",
+                        "Set-AdmPwdReadPasswordPermission",
+                        "Legacy Microsoft LAPS has no password history"
+                    };
+
+                foreach (var expected in
+                         requiredGuidance)
+                {
+                    if (!accessGuidance.Contains(
+                            expected,
+                            StringComparison.Ordinal))
+                    {
+                        failures.Add(
+                            "AD access troubleshooting guidance is missing: " +
+                            expected);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "AD access troubleshooting guidance test: " +
+                    ex.Message);
+            }
+
+            try
+            {
                 var exportDefaults =
                     new AppConfig();
 
