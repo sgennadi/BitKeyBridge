@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.3
+
+- Added **Cancel**, marquee progress, and secret-safe inline diagnostics to **Discover and Test DCs**. The existing CancellationToken is now wired from the GUI through domain-controller comparison.
+- Removed silent exception swallowing from the updated UI/AD paths. Non-fatal cleanup, status, DNS/DC metadata, clipboard, update-status, coverage-status, audit-checkpoint, and Event Log failures now emit sanitized diagnostics instead of disappearing.
+- Improved Device Code feedback so BitKeyBridge no longer claims the code was copied or the browser opened when either operation failed.
+- Domain-controller discovery metadata failures are logged safely while allowing the comparison to continue with partial information.
+- Preserved the v0.19.2 cancellable Recovery/LAPS flows, non-blocking diagnostic panels, LAPS-secret redaction, and the PowerShell-free native C#/.NET implementation.
+
+
 ## 0.19.2
 
 - Added a shared non-blocking diagnostics panel with **Copy diagnostics** and **Dismiss** actions. Copied data is sanitized and does not include stack traces, raw LDAP/Graph payloads, recovery keys, tokens, or LAPS password values.
