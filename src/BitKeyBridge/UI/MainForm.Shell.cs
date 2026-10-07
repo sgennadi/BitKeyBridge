@@ -19,6 +19,8 @@ public sealed partial class MainForm
     private readonly Label _recoveryCardTime = new();
     private readonly Label _recoveryCardSource = new();
     private readonly Button _startCopy = new();
+    private readonly Button _recoveryBackToStart = new();
+    private readonly Button _lapsBackToStart = new();
 
     private readonly UiStatusLabel _homeConnectionStatus = new();
     private readonly Button _homeConnectAdButton = new();
@@ -1006,7 +1008,8 @@ public sealed partial class MainForm
         return tab;
     }
 
-    private void NavigateToRecoveryWorkspace()
+    private void NavigateToRecoveryWorkspace(
+        bool fromStart = false)
     {
         if (_recoveryWorkspaceTab is null)
             return;
@@ -1017,12 +1020,15 @@ public sealed partial class MainForm
                 0;
         }
 
+        _recoveryBackToStart.Visible =
+            fromStart;
         _mainTabs.SelectedTab =
             _recoveryWorkspaceTab;
         _startQuery.Focus();
     }
 
-    private void NavigateToLapsWorkspace()
+    private void NavigateToLapsWorkspace(
+        bool fromStart = false)
     {
         if (_lapsWorkspaceTab is null)
             return;
@@ -1033,6 +1039,8 @@ public sealed partial class MainForm
                 0;
         }
 
+        _lapsBackToStart.Visible =
+            fromStart;
         _mainTabs.SelectedTab =
             _lapsWorkspaceTab;
         _lapsQuery.Focus();
@@ -1064,10 +1072,13 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            ColumnCount = 1,
+            ColumnCount = 2,
+            RowCount = 2,
             Margin = new Padding(0, 0, 0, 10)
         };
         titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
         titlePanel.Controls.Add(new Label
         {
             Text = "Find BitLocker Recovery Key",
@@ -1075,15 +1086,50 @@ public sealed partial class MainForm
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 4)
         }, 0, 0);
-        titlePanel.Controls.Add(new Label
-        {
-            Text =
-                "Search by computer name or Recovery ID. BitKeyBridge searches metadata first; " +
-                "the recovery password is retrieved only when you explicitly reveal or copy it.",
-            AutoSize = true,
-            MaximumSize = new Size(1050, 0)
-        }, 0, 1);
+
+        _recoveryBackToStart.Name =
+            "RecoveryBackToStart";
+        _recoveryBackToStart.Text =
+            "Back to Start";
+        _recoveryBackToStart.Visible =
+            false;
+        UiStyle.ConfigureActionButton(
+            _recoveryBackToStart);
+        titlePanel.Controls.Add(
+            _recoveryBackToStart,
+            1,
+            0);
+
+        var recoveryIntro =
+            new Label
+            {
+                Text =
+                    "Search by computer name or Recovery ID. BitKeyBridge searches metadata first; " +
+                    "the recovery password is retrieved only when you explicitly reveal or copy it.",
+                AutoSize = true,
+                MaximumSize = new Size(1050, 0)
+            };
+        titlePanel.Controls.Add(
+            recoveryIntro,
+            0,
+            1);
+        titlePanel.SetColumnSpan(
+            recoveryIntro,
+            2);
         root.Controls.Add(titlePanel, 0, 0);
+
+        _recoveryBackToStart.Click +=
+            (_, _) =>
+            {
+                _recoveryBackToStart.Visible =
+                    false;
+                if (_homeWorkspaceTab is not null)
+                {
+                    _mainTabs.SelectedTab =
+                        _homeWorkspaceTab;
+                    _homeQuery.Focus();
+                }
+            };
 
         UiStyle.ConfigureInlineStatusLabel(
             _startPurposeStatus);
@@ -2279,22 +2325,45 @@ public sealed partial class MainForm
         if (!_config.AutoConnectOnStart)
         {
             SetDirectoryConnectionStatus(
-                "Automatic AD connection is disabled. Use Connect to AD to start a session.",
+                "Automatic AD connection is disabled. Choose an account to connect.",
                 UiStatusKind.Neutral);
+
+            await TestDirectoryConnectionAsync(
+                promptForOu: false,
+                promptForSessionCredentials: true,
+                forceManualCredentials: true);
             return;
         }
 
         if (!CanAttemptAutomaticDirectoryConnection())
         {
             SetDirectoryConnectionStatus(
-                "AD connection requires a session password. Use Connect to AD to enter credentials.",
+                "AD connection requires session credentials.",
                 UiStatusKind.Warning);
+
+            await TestDirectoryConnectionAsync(
+                promptForOu: false,
+                promptForSessionCredentials: true,
+                forceManualCredentials: false);
             return;
         }
 
         await TestDirectoryConnectionAsync(
             promptForOu: false,
             promptForSessionCredentials: false);
+
+        if (!_directoryConnected &&
+            !IsDisposed)
+        {
+            SetDirectoryConnectionStatus(
+                "Automatic AD connection failed. Enter credentials to retry.",
+                UiStatusKind.Warning);
+
+            await TestDirectoryConnectionAsync(
+                promptForOu: false,
+                promptForSessionCredentials: true,
+                forceManualCredentials: true);
+        }
     }
 
     private bool CanAttemptAutomaticDirectoryConnection()
