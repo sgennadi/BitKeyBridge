@@ -668,7 +668,14 @@ public sealed class EntraSetupService : IDisposable
             if (node?["error"] is JsonObject e && e["message"] is JsonValue m) return m.GetValue<string>();
             if (node?["error"] is JsonValue ev) return ev.GetValue<string>();
         }
-        catch { }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException)
+        {
+            WindowsEventLogService.TryWrite(
+                "Entra setup error body was not structured JSON: " + ex.Message,
+                EventLogSeverity.Warning,
+                4563,
+                "EntraSetup");
+        }
         return text.Length > 1200 ? text[..1200] : text;
     }
 
