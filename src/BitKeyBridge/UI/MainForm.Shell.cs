@@ -3,6 +3,7 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly TabControl _mainTabs = new();
+    private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly CheckBox _autoConnectOnStart = new();
     private readonly Button _connectAdButton = new();
@@ -38,16 +39,26 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 3,
             Padding = new Padding(0),
             Margin = new Padding(0)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         var menu = BuildMainMenu();
         root.Controls.Add(menu, 0, 0);
+
+        _appDiagnostics.Name =
+            "ApplicationDiagnostics";
+        _appDiagnostics.AccessibleName =
+            "Application diagnostics";
+        root.Controls.Add(
+            _appDiagnostics,
+            0,
+            1);
 
         _mainTabs.Dock = DockStyle.Fill;
         _mainTabs.TabPages.Add(BuildRecoveryWorkspaceTab());
@@ -63,7 +74,7 @@ public sealed partial class MainForm
         foreach (TabPage page in _mainTabs.TabPages)
             page.AutoScroll = true;
 
-        root.Controls.Add(_mainTabs, 0, 1);
+        root.Controls.Add(_mainTabs, 0, 2);
         MainMenuStrip = menu;
         return root;
     }
