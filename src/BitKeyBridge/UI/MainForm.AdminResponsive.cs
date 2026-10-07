@@ -956,12 +956,18 @@ public sealed partial class MainForm
                 Dock = DockStyle.Fill,
                 Padding = new Padding(16),
                 ColumnCount = 1,
-                RowCount = 4
+                RowCount = 6
             };
         root.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
         root.RowStyles.Add(
             new RowStyle(
                 SizeType.AutoSize));
@@ -989,18 +995,46 @@ public sealed partial class MainForm
 
         _dcTest.Text =
             "Discover and Test DCs";
-        _dcTest.AutoSize =
-            true;
-        _dcTest.Padding =
-            new Padding(
-                8,
-                2,
-                8,
-                2);
+        UiStyle.ConfigureActionButton(
+            _dcTest);
         actions.Controls.Add(
             _dcTest);
+
+        _dcCancel.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _dcCancel);
+        _dcCancel.Enabled =
+            false;
+        actions.Controls.Add(
+            _dcCancel);
+
         root.Controls.Add(
             actions);
+
+        _dcProgress.Name =
+            "DcDiscoveryProgress";
+        _dcProgress.AccessibleName =
+            "Domain controller discovery progress";
+        _dcProgress.Dock =
+            DockStyle.Top;
+        _dcProgress.Style =
+            ProgressBarStyle.Marquee;
+        _dcProgress.MarqueeAnimationSpeed =
+            25;
+        _dcProgress.Visible =
+            false;
+        _dcProgress.Margin =
+            new Padding(
+                0,
+                0,
+                0,
+                UiStyle.ControlGap);
+        root.Controls.Add(
+            _dcProgress);
+
+        root.Controls.Add(
+            _dcDiagnostics);
 
         _dcResults.View =
             View.Details;
@@ -1040,6 +1074,9 @@ public sealed partial class MainForm
         _dcTest.Click +=
             async (_, _) =>
                 await RunDcTestAsync();
+        _dcCancel.Click +=
+            (_, _) =>
+                CancelDcTest();
 
         return page;
     }
