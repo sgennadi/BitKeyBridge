@@ -665,9 +665,8 @@ public sealed partial class MainForm
             {
                 _startSearchDebounceTimer.Stop();
 
-                if (_startSearch.Enabled &&
-                    _startQuery.Text.Trim().Length >=
-                        SearchText.MinimumLiveSearchCharacters)
+                if (_startQuery.Text.Trim().Length >=
+                    SearchText.MinimumLiveSearchCharacters)
                 {
                     await SearchStartRecoveryAsync();
                 }
