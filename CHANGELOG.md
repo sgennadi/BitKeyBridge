@@ -2,6 +2,20 @@
 
 ## 0.20.0
 
+- Completed the native BitLocker + LAPS helpdesk workflow across Active Directory, Microsoft Entra ID and Intune without PowerShell, shell fallbacks, the AD PowerShell module or Microsoft Graph PowerShell SDK.
+- Extended the LAPS workspace with **All / Current / History** views, password-age and expiry visibility, account-name copy, stricter Reveal/Copy enablement, and per-record read/decryption status for Legacy LAPS, Windows LAPS, encrypted history, DSRM and Entra LAPS.
+- Added **Check access** for LAPS. The AD check validates LDAP/computer resolution, LAPS schema and non-secret backup indicators without requesting plaintext password attributes; the Entra check calls deviceLocalCredentials metadata without requesting the credentials collection. Secret-read/decryption rights are reported as not probed when they cannot be tested without retrieving a secret.
+- Added cancellable, progress-aware workflows for Recovery metadata search, LAPS, AD connection, DC discovery/comparison, Devices search, Export/Dry Run, Coverage, Microsoft Graph connection, First-Run/Repair and Entra certificate rollover. Synchronous native LDAP work runs off the UI thread and stale results are discarded after cancellation.
+- Replaced blocking application error/information popups with shared inline status/diagnostic surfaces. Modal dialogs remain only where the operator must make a decision or complete Device Code authentication. CI now rejects blocking error MessageBoxes.
+- Added a shared **Copy diagnostics** path with secret redaction and removed silent exception swallowing. CI rejects empty catch blocks so non-fatal failures must be explicitly logged or surfaced.
+- Hardened recovery-secret clipboard handling with Windows clipboard-history/cloud-sync exclusion formats. BitLocker/LAPS secrets are still cleared on timeout only when the clipboard still contains the same tracked secret; unrelated clipboard content is preserved.
+- Improved manual AD connection UX: successful status includes DC, domain, effective identity and LDAP/LDAPS port; **Disconnect** cancels pending work and forgets only current session credentials/secrets without deleting protected Credential Manager or machine-DPAPI vault entries.
+- Kept existing RBAC enablement/default semantics unchanged in this release; the secure-by-default RBAC policy design remains intentionally deferred.
+- Strengthened CI/regression coverage for LAPS codecs/lifetime, secret redaction, secure clipboard formats, x64/x86/ARM64 self-contained builds, offline self-test, CodeQL, and compact/large-text/200% WinForms layout validation.
+
+
+## 0.20.0
+
 - Completed the native **LAPS** helpdesk workflow for Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted password history, DSRM current/history, and Microsoft Entra LAPS. The LAPS table now supports **All / Current / History** views, account names, password age, expiry, per-record read/decryption status, account-name copy, and Reveal/Copy only for successfully available secrets.
 - Added a secret-free **Check access** workflow for LAPS. Active Directory checks LDAP bind, computer resolution, LAPS schema/history availability, and non-secret backup/version metadata without reading password-bearing attributes; secret-read and DPAPI-NG decrypt authorization are explicitly reported as **NotProbed** when they cannot be verified safely without touching a real secret. Entra checks DeviceLocalCredential.Read.All and backup metadata without requesting the credentials collection.
 - Standardized **Cancel + progress + non-blocking diagnostics** across long-running helpdesk/admin operations, including Active Directory connection, BitLocker Live AD search, Devices search, LAPS reads, Microsoft Graph connection, DC comparison, Export/Dry Run, Coverage, Entra First-Run / Repair, and Entra certificate rollover. Slow native LDAP operations run off the UI thread and stale results are discarded after cancellation.
