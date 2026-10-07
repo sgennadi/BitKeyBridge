@@ -214,12 +214,15 @@ public sealed partial class MainForm : DpiAwareForm
         LoadCloudFields();
         LoadDashboardSettings();
         LoadOperationsSettings();
+        LoadRecentComputers();
         RefreshDashboard();
 
         FormClosing +=
             (_, _) =>
             {
                 _startSearchDebounceTimer?.Stop();
+                _homeSearchDebounceTimer?.Stop();
+                _homeSearchCancellation?.Cancel();
                 ClearSensitiveState();
             };
 
@@ -3221,6 +3224,10 @@ public sealed partial class MainForm : DpiAwareForm
             _config.AdPort == 636;
         _adExplicitCredentials.Checked =
             _config.AdUseExplicitCredentials;
+        _homeUseWindowsIdentity.Checked =
+            !_config.AdUseExplicitCredentials;
+        _homeUseOtherAccount.Checked =
+            _config.AdUseExplicitCredentials;
         _adCredentialStorage.SelectedIndex =
             _config.AdCredentialStorageMode.Equals(
                 "CurrentUser",
@@ -4140,6 +4147,14 @@ public sealed partial class MainForm : DpiAwareForm
                 kind);
         }
 
+        if (!_globalConnectionStatus.IsDisposed)
+        {
+            _globalConnectionStatus.Text =
+                _directoryConnected
+                    ? "AD: " + text
+                    : "AD: disconnected — " + text;
+        }
+
         RefreshHomeConnectionUi();
     }
 
@@ -4159,13 +4174,33 @@ public sealed partial class MainForm : DpiAwareForm
             !_directoryConnecting &&
             _directoryConnected;
 
-        _homeBitLockerButton.Enabled =
+        var ready =
             !_directoryConnecting &&
             _directoryConnected;
 
-        _homeLapsButton.Enabled =
+        _homeQuery.Enabled =
+            ready;
+        _homeSearchButton.Enabled =
+            ready;
+        _homeUseWindowsIdentity.Enabled =
             !_directoryConnecting &&
-            _directoryConnected;
+            !_directoryConnected;
+        _homeUseOtherAccount.Enabled =
+            !_directoryConnecting &&
+            !_directoryConnected;
+
+        _homeBitLockerButton.Enabled =
+            ready;
+        _homeLapsButton.Enabled =
+            ready;
+
+        if (!ready)
+        {
+            _homeSearchCancelButton.Enabled =
+                false;
+            _homeSearchProgress.Visible =
+                false;
+        }
     }
 
     private void ShowAppError(
