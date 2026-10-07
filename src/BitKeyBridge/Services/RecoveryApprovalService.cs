@@ -164,8 +164,13 @@ public sealed class RecoveryApprovalService
                     decisionPath);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Stale recovery approval decision cleanup failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4571,
+                "RecoveryApproval");
         }
 
         return request;
@@ -512,8 +517,13 @@ public sealed class RecoveryApprovalService
                     count++;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Recovery approval request enumeration skipped an unreadable file: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4572,
+                    "RecoveryApproval");
             }
         }
 
@@ -554,8 +564,13 @@ public sealed class RecoveryApprovalService
                 if (status.Approved)
                     count++;
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Recovery approval decision enumeration skipped an unreadable file: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4573,
+                    "RecoveryApproval");
             }
         }
 
