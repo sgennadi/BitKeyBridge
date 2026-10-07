@@ -717,6 +717,303 @@ public sealed partial class MainForm
         return tab;
     }
 
+    private void QueueLapsLiveSearch()
+    {
+        _lapsSearchDebounceTimer?.Stop();
+
+        if (_lapsQuery.Text.Trim().Length <
+            SearchText.MinimumLiveSearchCharacters)
+        {
+            return;
+        }
+
+        _lapsSearchDebounceTimer?.Start();
+    }
+
+    private void CancelLapsSearch()
+    {
+        _lapsSearchDebounceTimer?.Stop();
+        _lapsSearchCancellation?.Cancel();
+    }
+
+    private LapsSearchResult? GetSelectedLapsSearchResult()
+    {
+        return _lapsSearchRows.SelectedRows.Count == 1
+            ? _lapsSearchRows.SelectedRows[0].Tag as
+                LapsSearchResult
+            : null;
+    }
+
+    private void SelectLapsSearchCandidate()
+    {
+        var selected =
+            GetSelectedLapsSearchResult();
+
+        if (selected is null)
+            return;
+
+        _suppressLapsSearchQueue =
+            true;
+
+        try
+        {
+            _lapsQuery.Text =
+                selected.LookupValue;
+            _lapsQuery.SelectionStart =
+                _lapsQuery.TextLength;
+        }
+        finally
+        {
+            _suppressLapsSearchQueue =
+                false;
+        }
+
+        ClearLapsResult();
+
+        UiStyle.SetStatus(
+            _lapsStatus,
+            $"Selected {selected.ComputerName}. Use Check access or Read LAPS.",
+            UiStatusKind.Neutral);
+    }
+
+    private async Task SearchLapsCandidatesAsync(
+        bool allowInteractiveAuth)
+    {
+        _lapsSearchDebounceTimer?.Stop();
+
+        var query =
+            _lapsQuery.Text.Trim();
+
+        if (query.Length == 0)
+            return;
+
+        var cloud =
+            _lapsSource.SelectedIndex == 1;
+
+        if (cloud &&
+            !allowInteractiveAuth &&
+            (_cloudToken is null ||
+             !_cloudTokenHasLaps ||
+             _cloudToken.ExpiresAt <=
+                DateTime.Now.AddMinutes(1)))
+        {
+            return;
+        }
+
+        if (!cloud &&
+            allowInteractiveAuth)
+        {
+            if (!EnsureSessionAdCredentialForConnection())
+                return;
+
+            SaveDirectorySettings(
+                showConfirmation: false,
+                allowInMemoryFallback: true);
+        }
+
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                "SearchLapsMetadata",
+                computerName: query,
+                source:
+                    cloud
+                        ? "LAPS-Entra"
+                        : "LAPS-AD"))
+        {
+            return;
+        }
+
+        _lapsSearchCancellation?.Cancel();
+
+        using var cancellation =
+            new CancellationTokenSource();
+        var generation =
+            ++_lapsSearchGeneration;
+        _lapsSearchCancellation =
+            cancellation;
+
+        _lapsSearchButton.Enabled =
+            false;
+        _lapsCancel.Enabled =
+            true;
+        _lapsProgress.Visible =
+            true;
+
+        try
+        {
+            UiStyle.SetStatus(
+                _lapsStatus,
+                cloud
+                    ? "Searching Entra LAPS devices..."
+                    : "Searching Active Directory computers...",
+                UiStatusKind.Busy);
+
+            List<LapsSearchResult> rows;
+
+            if (cloud)
+            {
+                if (allowInteractiveAuth &&
+                    !await EnsureCloudTokenAsync(
+                        forLaps: true,
+                        cancellation.Token))
+                {
+                    return;
+                }
+
+                using var graph =
+                    new CloudGraphService();
+
+                rows =
+                    await graph.SearchLapsDevicesAsync(
+                        _cloudToken!.AccessToken,
+                        query,
+                        100,
+                        cancellation.Token);
+            }
+            else
+            {
+                var snapshot =
+                    new AppConfig
+                    {
+                        AdConnectionMode =
+                            _config.AdConnectionMode,
+                        AdDomain =
+                            _config.AdDomain,
+                        AdServer =
+                            _config.AdServer,
+                        AdPort =
+                            _config.AdPort,
+                        AdUseLdaps =
+                            _config.AdUseLdaps
+                    };
+                var credential =
+                    AdSessionCredentials
+                        .CreateNetworkCredential(
+                            _config);
+                var service =
+                    new LapsDirectoryService(
+                        snapshot,
+                        credential);
+
+                rows =
+                    await Task.Run(
+                        () =>
+                            service.SearchMetadata(
+                                query,
+                                100,
+                                cancellation.Token),
+                        cancellation.Token);
+            }
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
+
+            if (generation !=
+                _lapsSearchGeneration)
+            {
+                return;
+            }
+
+            _lapsSearchRows.Rows.Clear();
+
+            foreach (var row in rows)
+            {
+                var rowIndex =
+                    _lapsSearchRows.Rows.Add(
+                        row.ComputerName,
+                        row.ComputerId,
+                        row.Source);
+
+                _lapsSearchRows.Rows[rowIndex].Tag =
+                    row;
+            }
+
+            if (rows.Count == 1)
+            {
+                _lapsSearchRows.ClearSelection();
+                _lapsSearchRows.Rows[0].Selected =
+                    true;
+                _lapsSearchRows.CurrentCell =
+                    _lapsSearchRows.Rows[0].Cells[0];
+                SelectLapsSearchCandidate();
+            }
+            else
+            {
+                UiStyle.SetStatus(
+                    _lapsStatus,
+                    rows.Count == 0
+                        ? "No matching LAPS device was found."
+                        : $"Found {rows.Count} matching device(s). Select one, then use Check access or Read LAPS.",
+                    rows.Count == 0
+                        ? UiStatusKind.Warning
+                        : UiStatusKind.Success);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (!IsDisposed &&
+                generation ==
+                    _lapsSearchGeneration)
+            {
+                UiStyle.SetStatus(
+                    _lapsStatus,
+                    "LAPS search canceled.",
+                    UiStatusKind.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (IsDisposed ||
+                generation !=
+                    _lapsSearchGeneration)
+            {
+                return;
+            }
+
+            UiStyle.SetStatus(
+                _lapsStatus,
+                allowInteractiveAuth
+                    ? "LAPS device search failed. Review diagnostics below."
+                    : "Live LAPS search is unavailable; press Enter or Search to retry interactively.",
+                UiStatusKind.Error);
+
+            if (allowInteractiveAuth)
+            {
+                _lapsDiagnostics.ShowError(
+                    "LAPS device search failed.",
+                    "SearchLapsMetadata",
+                    ex,
+                    ("Source",
+                        cloud
+                            ? "Entra"
+                            : "Active Directory"),
+                    ("Query", query));
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(
+                    _lapsSearchCancellation,
+                    cancellation))
+            {
+                _lapsSearchCancellation =
+                    null;
+            }
+
+            if (!IsDisposed &&
+                generation ==
+                    _lapsSearchGeneration)
+            {
+                _lapsSearchButton.Enabled =
+                    true;
+                _lapsCancel.Enabled =
+                    _lapsReading;
+                _lapsProgress.Visible =
+                    _lapsReading;
+            }
+        }
+    }
+
     private async Task ReadLapsAsync()
     {
         if (_lapsReading) return;
