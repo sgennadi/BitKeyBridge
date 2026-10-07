@@ -90,18 +90,54 @@ Run:
 BitKeyBridge.exe
 ```
 
-The normal helpdesk workflow is:
+BitKeyBridge has several normal helpdesk workflows. Choose the workspace for the task instead of treating **Search BitLocker** as the only entry point.
+
+### Connect to Active Directory
+
+For on-premises BitLocker or LAPS work:
+
+1. Open **Recovery** or **LAPS**.
+2. Use **Connect to AD** when you want to choose the domain/DC or enter manual credentials. Automatic discovery is also available when appropriate.
+3. After a successful bind, BitKeyBridge shows the effective DC, domain, identity and LDAP/LDAPS transport.
+4. **Disconnect / Forget session** clears only the in-memory AD session credentials and loaded secrets; it does not delete protected stored credentials.
+
+### BitLocker recovery
 
 1. Open **Recovery**.
-2. Keep **Live AD** selected. BitKeyBridge attempts to connect to a writable DC automatically.
-3. On first use, choose **Select / Change OU...** and select an OU or **Entire domain**.
+2. Choose **Live AD** or **Local cache**.
+3. For Live AD, choose **Select / Change OU...** and select an OU or **Entire domain** when required.
 4. Enter a computer name or Recovery ID.
 5. Click **Search BitLocker**.
-6. Search returns metadata only.
-7. Select the result. If exactly one result is found, BitKeyBridge goes directly to the selected-record card.
+6. Search returns recovery metadata only; the 48-digit password is not read during normal search.
+7. Select the result. A single result opens directly in the selected-record card.
 8. Use **Reveal Recovery Key** or **Copy Key** only when the password is actually required.
 
 The selected recovery password is fetched only after the authorization / privileged-access checks pass.
+
+### LAPS passwords and history
+
+1. Open **LAPS**.
+2. Choose **Active Directory (Legacy / Windows LAPS / DSRM)** or **Microsoft Entra ID**.
+3. Enter the exact computer/device identifier.
+4. Use **Check access** first when troubleshooting permissions; this performs a secret-free capability check.
+5. Keep **Include password history** enabled when Windows LAPS encrypted history/DSRM history is required.
+6. Click **Read LAPS**.
+7. Use **All / Current / History** to filter returned records.
+8. Select a record and use **Reveal password**, **Copy password**, or **Copy account** as required.
+9. If access is denied or attributes/history are unavailable, use **AD access help...** for targeted delegation guidance and example commands.
+
+Legacy Microsoft LAPS and plaintext Windows LAPS do not provide password history. Encrypted Windows LAPS history also requires history retention and a decryptor principal configured by Windows LAPS policy.
+
+### Devices / Entra / Intune
+
+1. Open **Devices → Search**.
+2. Search by computer name, serial number, user/UPN, Entra device ID, or Intune managed-device ID.
+3. AD results remain available even when Microsoft Graph is not connected.
+4. When Graph is configured, BitKeyBridge enriches results with Entra/Intune data.
+5. Retrieve an Entra BitLocker recovery key only when required.
+6. Use **Rotate BitLocker Key** for an explicit Intune rotation request; rotation is never performed automatically.
+
+For first-time cloud configuration, administrators should use **Administration → Cloud → Intune / Entra Setup Wizard...**. For role configuration, use **Administration → Security & Settings → RBAC Setup Wizard...**.
 
 ### Local cache fallback
 
