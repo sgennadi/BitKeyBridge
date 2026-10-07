@@ -21,6 +21,16 @@ public sealed partial class MainForm
     private readonly Label _recoveryCardSource = new();
     private readonly Button _startCopy = new();
 
+    private readonly UiStatusLabel _homeConnectionStatus = new();
+    private readonly Button _homeConnectAdButton = new();
+    private readonly Button _homeDisconnectAdButton = new();
+    private readonly Button _homeBitLockerButton = new();
+    private readonly Button _homeLapsButton = new();
+    private readonly ProgressBar _homeConnectionProgress = new();
+    private TabPage? _homeWorkspaceTab;
+    private TabPage? _recoveryWorkspaceTab;
+    private TabPage? _lapsWorkspaceTab;
+
     private readonly ComboBox _deviceRecoveryIds = new();
     private readonly TextBox _deviceRecoveryKey = new();
     private readonly Button _deviceShowKey = new();
@@ -60,19 +70,44 @@ public sealed partial class MainForm
             0,
             1);
 
-        _mainTabs.Dock = DockStyle.Fill;
-        _mainTabs.TabPages.Add(BuildRecoveryWorkspaceTab());
-        _mainTabs.TabPages.Add(BuildDevicesWorkspaceTab());
-        _mainTabs.TabPages.Add(BuildLapsWorkspaceTab());
+        _mainTabs.Name =
+            "MainWorkspaceTabs";
+        _mainTabs.Dock =
+            DockStyle.Fill;
+
+        _homeWorkspaceTab =
+            BuildHomeWorkspaceTab();
+        _recoveryWorkspaceTab =
+            BuildRecoveryWorkspaceTab();
+        _lapsWorkspaceTab =
+            BuildLapsWorkspaceTab();
+
+        _mainTabs.TabPages.Add(
+            _homeWorkspaceTab);
+        _mainTabs.TabPages.Add(
+            _recoveryWorkspaceTab);
+        _mainTabs.TabPages.Add(
+            BuildDevicesWorkspaceTab());
+        _mainTabs.TabPages.Add(
+            _lapsWorkspaceTab);
 
         if (AdministrationAllowed)
         {
-            _mainTabs.TabPages.Add(BuildAdministrationWorkspaceTab());
-            _mainTabs.TabPages.Add(BuildHealthAuditWorkspaceTab());
+            _mainTabs.TabPages.Add(
+                BuildAdministrationWorkspaceTab());
+            _mainTabs.TabPages.Add(
+                BuildHealthAuditWorkspaceTab());
         }
 
-        foreach (TabPage page in _mainTabs.TabPages)
-            page.AutoScroll = true;
+        foreach (TabPage page in
+                 _mainTabs.TabPages)
+        {
+            page.AutoScroll =
+                true;
+        }
+
+        _mainTabs.SelectedTab =
+            _homeWorkspaceTab;
 
         root.Controls.Add(_mainTabs, 0, 2);
         MainMenuStrip = menu;
@@ -117,6 +152,425 @@ public sealed partial class MainForm
 
         menu.Items.Add(tools);
         return menu;
+    }
+
+    private TabPage BuildHomeWorkspaceTab()
+    {
+        var tab =
+            new TabPage("Start")
+            {
+                Name =
+                    "StartWorkspace"
+            };
+
+        var root =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Fill,
+                AutoScroll =
+                    true,
+                Padding =
+                    new Padding(24),
+                ColumnCount =
+                    1,
+                RowCount =
+                    6
+            };
+
+        root.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.Percent,
+                100F));
+
+        tab.Controls.Add(
+            root);
+
+        var title =
+            new Label
+            {
+                Text =
+                    "BitKeyBridge",
+                Font =
+                    UiStyle.CreatePageTitleFont(),
+                AutoSize =
+                    true,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
+        root.Controls.Add(
+            title,
+            0,
+            0);
+
+        var intro =
+            new Label
+            {
+                Text =
+                    "Connect to Active Directory first, then choose the recovery task you need.",
+                AutoSize =
+                    true,
+                MaximumSize =
+                    new Size(
+                        1000,
+                        0),
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        16)
+            };
+        root.Controls.Add(
+            intro,
+            0,
+            1);
+
+        var connectionGroup =
+            new GroupBox
+            {
+                Text =
+                    "Active Directory connection",
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                Padding =
+                    new Padding(14),
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        18)
+            };
+
+        var connection =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    1,
+                RowCount =
+                    4
+            };
+
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        connection.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+
+        _homeConnectionStatus.Name =
+            "HomeConnectionStatus";
+        _homeConnectionStatus.AccessibleName =
+            "Start page Active Directory connection status";
+        UiStyle.ConfigureStatusLabel(
+            _homeConnectionStatus);
+        _homeConnectionStatus.MaximumSize =
+            new Size(
+                1000,
+                0);
+        UiStyle.SetStatus(
+            _homeConnectionStatus,
+            "Not connected. BitKeyBridge will try the configured AD connection when the GUI starts.",
+            UiStatusKind.Neutral);
+        connection.Controls.Add(
+            _homeConnectionStatus,
+            0,
+            0);
+
+        _homeConnectionProgress.Name =
+            "HomeConnectionProgress";
+        _homeConnectionProgress.AccessibleName =
+            "Start page Active Directory connection progress";
+        _homeConnectionProgress.Dock =
+            DockStyle.Top;
+        _homeConnectionProgress.Style =
+            ProgressBarStyle.Marquee;
+        _homeConnectionProgress.MarqueeAnimationSpeed =
+            25;
+        _homeConnectionProgress.Visible =
+            false;
+        _homeConnectionProgress.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                UiStyle.ControlGap);
+        connection.Controls.Add(
+            _homeConnectionProgress,
+            0,
+            1);
+
+        var connectionActions =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(0)
+            };
+
+        _homeConnectAdButton.Name =
+            "HomeConnectAdButton";
+        _homeConnectAdButton.Text =
+            "Connect to AD";
+        UiStyle.ConfigureActionButton(
+            _homeConnectAdButton);
+
+        _homeDisconnectAdButton.Name =
+            "HomeDisconnectAdButton";
+        _homeDisconnectAdButton.Text =
+            "Disconnect";
+        UiStyle.ConfigureActionButton(
+            _homeDisconnectAdButton);
+        _homeDisconnectAdButton.Enabled =
+            false;
+
+        var connectionSettings =
+            UiStyle.CreateActionButton(
+                "Connection settings...");
+        connectionSettings.Name =
+            "HomeConnectionSettingsButton";
+
+        connectionActions.Controls.AddRange([
+            _homeConnectAdButton,
+            _homeDisconnectAdButton,
+            connectionSettings
+        ]);
+
+        connection.Controls.Add(
+            connectionActions,
+            0,
+            2);
+
+        var connectionHint =
+            new Label
+            {
+                Text =
+                    "Current Windows identity or the configured protected AD credential is used automatically. " +
+                    "If a session password is required, Connect to AD will prompt for it.",
+                AutoSize =
+                    true,
+                MaximumSize =
+                    new Size(
+                        1000,
+                        0),
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+        connection.Controls.Add(
+            connectionHint,
+            0,
+            3);
+
+        connectionGroup.Controls.Add(
+            connection);
+        root.Controls.Add(
+            connectionGroup,
+            0,
+            2);
+
+        var chooseTitle =
+            new Label
+            {
+                Text =
+                    "Choose a task",
+                Font =
+                    UiStyle.CreateSectionTitleFont(),
+                AutoSize =
+                    true,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
+        root.Controls.Add(
+            chooseTitle,
+            0,
+            3);
+
+        var tasks =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        12)
+            };
+
+        _homeBitLockerButton.Name =
+            "HomeBitLockerButton";
+        _homeBitLockerButton.Text =
+            "BitLocker Recovery";
+        _homeBitLockerButton.MinimumSize =
+            new Size(
+                280,
+                64);
+        _homeBitLockerButton.Font =
+            UiStyle.CreateEmphasisFont(
+                11F);
+        UiStyle.ConfigureActionButton(
+            _homeBitLockerButton);
+        _homeBitLockerButton.Enabled =
+            false;
+
+        _homeLapsButton.Name =
+            "HomeLapsButton";
+        _homeLapsButton.Text =
+            "LAPS Passwords";
+        _homeLapsButton.MinimumSize =
+            new Size(
+                280,
+                64);
+        _homeLapsButton.Font =
+            UiStyle.CreateEmphasisFont(
+                11F);
+        UiStyle.ConfigureActionButton(
+            _homeLapsButton);
+        _homeLapsButton.Enabled =
+            false;
+
+        tasks.Controls.AddRange([
+            _homeBitLockerButton,
+            _homeLapsButton
+        ]);
+        root.Controls.Add(
+            tasks,
+            0,
+            4);
+
+        root.Controls.Add(
+            new Label
+            {
+                Text =
+                    "The Start workflow requires an AD connection. The top-level tabs remain available for Local cache or Entra-only scenarios.",
+                AutoSize =
+                    true,
+                MaximumSize =
+                    new Size(
+                        1000,
+                        0),
+                Margin =
+                    new Padding(0)
+            },
+            0,
+            5);
+
+        _homeConnectAdButton.Click +=
+            async (_, _) =>
+                await TestDirectoryConnectionAsync(
+                    promptForOu: false,
+                    promptForSessionCredentials: true,
+                    forceManualCredentials: false);
+
+        _homeDisconnectAdButton.Click +=
+            (_, _) =>
+                DisconnectDirectorySession();
+
+        connectionSettings.Click +=
+            (_, _) =>
+            {
+                if (_recoveryWorkspaceTab is null)
+                    return;
+
+                _mainTabs.SelectedTab =
+                    _recoveryWorkspaceTab;
+                _advancedConnectionGroup.Visible =
+                    true;
+                _advancedConnectionButton.Text =
+                    "Hide advanced settings";
+            };
+
+        _homeBitLockerButton.Click +=
+            (_, _) =>
+                NavigateToRecoveryWorkspace();
+
+        _homeLapsButton.Click +=
+            (_, _) =>
+                NavigateToLapsWorkspace();
+
+        return tab;
+    }
+
+    private void NavigateToRecoveryWorkspace()
+    {
+        if (_recoveryWorkspaceTab is null)
+            return;
+
+        _mainTabs.SelectedTab =
+            _recoveryWorkspaceTab;
+        _startQuery.Focus();
+    }
+
+    private void NavigateToLapsWorkspace()
+    {
+        if (_lapsWorkspaceTab is null)
+            return;
+
+        _mainTabs.SelectedTab =
+            _lapsWorkspaceTab;
+        _lapsQuery.Focus();
     }
 
     private TabPage BuildRecoveryWorkspaceTab()
