@@ -2251,9 +2251,9 @@ public sealed partial class MainForm : DpiAwareForm
                 _unifiedStatus,
                 rotationStatus,
                 UiStatusKind.Success);
-            MessageBox.Show(
-                this,
-                "Intune accepted the rotation request. The new recovery key appears after the device processes the action and backs up the new key.");
+            ShowAppMessage(
+                "BitLocker key rotation accepted by Intune.",
+                "The new recovery key appears after the device processes the action and backs up the new key.");
         }
         catch (Exception ex)
         {
@@ -2598,7 +2598,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!_config.RemoteApiEnabled)
         {
-            MessageBox.Show(this, "Remote API is not enabled.");
+            ShowAppMessage(
+                "Remote API is not enabled.",
+                "Enable the Remote API before rotating its bearer token.");
             return;
         }
 
@@ -2717,11 +2719,8 @@ public sealed partial class MainForm : DpiAwareForm
                 details:
                     $"Path={path}");
 
-            MessageBox.Show(
-                this,
-                "Configuration backup created." +
-                Environment.NewLine +
-                Environment.NewLine +
+            ShowAppMessage(
+                "Configuration backup created.",
                 path +
                 Environment.NewLine +
                 Environment.NewLine +
@@ -2791,11 +2790,8 @@ public sealed partial class MainForm : DpiAwareForm
                 details:
                     $"Path={dialog.FileName}; Rollback={result.RollbackBackupPath}; Warnings={result.Warnings.Count}");
 
-            MessageBox.Show(
-                this,
-                "Configuration restored." +
-                Environment.NewLine +
-                Environment.NewLine +
+            ShowAppMessage(
+                "Configuration restored.",
                 "Rollback: " +
                 result.RollbackBackupPath +
                 (result.Warnings.Count == 0
@@ -5453,12 +5449,11 @@ public sealed partial class MainForm : DpiAwareForm
             var shareText = result.ShareCreated
                 ? $"SMB share: \\{Environment.MachineName}\\{result.ShareName}"
                 : "SMB share: not created";
-            MessageBox.Show(
-                this,
-                $"Protected output created successfully.{Environment.NewLine}{Environment.NewLine}" +
+            ShowAppMessage(
+                "Protected output created successfully.",
                 $"Directory: {result.DirectoryPath}{Environment.NewLine}{shareText}{Environment.NewLine}{Environment.NewLine}" +
                 (dialog.UpdateApplicationConfig
-                    ? "BitKeyBridge export configuration was updated. If an existing WinPE workflow still reads NETLOGON/SYSVOL, update that consumer before switching production export."
+                    ? "BitKeyBridge export configuration was updated."
                     : "BitKeyBridge export configuration was not changed."));
         }
         catch (Exception ex)
@@ -5979,11 +5974,8 @@ public sealed partial class MainForm : DpiAwareForm
                 RefreshAuditSigningStatus();
                 RefreshDashboard();
 
-                MessageBox.Show(
-                    this,
-                    "Audit-signing certificate rollover completed." +
-                    Environment.NewLine +
-                    Environment.NewLine +
+                ShowAppMessage(
+                    "Audit-signing certificate rollover completed.",
                     $"Previous: {result.PreviousThumbprint}" +
                     Environment.NewLine +
                     $"New: {result.NewThumbprint}" +
@@ -6227,7 +6219,9 @@ public sealed partial class MainForm : DpiAwareForm
         {
             if (!File.Exists(path) && !Directory.Exists(path))
             {
-                MessageBox.Show(this, $"Path does not exist:{Environment.NewLine}{path}");
+                ShowAppMessage(
+                    "Requested path does not exist.",
+                    path);
                 return;
             }
             if (executable is null)
