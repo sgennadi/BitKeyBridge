@@ -3912,6 +3912,16 @@ public sealed partial class MainForm : DpiAwareForm
             context);
     }
 
+    private void ShowAppMessage(
+        string summary,
+        string details)
+    {
+        _appDiagnostics.ShowMessage(
+            summary,
+            DiagnosticRedaction.Sanitize(
+                details));
+    }
+
     private async Task SelectStartOuAsync()
     {
         try
@@ -6177,10 +6187,6 @@ public sealed partial class MainForm : DpiAwareForm
         {
             var result =
                 AuditIntegrityService.VerifyAndPersist(_audit.Path);
-            var icon = result.Valid
-                ? MessageBoxIcon.Information
-                : MessageBoxIcon.Error;
-
             var message =
                 $"Valid: {result.Valid}{Environment.NewLine}" +
                 $"Files checked: {result.FilesChecked}{Environment.NewLine}" +
@@ -6192,12 +6198,11 @@ public sealed partial class MainForm : DpiAwareForm
                     : Environment.NewLine + Environment.NewLine +
                       "First error: " + result.FirstError);
 
-            MessageBox.Show(
-                this,
-                message,
-                "Audit Integrity",
-                MessageBoxButtons.OK,
-                icon);
+            ShowAppMessage(
+                result.Valid
+                    ? "Audit integrity verification succeeded."
+                    : "Audit integrity verification found a problem.",
+                message);
         }
         catch (Exception ex)
         {
