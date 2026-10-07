@@ -298,8 +298,13 @@ public sealed class JitRecoveryService
                 if (grant is not null)
                     result.Add(grant);
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "JIT recovery grant file could not be read: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4569,
+                    "JIT");
             }
         }
 
