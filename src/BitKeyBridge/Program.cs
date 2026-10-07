@@ -3206,7 +3206,17 @@ internal static class Program
         }
         finally
         {
-            try { if (Directory.Exists(tempDirectory)) Directory.Delete(tempDirectory, true); } catch { }
+            try
+            {
+                if (Directory.Exists(tempDirectory))
+                    Directory.Delete(tempDirectory, true);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(
+                    "Self-test temporary directory cleanup failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
         }
 
         if (failures.Count == 0)
