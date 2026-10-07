@@ -11,5 +11,6 @@
     <Compile Include="../../src/BitKeyBridge/Services/LapsCloudCodec.cs" Link="LapsCloudCodec.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsSelfTest.cs" Link="LapsSelfTest.cs" />
     <Compile Include="../../src/BitKeyBridge/Infrastructure/NativeLapsProtection.cs" Link="NativeLapsProtection.cs" />
+    <Compile Include="../../src/BitKeyBridge/Infrastructure/DiagnosticRedaction.cs" Link="DiagnosticRedaction.cs" />
   </ItemGroup>
 </Project>
