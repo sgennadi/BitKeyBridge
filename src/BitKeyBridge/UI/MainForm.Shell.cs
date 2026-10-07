@@ -1271,26 +1271,6 @@ public sealed partial class MainForm
             4,
             0);
 
-        _advancedConnectionButton.Name =
-            "AdvancedConnectionButton";
-        _advancedConnectionButton.AccessibleName =
-            "Advanced Active Directory connection settings";
-        _advancedConnectionButton.TabIndex =
-            4;
-        _advancedConnectionButton.Text =
-            "Advanced connection settings...";
-        UiStyle.ConfigureActionButton(
-            _advancedConnectionButton);
-        _advancedConnectionButton.Anchor =
-            AnchorStyles.Left;
-        _advancedConnectionButton.Margin =
-            new Padding(
-                0);
-        connection.Controls.Add(
-            _advancedConnectionButton,
-            5,
-            0);
-
         _adConnectionStatus.Name =
             "AdConnectionStatus";
         UiStyle.ConfigureStatusLabel(
@@ -1513,9 +1493,6 @@ public sealed partial class MainForm
         ConfigureRecoveryCard();
         root.Controls.Add(_recoveryCard, 0, 6);
 
-        ConfigureAdvancedConnectionGroup();
-        root.Controls.Add(_advancedConnectionGroup, 0, 7);
-
         _connectAdButton.Click +=
             async (_, _) =>
                 await TestDirectoryConnectionAsync(
@@ -1599,18 +1576,6 @@ public sealed partial class MainForm
                 ResetRecoverySearchState();
                 UpdateRecoverySourceUi();
                 TrySaveRecoveryUiState();
-            };
-
-        _advancedConnectionButton.Click +=
-            (_, _) =>
-            {
-                _advancedConnectionGroup.Visible =
-                    !_advancedConnectionGroup.Visible;
-
-                _advancedConnectionButton.Text =
-                    _advancedConnectionGroup.Visible
-                        ? "Hide advanced settings"
-                        : "Advanced connection settings...";
             };
 
         return tab;
