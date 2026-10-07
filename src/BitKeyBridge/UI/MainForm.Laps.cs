@@ -2107,6 +2107,9 @@ public sealed partial class MainForm
         _lapsResult = null;
         _lapsResourceId = _lapsAuditSource = string.Empty;
         if (!IsDisposed)
-            UiStyle.SetStatus(_lapsStatus, "Passwords cleared. Enter a computer and click Read LAPS.", UiStatusKind.Neutral);
+            UiStyle.SetStatus(
+                _lapsStatus,
+                "Passwords cleared. Search/select a computer; Enter or double-click reads LAPS.",
+                UiStatusKind.Neutral);
     }
 }
