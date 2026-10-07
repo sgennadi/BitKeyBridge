@@ -535,16 +535,14 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
                         _jitGrantId.Text.Trim(),
                         _jitReason.Text.Trim());
 
-            MessageBox.Show(
-                this,
+            UiStyle.SetStatus(
+                _jitStatus,
                 removed
                     ? "JIT grant revoked."
                     : "JIT grant was not found.",
-                "Privileged Access",
-                MessageBoxButtons.OK,
                 removed
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
 
             RefreshStatus();
         }
@@ -570,16 +568,14 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
                         approved,
                         _approvalComment.Text.Trim());
 
-            MessageBox.Show(
-                this,
+            UiStyle.SetStatus(
+                _approvalStatus,
                 approved
                     ? $"Session {decision.SessionId} approved."
                     : $"Session {decision.SessionId} denied.",
-                "Privileged Access",
-                MessageBoxButtons.OK,
                 approved
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
 
             RefreshStatus();
         }
