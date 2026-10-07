@@ -3412,7 +3412,9 @@ public sealed partial class MainForm : DpiAwareForm
         var generation = ++_directoryConnectionGeneration;
         _directoryConnectionCancellation = cancellation;
         _directoryConnecting = true;
+        _directoryConnected = false;
         _connectAdButton.Enabled = false;
+        _disconnectAdButton.Enabled = false;
         _connectAdCancelButton.Enabled = true;
         _adConnectionProgress.Visible = true;
         _recoveryDiagnostics.Clear();
@@ -3495,6 +3497,9 @@ public sealed partial class MainForm : DpiAwareForm
                 result.Root.GetValueOrDefault(
                     "defaultNamingContext",
                     string.Empty);
+
+            _directoryConnected = true;
+            _disconnectAdButton.Enabled = true;
 
             SetDirectoryConnectionStatus(
                 BuildDirectoryConnectedStatus(
@@ -3580,6 +3585,8 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
+            _directoryConnected = false;
+            _disconnectAdButton.Enabled = false;
             _startDomainDn =
                 string.Empty;
             _startSelectOu.Enabled =
@@ -3633,6 +3640,8 @@ public sealed partial class MainForm : DpiAwareForm
                     _recoverySource.SelectedIndex != 1;
                 _connectAdCancelButton.Enabled =
                     false;
+                _disconnectAdButton.Enabled =
+                    _directoryConnected;
                 _adConnectionProgress.Visible =
                     false;
             }
@@ -3666,8 +3675,23 @@ public sealed partial class MainForm : DpiAwareForm
         ClearLapsResult();
         ClearTrackedRecoveryClipboard();
 
+        _directoryConnected =
+            false;
+        _disconnectAdButton.Enabled =
+            false;
         _startDomainDn =
             string.Empty;
+        _startScope =
+            null;
+        _startOuStatus.Text =
+            string.Empty;
+        _startResults.Items.Clear();
+        _startResults.Visible =
+            true;
+        _startCurrentKey =
+            null;
+        _startKey.Clear();
+        ClearRecoveryCard();
         _startSelectOu.Enabled =
             false;
 
@@ -3710,7 +3734,7 @@ public sealed partial class MainForm : DpiAwareForm
             _config.AdUseLdaps ||
             _config.AdPort == 636
                 ? "LDAPS"
-                : "LDAP";
+                : "LDAP sign/seal";
 
         var user =
             _config.AdUseExplicitCredentials &&
