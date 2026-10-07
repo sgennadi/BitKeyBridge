@@ -2448,63 +2448,219 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadOperationsSettings()
     {
-        _updateRepository.Text = _config.UpdateRepository;
-        _checkUpdatesOnStart.Checked = _config.CheckForUpdatesOnStart;
-        _allowPrereleaseUpdates.Checked = _config.AllowPrereleaseUpdates;
-        _remoteApiPort.Value = Math.Clamp(_config.RemoteApiPort, 1024, 65535);
-        _remoteApiManagement.Checked = _config.RemoteApiAllowManagement;
-        _requireRecoveryReference.Checked = _config.RequireRecoveryAccessReference;
+        LoadUpdateSettings();
+
+        _remoteApiPort.Value =
+            Math.Clamp(
+                _config.RemoteApiPort,
+                1024,
+                65535);
+        _remoteApiManagement.Checked =
+            _config.RemoteApiAllowManagement;
+        _requireRecoveryReference.Checked =
+            _config.RequireRecoveryAccessReference;
         _suggestRotationAfterRecovery.Checked =
             _config.SuggestRotationAfterCloudKeyRetrieval;
         RefreshRemoteApiStatus();
+    }
+
+    private void LoadUpdateSettings()
+    {
+        _updateRepository.Text =
+            _config.UpdateRepository;
+        _checkUpdatesOnStart.Checked =
+            _config.CheckForUpdatesOnStart;
+        _allowPrereleaseUpdates.Checked =
+            _config.AllowPrereleaseUpdates;
 
         try
         {
-            _lastUpdateInfo = JsonStore.Read<UpdateInfo>(AppPaths.UpdateStatusFile);
+            _lastUpdateInfo =
+                JsonStore.Read<UpdateInfo>(
+                    AppPaths.UpdateStatusFile);
+
             if (_lastUpdateInfo is not null)
-                DisplayUpdateInfo(_lastUpdateInfo);
+            {
+                DisplayUpdateInfo(
+                    _lastUpdateInfo);
+            }
+            else
+            {
+                UiStyle.SetStatus(
+                    _updateStatus,
+                    _config.CheckForUpdatesOnStart
+                        ? "Automatic startup update checks are enabled. Use Check for Updates for an immediate check."
+                        : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
+                    UiStatusKind.Neutral);
+            }
         }
         catch (Exception ex)
         {
             WindowsEventLogService.TryWrite(
-                "Update status read failed: " + ex.Message,
+                "Update status read failed: " +
+                ex.Message,
                 EventLogSeverity.Warning,
                 4545,
                 "Update");
+
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Previous update status could not be loaded. Manual update actions are still available.",
+                UiStatusKind.Warning);
+        }
+    }
+
+    private bool SaveUpdateSettings(
+        bool showConfirmation)
+    {
+        string repository;
+        try
+        {
+            repository =
+                UpdateService.NormalizeRepository(
+                    _updateRepository.Text);
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Update repository is invalid: " +
+                ex.Message,
+                UiStatusKind.Error);
+            return false;
+        }
+
+        try
+        {
+            _config.UpdateRepository =
+                repository;
+            _config.CheckForUpdatesOnStart =
+                _checkUpdatesOnStart.Checked;
+            _config.AllowPrereleaseUpdates =
+                _allowPrereleaseUpdates.Checked;
+
+            ConfigService.SaveAppConfig(
+                _config);
+
+            _audit.Write(
+                "SaveUpdateSettings",
+                source: "Local",
+                details:
+                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}");
+
+            if (showConfirmation)
+            {
+                UiStyle.SetStatus(
+                    _updateStatus,
+                    _config.CheckForUpdatesOnStart
+                        ? "Update settings saved. Automatic startup checks are enabled."
+                        : "Update settings saved. Automatic startup checks are disabled; manual checks remain available.",
+                    UiStatusKind.Success);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Could not save update settings: " +
+                ex.Message,
+                UiStatusKind.Error);
+
+            ShowAppError(
+                "Saving update settings failed.",
+                "SaveUpdateSettings",
+                ex,
+                ("Repository", repository));
+            return false;
+        }
+    }
+
+    private void SetAutomaticUpdateChecksGui(
+        bool enabled)
+    {
+        var previous =
+            _config.CheckForUpdatesOnStart;
+
+        try
+        {
+            _config.CheckForUpdatesOnStart =
+                enabled;
+            _checkUpdatesOnStart.Checked =
+                enabled;
+
+            ConfigService.SaveAppConfig(
+                _config);
+
+            _audit.Write(
+                enabled
+                    ? "EnableAutomaticUpdateChecks"
+                    : "DisableAutomaticUpdateChecks",
+                source: "Local",
+                details:
+                    $"CheckOnStart={enabled}");
+
+            UiStyle.SetStatus(
+                _updateStatus,
+                enabled
+                    ? "Automatic startup update checks are enabled."
+                    : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
+                enabled
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
+        }
+        catch (Exception ex)
+        {
+            _config.CheckForUpdatesOnStart =
+                previous;
+            _checkUpdatesOnStart.Checked =
+                previous;
+
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Could not change automatic update checks: " +
+                ex.Message,
+                UiStatusKind.Error);
+
+            ShowAppError(
+                "Changing automatic update checks failed.",
+                "SetAutomaticUpdateChecks",
+                ex);
         }
     }
 
     private void SaveOperationsSettings()
     {
-        var repository = _updateRepository.Text.Trim();
-        if (string.IsNullOrWhiteSpace(repository) || repository.Split('/').Length != 2)
-        {
-            ShowAppMessage(
-                "Update Settings",
-                "Update repository must use owner/repository format.");
-            return;
-        }
-
-        _config.UpdateRepository = repository;
-        _config.CheckForUpdatesOnStart = _checkUpdatesOnStart.Checked;
-        _config.AllowPrereleaseUpdates = _allowPrereleaseUpdates.Checked;
-        _config.RemoteApiPort = (int)_remoteApiPort.Value;
-        _config.RemoteApiAllowManagement = _remoteApiManagement.Checked;
-        _config.RequireRecoveryAccessReference = _requireRecoveryReference.Checked;
+        _config.RemoteApiPort =
+            (int)_remoteApiPort.Value;
+        _config.RemoteApiAllowManagement =
+            _remoteApiManagement.Checked;
+        _config.RequireRecoveryAccessReference =
+            _requireRecoveryReference.Checked;
         _config.SuggestRotationAfterCloudKeyRetrieval =
             _suggestRotationAfterRecovery.Checked;
-        ConfigService.SaveAppConfig(_config);
+
+        ConfigService.SaveAppConfig(
+            _config);
+
         _audit.Write(
             "SaveOperationsSettings",
             source: "Local",
             details:
-                $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RemotePort={_config.RemoteApiPort}; RemoteManagement={_config.RemoteApiAllowManagement}; RequireReference={_config.RequireRecoveryAccessReference}; SuggestRotation={_config.SuggestRotationAfterCloudKeyRetrieval}");
+                $"RemotePort={_config.RemoteApiPort}; RemoteManagement={_config.RemoteApiAllowManagement}; RequireReference={_config.RequireRecoveryAccessReference}; SuggestRotation={_config.SuggestRotationAfterCloudKeyRetrieval}");
+
         RefreshRemoteApiStatus();
     }
 
     private async Task CheckForUpdatesGuiAsync(bool silentWhenCurrent)
     {
-        SaveOperationsSettings();
+        if (!SaveUpdateSettings(
+                showConfirmation: false))
+        {
+            return;
+        }
+
         try
         {
             UiStyle.SetStatus(
@@ -2569,7 +2725,9 @@ public sealed partial class MainForm : DpiAwareForm
                 ? $"UPDATE AVAILABLE: {info.LatestVersion}    Asset: {info.AssetName}"
                 : "No newer release is available.") +
             Environment.NewLine +
-            $"Checked: {info.CheckedAtUtc:u}",
+            $"Checked: {info.CheckedAtUtc:u}" +
+            Environment.NewLine +
+            $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}",
             info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);

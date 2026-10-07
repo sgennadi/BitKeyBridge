@@ -26,6 +26,31 @@ PowerShell в рабочем режиме не используется вооб
 Перед сохранением мастер показывает effective access текущей identity и не даёт применить очевидную lockout-конфигурацию, при которой текущий администратор потеряет доступ к BitKeyBridge Administration без bypass. Изменения применяются только после **Finish**. JIT, two-person approval и SIEM этим мастером не включаются и остаются отдельными opt-in настройками в **Privileged Access...**.
 
 Старые **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...** и **Privileged Access...** оставлены как advanced/repair путь.
+## Отдельный раздел Updates — 0.21.3
+
+Updater вынесен из **Administration → Security & Settings** в отдельную вкладку **Administration → Updates**.
+
+В ней есть:
+- **Check for Updates** — вручную проверить GitHub Releases;
+- **Update Now** — скачать, проверить и установить более новую версию;
+- **Save Update Settings** — сохранить repository, release channel и auto-check;
+- **Disable Automatic Checks / Enable Automatic Checks** — отключить или включить только автоматическую проверку при старте GUI;
+- **Open Release Page** — открыть страницу релизов.
+
+Если автоматическая проверка выключена, ручные **Check for Updates** и **Update Now** продолжают работать. Настройки updater сохраняются отдельно и больше не затрагивают Remote API или Helpdesk settings.
+
+CLI:
+
+```text
+BitKeyBridge.exe --check-update
+BitKeyBridge.exe --update
+BitKeyBridge.exe --update-checks-status
+BitKeyBridge.exe --update-checks-enable
+BitKeyBridge.exe --update-checks-disable
+```
+
+Release pipeline после публикации запускает живой x64 smoke-test updater: проверяет GitHub release metadata, сохранение auto-check disable/enable и безопасный current-version `--update` path. SHA-256, asset digest, версия EXE, staged `--self-test`, apply-plan hash и rollback остаются обязательными.
+
 ## LAPS и ручное подключение
 
 Вкладка **LAPS** поддерживает Legacy Microsoft LAPS, Windows LAPS с открытым или зашифрованным паролем, историю зашифрованных паролей, DSRM и его историю, а также LAPS в Entra ID. **Check access** выполняет безопасную проверку без чтения самого секрета, а **Read LAPS** получает разрешённые записи. Таблица имеет фильтры **All / Current / History** и показывает источник/версию, учётную запись, время изменения, возраст пароля, срок действия и результат чтения/расшифровки. **Copy account** отделён от **Reveal password** / **Copy password**; для записи с ошибкой чтения или расшифровки действия с паролем недоступны.

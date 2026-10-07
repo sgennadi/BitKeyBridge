@@ -2,43 +2,104 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
-    private TabPage BuildSecuritySettingsResponsiveTab()
+    private TabPage BuildUpdatesResponsiveTab()
     {
-        var page = new TabPage("Security & Settings");
-        var root = CreateVerticalWorkspace();
+        var page =
+            new TabPage("Updates")
+            {
+                Name = "UpdatesTab"
+            };
+        var root =
+            CreateVerticalWorkspace();
         page.Controls.Add(root);
 
         root.Controls.Add(
             CreateSectionTitle(
-                "Verified Updates",
-                "Update checks use the configured GitHub repository and verified release workflow."));
+                "Verified Updater",
+                "Check manually at any time, install a verified GitHub release, or disable automatic startup checks. " +
+                "Downloaded packages must match SHA-256 metadata and the staged EXE must pass --self-test before replacement."));
 
-        var updateGrid = CreateTwoColumnGrid();
-        AddGridField(updateGrid, 0, "GitHub repository:", _updateRepository);
+        var updateGrid =
+            CreateTwoColumnGrid();
 
+        _updateRepository.Name =
+            "UpdateRepository";
+        _updateRepository.AccessibleName =
+            "GitHub update repository";
+        AddGridField(
+            updateGrid,
+            0,
+            "GitHub repository:",
+            _updateRepository);
+
+        _checkUpdatesOnStart.Name =
+            "AutomaticUpdateChecks";
+        _checkUpdatesOnStart.AccessibleName =
+            "Automatically check for updates when the GUI starts";
         _checkUpdatesOnStart.Text =
-            "Check for updates when GUI starts";
-        _checkUpdatesOnStart.AutoSize = true;
-        updateGrid.Controls.Add(_checkUpdatesOnStart, 1, 1);
+            "Automatically check for updates when GUI starts";
+        _checkUpdatesOnStart.AutoSize =
+            true;
+        updateGrid.Controls.Add(
+            _checkUpdatesOnStart,
+            1,
+            1);
 
+        _allowPrereleaseUpdates.Name =
+            "AllowPrereleaseUpdates";
         _allowPrereleaseUpdates.Text =
             "Allow prerelease versions";
-        _allowPrereleaseUpdates.AutoSize = true;
-        updateGrid.Controls.Add(_allowPrereleaseUpdates, 1, 2);
+        _allowPrereleaseUpdates.AutoSize =
+            true;
+        updateGrid.Controls.Add(
+            _allowPrereleaseUpdates,
+            1,
+            2);
 
-        var updateActions = CreateActionFlow();
-        var saveUpdate = NewActionButton("Save Settings");
-        var check = NewActionButton("Check Now");
-        var install = NewActionButton("Install Verified Update");
+        var updateActions =
+            CreateActionFlow();
+        var saveUpdate =
+            NewActionButton(
+                "Save Update Settings");
+        saveUpdate.Name =
+            "SaveUpdateSettingsButton";
+        var check =
+            NewActionButton(
+                "Check for Updates");
+        check.Name =
+            "CheckForUpdatesButton";
+        var install =
+            NewActionButton(
+                "Update Now");
+        install.Name =
+            "UpdateNowButton";
+        var toggleAutomatic =
+            NewActionButton(
+                "Disable Automatic Checks");
+        toggleAutomatic.Name =
+            "ToggleAutomaticUpdateChecksButton";
+        var openRelease =
+            NewActionButton(
+                "Open Release Page");
+        openRelease.Name =
+            "OpenUpdateReleaseButton";
+
         updateActions.Controls.AddRange([
             saveUpdate,
             check,
-            install
+            install,
+            toggleAutomatic,
+            openRelease
         ]);
-        updateGrid.Controls.Add(updateActions, 1, 3);
+        updateGrid.Controls.Add(
+            updateActions,
+            1,
+            3);
 
         UiStyle.ConfigureStatusLabel(
             _updateStatus);
+        _updateStatus.Name =
+            "UpdateStatus";
         _updateStatus.AccessibleName =
             "Software update status";
         _updateStatus.MaximumSize =
@@ -48,18 +109,58 @@ public sealed partial class MainForm
         UiStyle.ApplyStatusLabel(
             _updateStatus,
             UiStatusKind.Neutral);
-        updateGrid.Controls.Add(_updateStatus, 1, 4);
-        root.Controls.Add(updateGrid);
+        updateGrid.Controls.Add(
+            _updateStatus,
+            1,
+            4);
+
+        root.Controls.Add(
+            updateGrid);
+
+        void RefreshAutomaticToggleText()
+        {
+            toggleAutomatic.Text =
+                _checkUpdatesOnStart.Checked
+                    ? "Disable Automatic Checks"
+                    : "Enable Automatic Checks";
+        }
+
+        _checkUpdatesOnStart.CheckedChanged +=
+            (_, _) =>
+                RefreshAutomaticToggleText();
 
         saveUpdate.Click +=
-            (_, _) => SaveOperationsSettings();
+            (_, _) =>
+                SaveUpdateSettings(
+                    showConfirmation: true);
+
         check.Click +=
             async (_, _) =>
                 await CheckForUpdatesGuiAsync(
                     silentWhenCurrent: false);
+
         install.Click +=
             async (_, _) =>
                 await InstallLatestUpdateGuiAsync();
+
+        toggleAutomatic.Click +=
+            (_, _) =>
+                SetAutomaticUpdateChecksGui(
+                    !_checkUpdatesOnStart.Checked);
+
+        openRelease.Click +=
+            (_, _) =>
+                OpenLatestRelease();
+
+        RefreshAutomaticToggleText();
+        return page;
+    }
+
+    private TabPage BuildSecuritySettingsResponsiveTab()
+    {
+        var page = new TabPage("Security & Settings");
+        var root = CreateVerticalWorkspace();
+        page.Controls.Add(root);
 
         root.Controls.Add(
             CreateSectionTitle(

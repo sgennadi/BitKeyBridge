@@ -50,6 +50,9 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
@@ -238,6 +241,7 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
@@ -897,6 +901,15 @@ internal static class Program
             return health.OverallStatus == "Error" ? 2 : 0;
         }
 
+        if (args.Any(x => x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase)))
+            return ShowUpdateCheckSettings(config);
+
+        if (args.Any(x => x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase)))
+            return SetUpdateCheckSettings(config, enabled: true);
+
+        if (args.Any(x => x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase)))
+            return SetUpdateCheckSettings(config, enabled: false);
+
         if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
             return CheckUpdateAsync(config).GetAwaiter().GetResult();
 
@@ -951,6 +964,39 @@ internal static class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine(ex);
+            return 1;
+        }
+    }
+
+    private static int ShowUpdateCheckSettings(
+        AppConfig config)
+    {
+        Console.WriteLine(
+            $"AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}");
+        return 0;
+    }
+
+    private static int SetUpdateCheckSettings(
+        AppConfig config,
+        bool enabled)
+    {
+        try
+        {
+            config.CheckForUpdatesOnStart =
+                enabled;
+            ConfigService.SaveAppConfig(
+                config);
+
+            Console.WriteLine(
+                enabled
+                    ? "Automatic update checks enabled."
+                    : "Automatic update checks disabled. Manual --check-update and --update remain available.");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                ex.Message);
             return 1;
         }
     }
@@ -3446,6 +3492,9 @@ internal static class Program
         Console.WriteLine("  --service-coverage-no-run-on-start  Do not run Coverage immediately on start");
         Console.WriteLine("  --check-update        Check the configured GitHub repository for a newer release");
         Console.WriteLine("  --update              Verify and install the latest stable release");
+        Console.WriteLine("  --update-checks-status   Show automatic update-check setting");
+        Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
+        Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
         Console.WriteLine("  --no-elevation        Do not relaunch through UAC");
         Console.WriteLine("  --self-test           Run offline smoke tests and exit");

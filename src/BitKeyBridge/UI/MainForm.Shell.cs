@@ -1259,6 +1259,7 @@ public sealed partial class MainForm
         };
 
         nested.TabPages.Add(BuildCloudAdministrationTab());
+        nested.TabPages.Add(BuildUpdatesResponsiveTab());
         nested.TabPages.Add(BuildSecuritySettingsResponsiveTab());
         nested.TabPages.Add(BuildExportAutomationResponsiveTab());
 

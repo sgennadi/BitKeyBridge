@@ -378,6 +378,57 @@ jobs:
           $tag = "${{ steps.release_meta.outputs.tag }}"
           gh release create $tag release/BitKeyBridge-win-x64.zip release/BitKeyBridge-win-x86.zip release/BitKeyBridge-win-arm64.zip release/BitKeyBridge.cdx.json release/SHA256SUMS.txt --repo "${{ github.repository }}" --target "${{ github.sha }}" --generate-notes --title "BitKeyBridge $tag"
 
+      - name: Smoke-test published updater controls
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "bitkeybridge-updater-smoke"
+          Remove-Item $smokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $smokeRoot | Out-Null
+          Expand-Archive -Path release\BitKeyBridge-win-x64.zip -DestinationPath $smokeRoot -Force
+          $exe = Join-Path $smokeRoot "BitKeyBridge.exe"
+
+          $checkOutput = & $exe --check-update --no-elevation 2>&1 | Out-String
+          $checkExit = $LASTEXITCODE
+          Write-Host $checkOutput
+          if ($checkExit -notin @(0, 10)) {
+            throw "--check-update failed with exit code $checkExit."
+          }
+
+          & $exe --update-checks-disable --no-elevation
+          if ($LASTEXITCODE -ne 0) {
+            throw "--update-checks-disable failed."
+          }
+
+          $disabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
+          Write-Host $disabledStatus
+          if ($disabledStatus -notmatch 'AutomaticChecks=False') {
+            throw "Automatic update checks were not persisted as disabled."
+          }
+
+          & $exe --update-checks-enable --no-elevation
+          if ($LASTEXITCODE -ne 0) {
+            throw "--update-checks-enable failed."
+          }
+
+          $enabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
+          Write-Host $enabledStatus
+          if ($enabledStatus -notmatch 'AutomaticChecks=True') {
+            throw "Automatic update checks were not persisted as enabled."
+          }
+
+          if ($checkExit -eq 0) {
+            $updateOutput = & $exe --update --no-elevation 2>&1 | Out-String
+            $updateExit = $LASTEXITCODE
+            Write-Host $updateOutput
+            if ($updateExit -ne 0) {
+              throw "--update current-version/no-op path failed with exit code $updateExit."
+            }
+          }
+          else {
+            Write-Host "A newer release appeared during the smoke test; skipping --update to avoid applying a different release on the CI runner."
+          }
+
       - name: Archive and remove stale release branches
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
