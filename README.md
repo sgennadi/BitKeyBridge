@@ -1,8 +1,10 @@
 # BitKeyBridge
 
-BitKeyBridge is a native Windows BitLocker and LAPS recovery utility for helpdesk and administrators. It searches recovery metadata in on-premises Active Directory and Microsoft Entra ID / Intune, retrieves passwords when the operator explicitly requests them, and keeps recovery access auditable.
+BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
-The application is written in **C# / .NET 10 / WinForms**. Runtime operation does not use PowerShell, the ActiveDirectory PowerShell module, or the Microsoft Graph PowerShell SDK.
+It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS current/history access, Entra LAPS, Intune recovery-key rotation, secure auditing, RBAC/JIT approval controls, and administrative health/coverage tooling in one WinForms application.
+
+BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
@@ -99,8 +101,6 @@ The default export location is:
 ```text
 %ProgramData%\BitKeyBridge\RecoveryExport
 ```
-
-There is no SYSVOL or forced `BL` subdirectory default.
 
 ## GUI sections
 
