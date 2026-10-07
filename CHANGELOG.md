@@ -11,6 +11,7 @@
 - Added `docs/ACCESS-TROUBLESHOOTING.md` and contextual hints when BitLocker/LAPS secret retrieval or encrypted LAPS decryption fails. Runtime remains PowerShell-free; PowerShell snippets shown by the troubleshooting UI are optional administrator-side delegation commands only.
 - Marked Username + Password / ROPC as a **deprecated compatibility mode** in the Cloud UI and documentation because it doesn't support MFA and is commonly blocked by Conditional Access. Device Code and certificate authentication are the recommended modes.
 - Cleaned the release documentation: README now describes the current 0.21.x BitLocker/LAPS/wizard feature set, and the duplicate 0.18.4 CHANGELOG section was merged into one canonical entry.
+- Added official Microsoft reference links to the AD access troubleshooting guide and release-tested the new wizard/troubleshooting surfaces through the existing build, security and UI validation pipeline.
 
 ## 0.20.0
 
