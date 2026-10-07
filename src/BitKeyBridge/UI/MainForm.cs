@@ -5030,16 +5030,8 @@ public sealed partial class MainForm : DpiAwareForm
 
         try
         {
-            if (!string.IsNullOrWhiteSpace(
-                    _clipboardRecoveryKey) &&
-                Clipboard.ContainsText() &&
-                string.Equals(
-                    Clipboard.GetText(),
-                    _clipboardRecoveryKey,
-                    StringComparison.Ordinal))
-            {
-                Clipboard.Clear();
-            }
+            SecureClipboard.ClearIfMatches(
+                _clipboardRecoveryKey);
         }
         catch (Exception ex)
         {
@@ -5073,16 +5065,11 @@ public sealed partial class MainForm : DpiAwareForm
 
         try
         {
-            if (Clipboard.ContainsText())
+            if (!SecureClipboard.ClearIfMatches(
+                    _startCurrentKey))
             {
-                var text = Clipboard.GetText();
-                if ((!string.IsNullOrWhiteSpace(_startCurrentKey) &&
-                     string.Equals(text, _startCurrentKey, StringComparison.Ordinal)) ||
-                    (!string.IsNullOrWhiteSpace(_deviceCurrentKey) &&
-                     string.Equals(text, _deviceCurrentKey, StringComparison.Ordinal)))
-                {
-                    Clipboard.Clear();
-                }
+                SecureClipboard.ClearIfMatches(
+                    _deviceCurrentKey);
             }
         }
         catch (Exception ex)
@@ -5566,7 +5553,7 @@ public sealed partial class MainForm : DpiAwareForm
         _clipboardClearTimer?.Stop();
         _clipboardClearTimer?.Dispose();
 
-        Clipboard.SetText(key);
+        SecureClipboard.SetSensitiveText(key);
         _clipboardRecoveryKey = key;
 
         _clipboardClearTimer =
@@ -5582,14 +5569,8 @@ public sealed partial class MainForm : DpiAwareForm
 
                 try
                 {
-                    if (Clipboard.ContainsText() &&
-                        string.Equals(
-                            Clipboard.GetText(),
-                            _clipboardRecoveryKey,
-                            StringComparison.Ordinal))
-                    {
-                        Clipboard.Clear();
-                    }
+                    SecureClipboard.ClearIfMatches(
+                        _clipboardRecoveryKey);
                 }
                 catch (Exception ex)
                 {
