@@ -340,8 +340,7 @@ public sealed class LapsDirectoryService
             ComputerId = BinaryGuid(entry, "objectGUID"),
             DirectoryServer = server,
             PasswordVersion = BinaryGuid(entry, "msLAPS-CurrentPasswordVersion"),
-            Note = "Legacy LAPS has no password history. Windows LAPS and DSRM history requires AD password encryption and enabled history retention. " +
-                "An attribute that is not returned may be absent, not backed up, or hidden by AD permissions."
+            Note = string.Empty
         };
         try
         {
@@ -378,7 +377,10 @@ public sealed class LapsDirectoryService
                 ReadEncrypted(entry, result, "msLAPS-EncryptedDSRMPasswordHistory", "Windows LAPS (DSRM)", true, null, ct);
             }
             if (result.Entries.Count == 0)
-                result.Note = "No readable LAPS password attributes were returned. Check the selected domain, backup policy and read permissions. " + result.Note;
+            {
+                result.Note =
+                    "No readable LAPS password attributes were returned. Check backup policy and read/decrypt permissions.";
+            }
             return result;
         }
         catch

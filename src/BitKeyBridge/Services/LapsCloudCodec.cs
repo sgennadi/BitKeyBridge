@@ -12,8 +12,7 @@ public static class LapsCloudCodec
         {
             ComputerId = deviceId, ComputerName = Text(root, "deviceName") ?? deviceName,
             DirectoryServer = "Microsoft Entra ID",
-            Note = "Entra displays the current credential and any previous credentials returned by Microsoft Graph. " +
-                "AD history retention and AD encryption-principal permissions do not apply to this source."
+            Note = string.Empty
         };
         try
         {

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.23.0
+
+- Added a new **Start** workspace as the default GUI landing page. BitKeyBridge now opens on connection state first instead of immediately dropping the operator into Recovery or LAPS.
+- The Start page shows the shared Active Directory session status, connection progress, **Connect to AD**, **Disconnect**, and **Connection settings...** actions.
+- After a successful AD bind, the Start page enables two primary helpdesk actions: **BitLocker Recovery** and **LAPS Passwords**. These navigate directly to the corresponding workspace and focus the search box.
+- Start-page task buttons are disabled while disconnected or while a connection attempt is in progress, so the normal workflow is explicitly **connect first → choose BitLocker or LAPS**.
+- Automatic startup connection now runs from the Start workflow regardless of the previously selected Recovery source. It uses the current Windows identity or configured protected credentials without prompting.
+- If explicit Session credential mode is selected but no session password is loaded, startup does not display a password dialog automatically; the Start page reports that credentials are required and **Connect to AD** opens the normal credential prompt.
+- Entering BitLocker from Start switches Recovery to **Live AD**; entering LAPS from Start switches LAPS to the **Active Directory** source. The existing top-level tabs remain available for Local cache, Entra-only, Devices, Administration and Health/Audit scenarios.
+- The same connection state is synchronized between Start and the existing Recovery connection surface; disconnects, failures, progress and successful binds update both places.
+- Added UI self-test enforcement that Start is the first/default workspace and that its connection and BitLocker/LAPS controls are present.
+- Includes the 0.22.1 LAPS workflow cleanup: Enter/double-click reads the selected LAPS device, successful details omit empty/redundant fields, one-row reads auto-select, and expired current credentials are marked **Available / Expired**.
+
+## 0.22.1
+
+- Simplified the normal LAPS workflow: **Check access** is no longer shown as a primary action. Live search remains metadata-only; after selecting a computer/device, **Enter** or double-click reads LAPS immediately. Pressing Enter on an exact/single search result also proceeds directly to **Read LAPS**.
+- The Search button remains metadata-only, so browsing candidates never reads a password.
+- A single returned LAPS password row is selected automatically after a successful read; Reveal/Copy become ready without requiring an extra row click, while the password remains masked.
+- Cleaned successful LAPS details: empty **Account SID**, **Password version**, and device/object ID fields are omitted, and the generic Legacy/history permissions paragraph is no longer shown after every successful read.
+- When **Include password history** is enabled but no history is returned, the status now says so briefly instead of displaying a long generic explanation.
+- Current LAPS credentials whose expiration timestamp is already in the past are clearly shown as **Available / Expired**, with an explicit warning that password rotation may be overdue. The password remains readable/copyable because expiry and read/decrypt availability are separate conditions.
+- Redundant `Password read successfully` text is suppressed when the row already shows **Available**.
+- Existing AD access diagnostics remain implemented for troubleshooting, while **AD access help...** remains the visible help path.
+
 ## 0.22.0
 
 - Added debounced live search to both **Recovery / BitLocker** and **LAPS**. Typing two or more characters queues a 450 ms metadata search; **Enter** or the Search button runs immediately.

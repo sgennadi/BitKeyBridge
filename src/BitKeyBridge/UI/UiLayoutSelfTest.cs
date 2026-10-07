@@ -424,6 +424,49 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        if (tabs.TabPages.Count == 0 ||
+            !string.Equals(
+                tabs.TabPages[0].Text,
+                "Start",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Start must be the first main workspace tab.");
+        }
+        else
+        {
+            var startPage =
+                tabs.TabPages[0];
+
+            var requiredStartControls =
+                new[]
+                {
+                    "HomeConnectionStatus",
+                    "HomeConnectAdButton",
+                    "HomeDisconnectAdButton",
+                    "HomeBitLockerButton",
+                    "HomeLapsButton"
+                };
+
+            foreach (var controlName in
+                     requiredStartControls)
+            {
+                if (FindByName(
+                        startPage,
+                        controlName) is null)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Start workspace is missing '{controlName}'.");
+                }
+            }
+
+            if (tabs.SelectedIndex != 0)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Start workspace is not selected by default.");
+            }
+        }
+
         VerifyTabControlPages(
             tabs,
             formName,

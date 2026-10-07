@@ -3659,6 +3659,7 @@ public sealed partial class MainForm : DpiAwareForm
         _directoryConnectionCancellation = cancellation;
         _directoryConnecting = true;
         _directoryConnected = false;
+        RefreshHomeConnectionUi();
         _connectAdButton.Enabled = false;
         _disconnectAdButton.Enabled = false;
         _connectAdCancelButton.Enabled = true;
@@ -3746,6 +3747,7 @@ public sealed partial class MainForm : DpiAwareForm
 
             _directoryConnected = true;
             _disconnectAdButton.Enabled = true;
+            RefreshHomeConnectionUi();
 
             SetDirectoryConnectionStatus(
                 BuildDirectoryConnectedStatus(
@@ -3833,6 +3835,7 @@ public sealed partial class MainForm : DpiAwareForm
 
             _directoryConnected = false;
             _disconnectAdButton.Enabled = false;
+            RefreshHomeConnectionUi();
             _startDomainDn =
                 string.Empty;
             _startSelectOu.Enabled =
@@ -3882,6 +3885,7 @@ public sealed partial class MainForm : DpiAwareForm
 
             if (!IsDisposed)
             {
+                RefreshHomeConnectionUi();
                 _connectAdButton.Enabled =
                     _recoverySource.SelectedIndex != 1;
                 _connectAdCancelButton.Enabled =
@@ -3925,6 +3929,7 @@ public sealed partial class MainForm : DpiAwareForm
             false;
         _disconnectAdButton.Enabled =
             false;
+        RefreshHomeConnectionUi();
         _startDomainDn =
             string.Empty;
         _startScope =
@@ -4125,6 +4130,42 @@ public sealed partial class MainForm : DpiAwareForm
         UiStyle.ApplyStatusLabel(
             _adConnectionStatus,
             kind);
+
+        if (!_homeConnectionStatus.IsDisposed)
+        {
+            _homeConnectionStatus.Text =
+                text;
+            UiStyle.ApplyStatusLabel(
+                _homeConnectionStatus,
+                kind);
+        }
+
+        RefreshHomeConnectionUi();
+    }
+
+    private void RefreshHomeConnectionUi()
+    {
+        if (_homeConnectAdButton.IsDisposed)
+            return;
+
+        _homeConnectionProgress.Visible =
+            _directoryConnecting;
+
+        _homeConnectAdButton.Enabled =
+            !_directoryConnecting &&
+            !_directoryConnected;
+
+        _homeDisconnectAdButton.Enabled =
+            !_directoryConnecting &&
+            _directoryConnected;
+
+        _homeBitLockerButton.Enabled =
+            !_directoryConnecting &&
+            _directoryConnected;
+
+        _homeLapsButton.Enabled =
+            !_directoryConnecting &&
+            _directoryConnected;
     }
 
     private void ShowAppError(

@@ -297,13 +297,6 @@ public sealed partial class MainForm
         actions.Controls.Add(
             _lapsView);
 
-        _lapsAccessCheck.Text =
-            "Check access";
-        UiStyle.ConfigureActionButton(
-            _lapsAccessCheck);
-        actions.Controls.Add(
-            _lapsAccessCheck);
-
         _lapsRead.Text =
             "Read LAPS";
         UiStyle.ConfigureActionButton(
@@ -522,7 +515,7 @@ public sealed partial class MainForm
             DockStyle.Top;
         UiStyle.SetStatus(
             _lapsStatus,
-            "Type at least two characters for live metadata search, or press Enter to search immediately. Select a device, then use Check access or Read LAPS.",
+            "Type at least two characters for live metadata search. Select a device and press Enter or double-click to read LAPS. Search never reads passwords.",
             UiStatusKind.Neutral);
         root.Controls.Add(
             _lapsStatus,
@@ -557,9 +550,6 @@ public sealed partial class MainForm
             0,
             9);
 
-        _lapsAccessCheck.Click +=
-            async (_, _) =>
-                await CheckLapsAccessAsync();
         _lapsRead.Click +=
             async (_, _) =>
                 await ReadLapsAsync();
@@ -576,7 +566,8 @@ public sealed partial class MainForm
         _lapsSearchButton.Click +=
             async (_, _) =>
                 await SearchLapsCandidatesAsync(
-                    allowInteractiveAuth: true);
+                    allowInteractiveAuth: true,
+                    readExactMatch: false);
 
         _lapsQuery.KeyDown +=
             async (_, e) =>
@@ -590,8 +581,17 @@ public sealed partial class MainForm
                 e.SuppressKeyPress =
                     true;
                 _lapsSearchDebounceTimer?.Stop();
+
+                if (GetSelectedLapsSearchResult() is not null)
+                {
+                    SelectLapsSearchCandidate();
+                    await ReadLapsAsync();
+                    return;
+                }
+
                 await SearchLapsCandidatesAsync(
-                    allowInteractiveAuth: true);
+                    allowInteractiveAuth: true,
+                    readExactMatch: true);
             };
 
         _lapsQuery.TextChanged +=
@@ -620,7 +620,8 @@ public sealed partial class MainForm
                     SearchText.MinimumLiveSearchCharacters)
                 {
                     await SearchLapsCandidatesAsync(
-                        allowInteractiveAuth: false);
+                        allowInteractiveAuth: false,
+                        readExactMatch: false);
                 }
             };
 
@@ -636,6 +637,22 @@ public sealed partial class MainForm
                     SelectLapsSearchCandidate();
                     await ReadLapsAsync();
                 }
+            };
+
+        _lapsSearchRows.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode !=
+                        Keys.Enter ||
+                    GetSelectedLapsSearchResult() is null)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
+                    true;
+                SelectLapsSearchCandidate();
+                await ReadLapsAsync();
             };
 
         _adUsername.TextChanged +=
@@ -787,12 +804,13 @@ public sealed partial class MainForm
 
         UiStyle.SetStatus(
             _lapsStatus,
-            $"Selected {selected.ComputerName}. Use Check access or Read LAPS.",
+            $"Selected {selected.ComputerName}. Press Enter or double-click to read LAPS.",
             UiStatusKind.Neutral);
     }
 
     private async Task SearchLapsCandidatesAsync(
-        bool allowInteractiveAuth)
+        bool allowInteractiveAuth,
+        bool readExactMatch = false)
     {
         _lapsSearchDebounceTimer?.Stop();
 
@@ -964,14 +982,53 @@ public sealed partial class MainForm
                     false;
             }
 
-            if (rows.Count == 1)
+            var normalizedQuery =
+                SearchText.NormalizeIdentifierFragment(
+                    query);
+
+            var exactMatches =
+                rows
+                    .Select(
+                        (row, index) =>
+                            new
+                            {
+                                Row = row,
+                                Index = index
+                            })
+                    .Where(
+                        item =>
+                            item.Row.ComputerName.Equals(
+                                query,
+                                StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrWhiteSpace(
+                                 normalizedQuery) &&
+                             SearchText.NormalizeIdentifierFragment(
+                                 item.Row.ComputerId)
+                                 .Equals(
+                                     normalizedQuery,
+                                     StringComparison.Ordinal)))
+                    .ToList();
+
+            var selectedIndex =
+                rows.Count == 1
+                    ? 0
+                    : exactMatches.Count == 1
+                        ? exactMatches[0].Index
+                        : -1;
+
+            if (selectedIndex >= 0)
             {
                 _lapsSearchRows.ClearSelection();
-                _lapsSearchRows.Rows[0].Selected =
+                _lapsSearchRows.Rows[selectedIndex].Selected =
                     true;
                 _lapsSearchRows.CurrentCell =
-                    _lapsSearchRows.Rows[0].Cells[0];
+                    _lapsSearchRows.Rows[selectedIndex].Cells[0];
                 SelectLapsSearchCandidate();
+
+                if (readExactMatch)
+                {
+                    await ReadLapsAsync();
+                }
             }
             else
             {
@@ -979,7 +1036,7 @@ public sealed partial class MainForm
                     _lapsStatus,
                     rows.Count == 0
                         ? "No matching LAPS device was found."
-                        : $"Found {rows.Count} matching device(s). Select one, then use Check access or Read LAPS.",
+                        : $"Found {rows.Count} matching device(s). Select one and press Enter or double-click to read LAPS.",
                     rows.Count == 0
                         ? UiStatusKind.Warning
                         : UiStatusKind.Success);
@@ -1156,11 +1213,59 @@ public sealed partial class MainForm
                 computerName: _lapsResult.ComputerName,
                 recoveryId: resourceId, source: source,
                 details: $"Records={_lapsResult.Entries.Count}; Available={available}; IncludeHistory={history}; DC={_lapsResult.DirectoryServer}");
-            _lapsDetails.Text = $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
-                $"Device / AD object ID: {_lapsResult.ComputerId} | Password version: {_lapsResult.PasswordVersion}\r\n{_lapsResult.Note}";
-            UiStyle.SetStatus(_lapsStatus, $"{_lapsResult.Entries.Count} record(s), {available} readable password(s). " +
-                "Select a record to reveal or copy. Passwords clear after two minutes.",
-                available == _lapsResult.Entries.Count && available > 0 ? UiStatusKind.Success : UiStatusKind.Warning);
+            _lapsDetails.Text =
+                BuildLapsSummaryText(
+                    _lapsResult);
+
+            var expiredCurrent =
+                _lapsResult.Entries.Any(
+                    row =>
+                        !row.IsHistory &&
+                        row.HasPassword &&
+                        row.Status ==
+                            LapsPasswordStatus.Available &&
+                        IsLapsExpired(
+                            row));
+
+            var historyMissing =
+                history &&
+                _lapsResult.Entries.Count > 0 &&
+                !_lapsResult.Entries.Any(
+                    row =>
+                        row.IsHistory);
+
+            var readMessages =
+                new List<string>
+                {
+                    $"{_lapsResult.Entries.Count} record(s), {available} readable password(s)."
+                };
+
+            if (historyMissing)
+            {
+                readMessages.Add(
+                    "No password history was returned by the selected source.");
+            }
+
+            if (expiredCurrent)
+            {
+                readMessages.Add(
+                    "The current LAPS expiration time is in the past; password rotation may be overdue.");
+            }
+
+            readMessages.Add(
+                "Passwords clear after two minutes.");
+
+            UiStyle.SetStatus(
+                _lapsStatus,
+                string.Join(
+                    " ",
+                    readMessages),
+                expiredCurrent ||
+                available == 0 ||
+                available !=
+                    _lapsResult.Entries.Count
+                    ? UiStatusKind.Warning
+                    : UiStatusKind.Success);
             _lapsClearTimer = new System.Windows.Forms.Timer { Interval = 120000 };
             _lapsClearTimer.Tick += (_, _) => ClearLapsResult();
             _lapsClearTimer.Start();
@@ -1266,11 +1371,94 @@ public sealed partial class MainForm
                   "For encrypted Windows LAPS, read ACL and DPAPI-NG decrypt authorization are separate."
                 : string.Empty;
 
+        var details =
+            new List<string>
+            {
+                $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}"
+            };
+
+        var identity =
+            new List<string>
+            {
+                $"Attribute: {row.Attribute}"
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                row.AccountSid))
+        {
+            identity.Add(
+                $"Account SID: {row.AccountSid}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                _lapsResult.PasswordVersion))
+        {
+            identity.Add(
+                $"Password version: {_lapsResult.PasswordVersion}");
+        }
+
+        details.Add(
+            string.Join(
+                " | ",
+                identity));
+
+        details.Add(
+            $"Type: {(row.IsHistory ? "History" : "Current")} | " +
+            $"Age: {FormatLapsAge(row.UpdatedAtUtc)} | " +
+            $"Expires: {FormatLapsExpiry(row)}");
+
+        var statusText =
+            row.Status.ToString();
+
+        if (IsLapsExpired(
+                row))
+        {
+            statusText +=
+                " / Expired";
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                row.StatusDetail) &&
+            !(row.Status ==
+                  LapsPasswordStatus.Available &&
+              row.StatusDetail.Equals(
+                  "Password read successfully.",
+                  StringComparison.OrdinalIgnoreCase)))
+        {
+            statusText +=
+                ". " +
+                row.StatusDetail;
+        }
+
+        details.Add(
+            "Status: " +
+            statusText);
+
+        if (IsLapsExpired(
+                row))
+        {
+            details.Add(
+                "Warning: current LAPS expiration is in the past; password rotation may be overdue.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                _lapsResult.Note))
+        {
+            details.Add(
+                _lapsResult.Note);
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                accessHint))
+        {
+            details.Add(
+                accessHint.Trim());
+        }
+
         _lapsDetails.Text =
-            $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
-            $"Attribute: {row.Attribute} | Account SID: {row.AccountSid} | Password version: {_lapsResult.PasswordVersion}\r\n" +
-            $"Type: {(row.IsHistory ? "History" : "Current")} | Age: {FormatLapsAge(row.UpdatedAtUtc)} | Expires: {row.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Not stored"}\r\n" +
-            $"Status: {row.Status}. {row.StatusDetail}\r\n{_lapsResult.Note}{accessHint}";
+            string.Join(
+                Environment.NewLine,
+                details);
     }
 
     private void RevealLapsPassword(bool copy)
@@ -1369,13 +1557,93 @@ public sealed partial class MainForm
                     FormatLapsAge(
                         row.UpdatedAtUtc),
                     row.ExpiresAtUtc,
-                    row.Status.ToString());
+                    IsLapsExpired(
+                        row)
+                        ? row.Status + " / Expired"
+                        : row.Status.ToString());
 
             _lapsRows.Rows[rowIndex].Tag =
                 row;
         }
 
         _lapsRows.ClearSelection();
+
+        if (_lapsRows.Rows.Count == 1)
+        {
+            _lapsRows.Rows[0].Selected =
+                true;
+            _lapsRows.CurrentCell =
+                _lapsRows.Rows[0].Cells[0];
+            SelectLapsEntry();
+        }
+    }
+
+    private static bool IsLapsExpired(
+        LapsPasswordEntry row)
+    {
+        return !row.IsHistory &&
+               row.ExpiresAtUtc.HasValue &&
+               row.ExpiresAtUtc.Value
+                   .ToUniversalTime() <
+               DateTime.UtcNow;
+    }
+
+    private static string FormatLapsExpiry(
+        LapsPasswordEntry row)
+    {
+        if (!row.ExpiresAtUtc.HasValue)
+            return "Not stored";
+
+        var text =
+            row.ExpiresAtUtc.Value
+                .ToUniversalTime()
+                .ToString(
+                    "yyyy-MM-dd HH:mm:ss 'UTC'");
+
+        return IsLapsExpired(
+            row)
+            ? text + " (expired)"
+            : text;
+    }
+
+    private static string BuildLapsSummaryText(
+        LapsReadResult result)
+    {
+        var parts =
+            new List<string>
+            {
+                $"Computer: {result.ComputerName}",
+                $"Directory: {result.DirectoryServer}"
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                result.ComputerId))
+        {
+            parts.Add(
+                $"Device / AD object ID: {result.ComputerId}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                result.PasswordVersion))
+        {
+            parts.Add(
+                $"Password version: {result.PasswordVersion}");
+        }
+
+        var text =
+            string.Join(
+                " | ",
+                parts);
+
+        if (!string.IsNullOrWhiteSpace(
+                result.Note))
+        {
+            text +=
+                Environment.NewLine +
+                result.Note;
+        }
+
+        return text;
     }
 
     private static string FormatLapsAge(
