@@ -140,8 +140,11 @@ public sealed partial class MainForm : DpiAwareForm
                 if (SecurityContext.IsAdministrator())
                     WindowsEventLogService.EnsureSource();
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine(
+                    "BitKeyBridge Event Log source initialization failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
             }
         }
 
@@ -319,7 +322,18 @@ public sealed partial class MainForm : DpiAwareForm
             _lastSuccess.Text = $"Last successful export: {last.Finished:yyyy-MM-dd HH:mm:ss} ({age:0.0}h ago) | Rows: {last.ValidRows} | DC: {last.AdServer}" + (stale ? " | STALE" : string.Empty);
             _lastSuccess.ForeColor = stale ? Color.DarkRed : Color.DarkGreen;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _lastSuccess.Text =
+                "Last successful export: status unavailable.";
+            _lastSuccess.ForeColor =
+                SystemColors.ControlText;
+            WindowsEventLogService.TryWrite(
+                "Last-success status read failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4541,
+                "UI");
+        }
     }
 
     private async Task RunDcTestAsync()
@@ -848,14 +862,60 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task ShowDeviceCodeAsync(DeviceCodeInfo info)
     {
-        try { Clipboard.SetText(info.UserCode); } catch { }
-        try { Process.Start(new ProcessStartInfo(info.VerificationUri) { UseShellExecute = true }); } catch { }
-        MessageBox.Show(this,
-            info.Message + Environment.NewLine + Environment.NewLine +
-            "The code has been copied to the clipboard. Complete sign-in in the browser, then return to BitKeyBridge.",
+        var copied = false;
+        var browserOpened = false;
+
+        try
+        {
+            Clipboard.SetText(info.UserCode);
+            copied = true;
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Device Code clipboard copy failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4542,
+                "Entra");
+        }
+
+        try
+        {
+            Process.Start(
+                new ProcessStartInfo(
+                    info.VerificationUri)
+                {
+                    UseShellExecute = true
+                });
+            browserOpened = true;
+        }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Device Code browser launch failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4543,
+                "Entra");
+        }
+
+        MessageBox.Show(
+            this,
+            info.Message +
+            Environment.NewLine +
+            Environment.NewLine +
+            (copied
+                ? "The code has been copied to the clipboard."
+                : "The code could not be copied automatically; use the code shown above.") +
+            Environment.NewLine +
+            (browserOpened
+                ? "Complete sign-in in the browser, then return to BitKeyBridge."
+                : "Open the verification URL manually, complete sign-in, then return to BitKeyBridge."),
             "Microsoft Entra Device Code",
             MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
+            copied && browserOpened
+                ? MessageBoxIcon.Information
+                : MessageBoxIcon.Warning);
+
         await Task.CompletedTask;
     }
 
@@ -1119,8 +1179,13 @@ public sealed partial class MainForm : DpiAwareForm
                     AppPaths.CoverageStatusFile,
                     stored);
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Coverage status persistence failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4544,
+                    "Coverage");
             }
         }
 
@@ -1711,7 +1776,14 @@ public sealed partial class MainForm : DpiAwareForm
             if (_lastUpdateInfo is not null)
                 DisplayUpdateInfo(_lastUpdateInfo);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Update status read failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4545,
+                "Update");
+        }
     }
 
     private void SaveOperationsSettings()
@@ -4806,8 +4878,13 @@ public sealed partial class MainForm : DpiAwareForm
                 Clipboard.Clear();
             }
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Tracked recovery clipboard clear failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4546,
+                "Clipboard");
         }
 
         _clipboardRecoveryKey = null;
@@ -4845,7 +4922,14 @@ public sealed partial class MainForm : DpiAwareForm
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            WindowsEventLogService.TryWrite(
+                "Sensitive clipboard cleanup failed while clearing application state: " + ex.Message,
+                EventLogSeverity.Warning,
+                4547,
+                "Clipboard");
+        }
 
         _startCurrentKey = null;
         _startKey.Clear();
@@ -5193,8 +5277,13 @@ public sealed partial class MainForm : DpiAwareForm
             {
                 _ = signing.SignCheckpoint();
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Final audit checkpoint before disabling signing failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4548,
+                    "AuditSigning");
             }
 
             signing.Disable();
@@ -5339,8 +5428,13 @@ public sealed partial class MainForm : DpiAwareForm
                         Clipboard.Clear();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    WindowsEventLogService.TryWrite(
+                        "Timed recovery clipboard clear failed: " + ex.Message,
+                        EventLogSeverity.Warning,
+                        4549,
+                        "Clipboard");
                 }
 
                 _clipboardRecoveryKey = null;
