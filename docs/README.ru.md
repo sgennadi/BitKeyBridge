@@ -6,6 +6,24 @@ BitKeyBridge — native Windows-приложение для восстановл
 
 PowerShell в рабочем режиме не используется вообще: нет запуска powershell.exe/pwsh.exe, ActiveDirectory PowerShell module, Microsoft Graph PowerShell SDK или shell fallback.
 
+## Мастера настройки — 0.21.0
+
+В **Administration → Cloud** добавлен **Intune / Entra Setup Wizard...** — рекомендуемый путь для первой настройки. Мастер проверяет локальные prerequisites, предлагает tenant, показывает необходимые Microsoft Graph permissions и опциональный Entra LAPS, затем через существующий native Device Code bootstrap сам создаёт/repair App Registration и Enterprise Application, выдаёт admin consent, создаёт/переиспользует LocalMachine certificate и проверяет certificate authentication.
+
+Обязательные права: **BitlockerKey.Read.All**, **Device.Read.All**, **DeviceManagementManagedDevices.ReadWrite.All**. Для Entra LAPS можно отдельно включить **DeviceLocalCredential.Read.All**. После настройки мастер проверяет наличие этих application roles прямо в app-only access token, metadata BitLocker и Intune managedDevices endpoint. Во время проверки он **не** выполняет rotate BitLocker key и **не** читает LAPS password.
+
+В **Administration → Security & Settings** добавлен **RBAC Setup Wizard...**. Он пошагово настраивает:
+- включение/выключение RBAC;
+- bypass для local Administrators;
+- Recovery Readers;
+- Rotation Operators;
+- BitKeyBridge Administrators;
+- добавление текущей Windows identity в выбранные роли;
+- проверку разрешения всех DOMAIN\\group, DOMAIN\\user, local account/group и SID.
+
+Перед сохранением мастер показывает effective access текущей identity и не даёт применить очевидную lockout-конфигурацию, при которой текущий администратор потеряет доступ к BitKeyBridge Administration без bypass. Изменения применяются только после **Finish**. JIT, two-person approval и SIEM этим мастером не включаются и остаются отдельными opt-in настройками в **Privileged Access...**.
+
+Старые **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...** и **Privileged Access...** оставлены как advanced/repair путь.
 ## LAPS и ручное подключение — 0.20.0
 
 Вкладка **LAPS** поддерживает Legacy Microsoft LAPS, Windows LAPS с открытым или зашифрованным паролем, историю зашифрованных паролей, DSRM и его историю, а также LAPS в Entra ID. **Check access** выполняет безопасную проверку без чтения самого секрета, а **Read LAPS** получает разрешённые записи. Таблица имеет фильтры **All / Current / History** и показывает источник/версию, учётную запись, время изменения, возраст пароля, срок действия и результат чтения/расшифровки. **Copy account** отделён от **Reveal password** / **Copy password**; для записи с ошибкой чтения или расшифровки действия с паролем недоступны.
