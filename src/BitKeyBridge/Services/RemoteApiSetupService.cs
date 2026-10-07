@@ -96,9 +96,29 @@ public sealed class RemoteApiSetupService
                 else
                     WindowsFirewallService.RemoveRemoteApiRule();
             }
-            catch { }
+            catch (Exception firewallRollbackException)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Remote API firewall rollback failed: " +
+                    firewallRollbackException.Message,
+                    EventLogSeverity.Error,
+                    4584,
+                    "RemoteApi");
+            }
 
-            try { ConfigService.SaveAppConfig(config); } catch { }
+            try
+            {
+                ConfigService.SaveAppConfig(config);
+            }
+            catch (Exception configRollbackException)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Remote API configuration rollback failed: " +
+                    configRollbackException.Message,
+                    EventLogSeverity.Error,
+                    4585,
+                    "RemoteApi");
+            }
             throw;
         }
         finally
