@@ -3979,6 +3979,33 @@ public sealed partial class MainForm : DpiAwareForm
                 details));
     }
 
+    private void ShowAdAccessTroubleshooting(
+        string context)
+    {
+        var ou =
+            _startScope?.SearchBase ??
+            _config.DefaultScopes
+                .FirstOrDefault()?
+                .SearchBase ??
+            string.Empty;
+
+        var principal =
+            !string.IsNullOrWhiteSpace(
+                _config.AdUsername)
+                ? _config.AdUsername
+                : AuthorizationService
+                    .CurrentIdentityName();
+
+        using var dialog =
+            new AdAccessTroubleshootingDialog(
+                ou,
+                principal,
+                context);
+
+        dialog.ShowDialog(
+            this);
+    }
+
     private async Task SelectStartOuAsync()
     {
         try
