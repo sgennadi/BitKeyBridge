@@ -119,7 +119,12 @@ public static class LapsSelfTest
                 new { accountName = "new-admin", accountSid = "S-1-5-21-501", backupDateTime = "2026-10-06T12:00:00Z", passwordBase64 = base64 },
                 new { accountName = "old-admin", accountSid = "S-1-5-21-500", backupDateTime = "2026-10-02T12:00:00Z", passwordBase64 = "invalid" }
             }});
-            foreach (var text in new[] { response, "{\"value\":" + response + "}" })
+            foreach (var text in new[]
+            {
+                response,
+                "{\"value\":" + response + "}",
+                "{\"value\":[" + response + "]}"
+            })
             {
                 using var document = JsonDocument.Parse(text);
                 using var all = LapsCloudCodec.Read(document.RootElement, "device-id", "fallback", true);
