@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.19.2
+
+- Added a shared non-blocking diagnostics panel with **Copy diagnostics** and **Dismiss** actions. Copied data is sanitized and does not include stack traces, raw LDAP/Graph payloads, recovery keys, tokens, or LAPS password values.
+- Recovery **Connect to AD** now has an explicit **Cancel** button and marquee progress indicator. Cancellation returns the GUI immediately even while a synchronous native LDAP bind finishes on its worker thread; stale results are discarded.
+- Active Directory connection and OU-discovery failures no longer open blocking error MessageBoxes in the Recovery workflow. The reason and safe connection context are shown inline instead.
+- LAPS reads now show an explicit marquee progress indicator and non-blocking diagnostics. AD-LAPS cancellation releases the GUI immediately instead of waiting for the LDAP timeout; Graph cancellation continues through CancellationToken.
+- Added explicit LAPS JSON/password redaction rules to the shared diagnostic sanitizer and regression coverage that fails if synthetic LAPS secrets survive sanitization.
+- Preserved the PowerShell-free implementation: C#/.NET, native LDAP, Win32/DPAPI-NG, Windows impersonation, and Microsoft Graph only.
+
+
 ## 0.19.1
 
 - Added an explicit **Cancel** button to the LAPS workspace for in-flight Active Directory and Microsoft Graph reads.
