@@ -159,8 +159,13 @@ public sealed class RecoveryIncidentVerificationDialog : DpiAwareForm
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "Recovery incident list discovery failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4590,
+                "RecoveryIncident");
         }
 
         if (!string.IsNullOrWhiteSpace(
