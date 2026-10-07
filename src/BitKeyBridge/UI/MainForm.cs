@@ -37,6 +37,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly ComboBox _cloudAuthMode = new();
     private readonly UiStatusLabel _cloudStatus = new();
     private readonly Button _cloudSaveButton = new();
+    private readonly Button _cloudWizardButton = new();
     private readonly Button _cloudConnectButton = new();
     private readonly Button _cloudConnectCancelButton = new();
     private readonly Button _cloudSetupButton = new();
@@ -834,6 +835,8 @@ public sealed partial class MainForm : DpiAwareForm
         bool running)
     {
         _cloudSaveButton.Enabled =
+            !running;
+        _cloudWizardButton.Enabled =
             !running;
         _cloudConnectButton.Enabled =
             !running;
@@ -2269,6 +2272,113 @@ public sealed partial class MainForm : DpiAwareForm
                 rotationSucceeded: false);
             throw;
         }
+    }
+
+    private async Task OpenIntuneSetupWizardAsync()
+    {
+        if (_cloudConnecting ||
+            _cloudMaintenanceCancellation is not null)
+        {
+            return;
+        }
+
+        using var wizard =
+            new IntuneSetupWizardDialog(
+                _cloudConfig,
+                ShowDeviceCodeAsync);
+
+        if (wizard.ShowDialog(this) !=
+            DialogResult.OK)
+        {
+            return;
+        }
+
+        LoadCloudFields();
+        RefreshMachineCloudStatus();
+        RefreshDashboard();
+
+        _audit.Write(
+            "IntuneSetupWizard",
+            source:
+                "Entra+Intune",
+            authMode:
+                "Certificate",
+            details:
+                wizard.SetupResult is null
+                    ? "Wizard closed without a setup result."
+                    : $"Tenant={wizard.SetupResult.TenantId}; ClientId={wizard.SetupResult.ClientId}; Certificate={wizard.SetupResult.CertificateThumbprint}");
+
+        UiStyle.SetStatus(
+            _cloudStatus,
+            wizard.SetupResult is null
+                ? "Intune / Entra wizard completed."
+                : $"Intune / Entra wizard completed. Client ID: {wizard.SetupResult.ClientId}; certificate expires {wizard.SetupResult.CertificateNotAfter:yyyy-MM-dd}.",
+            UiStatusKind.Success);
+
+        await Task.CompletedTask;
+    }
+
+    private void ConfigureRbacWizardFromGui()
+    {
+        using var wizard =
+            new RbacSetupWizardDialog(
+                _config);
+
+        if (wizard.ShowDialog(this) !=
+            DialogResult.OK)
+        {
+            return;
+        }
+
+        _config.RbacEnabled =
+            wizard.RbacEnabled;
+        _config.RbacAllowLocalAdministrators =
+            wizard.AllowLocalAdministrators;
+        _config.RbacRecoveryReaders =
+            wizard.RecoveryReaders;
+        _config.RbacRotationOperators =
+            wizard.RotationOperators;
+        _config.RbacAdministrators =
+            wizard.Administrators;
+
+        ConfigService.SaveAppConfig(
+            _config);
+
+        var auth =
+            new AuthorizationService(
+                _config);
+        var read =
+            auth.Check(
+                BitKeyBridgePermission.RecoveryRead);
+        var rotate =
+            auth.Check(
+                BitKeyBridgePermission.Rotate);
+        var admin =
+            auth.Check(
+                BitKeyBridgePermission.Administrator);
+
+        _audit.Write(
+            "RbacSetupWizard",
+            source:
+                "Local",
+            details:
+                $"Enabled={_config.RbacEnabled}; AdminBypass={_config.RbacAllowLocalAdministrators}; Readers={string.Join("|", _config.RbacRecoveryReaders)}; Rotators={string.Join("|", _config.RbacRotationOperators)}; Administrators={string.Join("|", _config.RbacAdministrators)}; CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}; CurrentAdminUI={admin.Allowed}");
+
+        ShowAppMessage(
+            "RBAC Setup Wizard",
+            "RBAC settings saved." +
+            Environment.NewLine +
+            Environment.NewLine +
+            $"Current identity: {AuthorizationService.CurrentIdentityName()}" +
+            Environment.NewLine +
+            $"Recovery Read: {(read.Allowed ? "Allowed" : "Denied")}" +
+            Environment.NewLine +
+            $"Intune rotation: {(rotate.Allowed ? "Allowed" : "Denied")}" +
+            Environment.NewLine +
+            $"Administration UI: {(admin.Allowed ? "Allowed" : "Denied")}" +
+            Environment.NewLine +
+            Environment.NewLine +
+            "JIT, two-person approval and SIEM settings were not changed.");
     }
 
     private void ConfigureRbacFromGui()
