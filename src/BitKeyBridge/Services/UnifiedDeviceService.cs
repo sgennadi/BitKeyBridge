@@ -60,27 +60,86 @@ public sealed class UnifiedDeviceService
         CancellationToken ct = default)
     {
         query = query?.Trim() ?? string.Empty;
-        var dc = _ad.GetPreferredWritableDc();
 
-        var adTask = Task.Run(() => _ad.SearchComputers(dc, query, maximumItems), ct);
+        // Cloud inventory must remain usable even when the operator has not
+        // connected an AD session yet. In particular, Session-only explicit
+        // credentials are intentionally memory-only and may be absent after a
+        // restart. That must not make Entra/Intune search fail.
+        string? dc = null;
+        Task<List<AdComputerInfo>>? adTask = null;
+        try
+        {
+            dc = _ad.GetPreferredWritableDc();
+            adTask =
+                Task.Run(
+                    () =>
+                        _ad.SearchComputers(
+                            dc,
+                            query,
+                            maximumItems),
+                    ct);
+        }
+        catch (Exception ex) when (
+            ex is not OperationCanceledException)
+        {
+            WindowsEventLogService.TryWrite(
+                "Unified device AD search was skipped: " + ex.Message,
+                EventLogSeverity.Warning,
+                4576,
+                "Devices");
+        }
+
         using var graph = new CloudGraphService();
-        var intuneTask = graph.SearchManagedDevicesAsync(accessToken, query, maximumItems, ct);
-        var recoveryTask = graph.SearchAsync(accessToken, query, ct);
+        var intuneTask =
+            graph.SearchManagedDevicesAsync(
+                accessToken,
+                query,
+                maximumItems,
+                ct);
+        var recoveryTask =
+            graph.SearchAsync(
+                accessToken,
+                query,
+                ct);
 
-        await Task.WhenAll(adTask, intuneTask, recoveryTask);
+        await Task.WhenAll(
+            intuneTask,
+            recoveryTask);
 
         var result = new Dictionary<string, UnifiedDeviceInfo>(StringComparer.OrdinalIgnoreCase);
+        var adAvailable = false;
 
-        foreach (var ad in await adTask)
+        if (adTask is not null)
         {
-            var key = NormalizeName(ad.ComputerName);
-            if (string.IsNullOrWhiteSpace(key)) continue;
-            var row = GetOrCreate(result, key, ad.ComputerName);
-            row.FoundInAd = true;
-            row.AdDistinguishedName = ad.DistinguishedName;
-            row.AdLastLogonTimestamp = ad.LastLogonTimestamp;
-            if (string.IsNullOrWhiteSpace(row.OperatingSystem)) row.OperatingSystem = ad.OperatingSystem;
-            if (string.IsNullOrWhiteSpace(row.OsVersion)) row.OsVersion = ad.OperatingSystemVersion;
+            try
+            {
+                foreach (var ad in await adTask)
+                {
+                    var key = NormalizeName(ad.ComputerName);
+                    if (string.IsNullOrWhiteSpace(key)) continue;
+                    var row = GetOrCreate(result, key, ad.ComputerName);
+                    row.FoundInAd = true;
+                    row.AdDistinguishedName = ad.DistinguishedName;
+                    row.AdLastLogonTimestamp = ad.LastLogonTimestamp;
+                    if (string.IsNullOrWhiteSpace(row.OperatingSystem)) row.OperatingSystem = ad.OperatingSystem;
+                    if (string.IsNullOrWhiteSpace(row.OsVersion)) row.OsVersion = ad.OperatingSystemVersion;
+                }
+
+                adAvailable = true;
+            }
+            catch (OperationCanceledException) when (
+                ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Unified device AD search failed; continuing with Entra/Intune: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4576,
+                    "Devices");
+            }
         }
 
         foreach (var md in await intuneTask)
@@ -106,17 +165,31 @@ public sealed class UnifiedDeviceService
             row.IsEncrypted = md.IsEncrypted;
             row.LastSyncDateTime = md.LastSyncDateTime;
 
-            if (!row.FoundInAd && !string.IsNullOrWhiteSpace(md.DeviceName))
+            if (adAvailable &&
+                !row.FoundInAd &&
+                !string.IsNullOrWhiteSpace(md.DeviceName) &&
+                !string.IsNullOrWhiteSpace(dc))
             {
                 try
                 {
-                    var ad = await Task.Run(() => _ad.FindComputerByName(dc, md.DeviceName), ct);
+                    var ad =
+                        await Task.Run(
+                            () =>
+                                _ad.FindComputerByName(
+                                    dc,
+                                    md.DeviceName),
+                            ct);
                     if (ad is not null)
                     {
                         row.FoundInAd = true;
                         row.AdDistinguishedName = ad.DistinguishedName;
                         row.AdLastLogonTimestamp = ad.LastLogonTimestamp;
                     }
+                }
+                catch (OperationCanceledException) when (
+                    ct.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
