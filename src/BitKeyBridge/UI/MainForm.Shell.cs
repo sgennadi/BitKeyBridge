@@ -63,7 +63,7 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(0),
             Margin = new Padding(0)
         };
@@ -71,6 +71,7 @@ public sealed partial class MainForm
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var menu = BuildMainMenu();
         root.Controls.Add(menu, 0, 0);
@@ -124,8 +125,61 @@ public sealed partial class MainForm
             _homeWorkspaceTab;
 
         root.Controls.Add(_mainTabs, 0, 2);
+        root.Controls.Add(
+            BuildGlobalStatusBar(),
+            0,
+            3);
         MainMenuStrip = menu;
         return root;
+    }
+
+    private StatusStrip BuildGlobalStatusBar()
+    {
+        var status =
+            new StatusStrip
+            {
+                Name =
+                    "GlobalStatusBar",
+                SizingGrip =
+                    false
+            };
+
+        _globalConnectionStatus.Name =
+            "GlobalConnectionStatus";
+        _globalConnectionStatus.Text =
+            "AD: disconnected";
+        _globalConnectionStatus.IsLink =
+            true;
+        _globalConnectionStatus.Spring =
+            true;
+        _globalConnectionStatus.TextAlign =
+            ContentAlignment.MiddleLeft;
+        _globalConnectionStatus.ToolTipText =
+            "Open Start / connection settings";
+
+        _globalVersionStatus.Name =
+            "GlobalVersionStatus";
+        _globalVersionStatus.Text =
+            "v" +
+            (GetType().Assembly.GetName().Version?.ToString(3) ??
+             "unknown");
+
+        status.Items.Add(
+            _globalConnectionStatus);
+        status.Items.Add(
+            _globalVersionStatus);
+
+        _globalConnectionStatus.Click +=
+            (_, _) =>
+            {
+                if (_homeWorkspaceTab is not null)
+                {
+                    _mainTabs.SelectedTab =
+                        _homeWorkspaceTab;
+                }
+            };
+
+        return status;
     }
 
     private MenuStrip BuildMainMenu()
