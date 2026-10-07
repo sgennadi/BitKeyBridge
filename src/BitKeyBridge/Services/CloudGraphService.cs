@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -581,7 +582,12 @@ public sealed partial class CloudGraphService : IDisposable
                 return error.ToString();
             }
         }
-        catch { }
+        catch (JsonException ex)
+        {
+            Debug.WriteLine(
+                "Microsoft Graph error body was not JSON: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
         return json.Length > 1000 ? json[..1000] : json;
     }
 
