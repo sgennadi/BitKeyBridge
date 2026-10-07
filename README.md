@@ -8,6 +8,15 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## Guided setup wizards (0.21.0)
+
+Administration → **Cloud** now includes **Intune / Entra Setup Wizard...** as the recommended first-run path. The wizard checks local prerequisites, asks for the tenant, shows the exact Microsoft Graph capabilities, optionally includes Entra LAPS, then uses the existing native Device Code bootstrap to create/repair the BitKeyBridge App Registration and Enterprise Application, grant admin consent, create/reuse the LocalMachine certificate, and verify certificate authentication. Verification is non-destructive: it checks the app-only token roles, BitLocker metadata access, and the Intune managed-device endpoint; it does not rotate a BitLocker key or retrieve a LAPS password.
+
+Required Graph capabilities configured by the wizard are **BitlockerKey.Read.All**, **Device.Read.All**, and **DeviceManagementManagedDevices.ReadWrite.All**. **DeviceLocalCredential.Read.All** is optional for Entra LAPS. After setup, the wizard verifies the required application roles are present in the issued certificate-authentication token so missing admin consent is reported immediately.
+
+Administration → Security & Settings now includes **RBAC Setup Wizard...**. It guides the administrator through enabling/disabling RBAC, local-Administrators bypass, Recovery Readers, Rotation Operators, and BitKeyBridge Administrators. Principals are validated before saving, the current Windows identity is previewed against the proposed policy, and the wizard blocks a configuration that would remove the current non-bypass administrator from BitKeyBridge Administration. Nothing changes until **Finish**. JIT recovery, two-person approval, and SIEM remain separate opt-in controls under **Privileged Access...**.
+
+The detailed **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...**, and **Privileged Access...** controls remain available for repair and manual/advanced configuration.
 ## LAPS and manual AD connections (0.20.0)
 
 The **LAPS** workspace reads Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted AD history, DSRM passwords/history, and Entra credentials/history. Select the source, enter an exact computer/device name or ID, and use **Check access** for a secret-free capability check or **Read LAPS** to retrieve permitted password records. The table supports **All / Current / History** views and shows source/version, account, update time, password age, expiry, and read/decryption status. **Copy account** is separate from **Reveal password** / **Copy password**, and secret actions stay disabled for records that were not successfully read or decrypted. The AD logical password-version GUID is shown when the Windows Server 2025 attribute is available.
