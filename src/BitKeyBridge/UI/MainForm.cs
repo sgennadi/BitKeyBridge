@@ -3932,8 +3932,7 @@ public sealed partial class MainForm : DpiAwareForm
         _startOuStatus.Text =
             string.Empty;
         _startResults.Rows.Clear();
-        _startResults.Visible =
-            true;
+        
         _startCurrentKey =
             null;
         _startKey.Clear();
@@ -4576,7 +4575,7 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             _startResults.Rows.Clear();
-            _startResults.Visible = true;
+            
             _startCurrentKey = null;
             _startKey.Clear();
             _startKey.UseSystemPasswordChar = true;
@@ -6090,7 +6089,7 @@ public sealed partial class MainForm : DpiAwareForm
     {
         ClearTrackedRecoveryClipboard();
         _startResults.Rows.Clear();
-        _startResults.Visible = true;
+        
         _startCurrentKey = null;
         _startKey.Clear();
         _startKey.UseSystemPasswordChar = true;
