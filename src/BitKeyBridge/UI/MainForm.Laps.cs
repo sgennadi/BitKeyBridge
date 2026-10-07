@@ -37,64 +37,238 @@ public sealed partial class MainForm
 
     private TabPage BuildLapsWorkspaceTab()
     {
-        var tab = new TabPage("LAPS");
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(UiStyle.PagePadding),
-            ColumnCount = 1, RowCount = 10
-        };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 10; i++)
-            root.RowStyles.Add(new RowStyle(i == 4 ? SizeType.Percent : SizeType.AutoSize, i == 4 ? 100F : 0F));
-        tab.Controls.Add(root);
-        root.Controls.Add(new Label
-        {
-            Text = "LAPS passwords and history", AutoSize = true, Font = UiStyle.CreatePageTitleFont(),
-            Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
-        }, 0, 0);
+        var tab =
+            new TabPage("LAPS");
 
-        var search = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 2,
-            Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
-        };
-        search.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        search.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        search.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        search.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        search.Controls.Add(new Label { Text = "Source:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
-        _lapsSource.DropDownStyle = ComboBoxStyle.DropDownList;
-        _lapsSource.Items.AddRange(["Active Directory (Legacy / Windows LAPS / DSRM)", "Microsoft Entra ID"]);
-        _lapsSource.Dock = DockStyle.Fill;
-        _lapsSource.SelectedIndex = 0;
-        search.Controls.Add(_lapsSource, 1, 0);
-        search.Controls.Add(new Label { Text = "Computer:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
-        _lapsQuery.Dock = DockStyle.Fill;
-        _lapsQuery.PlaceholderText = "Exact computer name, DNS name, AD object GUID or DN";
-        search.Controls.Add(_lapsQuery, 1, 1);
-        root.Controls.Add(search, 0, 1);
+        var root =
+            new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                Padding = new Padding(
+                    UiStyle.PagePadding),
+                ColumnCount = 1,
+                RowCount = 10
+            };
+        root.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
 
-        var actions = new FlowLayoutPanel
+        for (var index = 0;
+             index < 10;
+             index++)
         {
-            Dock = DockStyle.Top, AutoSize = true, WrapContents = true,
-            Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
-        };
-        _lapsHistory.Text = "Include password history";
-        _lapsHistory.AutoSize = true;
-        _lapsHistory.Checked = true;
-        actions.Controls.Add(_lapsHistory);
+            root.RowStyles.Add(
+                new RowStyle(
+                    index == 4
+                        ? SizeType.Percent
+                        : SizeType.AutoSize,
+                    index == 4
+                        ? 100F
+                        : 0F));
+        }
+
+        tab.Controls.Add(
+            root);
+
+        root.Controls.Add(
+            new Label
+            {
+                Text =
+                    "LAPS passwords and history",
+                AutoSize =
+                    true,
+                Font =
+                    UiStyle.CreatePageTitleFont(),
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.SectionGap)
+            },
+            0,
+            0);
+
+        var search =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    3,
+                RowCount =
+                    2,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        search.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        search.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        search.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+
+        search.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Source:",
+                AutoSize =
+                    true,
+                Anchor =
+                    AnchorStyles.Left
+            },
+            0,
+            0);
+
+        _lapsSource.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _lapsSource.Items.AddRange([
+            "Active Directory (Legacy / Windows LAPS / DSRM)",
+            "Microsoft Entra ID"
+        ]);
+        _lapsSource.Dock =
+            DockStyle.Fill;
+        _lapsSource.SelectedIndex =
+            0;
+        search.Controls.Add(
+            _lapsSource,
+            1,
+            0);
+        search.SetColumnSpan(
+            _lapsSource,
+            2);
+
+        search.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Computer / device ID:",
+                AutoSize =
+                    true,
+                Anchor =
+                    AnchorStyles.Left
+            },
+            0,
+            1);
+
+        _lapsQuery.Name =
+            "LapsLiveSearchQuery";
+        _lapsQuery.Dock =
+            DockStyle.Fill;
+        _lapsQuery.PlaceholderText =
+            "Type part of a computer name or device ID";
+        search.Controls.Add(
+            _lapsQuery,
+            1,
+            1);
+
+        _lapsSearchButton.Name =
+            "LapsSearchButton";
+        _lapsSearchButton.Text =
+            "Search";
+        UiStyle.ConfigureActionButton(
+            _lapsSearchButton);
+        search.Controls.Add(
+            _lapsSearchButton,
+            2,
+            1);
+
+        root.Controls.Add(
+            search,
+            0,
+            1);
+
+        _lapsSearchRows.Name =
+            "LapsSearchResults";
+        _lapsSearchRows.AccessibleName =
+            "LAPS device search results";
+        _lapsSearchRows.Dock =
+            DockStyle.Top;
+        _lapsSearchRows.MinimumSize =
+            new Size(
+                0,
+                120);
+        UiStyle.ConfigureDataGridView(
+            _lapsSearchRows);
+        _lapsSearchRows.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Computer",
+                "Computer",
+                160),
+            UiStyle.CreateSortableTextColumn(
+                "ComputerId",
+                "Device / AD object ID",
+                240),
+            UiStyle.CreateSortableTextColumn(
+                "Source",
+                "Source",
+                100)
+        ]);
+        root.Controls.Add(
+            _lapsSearchRows,
+            0,
+            2);
+
+        var actions =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
+
+        _lapsHistory.Text =
+            "Include password history";
+        _lapsHistory.AutoSize =
+            true;
+        _lapsHistory.Checked =
+            true;
+        actions.Controls.Add(
+            _lapsHistory);
 
         actions.Controls.Add(
             new Label
             {
-                Text = "View:",
-                AutoSize = true,
-                Margin = new Padding(
-                    UiStyle.ControlGap,
-                    8,
-                    4,
-                    0)
+                Text =
+                    "View:",
+                AutoSize =
+                    true,
+                Margin =
+                    new Padding(
+                        UiStyle.ControlGap,
+                        8,
+                        4,
+                        0)
             });
+
         _lapsView.DropDownStyle =
             ComboBoxStyle.DropDownList;
         _lapsView.Items.AddRange([
@@ -102,138 +276,444 @@ public sealed partial class MainForm
             "Current",
             "History"
         ]);
-        _lapsView.SelectedIndex = 0;
+        _lapsView.SelectedIndex =
+            0;
         _lapsView.MinimumSize =
-            new Size(105, 0);
-        actions.Controls.Add(_lapsView);
+            new Size(
+                105,
+                0);
+        actions.Controls.Add(
+            _lapsView);
 
-        _lapsAccessCheck.Text = "Check access";
-        UiStyle.ConfigureActionButton(_lapsAccessCheck);
-        actions.Controls.Add(_lapsAccessCheck);
+        _lapsAccessCheck.Text =
+            "Check access";
+        UiStyle.ConfigureActionButton(
+            _lapsAccessCheck);
+        actions.Controls.Add(
+            _lapsAccessCheck);
 
-        _lapsRead.Text = "Read LAPS";
-        UiStyle.ConfigureActionButton(_lapsRead);
-        actions.Controls.Add(_lapsRead);
-        _lapsCancel.Text = "Cancel";
-        UiStyle.ConfigureActionButton(_lapsCancel);
-        _lapsCancel.Enabled = false;
-        actions.Controls.Add(_lapsCancel);
-        var connect = UiStyle.CreateActionButton("Connect to AD");
-        var accessHelp = UiStyle.CreateActionButton("AD access help...");
-        var clear = UiStyle.CreateActionButton("Clear passwords");
-        actions.Controls.Add(connect);
-        actions.Controls.Add(accessHelp);
-        actions.Controls.Add(clear);
-        root.Controls.Add(actions, 0, 2);
+        _lapsRead.Text =
+            "Read LAPS";
+        UiStyle.ConfigureActionButton(
+            _lapsRead);
+        actions.Controls.Add(
+            _lapsRead);
 
-        _lapsRows.Dock = DockStyle.Fill;
-        _lapsRows.MinimumSize = new Size(0, 160);
-        _lapsRows.View = View.Details;
-        _lapsRows.FullRowSelect = true;
-        _lapsRows.MultiSelect = false;
-        _lapsRows.HideSelection = false;
-        _lapsRows.GridLines = true;
-        AddColumns(
+        _lapsCancel.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _lapsCancel);
+        _lapsCancel.Enabled =
+            false;
+        actions.Controls.Add(
+            _lapsCancel);
+
+        var connect =
+            UiStyle.CreateActionButton(
+                "Connect to AD");
+        var accessHelp =
+            UiStyle.CreateActionButton(
+                "AD access help...");
+        var clear =
+            UiStyle.CreateActionButton(
+                "Clear passwords");
+
+        actions.Controls.Add(
+            connect);
+        actions.Controls.Add(
+            accessHelp);
+        actions.Controls.Add(
+            clear);
+
+        root.Controls.Add(
+            actions,
+            0,
+            3);
+
+        _lapsRows.Name =
+            "LapsKeyResults";
+        _lapsRows.AccessibleName =
+            "LAPS key results";
+        _lapsRows.Dock =
+            DockStyle.Fill;
+        _lapsRows.MinimumSize =
+            new Size(
+                0,
+                180);
+        UiStyle.ConfigureDataGridView(
+            _lapsRows);
+        _lapsRows.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Source",
+                "Source / version",
+                145),
+            UiStyle.CreateSortableTextColumn(
+                "RecordType",
+                "Current / history",
+                95),
+            UiStyle.CreateSortableTextColumn(
+                "Account",
+                "Account",
+                130),
+            UiStyle.CreateSortableTextColumn(
+                "KeyDate",
+                "Key date",
+                125),
+            UiStyle.CreateSortableTextColumn(
+                "Latest",
+                "Latest",
+                65),
+            UiStyle.CreateSortableTextColumn(
+                "Age",
+                "Age",
+                70),
+            UiStyle.CreateSortableTextColumn(
+                "Expires",
+                "Expires",
+                125),
+            UiStyle.CreateSortableTextColumn(
+                "Status",
+                "Status",
+                100)
+        ]);
+        _lapsRows.Columns["KeyDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        _lapsRows.Columns["Expires"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        root.Controls.Add(
             _lapsRows,
-            ("Source / version", 210),
-            ("Current / history", 150),
-            ("Account", 190),
-            ("Updated (UTC)", 175),
-            ("Age", 100),
-            ("Expires (UTC)", 175),
-            ("Status", 150));
-        root.Controls.Add(_lapsRows, 0, 3);
+            0,
+            4);
 
-        _lapsDetails.Dock = DockStyle.Top;
-        _lapsDetails.ReadOnly = true;
-        _lapsDetails.MinimumSize = new Size(0, 90);
-        _lapsDetails.Font = UiStyle.CreateMonospaceFont(9F);
-        root.Controls.Add(_lapsDetails, 0, 4);
+        _lapsDetails.Dock =
+            DockStyle.Top;
+        _lapsDetails.ReadOnly =
+            true;
+        _lapsDetails.MinimumSize =
+            new Size(
+                0,
+                90);
+        _lapsDetails.Font =
+            UiStyle.CreateMonospaceFont(
+                9F);
+        root.Controls.Add(
+            _lapsDetails,
+            0,
+            5);
 
-        var secret = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 2,
-            Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap)
-        };
-        secret.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        secret.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        secret.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        secret.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        secret.Controls.Add(new Label { Text = "Password:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
-        _lapsPassword.Dock = DockStyle.Fill;
-        _lapsPassword.ReadOnly = true;
-        _lapsPassword.UseSystemPasswordChar = true;
-        _lapsPassword.Font = UiStyle.CreateMonospaceFont(10F);
-        secret.Controls.Add(_lapsPassword, 1, 0);
-        var secretActions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
-        _lapsReveal.Text = "Reveal password";
-        _lapsCopy.Text = "Copy password";
-        _lapsCopyAccount.Text = "Copy account";
-        UiStyle.ConfigureActionButton(_lapsReveal);
-        UiStyle.ConfigureActionButton(_lapsCopy);
-        UiStyle.ConfigureActionButton(_lapsCopyAccount);
-        _lapsReveal.Enabled = _lapsCopy.Enabled = false;
-        _lapsCopyAccount.Enabled = false;
-        secretActions.Controls.Add(_lapsReveal);
-        secretActions.Controls.Add(_lapsCopy);
-        secretActions.Controls.Add(_lapsCopyAccount);
-        secret.Controls.Add(secretActions, 1, 1);
-        root.Controls.Add(secret, 0, 5);
-        _lapsStatus.Dock = DockStyle.Top;
-        UiStyle.SetStatus(_lapsStatus, "Choose a source and computer. Read LAPS checks access and reads current passwords and optional history.", UiStatusKind.Neutral);
-        root.Controls.Add(_lapsStatus, 0, 6);
+        var secret =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    2,
+                RowCount =
+                    2,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        UiStyle.ControlGap)
+            };
+        secret.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        secret.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        secret.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        secret.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
 
-        _lapsProgress.Name = "LapsProgress";
-        _lapsProgress.AccessibleName = "LAPS read progress";
-        _lapsProgress.Dock = DockStyle.Top;
-        _lapsProgress.Style = ProgressBarStyle.Marquee;
-        _lapsProgress.MarqueeAnimationSpeed = 25;
-        _lapsProgress.Visible = false;
-        _lapsProgress.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
-        root.Controls.Add(_lapsProgress, 0, 7);
+        secret.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Password:",
+                AutoSize =
+                    true,
+                Anchor =
+                    AnchorStyles.Left
+            },
+            0,
+            0);
 
-        root.Controls.Add(_lapsDiagnostics, 0, 8);
+        _lapsPassword.Dock =
+            DockStyle.Fill;
+        _lapsPassword.ReadOnly =
+            true;
+        _lapsPassword.UseSystemPasswordChar =
+            true;
+        _lapsPassword.Font =
+            UiStyle.CreateMonospaceFont(
+                10F);
+        secret.Controls.Add(
+            _lapsPassword,
+            1,
+            0);
 
-        _lapsAccessCheck.Click += async (_, _) => await CheckLapsAccessAsync();
-        _lapsRead.Click += async (_, _) => await ReadLapsAsync();
-        _lapsCancel.Click += (_, _) => CancelLapsRead();
-        _lapsView.SelectedIndexChanged += (_, _) => RenderLapsRows();
-        _lapsQuery.KeyDown += async (_, e) =>
-        {
-            if (e.KeyCode != Keys.Enter) return;
-            e.SuppressKeyPress = true;
-            await ReadLapsAsync();
-        };
-        _lapsQuery.TextChanged += (_, _) => ClearLapsResult();
-        _adUsername.TextChanged += (_, _) => ClearLapsResult();
-        _adServer.TextChanged += (_, _) => ClearLapsResult();
-        _adDomain.TextChanged += (_, _) => ClearLapsResult();
-        _adExplicitCredentials.CheckedChanged += (_, _) => ClearLapsResult();
-        _adCredentialStorage.SelectedIndexChanged += (_, _) => ClearLapsResult();
-        _cloudTenant.TextChanged += (_, _) => ClearLapsResult();
-        _cloudClient.TextChanged += (_, _) => ClearLapsResult();
-        _cloudUsername.TextChanged += (_, _) => ClearLapsResult();
-        _cloudThumbprint.TextChanged += (_, _) => ClearLapsResult();
-        _cloudAuthMode.SelectedIndexChanged += (_, _) => ClearLapsResult();
-        _lapsSource.SelectedIndexChanged += (_, _) =>
-        {
-            ClearLapsResult();
-            var cloud = _lapsSource.SelectedIndex == 1;
-            connect.Enabled = !cloud;
-            _lapsQuery.PlaceholderText = cloud ? "Exact Entra device name or Entra device ID (not object ID)" :
-                "Exact computer name, DNS name, AD object GUID or DN";
-        };
-        connect.Click += async (_, _) => await TestDirectoryConnectionAsync(promptForOu: false, forceManualCredentials: true);
+        var secretActions =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true
+            };
+
+        _lapsReveal.Text =
+            "Reveal password";
+        _lapsCopy.Text =
+            "Copy password";
+        _lapsCopyAccount.Text =
+            "Copy account";
+        UiStyle.ConfigureActionButton(
+            _lapsReveal);
+        UiStyle.ConfigureActionButton(
+            _lapsCopy);
+        UiStyle.ConfigureActionButton(
+            _lapsCopyAccount);
+        _lapsReveal.Enabled =
+            false;
+        _lapsCopy.Enabled =
+            false;
+        _lapsCopyAccount.Enabled =
+            false;
+        secretActions.Controls.Add(
+            _lapsReveal);
+        secretActions.Controls.Add(
+            _lapsCopy);
+        secretActions.Controls.Add(
+            _lapsCopyAccount);
+        secret.Controls.Add(
+            secretActions,
+            1,
+            1);
+        root.Controls.Add(
+            secret,
+            0,
+            6);
+
+        _lapsStatus.Dock =
+            DockStyle.Top;
+        UiStyle.SetStatus(
+            _lapsStatus,
+            "Type at least two characters for live metadata search, or press Enter to search immediately. Select a device, then use Check access or Read LAPS.",
+            UiStatusKind.Neutral);
+        root.Controls.Add(
+            _lapsStatus,
+            0,
+            7);
+
+        _lapsProgress.Name =
+            "LapsProgress";
+        _lapsProgress.AccessibleName =
+            "LAPS operation progress";
+        _lapsProgress.Dock =
+            DockStyle.Top;
+        _lapsProgress.Style =
+            ProgressBarStyle.Marquee;
+        _lapsProgress.MarqueeAnimationSpeed =
+            25;
+        _lapsProgress.Visible =
+            false;
+        _lapsProgress.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        root.Controls.Add(
+            _lapsProgress,
+            0,
+            8);
+
+        root.Controls.Add(
+            _lapsDiagnostics,
+            0,
+            9);
+
+        _lapsAccessCheck.Click +=
+            async (_, _) =>
+                await CheckLapsAccessAsync();
+        _lapsRead.Click +=
+            async (_, _) =>
+                await ReadLapsAsync();
+        _lapsCancel.Click +=
+            (_, _) =>
+            {
+                CancelLapsSearch();
+                CancelLapsRead();
+            };
+        _lapsView.SelectedIndexChanged +=
+            (_, _) =>
+                RenderLapsRows();
+
+        _lapsSearchButton.Click +=
+            async (_, _) =>
+                await SearchLapsCandidatesAsync(
+                    allowInteractiveAuth: true);
+
+        _lapsQuery.KeyDown +=
+            async (_, e) =>
+            {
+                if (e.KeyCode !=
+                    Keys.Enter)
+                {
+                    return;
+                }
+
+                e.SuppressKeyPress =
+                    true;
+                _lapsSearchDebounceTimer?.Stop();
+                await SearchLapsCandidatesAsync(
+                    allowInteractiveAuth: true);
+            };
+
+        _lapsQuery.TextChanged +=
+            (_, _) =>
+            {
+                ClearLapsResult();
+
+                if (!_suppressLapsSearchQueue)
+                {
+                    QueueLapsLiveSearch();
+                }
+            };
+
+        _lapsSearchDebounceTimer =
+            new System.Windows.Forms.Timer
+            {
+                Interval =
+                    SearchText.DebounceMilliseconds
+            };
+        _lapsSearchDebounceTimer.Tick +=
+            async (_, _) =>
+            {
+                _lapsSearchDebounceTimer.Stop();
+
+                if (_lapsQuery.Text.Trim().Length >=
+                    SearchText.MinimumLiveSearchCharacters)
+                {
+                    await SearchLapsCandidatesAsync(
+                        allowInteractiveAuth: false);
+                }
+            };
+
+        _lapsSearchRows.SelectionChanged +=
+            (_, _) =>
+                SelectLapsSearchCandidate();
+
+        _lapsSearchRows.CellDoubleClick +=
+            async (_, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    SelectLapsSearchCandidate();
+                    await ReadLapsAsync();
+                }
+            };
+
+        _adUsername.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _adServer.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _adDomain.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _adExplicitCredentials.CheckedChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _adCredentialStorage.SelectedIndexChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _cloudTenant.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _cloudClient.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _cloudUsername.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _cloudThumbprint.TextChanged +=
+            (_, _) =>
+                ClearLapsResult();
+        _cloudAuthMode.SelectedIndexChanged +=
+            (_, _) =>
+                ClearLapsResult();
+
+        _lapsSource.SelectedIndexChanged +=
+            (_, _) =>
+            {
+                CancelLapsSearch();
+                ClearLapsResult();
+                _lapsSearchRows.Rows.Clear();
+
+                var cloud =
+                    _lapsSource.SelectedIndex ==
+                    1;
+                connect.Enabled =
+                    !cloud;
+                _lapsQuery.PlaceholderText =
+                    cloud
+                        ? "Part of Entra device name or device ID"
+                        : "Part of computer name; full AD object GUID also works";
+                QueueLapsLiveSearch();
+            };
+
+        connect.Click +=
+            async (_, _) =>
+                await TestDirectoryConnectionAsync(
+                    promptForOu: false,
+                    forceManualCredentials: true);
+
         accessHelp.Click +=
             (_, _) =>
                 ShowAdAccessTroubleshooting(
                     "LAPS password / history access in Active Directory");
-        clear.Click += (_, _) => ClearLapsResult();
-        _lapsRows.SelectedIndexChanged += (_, _) => SelectLapsEntry();
-        _lapsReveal.Click += (_, _) => RevealLapsPassword(copy: false);
-        _lapsCopy.Click += (_, _) => RevealLapsPassword(copy: true);
-        _lapsCopyAccount.Click += (_, _) => CopySelectedLapsAccount();
-        FormClosed += (_, _) => ClearLapsResult();
+
+        clear.Click +=
+            (_, _) =>
+                ClearLapsResult();
+
+        _lapsRows.SelectionChanged +=
+            (_, _) =>
+                SelectLapsEntry();
+        _lapsReveal.Click +=
+            (_, _) =>
+                RevealLapsPassword(
+                    copy: false);
+        _lapsCopy.Click +=
+            (_, _) =>
+                RevealLapsPassword(
+                    copy: true);
+        _lapsCopyAccount.Click +=
+            (_, _) =>
+                CopySelectedLapsAccount();
+
+        FormClosed +=
+            (_, _) =>
+            {
+                _lapsSearchDebounceTimer?.Stop();
+                CancelLapsSearch();
+                ClearLapsResult();
+            };
+
         return tab;
     }
 
