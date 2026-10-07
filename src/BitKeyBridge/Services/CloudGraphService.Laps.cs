@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace BitKeyBridge;
@@ -361,10 +362,16 @@ public sealed partial class CloudGraphService
             deviceName);
     }
 
-    public async Task<LapsReadResult> ReadLapsPasswordsAsync(string token, string query,
-        bool includeHistory, CancellationToken ct = default)
+    public async Task<LapsReadResult> ReadLapsPasswordsAsync(
+        string token,
+        string query,
+        bool includeHistory,
+        CancellationToken ct = default)
     {
-        Require(query, nameof(query));
+        Require(
+            query,
+            nameof(query));
+
         var (
             deviceId,
             deviceName) =
@@ -373,22 +380,151 @@ public sealed partial class CloudGraphService
                 query,
                 ct);
 
-        var uri = $"https://graph.microsoft.com/v1.0/directory/deviceLocalCredentials/{deviceId}?$select=id,deviceName,lastBackupDateTime,refreshDateTime,credentials";
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        using var response = await _http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Entra LAPS request failed (HTTP {(int)response.StatusCode}). " +
-                "Verify the Entra device ID, LAPS backup, DeviceLocalCredential.Read.All consent and an allowed Entra role.");
-        try
+        var uri =
+            $"https://graph.microsoft.com/v1.0/directory/deviceLocalCredentials/{deviceId}?$select=id,deviceName,lastBackupDateTime,refreshDateTime,credentials";
+
+        string firstParseFailure =
+            string.Empty;
+
+        for (var attempt = 0;
+             attempt < 2;
+             attempt++)
         {
-            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-            return LapsCloudCodec.Read(json.RootElement, deviceId, deviceName, includeHistory);
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    uri);
+
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue(
+                    "Bearer",
+                    token);
+            request.Headers.Accept.Add(
+                new MediaTypeWithQualityHeaderValue(
+                    "application/json"));
+
+            if (attempt > 0)
+            {
+                request.Headers.CacheControl =
+                    new CacheControlHeaderValue
+                    {
+                        NoCache =
+                            true,
+                        NoStore =
+                            true
+                    };
+            }
+
+            using var response =
+                await _http.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"Entra LAPS request failed (HTTP {(int)response.StatusCode}). " +
+                    "Verify the Entra device ID, LAPS backup, DeviceLocalCredential.Read.All consent and an allowed Entra role.");
+            }
+
+            var body =
+                await response.Content.ReadAsByteArrayAsync(
+                    ct);
+
+            try
+            {
+                using var json =
+                    LapsGraphResponseCodec.ParseJsonResponse(
+                        body,
+                        response.Content.Headers.ContentType?.CharSet);
+
+                return LapsCloudCodec.Read(
+                    json.RootElement,
+                    deviceId,
+                    deviceName,
+                    includeHistory);
+            }
+            catch (JsonException ex)
+            {
+                var metadata =
+                    BuildLapsResponseMetadata(
+                        response,
+                        body.Length);
+
+                if (attempt == 0)
+                {
+                    firstParseFailure =
+                        metadata;
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    "Entra returned a non-JSON LAPS response after one retry. " +
+                    metadata +
+                    (string.IsNullOrWhiteSpace(
+                        firstParseFailure)
+                        ? string.Empty
+                        : " First attempt: " +
+                          firstParseFailure),
+                    ex);
+            }
+            finally
+            {
+                if (body.Length > 0)
+                {
+                    CryptographicOperations.ZeroMemory(
+                        body);
+                }
+            }
         }
-        catch (JsonException)
+
+        throw new InvalidOperationException(
+            "Entra LAPS response could not be read.");
+    }
+
+    private static string BuildLapsResponseMetadata(
+        HttpResponseMessage response,
+        int bodyLength)
+    {
+        var contentType =
+            response.Content.Headers.ContentType?.ToString() ??
+            "(none)";
+
+        var requestId =
+            TryGetResponseHeader(
+                response,
+                "request-id");
+
+        if (string.IsNullOrWhiteSpace(
+                requestId))
         {
-            throw new InvalidOperationException("Entra returned an invalid LAPS response.");
+            requestId =
+                TryGetResponseHeader(
+                    response,
+                    "client-request-id");
         }
+
+        return
+            $"HTTP {(int)response.StatusCode}; " +
+            $"Content-Type={contentType}; " +
+            $"Bytes={bodyLength}; " +
+            $"RequestId={(string.IsNullOrWhiteSpace(requestId) ? "(none)" : requestId)}.";
+    }
+
+    private static string TryGetResponseHeader(
+        HttpResponseMessage response,
+        string name)
+    {
+        if (!response.Headers.TryGetValues(
+                name,
+                out var values))
+        {
+            return string.Empty;
+        }
+
+        return values.FirstOrDefault() ??
+               string.Empty;
     }
 }
 

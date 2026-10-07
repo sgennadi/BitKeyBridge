@@ -482,6 +482,22 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: global connection status bar was not found.");
         }
 
+        if (FindByName(
+                form,
+                "RecoveryBackToStart") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Recovery Back to Start button was not found.");
+        }
+
+        if (FindByName(
+                form,
+                "LapsBackToStart") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: LAPS Back to Start button was not found.");
+        }
+
         VerifyTabControlPages(
             tabs,
             formName,

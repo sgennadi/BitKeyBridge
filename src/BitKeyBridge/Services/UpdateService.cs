@@ -377,20 +377,17 @@ public sealed class UpdateService : IDisposable
                 "The downloaded release contains BitKeyBridge.exe outside the package root.");
         }
 
-        var fileVersion = FileVersionInfo.GetVersionInfo(executable).FileVersion;
-        var expectedVersion =
-            ParseVersion(
-                info.LatestVersion);
+        var fileVersion =
+            FileVersionInfo.GetVersionInfo(
+                executable)
+                .FileVersion;
 
-        if (!Version.TryParse(
-                NormalizeVersionText(
-                    fileVersion),
-                out var stagedVersion) ||
-            !stagedVersion.Equals(
-                expectedVersion))
+        if (!ReleaseVersionsMatch(
+                fileVersion,
+                info.LatestVersion))
         {
             throw new InvalidOperationException(
-                $"Staged executable version '{fileVersion}' does not exactly match release {info.LatestVersion}.");
+                $"Staged executable version '{fileVersion}' does not match release {info.LatestVersion}.");
         }
 
         var stagedHashBeforeSelfTest =
@@ -795,19 +792,12 @@ public sealed class UpdateService : IDisposable
                     fullPath)
                     .FileVersion;
 
-            var expectedVersion =
-                ParseVersion(
-                    plan.ExpectedVersion);
-
-            if (!Version.TryParse(
-                    NormalizeVersionText(
-                        fileVersion),
-                    out var stagedVersion) ||
-                !stagedVersion.Equals(
-                    expectedVersion))
+            if (!ReleaseVersionsMatch(
+                    fileVersion,
+                    plan.ExpectedVersion))
             {
                 throw new InvalidDataException(
-                    $"Staged executable version '{fileVersion}' no longer exactly matches expected version {plan.ExpectedVersion}.");
+                    $"Staged executable version '{fileVersion}' no longer matches expected version {plan.ExpectedVersion}.");
             }
 
             stream.Position = 0;
@@ -1324,6 +1314,24 @@ public sealed class UpdateService : IDisposable
         if (!Version.TryParse(text, out var version))
             throw new InvalidOperationException($"Invalid release version '{value}'.");
         return new Version(version.Major, version.Minor, version.Build < 0 ? 0 : version.Build);
+    }
+
+    internal static bool ReleaseVersionsMatch(
+        string? actual,
+        string? expected)
+    {
+        try
+        {
+            return ParseVersion(
+                    actual ?? string.Empty)
+                .Equals(
+                    ParseVersion(
+                        expected ?? string.Empty));
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static string NormalizeVersionText(string? value)

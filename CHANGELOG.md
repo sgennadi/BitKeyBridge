@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.1
+
+- Fixed Start startup connection behavior. BitKeyBridge now attempts the configured AD connection on launch and opens the AD credential prompt when automatic connection cannot proceed or fails. When automatic connection is explicitly disabled, Start asks how to connect instead of silently remaining disconnected.
+- Fixed Entra LAPS reads that could report **Entra returned an invalid LAPS response** even after successful Device Code authentication. The Graph request now explicitly asks for JSON, accepts UTF-8/UTF-16 BOM responses, retries one non-JSON success response once, and reports only safe HTTP metadata (status, content type, byte count and request ID). Response bodies, `passwordBase64` and decoded passwords are never written to diagnostics.
+- Extended Entra LAPS parsing to accept both the normal `value: { ... }` wrapper and a defensive single-item `value: [ ... ]` wrapper.
+- Fixed updater release-version validation so Windows file versions such as `0.24.0.0` are treated as the same release as `0.24.0`. The same normalized comparison is used both when staging an update and by the elevated apply helper.
+- Added regression coverage for four-part updater file versions and Entra LAPS UTF-8/UTF-16 BOM responses.
+- Added **Back to Start** buttons in Recovery and LAPS when those workspaces were opened from the Start dashboard. Direct tab navigation stays uncluttered.
+- Replaced the plain Microsoft Entra Device Code message box with a dedicated dialog containing a selectable code, **Copy code**, **Open browser** and **OK**. Automatic clipboard copy and browser launch remain, with explicit retry buttons when either fails.
+- Upgrade note: the updater bug exists in 0.24.0 itself, so 0.24.0 may be unable to bootstrap the updater fix automatically. If that happens, install 0.24.1 once from the release ZIP/EXE; subsequent updates use the corrected comparison.
+
 ## 0.24.0
 
 - Reworked **Start** into the primary helpdesk dashboard. One metadata-only search now checks both **BitLocker** and **LAPS** by partial computer name, Recovery ID or device/object ID, with the existing 450 ms debounce and immediate **Enter** search.

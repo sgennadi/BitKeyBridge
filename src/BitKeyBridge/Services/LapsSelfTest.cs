@@ -110,6 +110,47 @@ public static class LapsSelfTest
         });
         Check("Entra password uses UTF-16LE", () =>
             Assert(LapsSecretCodec.DecodeEntraPassword(Convert.ToBase64String(Encoding.Unicode.GetBytes(secret))) == secret));
+        Check("Entra Graph JSON accepts UTF-8 and UTF-16 BOM", () =>
+        {
+            var payload =
+                "{\"value\":{\"deviceName\":\"PC-TEST\",\"credentials\":[]}}";
+
+            var utf8 =
+                Encoding.UTF8.GetPreamble()
+                    .Concat(
+                        Encoding.UTF8.GetBytes(
+                            payload))
+                    .ToArray();
+
+            using (var document =
+                   LapsGraphResponseCodec.ParseJsonResponse(
+                       utf8,
+                       "utf-8"))
+            {
+                Assert(
+                    document.RootElement.TryGetProperty(
+                        "value",
+                        out _));
+            }
+
+            var utf16 =
+                Encoding.Unicode.GetPreamble()
+                    .Concat(
+                        Encoding.Unicode.GetBytes(
+                            payload))
+                    .ToArray();
+
+            using (var document =
+                   LapsGraphResponseCodec.ParseJsonResponse(
+                       utf16,
+                       "utf-16"))
+            {
+                Assert(
+                    document.RootElement.TryGetProperty(
+                        "value",
+                        out _));
+            }
+        });
         Check("Entra current-only and unordered history (direct and wrapped responses)", () =>
         {
             var base64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(secret));
@@ -119,7 +160,12 @@ public static class LapsSelfTest
                 new { accountName = "new-admin", accountSid = "S-1-5-21-501", backupDateTime = "2026-10-06T12:00:00Z", passwordBase64 = base64 },
                 new { accountName = "old-admin", accountSid = "S-1-5-21-500", backupDateTime = "2026-10-02T12:00:00Z", passwordBase64 = "invalid" }
             }});
-            foreach (var text in new[] { response, "{\"value\":" + response + "}" })
+            foreach (var text in new[]
+            {
+                response,
+                "{\"value\":" + response + "}",
+                "{\"value\":[" + response + "]}"
+            })
             {
                 using var document = JsonDocument.Parse(text);
                 using var all = LapsCloudCodec.Read(document.RootElement, "device-id", "fallback", true);
