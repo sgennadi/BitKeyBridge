@@ -106,6 +106,285 @@ public sealed class LapsDirectoryService
         }
     }
 
+    public LapsAccessCheckResult CheckAccess(
+        string computer,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(computer))
+        {
+            throw new ArgumentException(
+                "Enter a computer name, DNS name, AD object GUID, or computer DN.");
+        }
+
+        ct.ThrowIfCancellationRequested();
+
+        var server =
+            _ad.GetPreferredWritableDc();
+        var root =
+            _ad.GetRootDse(server);
+        var query =
+            computer.Trim();
+        var isDn =
+            query.Contains('=') &&
+            query.Contains(',');
+
+        using var connection =
+            _ad.CreateConnection(server);
+
+        var request =
+            new SearchRequest(
+                isDn
+                    ? query
+                    : root["defaultNamingContext"],
+                isDn
+                    ? "(objectCategory=computer)"
+                    : BuildComputerFilter(query),
+                isDn
+                    ? SearchScope.Base
+                    : SearchScope.Subtree,
+                "name",
+                "objectGUID",
+                "ms-Mcs-AdmPwdExpirationTime",
+                "msLAPS-PasswordExpirationTime",
+                "msLAPS-CurrentPasswordVersion")
+            {
+                SizeLimit = 2
+            };
+
+        var response =
+            (SearchResponse)connection.SendRequest(
+                request,
+                TimeSpan.FromSeconds(30));
+
+        ct.ThrowIfCancellationRequested();
+
+        if (response.Entries.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The computer was not found in the selected AD domain.");
+        }
+
+        if (response.Entries.Count != 1)
+        {
+            throw new InvalidOperationException(
+                "The computer name is ambiguous. Use its DNS name, AD object GUID, or DN.");
+        }
+
+        var entry =
+            response.Entries[0];
+        var result =
+            new LapsAccessCheckResult
+            {
+                Source = "Active Directory",
+                ComputerName =
+                    Text(entry, "name") ??
+                    query,
+                ComputerId =
+                    BinaryGuid(
+                        entry,
+                        "objectGUID"),
+                DirectoryServer =
+                    server
+            };
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "LDAP bind",
+                State = LapsAccessState.Available,
+                Detail =
+                    $"Connected to {server} using the selected AD identity."
+            });
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Computer object",
+                State = LapsAccessState.Available,
+                Detail =
+                    "Computer object resolved successfully."
+            });
+
+        var schemaAttributes =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        var schemaNamingContext =
+            root.GetValueOrDefault(
+                "schemaNamingContext",
+                string.Empty);
+
+        if (!string.IsNullOrWhiteSpace(
+                schemaNamingContext))
+        {
+            try
+            {
+                var schemaRequest =
+                    new SearchRequest(
+                        schemaNamingContext,
+                        "(|(lDAPDisplayName=ms-Mcs-AdmPwd)(lDAPDisplayName=msLAPS-Password)(lDAPDisplayName=msLAPS-EncryptedPassword)(lDAPDisplayName=msLAPS-EncryptedPasswordHistory)(lDAPDisplayName=msLAPS-EncryptedDSRMPassword)(lDAPDisplayName=msLAPS-EncryptedDSRMPasswordHistory))",
+                        SearchScope.Subtree,
+                        "lDAPDisplayName");
+
+                var schemaResponse =
+                    (SearchResponse)connection.SendRequest(
+                        schemaRequest,
+                        TimeSpan.FromSeconds(30));
+
+                foreach (SearchResultEntry schemaEntry in
+                         schemaResponse.Entries)
+                {
+                    var name =
+                        Text(
+                            schemaEntry,
+                            "lDAPDisplayName");
+
+                    if (!string.IsNullOrWhiteSpace(
+                            name))
+                    {
+                        schemaAttributes.Add(
+                            name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Checks.Add(
+                    new LapsAccessCheckItem
+                    {
+                        Name = "LAPS schema inspection",
+                        State = LapsAccessState.Failed,
+                        Detail =
+                            "Schema inspection failed: " +
+                            DiagnosticRedaction.Sanitize(
+                                ex.Message)
+                    });
+            }
+        }
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Legacy Microsoft LAPS schema",
+                State =
+                    schemaAttributes.Contains(
+                        "ms-Mcs-AdmPwd")
+                        ? LapsAccessState.Available
+                        : LapsAccessState.NotDetected,
+                Detail =
+                    schemaAttributes.Contains(
+                        "ms-Mcs-AdmPwd")
+                        ? "Legacy LAPS schema attribute is present."
+                        : "Legacy LAPS schema attribute was not detected."
+            });
+
+        var windowsSchema =
+            schemaAttributes.Contains(
+                "msLAPS-Password") ||
+            schemaAttributes.Contains(
+                "msLAPS-EncryptedPassword");
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Windows LAPS schema",
+                State =
+                    windowsSchema
+                        ? LapsAccessState.Available
+                        : LapsAccessState.NotDetected,
+                Detail =
+                    windowsSchema
+                        ? "Windows LAPS schema attributes are present."
+                        : "Windows LAPS schema attributes were not detected."
+            });
+
+        var historySchema =
+            schemaAttributes.Contains(
+                "msLAPS-EncryptedPasswordHistory") ||
+            schemaAttributes.Contains(
+                "msLAPS-EncryptedDSRMPasswordHistory");
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Windows LAPS history schema",
+                State =
+                    historySchema
+                        ? LapsAccessState.Available
+                        : LapsAccessState.NotDetected,
+                Detail =
+                    historySchema
+                        ? "Encrypted password-history schema is present."
+                        : "Encrypted password-history schema was not detected."
+            });
+
+        var legacyExpiry =
+            Expiration(
+                entry,
+                "ms-Mcs-AdmPwdExpirationTime");
+        var windowsExpiry =
+            Expiration(
+                entry,
+                "msLAPS-PasswordExpirationTime");
+        var passwordVersion =
+            BinaryGuid(
+                entry,
+                "msLAPS-CurrentPasswordVersion");
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Legacy LAPS backup indicator",
+                State =
+                    legacyExpiry.HasValue
+                        ? LapsAccessState.Available
+                        : LapsAccessState.NotDetected,
+                Detail =
+                    legacyExpiry.HasValue
+                        ? $"Expiration metadata is present ({legacyExpiry:O})."
+                        : "No Legacy LAPS expiration metadata was returned."
+            });
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Windows LAPS backup indicator",
+                State =
+                    windowsExpiry.HasValue ||
+                    !string.IsNullOrWhiteSpace(
+                        passwordVersion)
+                        ? LapsAccessState.Available
+                        : LapsAccessState.NotDetected,
+                Detail =
+                    windowsExpiry.HasValue
+                        ? $"Expiration metadata is present ({windowsExpiry:O})."
+                        : !string.IsNullOrWhiteSpace(
+                            passwordVersion)
+                            ? $"Password version metadata is present ({passwordVersion})."
+                            : "No Windows LAPS backup indicator was returned."
+            });
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Secret attribute read permission",
+                State = LapsAccessState.NotProbed,
+                Detail =
+                    "Not probed by this safe check because requesting Legacy/plaintext LAPS secret attributes would retrieve the password."
+            });
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Encrypted password decryption",
+                State = LapsAccessState.NotProbed,
+                Detail =
+                    "Not probed by this safe check because DPAPI-NG authorization can only be verified by decrypting an actual protected LAPS value."
+            });
+
+        return result;
+    }
+
     public static string BuildComputerFilter(string query)
     {
         if (Guid.TryParse(query, out var id))
