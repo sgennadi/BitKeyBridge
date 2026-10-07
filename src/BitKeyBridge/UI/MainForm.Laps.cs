@@ -237,7 +237,41 @@ public sealed partial class MainForm
                 };
                 var credential = AdSessionCredentials.CreateNetworkCredential(_config);
                 var service = new LapsDirectoryService(snapshot, credential);
-                pending = await Task.Run(() => service.Read(query, history, cancellation.Token), cancellation.Token);
+                var readTask =
+                    Task.Run(
+                        () => service.Read(
+                            query,
+                            history,
+                            cancellation.Token));
+
+                var cancelSignal =
+                    Task.Delay(
+                        Timeout.InfiniteTimeSpan,
+                        cancellation.Token);
+
+                var completed =
+                    await Task.WhenAny(
+                        readTask,
+                        cancelSignal);
+
+                if (completed != readTask)
+                {
+                    _ = readTask.ContinueWith(
+                        static task =>
+                        {
+                            _ = task.Exception;
+                        },
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted |
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+
+                    throw new OperationCanceledException(
+                        cancellation.Token);
+                }
+
+                pending =
+                    await readTask;
             }
             if (IsDisposed || cancellation.IsCancellationRequested || generation != _lapsGeneration) return;
             _lapsResult = pending;
