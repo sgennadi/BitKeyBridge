@@ -3563,7 +3563,7 @@ public sealed partial class MainForm : DpiAwareForm
             {
                 UiStyle.SetStatus(
                     _credentialVaultStatus,
-                    "Using current Windows identity; no explicit AD credential is required.",
+                    "Credential status: using current Windows identity; no explicit AD credential is required.",
                     UiStatusKind.Neutral);
                 return;
             }
@@ -3574,8 +3574,8 @@ public sealed partial class MainForm : DpiAwareForm
                 UiStyle.SetStatus(
                     _credentialVaultStatus,
                     AdSessionCredentials.HasPassword
-                        ? $"Session credential loaded for {_adUsername.Text.Trim()}."
-                        : "Session credential is not loaded.",
+                        ? $"Credential status: session credential loaded for {_adUsername.Text.Trim()}."
+                        : "Credential status: session credential is not loaded.",
                     AdSessionCredentials.HasPassword
                         ? UiStatusKind.Success
                         : UiStatusKind.Warning);
@@ -3618,8 +3618,8 @@ public sealed partial class MainForm : DpiAwareForm
             UiStyle.SetStatus(
                 _credentialVaultStatus,
                 metadata.Exists
-                    ? $"Stored: {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}.{suffix}"
-                    : $"No stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.",
+                    ? $"Credential status: stored in {metadata.Storage}; User={metadata.Username}; Protected by {metadata.ProtectedBy}.{suffix}"
+                    : $"Credential status: no stored {metadata.Storage} credential. Protected by {metadata.ProtectedBy}.",
                 metadata.Exists
                     ? UiStatusKind.Success
                     : UiStatusKind.Warning);
