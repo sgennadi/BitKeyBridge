@@ -113,8 +113,10 @@ public sealed partial class MainForm
         _lapsCancel.Enabled = false;
         actions.Controls.Add(_lapsCancel);
         var connect = UiStyle.CreateActionButton("Connect to AD");
+        var accessHelp = UiStyle.CreateActionButton("AD access help...");
         var clear = UiStyle.CreateActionButton("Clear passwords");
         actions.Controls.Add(connect);
+        actions.Controls.Add(accessHelp);
         actions.Controls.Add(clear);
         root.Controls.Add(actions, 0, 2);
 
@@ -216,6 +218,10 @@ public sealed partial class MainForm
                 "Exact computer name, DNS name, AD object GUID or DN";
         };
         connect.Click += async (_, _) => await TestDirectoryConnectionAsync(promptForOu: false, forceManualCredentials: true);
+        accessHelp.Click +=
+            (_, _) =>
+                ShowAdAccessTroubleshooting(
+                    "LAPS password / history access in Active Directory");
         clear.Click += (_, _) => ClearLapsResult();
         _lapsRows.SelectedIndexChanged += (_, _) => SelectLapsEntry();
         _lapsReveal.Click += (_, _) => RevealLapsPassword(copy: false);
@@ -423,11 +429,20 @@ public sealed partial class MainForm
             return;
         }
 
+        var accessHint =
+            row.Status is
+                LapsPasswordStatus.AccessDenied or
+                LapsPasswordStatus.DecryptionFailed
+                ? Environment.NewLine +
+                  "Access help: use AD access help... to generate scoped BitLocker/LAPS delegation guidance. " +
+                  "For encrypted Windows LAPS, read ACL and DPAPI-NG decrypt authorization are separate."
+                : string.Empty;
+
         _lapsDetails.Text =
             $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
             $"Attribute: {row.Attribute} | Account SID: {row.AccountSid} | Password version: {_lapsResult.PasswordVersion}\r\n" +
             $"Type: {(row.IsHistory ? "History" : "Current")} | Age: {FormatLapsAge(row.UpdatedAtUtc)} | Expires: {row.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Not stored"}\r\n" +
-            $"Status: {row.Status}. {row.StatusDetail}\r\n{_lapsResult.Note}";
+            $"Status: {row.Status}. {row.StatusDetail}\r\n{_lapsResult.Note}{accessHint}";
     }
 
     private void RevealLapsPassword(bool copy)
@@ -789,6 +804,14 @@ public sealed partial class MainForm
                     $"{check.Name}: {check.State}");
                 builder.AppendLine(
                     $"  {check.Detail}");
+            }
+
+            if (!cloud)
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    "If password read/decrypt/history access is missing, open AD access help... for scoped delegation examples. " +
+                    "Windows LAPS read ACL, decrypt authorization and history retention are separate controls.");
             }
 
             _lapsDetails.Text =
