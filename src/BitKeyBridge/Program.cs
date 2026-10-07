@@ -1772,8 +1772,6 @@ internal static class Program
                     new AppConfig();
 
                 if (!string.IsNullOrWhiteSpace(
-                        exportDefaults.SysvolScriptsRoot) ||
-                    !string.IsNullOrWhiteSpace(
                         exportDefaults.OutputSubdirectory) ||
                     !string.Equals(
                         exportDefaults.EffectiveOutputRoot,
@@ -1782,13 +1780,10 @@ internal static class Program
                     !string.Equals(
                         exportDefaults.OutputDirectory,
                         AppConfig.DefaultOutputRoot,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    exportDefaults.EffectiveOutputRoot.Contains(
-                        "SYSVOL",
                         StringComparison.OrdinalIgnoreCase))
                 {
                     failures.Add(
-                        "Default recovery export path unexpectedly uses SYSVOL or a forced subdirectory.");
+                        "Default recovery export path differs from the configured local default or forces a subdirectory.");
                 }
             }
             catch (Exception ex)

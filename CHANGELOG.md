@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.1
+
+- Removed obsolete export configuration fields and legacy shared-folder names from current source, UI messages, example settings and documentation. The configurable local export default is unchanged.
+- UI regression checks now show each window before traversing visible controls and fail when no controls were inspected. Added original dialog sizes and 125% / 175% text scenarios alongside compact, 150% and 200% scenarios.
+- Button caption checks now inspect actual geometry even for auto-sized buttons.
+
 ## 0.19.0
 
 - Added a native LAPS workspace for Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted passwords, encrypted AD history, DSRM passwords/history, and Microsoft Entra LAPS credentials/history.
@@ -221,7 +227,7 @@
 - Main GUI title now reads the assembly version instead of a hard-coded version string.
 - Reworked the first GUI tab into a guided **BitLocker Recovery Search** workflow: connect to AD, automatically open the OU selector, then search live AD by computer name or Recovery ID.
 - Added live scoped AD recovery lookup so the first screen can retrieve matching BitLocker recovery records directly from the selected OU without requiring a prior CSV export.
-- Removed legacy SYSVOL and `BL` defaults. New installations use `%ProgramData%\BitKeyBridge\RecoveryExport` as the internal default export root with no forced subdirectory.
+- Removed legacy shared-folder defaults. New installations use `%ProgramData%\BitKeyBridge\RecoveryExport` as the internal default export root with no forced subdirectory.
 - Application configuration schema remains v3 for the optional privileged-access/SIEM settings.
 
 ## 0.15.0
@@ -405,7 +411,7 @@
 - Added a Directory Connection GUI tab with DC connection test and session-password clearing.
 - Added CLI connection overrides: `--ad-auto`, `--ad-server`, `--ad-domain`, `--ad-user`, `--ad-password-prompt`, `--ad-integrated`, `--ad-port`, and `--ad-test`.
 - Added configurable local/UNC export root so BitLocker recovery export no longer requires BitKeyBridge itself to run on a domain controller.
-- Kept the legacy SYSVOL root as a backward-compatible fallback when `OutputRoot` is empty.
+- Kept the legacy export root as a backward-compatible fallback when `OutputRoot` is empty (historical behavior, superseded by the local default in later versions).
 - Microsoft 365 / Entra / Intune workflows remain independent of Windows domain membership.
 - Added a CI gate requiring every project version to have a matching CHANGELOG section.
 

@@ -4444,7 +4444,7 @@ public sealed partial class MainForm : DpiAwareForm
                 $"Protected output created successfully.{Environment.NewLine}{Environment.NewLine}" +
                 $"Directory: {result.DirectoryPath}{Environment.NewLine}{shareText}{Environment.NewLine}{Environment.NewLine}" +
                 (dialog.UpdateApplicationConfig
-                    ? "BitKeyBridge export configuration was updated. If an existing WinPE workflow still reads NETLOGON/SYSVOL, update that consumer before switching production export."
+                    ? "BitKeyBridge export configuration was updated. Update any existing recovery consumers to use the selected output folder before switching production export."
                     : "BitKeyBridge export configuration was not changed."),
                 "Secure BitLocker Output",
                 MessageBoxButtons.OK,

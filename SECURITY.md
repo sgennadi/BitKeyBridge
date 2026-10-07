@@ -15,7 +15,7 @@ Do not include real recovery passwords, production LDAP distinguished names, ten
 - Recovery CSV publishing uses a temporary verified file and atomic replacement.
 - The application warns when common broad groups have read access to the output directory.
 
-A dedicated restricted share is preferred over broadly readable SYSVOL/NETLOGON storage for recovery passwords.
+Store recovery passwords in a dedicated folder or share restricted to authorized recovery administrators; avoid broadly readable locations.
 
 
 ## Update security

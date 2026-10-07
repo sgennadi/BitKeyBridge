@@ -7,8 +7,14 @@ public static class UiLayoutSelfTest
         Size ClientSize,
         float FontScale);
 
+    private static int _verifiedControls;
+    private static readonly List<string> Coverage = new();
+
     private static readonly Scenario[] Scenarios =
     [
+        new("DesignedSize", Size.Empty, 1.0F),
+        new("Text125", new Size(1000, 700), 1.25F),
+        new("Text175", new Size(1100, 760), 1.75F),
         new(
             "Compact",
             new Size(
@@ -80,12 +86,17 @@ public static class UiLayoutSelfTest
                     form =
                         factory.Factory();
 
+                    _verifiedControls = 0;
+                    form.ShowInTaskbar = false;
+                    form.Show();
+                    Application.DoEvents();
+
                     form.MinimumSize =
                         Size.Empty;
                     form.MaximumSize =
                         Size.Empty;
-                    form.ClientSize =
-                        scenario.ClientSize;
+                    if (!scenario.ClientSize.IsEmpty)
+                        form.ClientSize = scenario.ClientSize;
 
                     if (Math.Abs(
                             scenario.FontScale -
@@ -118,6 +129,9 @@ public static class UiLayoutSelfTest
                         factory.Name,
                         scenario,
                         failures);
+                    if (_verifiedControls == 0)
+                        failures.Add($"{factory.Name}/{scenario.Name}: no visible controls were checked.");
+                    Coverage.Add($"{factory.Name}/{scenario.Name}: checked {_verifiedControls} visible controls.");
                 }
                 catch (Exception ex)
                 {
@@ -149,7 +163,7 @@ public static class UiLayoutSelfTest
         {
             File.WriteAllLines(
                 reportPath,
-                reportLines);
+                Coverage.Concat(reportLines));
         }
         catch
         {
@@ -509,6 +523,8 @@ public static class UiLayoutSelfTest
             if (!control.Visible)
                 continue;
 
+            _verifiedControls++;
+
             if (control is UiStatusLabel statusLabel)
             {
                 VerifyStatusSurface(
@@ -577,8 +593,7 @@ public static class UiLayoutSelfTest
                         $"{formName}/{scenario.Name}: button '{button.Text}' minimum height is {button.MinimumSize.Height}, expected at least {UiStyle.MinimumButtonHeight}.");
                 }
 
-                if (!button.AutoSize &&
-                    button.Dock !=
+                if (button.Dock !=
                     DockStyle.Fill &&
                     (button.ClientSize.Width <
                          preferred.Width ||
