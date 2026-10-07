@@ -335,9 +335,11 @@ public sealed partial class MainForm
         _disconnectAdButton.TabIndex =
             3;
         _disconnectAdButton.Text =
-            "Disconnect / Forget session";
+            "Disconnect";
         UiStyle.ConfigureActionButton(
             _disconnectAdButton);
+        _disconnectAdButton.Enabled =
+            false;
         _disconnectAdButton.Margin =
             new Padding(
                 0,
