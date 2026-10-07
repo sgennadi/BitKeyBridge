@@ -1234,18 +1234,32 @@ public sealed partial class MainForm
                     row =>
                         row.IsHistory);
 
-            var readStatus =
-                expiredCurrent
-                    ? "Password read successfully, but the current LAPS expiration time is in the past. Rotation may be overdue."
-                    : historyMissing &&
-                      available > 0
-                        ? $"{available} readable password record(s). No password history was returned by the selected source."
-                        : $"{_lapsResult.Entries.Count} record(s), {available} readable password(s).";
+            var readMessages =
+                new List<string>
+                {
+                    $"{_lapsResult.Entries.Count} record(s), {available} readable password(s)."
+                };
+
+            if (historyMissing)
+            {
+                readMessages.Add(
+                    "No password history was returned by the selected source.");
+            }
+
+            if (expiredCurrent)
+            {
+                readMessages.Add(
+                    "The current LAPS expiration time is in the past; password rotation may be overdue.");
+            }
+
+            readMessages.Add(
+                "Passwords clear after two minutes.");
 
             UiStyle.SetStatus(
                 _lapsStatus,
-                readStatus +
-                " Passwords clear after two minutes.",
+                string.Join(
+                    " ",
+                    readMessages),
                 expiredCurrent ||
                 available == 0 ||
                 available !=
@@ -1404,7 +1418,12 @@ public sealed partial class MainForm
         }
 
         if (!string.IsNullOrWhiteSpace(
-                row.StatusDetail))
+                row.StatusDetail) &&
+            !(row.Status ==
+                  LapsPasswordStatus.Available &&
+              row.StatusDetail.Equals(
+                  "Password read successfully.",
+                  StringComparison.OrdinalIgnoreCase)))
         {
             statusText +=
                 ". " +
@@ -1594,9 +1613,15 @@ public sealed partial class MainForm
             new List<string>
             {
                 $"Computer: {result.ComputerName}",
-                $"Directory: {result.DirectoryServer}",
-                $"Device / AD object ID: {result.ComputerId}"
+                $"Directory: {result.DirectoryServer}"
             };
+
+        if (!string.IsNullOrWhiteSpace(
+                result.ComputerId))
+        {
+            parts.Add(
+                $"Device / AD object ID: {result.ComputerId}");
+        }
 
         if (!string.IsNullOrWhiteSpace(
                 result.PasswordVersion))
