@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.21.x** — includes BitLocker Recovery, Legacy/Windows/Entra LAPS current + history, manual AD credentials, Intune/Entra setup wizard, RBAC setup wizard, cancellable operations, secure diagnostics, and x64/x86/ARM64 builds.
+**Current release line: 0.22.x** — adds debounced live search and sortable DataGridView results for BitLocker and LAPS, including partial name/ID matching, key dates and latest-key markers, on top of the existing BitLocker/LAPS, setup wizard, RBAC, diagnostics and x64/x86/ARM64 feature set.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -21,7 +21,7 @@ Administration → Security & Settings now includes **RBAC Setup Wizard...**. It
 The detailed **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...**, and **Privileged Access...** controls remain available for repair and manual/advanced configuration.
 ## LAPS and manual AD connections
 
-The **LAPS** workspace reads Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted AD history, DSRM passwords/history, and Entra credentials/history. Select the source, enter an exact computer/device name or ID, and use **Check access** for a secret-free capability check or **Read LAPS** to retrieve permitted password records. The table supports **All / Current / History** views and shows source/version, account, update time, password age, expiry, and read/decryption status. **Copy account** is separate from **Reveal password** / **Copy password**, and secret actions stay disabled for records that were not successfully read or decrypted. The AD logical password-version GUID is shown when the Windows Server 2025 attribute is available.
+The **LAPS** workspace reads Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted AD history, DSRM passwords/history, and Entra credentials/history. Type part of a computer/device name or ID for debounced metadata search, or press **Enter** to search immediately. Select a device, then use **Check access** for a secret-free capability check or **Read LAPS** to retrieve permitted password records. Discovery results are shown in a sortable DataGridView with device ID, key date metadata when available, latest marker and source. The password/history grid is also sortable and shows source/version, account, key date, latest/current marker, age, expiry, and read/decryption status. **Copy account** is separate from **Reveal password** / **Copy password**, and secret actions stay disabled for records that were not successfully read or decrypted. The AD logical password-version GUID is shown when the Windows Server 2025 attribute is available.
 
 **Connect to AD** and **Discover DC** always open the manual connection dialog. Enter `DOMAIN\user` or `user@domain`, the password, and optionally the domain/DC. An empty DC selects automatic discovery. The dialog explicitly offers the current Windows account as an alternative. Manual connection passwords stay in process memory; protected credential storage remains available in Advanced settings. A selected DC determines the remote domain even on a workstation joined to another domain. After binding, the Recovery connection bar shows DC, domain, identity and LDAP/LDAPS transport. **Disconnect / Forget session** clears the in-memory session identity and loaded Recovery/LAPS state without deleting Credential Manager or machine-DPAPI credentials.
 
@@ -39,7 +39,7 @@ For `Access denied`, missing BitLocker recovery objects, unreadable LAPS attribu
 
 The GUI is intentionally simplified around the real helpdesk workflow.
 
-- **Recovery** — search BitLocker metadata by computer name or Recovery ID and retrieve the selected password only on Reveal/Copy.
+- **Recovery** — debounced live search by partial computer name or partial Recovery ID, sortable key-date/latest results, and selected-password retrieval only on Reveal/Copy.
 - **Devices** — one AD device search with optional Entra/Intune enrichment, Entra recovery-key retrieval, and Intune key rotation.
 - **Administration** — Cloud, security/settings, export, and automation. Visible only to authorized BitKeyBridge administrators.
 - **Health & Audit** — service/health, domain-controller comparison, and security audit. Visible to the same administrator role.
@@ -50,6 +50,9 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 ## Highlights
 
 - Live Active Directory recovery lookup over LDAP v3.
+- Debounced live BitLocker and LAPS search (450 ms), with Enter for immediate search.
+- Partial computer-name and punctuation-insensitive identifier matching.
+- Sortable DataGridView results with key date and latest-key markers where metadata allows it.
 - Dynamic writable-DC discovery; no hard-coded DC names.
 - Explicit DC / standalone / workgroup operation with optional protected AD credentials.
 - Configurable OU scope with remembered last OU and **Entire domain** support.
