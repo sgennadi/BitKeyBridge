@@ -494,26 +494,26 @@ public sealed partial class CloudGraphService
                 "The response body was empty.");
         }
 
-        var span =
-            body.AsSpan();
+        var offset =
+            0;
 
-        if (span.Length >= 3 &&
-            span[0] == 0xEF &&
-            span[1] == 0xBB &&
-            span[2] == 0xBF)
+        if (body.Length >= 3 &&
+            body[0] == 0xEF &&
+            body[1] == 0xBB &&
+            body[2] == 0xBF)
         {
-            span =
-                span[3..];
+            offset =
+                3;
         }
 
         var utf16Le =
-            span.Length >= 2 &&
-            span[0] == 0xFF &&
-            span[1] == 0xFE;
+            body.Length - offset >= 2 &&
+            body[offset] == 0xFF &&
+            body[offset + 1] == 0xFE;
         var utf16Be =
-            span.Length >= 2 &&
-            span[0] == 0xFE &&
-            span[1] == 0xFF;
+            body.Length - offset >= 2 &&
+            body[offset] == 0xFE &&
+            body[offset + 1] == 0xFF;
         var declaredUtf16 =
             !string.IsNullOrWhiteSpace(
                 charset) &&
@@ -530,15 +530,18 @@ public sealed partial class CloudGraphService
                     ? Encoding.BigEndianUnicode
                     : Encoding.Unicode;
 
-            var offset =
-                utf16Le ||
-                utf16Be
-                    ? 2
-                    : 0;
+            if (utf16Le ||
+                utf16Be)
+            {
+                offset +=
+                    2;
+            }
 
             var text =
                 encoding.GetString(
-                    span[offset..])
+                    body,
+                    offset,
+                    body.Length - offset)
                     .TrimStart(
                         '\uFEFF');
 
@@ -547,7 +550,8 @@ public sealed partial class CloudGraphService
         }
 
         return JsonDocument.Parse(
-            span);
+            body.AsMemory(
+                offset));
     }
 
     private static string BuildLapsResponseMetadata(
