@@ -44,6 +44,7 @@ public sealed class LapsDirectoryService
             root["defaultNamingContext"];
 
         string filter;
+
         if (Guid.TryParse(
                 query.Trim('{', '}'),
                 out var objectId))
@@ -468,6 +469,7 @@ public sealed class LapsDirectoryService
             ? LapsSecretCodec.FileTimeUtc(time) : null;
 }
 ));
+
             filter =
                 $"(&(objectCategory=computer)(|(name=*{escaped}*)(dNSHostName=*{escaped}*)))";
         }
@@ -482,10 +484,7 @@ public sealed class LapsDirectoryService
                 filter,
                 SearchScope.Subtree,
                 "name",
-                "objectGUID",
-                "ms-Mcs-AdmPwdExpirationTime",
-                "msLAPS-PasswordExpirationTime",
-                "msLAPS-CurrentPasswordVersion")
+                "objectGUID")
             {
                 SizeLimit =
                     Math.Clamp(
