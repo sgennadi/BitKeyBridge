@@ -60,6 +60,27 @@ jobs:
             throw "CHANGELOG.md is missing required section: $heading"
           }
 
+      - name: Reject silent empty catch blocks
+        shell: pwsh
+        run: |
+          $failures = @()
+          $files = Get-ChildItem src\BitKeyBridge -Recurse -Filter *.cs -File
+          $pattern = 'catch\s*(\([^\)]*\))?\s*\{\s*\}'
+          foreach ($file in $files) {
+            $raw = Get-Content $file.FullName -Raw
+            if ([regex]::IsMatch(
+                  $raw,
+                  $pattern,
+                  [System.Text.RegularExpressions.RegexOptions]::Singleline)) {
+              $failures += $file.FullName
+            }
+          }
+
+          if ($failures) {
+            $failures | ForEach-Object { Write-Host $_ }
+            throw "Silent empty catch blocks are not allowed. Handle, log, or explicitly report non-fatal failures."
+          }
+
       - name: Reject fixed-position WinForms layout
         shell: pwsh
         run: |
