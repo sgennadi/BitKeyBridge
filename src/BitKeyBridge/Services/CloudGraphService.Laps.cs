@@ -484,7 +484,7 @@ public sealed partial class CloudGraphService
             "Entra LAPS response could not be read.");
     }
 
-    private static JsonDocument ParseLapsJsonResponse(
+    internal static JsonDocument ParseLapsJsonResponse(
         byte[] body,
         string? charset)
     {
