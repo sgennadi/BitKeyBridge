@@ -7,6 +7,7 @@ public sealed partial class MainForm
     private readonly CheckBox _autoConnectOnStart = new();
     private readonly Button _connectAdButton = new();
     private readonly Button _connectAdCancelButton = new();
+    private readonly Button _disconnectAdButton = new();
     private readonly ProgressBar _adConnectionProgress = new();
     private readonly UiDiagnosticPanel _recoveryDiagnostics = new();
     private readonly Button _advancedConnectionButton = new();
@@ -183,7 +184,7 @@ public sealed partial class MainForm
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 5,
+                ColumnCount = 6,
                 RowCount = 4,
                 Margin =
                     new Padding(
@@ -193,6 +194,9 @@ public sealed partial class MainForm
                         UiStyle.ControlGap)
             };
 
+        connection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
         connection.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.AutoSize));
@@ -324,12 +328,33 @@ public sealed partial class MainForm
             3,
             0);
 
+        _disconnectAdButton.Name =
+            "DisconnectAdButton";
+        _disconnectAdButton.AccessibleName =
+            "Disconnect Active Directory and forget session credentials";
+        _disconnectAdButton.TabIndex =
+            3;
+        _disconnectAdButton.Text =
+            "Disconnect / Forget session";
+        UiStyle.ConfigureActionButton(
+            _disconnectAdButton);
+        _disconnectAdButton.Margin =
+            new Padding(
+                0,
+                0,
+                UiStyle.ControlGap,
+                0);
+        connection.Controls.Add(
+            _disconnectAdButton,
+            4,
+            0);
+
         _advancedConnectionButton.Name =
             "AdvancedConnectionButton";
         _advancedConnectionButton.AccessibleName =
             "Advanced Active Directory connection settings";
         _advancedConnectionButton.TabIndex =
-            3;
+            4;
         _advancedConnectionButton.Text =
             "Advanced connection settings...";
         UiStyle.ConfigureActionButton(
@@ -341,7 +366,7 @@ public sealed partial class MainForm
                 0);
         connection.Controls.Add(
             _advancedConnectionButton,
-            4,
+            5,
             0);
 
         _adConnectionStatus.Name =
@@ -359,7 +384,7 @@ public sealed partial class MainForm
             1);
         connection.SetColumnSpan(
             _adConnectionStatus,
-            5);
+            6);
 
         _adConnectionProgress.Name =
             "AdConnectionProgress";
@@ -381,7 +406,7 @@ public sealed partial class MainForm
             2);
         connection.SetColumnSpan(
             _adConnectionProgress,
-            5);
+            6);
 
         connection.Controls.Add(
             _recoveryDiagnostics,
@@ -389,7 +414,7 @@ public sealed partial class MainForm
             3);
         connection.SetColumnSpan(
             _recoveryDiagnostics,
-            5);
+            6);
 
         root.Controls.Add(
             connection,
@@ -542,6 +567,9 @@ public sealed partial class MainForm
 
         _connectAdCancelButton.Click +=
             (_, _) => CancelDirectoryConnection();
+
+        _disconnectAdButton.Click +=
+            (_, _) => DisconnectDirectorySession();
 
         _startSelectOu.Click +=
             async (_, _) =>
@@ -703,7 +731,7 @@ public sealed partial class MainForm
         grid.Controls.Add(
             keyLayout,
             1,
-            5);
+            6);
 
         grid.Controls.Add(new Label
         {
