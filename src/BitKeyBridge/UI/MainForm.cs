@@ -756,8 +756,11 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task ConnectCloudFromUiAsync()
     {
-        if (_cloudConnecting)
+        if (_cloudConnecting ||
+            _cloudMaintenanceCancellation is not null)
+        {
             return;
+        }
 
         using var cancellation =
             new CancellationTokenSource();
@@ -765,12 +768,8 @@ public sealed partial class MainForm : DpiAwareForm
             cancellation;
         _cloudConnecting =
             true;
-        _cloudConnectButton.Enabled =
-            false;
-        _cloudConnectCancelButton.Enabled =
-            true;
-        _cloudProgress.Visible =
-            true;
+        SetCloudOperationRunning(
+            true);
         _cloudDiagnostics.Clear();
 
         try
@@ -794,31 +793,70 @@ public sealed partial class MainForm : DpiAwareForm
 
             if (!IsDisposed)
             {
-                _cloudConnectButton.Enabled =
-                    true;
-                _cloudConnectCancelButton.Enabled =
-                    false;
-                _cloudProgress.Visible =
-                    false;
+                SetCloudOperationRunning(
+                    false);
             }
         }
     }
 
     private void CancelCloudConnection()
     {
-        if (!_cloudConnecting ||
-            _cloudConnectCancellation is null)
-        {
+        var cancellation =
+            _cloudConnectCancellation ??
+            _cloudMaintenanceCancellation;
+
+        if (cancellation is null)
             return;
-        }
 
         _cloudConnectCancelButton.Enabled =
             false;
         UiStyle.SetStatus(
             _cloudStatus,
-            "Cancelling Microsoft Graph connection...",
+            "Cancelling Microsoft Graph operation...",
             UiStatusKind.Busy);
-        _cloudConnectCancellation.Cancel();
+        cancellation.Cancel();
+    }
+
+    private void SetCloudOperationRunning(
+        bool running)
+    {
+        _cloudSaveButton.Enabled =
+            !running;
+        _cloudConnectButton.Enabled =
+            !running;
+        _cloudSetupButton.Enabled =
+            !running;
+        _cloudBootstrapButton.Enabled =
+            !running;
+        _cloudRolloverButton.Enabled =
+            !running;
+        _cloudConnectCancelButton.Enabled =
+            running;
+        _cloudProgress.Visible =
+            running;
+
+        _cloudTenant.Enabled =
+            !running;
+        _cloudClient.Enabled =
+            !running;
+        _cloudAuthMode.Enabled =
+            !running;
+        _cloudLapsPermissions.Enabled =
+            !running;
+
+        if (running)
+        {
+            _cloudUsername.Enabled =
+                false;
+            _cloudPassword.Enabled =
+                false;
+            _cloudThumbprint.Enabled =
+                false;
+        }
+        else
+        {
+            UpdateCloudAuthUi();
+        }
     }
 
     private async Task<bool> EnsureCloudTokenAsync(bool forLaps = false, CancellationToken ct = default)
@@ -884,42 +922,67 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task RunNativeAutoSetupAsync()
     {
+        if (_cloudConnecting ||
+            _cloudMaintenanceCancellation is not null)
+        {
+            return;
+        }
+
         SaveCloudFields();
 
-        var usingDefaultBootstrap = string.IsNullOrWhiteSpace(_cloudConfig.BootstrapClientId) ||
+        var usingDefaultBootstrap =
+            string.IsNullOrWhiteSpace(
+                _cloudConfig.BootstrapClientId) ||
             string.Equals(
                 _cloudConfig.BootstrapClientId,
                 EntraSetupService.DefaultBootstrapClientId,
                 StringComparison.OrdinalIgnoreCase);
 
-        var bootstrapDescription = usingDefaultBootstrap
-            ? $"Microsoft first-party '{EntraSetupService.DefaultBootstrapDisplayName}'"
-            : $"custom bootstrap Client ID {_cloudConfig.BootstrapClientId}";
+        var bootstrapDescription =
+            usingDefaultBootstrap
+                ? $"Microsoft first-party '{EntraSetupService.DefaultBootstrapDisplayName}'"
+                : $"custom bootstrap Client ID {_cloudConfig.BootstrapClientId}";
 
-        var answer = MessageBox.Show(
-            this,
-            "BitKeyBridge will create or repair its dedicated Microsoft Entra App Registration automatically." +
-            Environment.NewLine + Environment.NewLine +
-            $"Bootstrap: {bootstrapDescription}" + Environment.NewLine +
-            "You will be asked to sign in with an Entra administrator account using Device Code and approve the requested management permissions." +
-            Environment.NewLine + Environment.NewLine +
-            "BitKeyBridge will then create/update the application, Enterprise Application, Graph permissions, admin-consent grants and local certificate. No administrator password is stored." +
-            Environment.NewLine + Environment.NewLine +
-            "Continue?",
-            "First-Run / Repair Entra Setup",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Information,
-            MessageBoxDefaultButton.Button1);
-        if (answer != DialogResult.Yes) return;
+        var answer =
+            MessageBox.Show(
+                this,
+                "BitKeyBridge will create or repair its dedicated Microsoft Entra App Registration automatically." +
+                Environment.NewLine +
+                Environment.NewLine +
+                $"Bootstrap: {bootstrapDescription}" +
+                Environment.NewLine +
+                "You will be asked to sign in with an Entra administrator account using Device Code and approve the requested management permissions." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "BitKeyBridge will then create/update the application, Enterprise Application, Graph permissions, admin-consent grants and local certificate. No administrator password is stored." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Continue?",
+                "First-Run / Repair Entra Setup",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information,
+                MessageBoxDefaultButton.Button1);
+
+        if (answer != DialogResult.Yes)
+            return;
+
+        using var cancellation =
+            new CancellationTokenSource();
+        _cloudMaintenanceCancellation =
+            cancellation;
+        SetCloudOperationRunning(
+            true);
+        _cloudDiagnostics.Clear();
 
         try
         {
-            Enabled = false;
             UiStyle.SetStatus(
                 _cloudStatus,
                 "Starting first-run Entra setup...",
                 UiStatusKind.Busy);
-            using var setup = new EntraSetupService();
+
+            using var setup =
+                new EntraSetupService();
             var progress =
                 new Progress<string>(
                     message =>
@@ -927,49 +990,86 @@ public sealed partial class MainForm : DpiAwareForm
                             _cloudStatus,
                             message,
                             UiStatusKind.Busy));
-            var result = await setup.RunAsync(
-                _cloudTenant.Text,
-                _cloudConfig.BootstrapClientId,
-                "BitKeyBridge",
-                _cloudConfig,
-                ShowDeviceCodeAsync,
-                progress, includeLapsPermissions: _cloudLapsPermissions.Checked);
+
+            var result =
+                await setup.RunAsync(
+                    _cloudTenant.Text,
+                    _cloudConfig.BootstrapClientId,
+                    "BitKeyBridge",
+                    _cloudConfig,
+                    ShowDeviceCodeAsync,
+                    progress,
+                    cancellationToken:
+                        cancellation.Token,
+                    includeLapsPermissions:
+                        _cloudLapsPermissions.Checked);
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
+
             LoadCloudFields();
-            _cloudAuthMode.SelectedIndex = 0;
+            _cloudAuthMode.SelectedIndex =
+                0;
             SaveCloudFields();
+
             _audit.Write(
                 "EntraAutoSetup",
-                computerName: Environment.MachineName,
-                source: "Entra",
-                authMode: "DeviceCode",
-                details: $"ApplicationId={result.ClientId}; ServicePrincipalId={result.ServicePrincipalId}");
+                computerName:
+                    Environment.MachineName,
+                source:
+                    "Entra",
+                authMode:
+                    "DeviceCode",
+                details:
+                    $"ApplicationId={result.ClientId}; ServicePrincipalId={result.ServicePrincipalId}");
+
             UiStyle.SetStatus(
                 _cloudStatus,
-                $"First-run setup complete. BitKeyBridge App Client ID: {result.ClientId}; certificate: {result.CertificateThumbprint}",
+                $"First-run setup complete. Client ID: {result.ClientId}; certificate expires {result.CertificateNotAfter:yyyy-MM-dd}.",
                 UiStatusKind.Success);
-            MessageBox.Show(
-                this,
-                "Microsoft Entra setup completed successfully." + Environment.NewLine + Environment.NewLine +
-                $"BitKeyBridge Client ID: {result.ClientId}" + Environment.NewLine +
-                $"Certificate: {result.CertificateThumbprint}" + Environment.NewLine +
-                $"Certificate expires: {result.CertificateNotAfter:yyyy-MM-dd}" + Environment.NewLine + Environment.NewLine +
-                "Authentication was switched to Device Code. You can now use Connect / Test, Cloud Search and Unified Devices.",
-                "BitKeyBridge Entra Setup",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+
+            _cloudDiagnostics.ShowMessage(
+                "Microsoft Entra setup completed successfully.",
+                $"Client ID: {result.ClientId}" +
+                Environment.NewLine +
+                $"Certificate: {result.CertificateThumbprint}" +
+                Environment.NewLine +
+                $"Certificate expires: {result.CertificateNotAfter:yyyy-MM-dd}" +
+                Environment.NewLine +
+                "Authentication was switched to Device Code.");
+        }
+        catch (OperationCanceledException)
+        {
+            _audit.Write(
+                "EntraAutoSetup",
+                "Canceled",
+                source:
+                    "Entra",
+                authMode:
+                    "DeviceCode");
+
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "First-Run / Repair canceled.",
+                UiStatusKind.Warning);
         }
         catch (Exception ex)
         {
             _audit.Write(
                 "EntraAutoSetup",
                 "Failed",
-                source: "Entra",
-                authMode: "DeviceCode",
-                details: ex.Message);
+                source:
+                    "Entra",
+                authMode:
+                    "DeviceCode",
+                details:
+                    ex.Message);
+
             UiStyle.SetStatus(
                 _cloudStatus,
-                "Auto Setup failed: " + ex.Message,
+                "Auto Setup failed. Review diagnostics below.",
                 UiStatusKind.Error);
+
             _cloudDiagnostics.ShowError(
                 "First-Run / Repair Entra setup failed. If Conditional Access blocks the Microsoft first-party bootstrap, configure a tenant-approved public-client Application ID with Bootstrap... and try again.",
                 "EntraAutoSetup",
@@ -978,11 +1078,32 @@ public sealed partial class MainForm : DpiAwareForm
                 ("BootstrapClientId", _cloudConfig.BootstrapClientId),
                 ("IncludeLapsPermissions", _cloudLapsPermissions.Checked.ToString()));
         }
-        finally { Enabled = true; }
+        finally
+        {
+            if (ReferenceEquals(
+                    _cloudMaintenanceCancellation,
+                    cancellation))
+            {
+                _cloudMaintenanceCancellation =
+                    null;
+            }
+
+            if (!IsDisposed)
+            {
+                SetCloudOperationRunning(
+                    false);
+            }
+        }
     }
 
     private async Task RolloverEntraCertificateGuiAsync()
     {
+        if (_cloudConnecting ||
+            _cloudMaintenanceCancellation is not null)
+        {
+            return;
+        }
+
         SaveCloudFields();
 
         if (string.IsNullOrWhiteSpace(
@@ -990,35 +1111,41 @@ public sealed partial class MainForm : DpiAwareForm
             string.IsNullOrWhiteSpace(
                 _cloudConfig.CertificateThumbprint))
         {
-            MessageBox.Show(
-                this,
-                "Run First-Run / Repair Setup first. A managed Client ID and certificate are required before rollover.",
-                "Entra Certificate Rollover",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Run First-Run / Repair first. A managed Client ID and certificate are required before rollover.",
+                UiStatusKind.Warning);
             return;
         }
 
-        var answer = MessageBox.Show(
-            this,
-            "Roll over the BitKeyBridge Entra certificate?" +
-            Environment.NewLine +
-            Environment.NewLine +
-            "A new LocalMachine certificate will be added to the existing App Registration and tested with app-only Graph authentication before BitKeyBridge switches its configuration." +
-            Environment.NewLine +
-            Environment.NewLine +
-            "The previous Graph credential and local certificate will be retained for rollback/grace.",
-            "Entra Certificate Rollover",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
+        var answer =
+            MessageBox.Show(
+                this,
+                "Roll over the BitKeyBridge Entra certificate?" +
+                Environment.NewLine +
+                Environment.NewLine +
+                "A new LocalMachine certificate will be added to the existing App Registration and tested with app-only Graph authentication before BitKeyBridge switches its configuration." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "The previous Graph credential and local certificate will be retained for rollback/grace.",
+                "Entra Certificate Rollover",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
 
         if (answer != DialogResult.Yes)
             return;
 
+        using var cancellation =
+            new CancellationTokenSource();
+        _cloudMaintenanceCancellation =
+            cancellation;
+        SetCloudOperationRunning(
+            true);
+        _cloudDiagnostics.Clear();
+
         try
         {
-            Enabled = false;
             UiStyle.SetStatus(
                 _cloudStatus,
                 "Starting staged Entra certificate rollover...",
@@ -1039,7 +1166,11 @@ public sealed partial class MainForm : DpiAwareForm
                 await lifecycle.RolloverAsync(
                     _cloudConfig,
                     ShowDeviceCodeAsync,
-                    progress);
+                    progress,
+                    cancellation.Token);
+
+            cancellation.Token
+                .ThrowIfCancellationRequested();
 
             LoadCloudFields();
             RefreshMachineCloudStatus();
@@ -1047,8 +1178,10 @@ public sealed partial class MainForm : DpiAwareForm
 
             _audit.Write(
                 "EntraCertificateRollover",
-                source: "Entra",
-                authMode: "DeviceCode",
+                source:
+                    "Entra",
+                authMode:
+                    "DeviceCode",
                 details:
                     $"Previous={result.PreviousThumbprint}; New={result.NewThumbprint}; Verified={result.CertificateAuthenticationVerified}; MachineConfigUpdated={result.MachineCloudConfigUpdated}; ServiceKeyAccess={result.ServiceKeyAccessStatus}");
 
@@ -1059,11 +1192,8 @@ public sealed partial class MainForm : DpiAwareForm
                     ? UiStatusKind.Success
                     : UiStatusKind.Warning);
 
-            MessageBox.Show(
-                this,
-                "Entra certificate rollover completed successfully." +
-                Environment.NewLine +
-                Environment.NewLine +
+            _cloudDiagnostics.ShowMessage(
+                "Entra certificate rollover completed.",
                 $"Previous: {result.PreviousThumbprint}" +
                 Environment.NewLine +
                 $"New: {result.NewThumbprint}" +
@@ -1074,27 +1204,38 @@ public sealed partial class MainForm : DpiAwareForm
                 Environment.NewLine +
                 $"Machine service config updated: {result.MachineCloudConfigUpdated}" +
                 Environment.NewLine +
-                Environment.NewLine +
-                "The previous credential/certificate was retained for rollback/grace.",
-                "Entra Certificate Rollover",
-                MessageBoxButtons.OK,
-                result.Warnings.Count == 0
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
+                "The previous credential/certificate was retained for rollback/grace.");
+        }
+        catch (OperationCanceledException)
+        {
+            _audit.Write(
+                "EntraCertificateRollover",
+                "Canceled",
+                source:
+                    "Entra",
+                authMode:
+                    "DeviceCode");
+
+            UiStyle.SetStatus(
+                _cloudStatus,
+                "Certificate rollover canceled.",
+                UiStatusKind.Warning);
         }
         catch (Exception ex)
         {
             _audit.Write(
                 "EntraCertificateRollover",
                 "Failed",
-                source: "Entra",
-                authMode: "DeviceCode",
-                details: ex.Message);
+                source:
+                    "Entra",
+                authMode:
+                    "DeviceCode",
+                details:
+                    ex.Message);
 
             UiStyle.SetStatus(
                 _cloudStatus,
-                "Certificate rollover failed: " +
-                ex.Message,
+                "Certificate rollover failed. Review diagnostics below.",
                 UiStatusKind.Error);
 
             _cloudDiagnostics.ShowError(
@@ -1107,7 +1248,19 @@ public sealed partial class MainForm : DpiAwareForm
         }
         finally
         {
-            Enabled = true;
+            if (ReferenceEquals(
+                    _cloudMaintenanceCancellation,
+                    cancellation))
+            {
+                _cloudMaintenanceCancellation =
+                    null;
+            }
+
+            if (!IsDisposed)
+            {
+                SetCloudOperationRunning(
+                    false);
+            }
         }
     }
 
