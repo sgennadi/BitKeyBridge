@@ -7,6 +7,7 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
     private readonly UiStatusLabel _coverageStatus = new();
     private readonly UiStatusLabel _exportStatus = new();
     private readonly TableLayoutPanel _scopeGrid = new();
+    private readonly UiDiagnosticPanel _diagnostics = new();
 
     public RemoteApiScopedTokenDialog(
         AppConfig config)
@@ -27,12 +28,13 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 4
+            RowCount = 5
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
 
@@ -100,7 +102,8 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
             close;
         close.Click += (_, _) => Close();
         footer.Controls.Add(close);
-        root.Controls.Add(footer, 0, 3);
+        root.Controls.Add(_diagnostics, 0, 3);
+        root.Controls.Add(footer, 0, 4);
 
         RefreshStatuses();
     }
@@ -215,12 +218,10 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Remote API Scoped Token",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _diagnostics.ShowError(
+                "Remote API scoped-token operation failed.",
+                "RemoteApiScopedToken",
+                ex);
         }
     }
 
@@ -261,12 +262,10 @@ public sealed class RemoteApiScopedTokenDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Remote API Scoped Token",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _diagnostics.ShowError(
+                "Remote API scoped-token operation failed.",
+                "RemoteApiScopedToken",
+                ex);
         }
     }
 
