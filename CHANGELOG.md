@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.0
+
+- Added a guided **Intune / Entra Setup Wizard** as the recommended first-run cloud path. It checks local administrator prerequisites, captures tenant selection, explains the exact Microsoft Graph capabilities, supports optional Entra LAPS, and reuses the native Device Code setup engine to create/repair the App Registration and Enterprise Application, grant tenant-wide consent, and create/reuse a LocalMachine certificate.
+- The cloud wizard performs non-destructive post-setup verification with certificate authentication: required app-only roles are checked directly from the issued access token, BitLocker metadata access is tested, and the Intune managed-device endpoint is queried without rotating any key. Optional DeviceLocalCredential.Read.All is also verified in the token when Entra LAPS is selected; no LAPS password is requested.
+- Added a guided **RBAC Setup Wizard** for Recovery Readers, Intune Rotation Operators, BitKeyBridge Administrators, local-Administrators bypass, and RBAC enable/disable state. The wizard can add the current Windows identity to selected roles, validates every configured Windows principal, previews effective access, and blocks an obvious current-admin lockout before saving.
+- RBAC policy defaults remain unchanged: the wizard does not silently enable RBAC, JIT recovery, two-person approval, or SIEM. Changes are committed only after **Finish**; advanced RBAC and Privileged Access dialogs remain available.
+- Added both setup wizards to compact, 150% large-text and 200% UI layout self-tests. The existing native C#/.NET, no-PowerShell architecture and x64/x86/ARM64 release model remain unchanged.
+
 ## 0.20.0
 
 - Completed the native **BitLocker + LAPS** helpdesk workflow across Active Directory, Microsoft Entra ID and Intune without PowerShell, shell fallbacks, the ActiveDirectory PowerShell module or Microsoft Graph PowerShell SDK.
