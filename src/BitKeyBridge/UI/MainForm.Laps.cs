@@ -1282,9 +1282,16 @@ public sealed partial class MainForm
                     _lapsResult.ComputerId,
                     "LAPS read");
             }
-            _lapsDetails.Text =
-                BuildLapsSummaryText(
-                    _lapsResult);
+            if (_lapsRows.SelectedRows.Count > 0)
+            {
+                SelectLapsEntry();
+            }
+            else
+            {
+                _lapsDetails.Text =
+                    BuildLapsSummaryText(
+                        _lapsResult);
+            }
 
             var expiredCurrent =
                 _lapsResult.Entries.Any(
