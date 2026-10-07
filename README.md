@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.22.x** — adds debounced live search and sortable DataGridView results for BitLocker and LAPS, including partial name/ID matching, key dates and latest-key markers, on top of the existing BitLocker/LAPS, setup wizard, RBAC, diagnostics and x64/x86/ARM64 feature set.
+**Current release line: 0.23.x** — adds a connection-first Start workspace: BitKeyBridge opens on AD session status, connects automatically when possible, then offers direct BitLocker Recovery or LAPS Passwords actions. The 0.22 live-search/DataGridView work and the existing setup, RBAC, diagnostics and x64/x86/ARM64 feature set remain included.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -19,6 +19,17 @@ Required Graph capabilities configured by the wizard are **BitlockerKey.Read.All
 Administration → Security & Settings now includes **RBAC Setup Wizard...**. It guides the administrator through enabling/disabling RBAC, local-Administrators bypass, Recovery Readers, Rotation Operators, and BitKeyBridge Administrators. Principals are validated before saving, the current Windows identity is previewed against the proposed policy, and the wizard blocks a configuration that would remove the current non-bypass administrator from BitKeyBridge Administration. Nothing changes until **Finish**. JIT recovery, two-person approval, and SIEM remain separate opt-in controls under **Privileged Access...**.
 
 The detailed **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...**, and **Privileged Access...** controls remain available for repair and manual/advanced configuration.
+## Start workflow (0.23.0)
+
+The GUI now opens on **Start** instead of immediately entering Recovery. Start shows the shared Active Directory connection state first. When automatic connection is enabled, BitKeyBridge tries the configured AD session using the current Windows identity or configured protected credential without showing an interactive password prompt.
+
+If Session credential mode requires a password that is not loaded yet, Start reports **Connection required** and waits for **Connect to AD**. After a successful bind, the two main helpdesk actions become available:
+
+- **BitLocker Recovery** — opens Recovery in **Live AD** mode and focuses the computer / Recovery ID search box.
+- **LAPS Passwords** — opens LAPS with **Active Directory** selected and focuses the computer search box.
+
+**Disconnect** clears the in-memory AD session credential and disables both Start actions. **Connection settings...** opens the existing advanced AD connection configuration. The top-level Recovery, Devices, LAPS, Administration and Health & Audit tabs remain available, so Local cache and Entra-only workflows are not removed.
+
 ## LAPS and manual AD connections
 
 The **LAPS** workspace reads Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted AD history, DSRM passwords/history, and Entra credentials/history. Type part of a computer/device name or ID for debounced metadata search. Select a device and press **Enter** or double-click to read LAPS immediately; pressing Enter on an exact/single search result also proceeds directly to the read. The **Search** button remains metadata-only and never reads a password. Discovery results are shown in a sortable DataGridView with device ID, key date metadata when available, latest marker and source. The password/history grid is also sortable and shows source/version, account, key date, latest/current marker, age, expiry, and read/decryption status. A single returned credential row is selected automatically while the password remains masked. Expired current credentials are marked **Available / Expired** with a rotation-overdue warning. **Copy account** is separate from **Reveal password** / **Copy password**, and secret actions stay disabled for records that were not successfully read or decrypted. The AD logical password-version GUID is shown only when the Windows Server 2025 attribute is actually available.
@@ -39,9 +50,11 @@ For `Access denied`, missing BitLocker recovery objects, unreadable LAPS attribu
 
 The GUI is intentionally simplified around the real helpdesk workflow.
 
+- **Start** — default landing page with shared AD connection status and the primary **BitLocker Recovery** / **LAPS Passwords** choices.
 - **Recovery** — debounced live search by partial computer name or partial Recovery ID, sortable key-date/latest results, and selected-password retrieval only on Reveal/Copy.
 - **Devices** — one AD device search with optional Entra/Intune enrichment, Entra recovery-key retrieval, and Intune key rotation.
-- **Administration** — Cloud, security/settings, export, and automation. Visible only to authorized BitKeyBridge administrators.
+- **LAPS** — debounced device discovery plus direct Enter/double-click reading of the selected LAPS device.
+- **Administration** — Cloud, Updates, security/settings, export, and automation. Visible only to authorized BitKeyBridge administrators.
 - **Health & Audit** — service/health, domain-controller comparison, and security audit. Visible to the same administrator role.
 - **Tools** — consolidated shortcuts for export files/logs/folders, Windows Event Log, and the latest GitHub release.
 
