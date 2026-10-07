@@ -700,7 +700,7 @@ public sealed partial class MainForm
                 105),
             UiStyle.CreateSortableTextColumn(
                 "LapsDate",
-                "LAPS key date",
+                "LAPS metadata date",
                 130)
         ]);
         _homeSearchResults.Columns["BitLockerDate"]!
