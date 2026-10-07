@@ -16,6 +16,8 @@ public sealed partial class MainForm
     private readonly TextBox _lapsPassword = new();
     private readonly RichTextBox _lapsDetails = new();
     private readonly UiStatusLabel _lapsStatus = new();
+    private readonly ProgressBar _lapsProgress = new();
+    private readonly UiDiagnosticPanel _lapsDiagnostics = new();
     private LapsReadResult? _lapsResult;
     private CancellationTokenSource? _lapsReadCancellation;
     private System.Windows.Forms.Timer? _lapsClearTimer;
@@ -30,10 +32,10 @@ public sealed partial class MainForm
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(UiStyle.PagePadding),
-            ColumnCount = 1, RowCount = 7
+            ColumnCount = 1, RowCount = 9
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 7; i++)
+        for (var i = 0; i < 9; i++)
             root.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, i == 3 ? 100F : 0F));
         tab.Controls.Add(root);
         root.Controls.Add(new Label
@@ -131,6 +133,17 @@ public sealed partial class MainForm
         UiStyle.SetStatus(_lapsStatus, "Choose a source and computer. Read LAPS checks access and reads current passwords and optional history.", UiStatusKind.Neutral);
         root.Controls.Add(_lapsStatus, 0, 6);
 
+        _lapsProgress.Name = "LapsProgress";
+        _lapsProgress.AccessibleName = "LAPS read progress";
+        _lapsProgress.Dock = DockStyle.Top;
+        _lapsProgress.Style = ProgressBarStyle.Marquee;
+        _lapsProgress.MarqueeAnimationSpeed = 25;
+        _lapsProgress.Visible = false;
+        _lapsProgress.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
+        root.Controls.Add(_lapsProgress, 0, 7);
+
+        root.Controls.Add(_lapsDiagnostics, 0, 8);
+
         _lapsRead.Click += async (_, _) => await ReadLapsAsync();
         _lapsCancel.Click += (_, _) => CancelLapsRead();
         _lapsQuery.KeyDown += async (_, e) =>
@@ -195,6 +208,8 @@ public sealed partial class MainForm
         _lapsReading = true;
         _lapsRead.Enabled = false;
         _lapsCancel.Enabled = true;
+        _lapsProgress.Visible = true;
+        _lapsDiagnostics.Clear();
         _lapsSource.Enabled = false;
         _lapsQuery.Enabled = false;
         _lapsHistory.Enabled = false;
@@ -265,7 +280,16 @@ public sealed partial class MainForm
             if (IsDisposed || generation != _lapsGeneration) return;
             // Secret parsers and native decryption emit fixed, secret-free errors.
             _audit.Write("ReadLapsPasswords", "Failed", query, resourceId, source, details: ex.Message);
-            UiStyle.SetStatus(_lapsStatus, "LAPS read failed: " + ex.Message, UiStatusKind.Error);
+            UiStyle.SetStatus(_lapsStatus, "LAPS read failed. Review diagnostics below.", UiStatusKind.Error);
+            _lapsDiagnostics.ShowError(
+                "LAPS read failed.",
+                "ReadLapsPasswords",
+                ex,
+                ("Source", source),
+                ("Lookup", query),
+                ("IncludeHistory", history.ToString()),
+                ("Server", _config.AdServer),
+                ("Domain", _config.AdDomain));
         }
         finally
         {
@@ -279,6 +303,7 @@ public sealed partial class MainForm
                 _lapsSource.Enabled = true;
                 _lapsQuery.Enabled = true;
                 _lapsHistory.Enabled = true;
+                _lapsProgress.Visible = false;
             }
         }
     }
@@ -356,6 +381,7 @@ public sealed partial class MainForm
         _lapsPassword.UseSystemPasswordChar = true;
         _lapsRows.Items.Clear();
         _lapsDetails.Clear();
+        _lapsDiagnostics.Clear();
         _lapsReveal.Text = "Reveal password";
         _lapsReveal.Enabled = _lapsCopy.Enabled = false;
         _lapsResult?.Dispose();
