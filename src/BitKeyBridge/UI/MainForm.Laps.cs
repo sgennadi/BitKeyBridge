@@ -1186,12 +1186,21 @@ public sealed partial class MainForm
             ? context : null;
     }
 
+    private LapsPasswordEntry? GetSelectedLapsEntry()
+    {
+        return _lapsRows.SelectedRows.Count == 1
+            ? _lapsRows.SelectedRows[0].Tag as
+                LapsPasswordEntry
+            : null;
+    }
+
     private void SelectLapsEntry()
     {
         _lapsPassword.Clear();
         _lapsPassword.UseSystemPasswordChar = true;
         _lapsReveal.Text = "Reveal password";
-        var row = _lapsRows.SelectedItems.Count == 1 ? _lapsRows.SelectedItems[0].Tag as LapsPasswordEntry : null;
+        var row =
+            GetSelectedLapsEntry();
         var readable =
             row is
             {
@@ -1237,12 +1246,14 @@ public sealed partial class MainForm
             _lapsReveal.Text = "Reveal password";
             return;
         }
-        if (_lapsResult is null || _lapsRows.SelectedItems.Count != 1 ||
-            _lapsRows.SelectedItems[0].Tag is not LapsPasswordEntry
-            {
-                HasPassword: true,
-                Status: LapsPasswordStatus.Available
-            } row)
+        if (_lapsResult is null ||
+            GetSelectedLapsEntry() is not
+                LapsPasswordEntry
+                {
+                    HasPassword: true,
+                    Status:
+                        LapsPasswordStatus.Available
+                } row)
         {
             return;
         }
@@ -1285,66 +1296,50 @@ public sealed partial class MainForm
         if (_lapsRows.IsDisposed)
             return;
 
-        _lapsRows.BeginUpdate();
-        try
+        _lapsRows.Rows.Clear();
+
+        if (_lapsResult is null)
+            return;
+
+        var mode =
+            _lapsView.SelectedIndex;
+
+        foreach (var row in
+                 _lapsResult.OrderedEntries)
         {
-            _lapsRows.Items.Clear();
-
-            if (_lapsResult is null)
-                return;
-
-            var mode =
-                _lapsView.SelectedIndex;
-
-            foreach (var row in
-                     _lapsResult.OrderedEntries)
+            if (mode == 1 &&
+                row.IsHistory)
             {
-                if (mode == 1 &&
-                    row.IsHistory)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                if (mode == 2 &&
-                    !row.IsHistory)
-                {
-                    continue;
-                }
+            if (mode == 2 &&
+                !row.IsHistory)
+            {
+                continue;
+            }
 
-                var item =
-                    new ListViewItem(
-                        row.Source);
-                item.SubItems.Add(
+            var rowIndex =
+                _lapsRows.Rows.Add(
+                    row.Source,
                     row.IsHistory
                         ? "History"
-                        : "Current");
-                item.SubItems.Add(
-                    row.AccountName);
-                item.SubItems.Add(
-                    row.UpdatedAtUtc?
-                        .ToString(
-                            "yyyy-MM-dd HH:mm:ss") ??
-                    "Not stored");
-                item.SubItems.Add(
+                        : "Current",
+                    row.AccountName,
+                    row.UpdatedAtUtc,
+                    row.IsHistory
+                        ? "No"
+                        : "Yes",
                     FormatLapsAge(
-                        row.UpdatedAtUtc));
-                item.SubItems.Add(
-                    row.ExpiresAtUtc?
-                        .ToString(
-                            "yyyy-MM-dd HH:mm:ss") ??
-                    "Not stored");
-                item.SubItems.Add(
+                        row.UpdatedAtUtc),
+                    row.ExpiresAtUtc,
                     row.Status.ToString());
-                item.Tag =
-                    row;
-                _lapsRows.Items.Add(
-                    item);
-            }
+
+            _lapsRows.Rows[rowIndex].Tag =
+                row;
         }
-        finally
-        {
-            _lapsRows.EndUpdate();
-        }
+
+        _lapsRows.ClearSelection();
     }
 
     private static string FormatLapsAge(
@@ -1371,8 +1366,8 @@ public sealed partial class MainForm
 
     private void CopySelectedLapsAccount()
     {
-        if (_lapsRows.SelectedItems.Count != 1 ||
-            _lapsRows.SelectedItems[0].Tag is not LapsPasswordEntry row ||
+        if (GetSelectedLapsEntry() is not
+                LapsPasswordEntry row ||
             string.IsNullOrWhiteSpace(
                 row.AccountName))
         {
@@ -1716,7 +1711,7 @@ public sealed partial class MainForm
             ClearTrackedRecoveryClipboard();
         _lapsPassword.Clear();
         _lapsPassword.UseSystemPasswordChar = true;
-        _lapsRows.Items.Clear();
+        _lapsRows.Rows.Clear();
         _lapsDetails.Clear();
         _lapsDiagnostics.Clear();
         _lapsReveal.Text = "Reveal password";
