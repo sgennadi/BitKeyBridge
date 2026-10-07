@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.24.0
+
+- Reworked **Start** into the primary helpdesk dashboard. One metadata-only search now checks both **BitLocker** and **LAPS** by partial computer name, Recovery ID or device/object ID, with the existing 450 ms debounce and immediate **Enter** search.
+- Start search results are shown in one sortable DataGridView with computer name, BitLocker status/date and LAPS status/metadata date. A single result is selected automatically.
+- Start now uses human-readable states instead of raw implementation details: **Available**, **Multiple keys**, **Old key**, **No backup**, **Detected** and **Expired**. Secret-read failures continue to surface as **Access denied**, **Decrypt denied**, **Invalid data** or **No backup** when a real LAPS read is attempted.
+- Start action buttons are context-aware: **BitLocker Recovery** is disabled when the selected computer has no recovery-key metadata, and **LAPS Passwords** is disabled when no LAPS backup indicator is present. Recovery-ID-like input prefers the BitLocker path.
+- Added a user-scoped **Recent computers** list. It stores only computer/device identifiers, last action and timestamp in LocalAppData; BitLocker keys and LAPS passwords are never stored. Successful direct BitLocker Reveal/Copy and LAPS reads also update Recent.
+- Moved detailed Active Directory connection settings out of Recovery and onto **Start → Advanced**. Recovery keeps only the task-specific source/connect controls.
+- Simplified the normal credential choice on Start to **Use current Windows account** or **Use another AD account**. DC/FQDN, domain, port, LDAPS, credential-storage mode and vault actions remain available under **Advanced**.
+- Added a persistent bottom connection/status bar showing AD session state and the running BitKeyBridge version. Clicking the connection status returns to Start and expands connection settings.
+- LAPS technical details are collapsed by default behind **Details...** and automatically expand only for read/decrypt/data failures. Normal successful reads stay compact.
+- Unified keyboard flow: Enter searches immediately, Enter/double-click on a selected LAPS device reads LAPS, and a BitLocker search for one computer automatically selects its latest recovery record without revealing the secret.
+- LAPS metadata discovery now carries the non-secret expiration timestamp when Active Directory exposes it. Start labels this field **LAPS metadata date** so expiration is never presented as a password-change timestamp.
+- Missing LAPS history is summarized as **History unavailable (disabled, not retained, or not readable)** instead of a long generic diagnostic paragraph.
+- Disconnect now cancels the unified Start search, clears its result set and disables helpdesk actions consistently.
+- Extended runtime UI/HiDPI self-tests to require the unified Start search, Recent list, simplified credential choices, Start-owned Advanced settings and global status bar.
+
 ## 0.23.0
 
 - Added a new **Start** workspace as the default GUI landing page. BitKeyBridge now opens on connection state first instead of immediately dropping the operator into Recovery or LAPS.
