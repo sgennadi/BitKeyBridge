@@ -45,8 +45,11 @@ public static class UiLayoutSelfTest
                     reportPath);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine(
+                "UI self-test report cleanup failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
 
         var failures =
@@ -151,8 +154,11 @@ public static class UiLayoutSelfTest
                 reportPath,
                 reportLines);
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine(
+                "UI self-test report write failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
 
         foreach (var line in
