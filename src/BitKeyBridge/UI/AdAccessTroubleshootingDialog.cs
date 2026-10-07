@@ -396,12 +396,12 @@ public sealed class AdAccessTroubleshootingDialog : DpiAwareForm
     {
         var safeOu =
             ou.Replace(
-                """,
-                """");
+                "\"",
+                "\"\"");
         var safePrincipal =
             principal.Replace(
-                """,
-                """");
+                "\"",
+                "\"\"");
 
         return
             "BITLOCKER — AD DS recovery password" +
