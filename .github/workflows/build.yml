@@ -253,6 +253,40 @@ jobs:
             throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
           }
 
+      - name: Updater preference persistence self-test
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+
+          $disableOutput = & $exe --update-checks-disable --no-elevation 2>&1 | Out-String
+          $disableExit = $LASTEXITCODE
+          Write-Host $disableOutput
+          if ($disableExit -ne 0) {
+            throw "--update-checks-disable failed with exit code $disableExit."
+          }
+
+          $disabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
+          $disabledExit = $LASTEXITCODE
+          Write-Host $disabledStatus
+          if ($disabledExit -ne 0 -or $disabledStatus -notmatch 'AutomaticChecks=False') {
+            throw "Automatic update checks were not persisted as disabled."
+          }
+
+          $enableOutput = & $exe --update-checks-enable --no-elevation 2>&1 | Out-String
+          $enableExit = $LASTEXITCODE
+          Write-Host $enableOutput
+          if ($enableExit -ne 0) {
+            throw "--update-checks-enable failed with exit code $enableExit."
+          }
+
+          $enabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
+          $enabledExit = $LASTEXITCODE
+          Write-Host $enabledStatus
+          if ($enabledExit -ne 0 -or $enabledStatus -notmatch 'AutomaticChecks=True') {
+            throw "Automatic update checks were not persisted as enabled."
+          }
+
       - name: Package architecture
         shell: cmd
         run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
@@ -395,9 +429,11 @@ jobs:
             throw "--check-update failed with exit code $checkExit."
           }
 
-          & $exe --update-checks-disable --no-elevation
-          if ($LASTEXITCODE -ne 0) {
-            throw "--update-checks-disable failed."
+          $disableOutput = & $exe --update-checks-disable --no-elevation 2>&1 | Out-String
+          $disableExit = $LASTEXITCODE
+          Write-Host $disableOutput
+          if ($disableExit -ne 0) {
+            throw "--update-checks-disable failed with exit code $disableExit."
           }
 
           $disabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
@@ -406,9 +442,11 @@ jobs:
             throw "Automatic update checks were not persisted as disabled."
           }
 
-          & $exe --update-checks-enable --no-elevation
-          if ($LASTEXITCODE -ne 0) {
-            throw "--update-checks-enable failed."
+          $enableOutput = & $exe --update-checks-enable --no-elevation 2>&1 | Out-String
+          $enableExit = $LASTEXITCODE
+          Write-Host $enableOutput
+          if ($enableExit -ne 0) {
+            throw "--update-checks-enable failed with exit code $enableExit."
           }
 
           $enabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
