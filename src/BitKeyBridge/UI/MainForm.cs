@@ -20,6 +20,10 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly ListView _dcResults = new();
     private readonly RichTextBox _dcDetails = new();
     private readonly Button _dcTest = new();
+    private readonly Button _dcCancel = new();
+    private readonly ProgressBar _dcProgress = new();
+    private readonly UiDiagnosticPanel _dcDiagnostics = new();
+    private CancellationTokenSource? _dcTestCancellation;
 
     private readonly TextBox _cloudTenant = new();
     private readonly TextBox _cloudClient = new();
@@ -338,6 +342,9 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task RunDcTestAsync()
     {
+        if (_dcTestCancellation is not null)
+            return;
+
         if (!EnsureSessionAdCredentialForConnection(forcePrompt: true))
             return;
 
@@ -345,8 +352,12 @@ public sealed partial class MainForm : DpiAwareForm
             showConfirmation: false,
             allowInMemoryFallback: true);
 
-        _dcTest.Enabled =
-            false;
+        using var cancellation = new CancellationTokenSource();
+        _dcTestCancellation = cancellation;
+        _dcTest.Enabled = false;
+        _dcCancel.Enabled = true;
+        _dcProgress.Visible = true;
+        _dcDiagnostics.Clear();
         _dcResults.Items.Clear();
         _dcDetails.Clear();
 
@@ -365,7 +376,11 @@ public sealed partial class MainForm : DpiAwareForm
             var rows =
                 await service.RunAsync(
                     GetSelectedScopes(),
-                    progress);
+                    progress,
+                    cancellation.Token);
+
+            cancellation.Token.ThrowIfCancellationRequested();
+
             foreach (var row in rows)
             {
                 var item = new ListViewItem(row.Name);
@@ -383,13 +398,58 @@ public sealed partial class MainForm : DpiAwareForm
                 item.Tag = row;
                 _dcResults.Items.Add(item);
             }
-            _dcDetails.AppendText(Environment.NewLine + $"Discovered {rows.Count} domain controller(s)." + Environment.NewLine);
+
+            _dcDetails.AppendText(
+                Environment.NewLine +
+                $"Discovered {rows.Count} domain controller(s)." +
+                Environment.NewLine);
+        }
+        catch (OperationCanceledException)
+        {
+            _dcDetails.AppendText(
+                Environment.NewLine +
+                "Domain controller discovery canceled." +
+                Environment.NewLine);
         }
         catch (Exception ex)
         {
-            _dcDetails.AppendText("ERROR: " + ex + Environment.NewLine);
+            _dcDetails.AppendText(
+                "ERROR: " +
+                DiagnosticRedaction.Sanitize(ex.Message) +
+                Environment.NewLine);
+
+            _dcDiagnostics.ShowError(
+                "Domain controller discovery failed.",
+                "DiscoverAndTestDomainControllers",
+                ex,
+                ("Domain", _config.AdDomain),
+                ("Server", _config.AdServer),
+                ("Port", _config.AdPort.ToString()),
+                ("LDAPS", _config.AdUseLdaps.ToString()));
         }
-        finally { _dcTest.Enabled = true; }
+        finally
+        {
+            if (ReferenceEquals(_dcTestCancellation, cancellation))
+                _dcTestCancellation = null;
+
+            if (!IsDisposed)
+            {
+                _dcTest.Enabled = true;
+                _dcCancel.Enabled = false;
+                _dcProgress.Visible = false;
+            }
+        }
+    }
+
+    private void CancelDcTest()
+    {
+        if (_dcTestCancellation is null)
+            return;
+
+        _dcCancel.Enabled = false;
+        _dcDetails.AppendText(
+            $"[{DateTime.Now:HH:mm:ss}] Cancelling...{Environment.NewLine}");
+        _dcTestCancellation.Cancel();
     }
 
     private void LoadCloudFields()
