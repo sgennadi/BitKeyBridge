@@ -1143,7 +1143,7 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 2,
-            RowCount = 8
+            RowCount = 12
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -1186,9 +1186,16 @@ public sealed partial class MainForm
         var save =
             UiStyle.CreateActionButton(
                 "Save Config");
-        var connect =
-            UiStyle.CreateActionButton(
-                "Connect / Test");
+        _cloudConnectButton.Text =
+            "Connect / Test";
+        UiStyle.ConfigureActionButton(
+            _cloudConnectButton);
+        _cloudConnectCancelButton.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _cloudConnectCancelButton);
+        _cloudConnectCancelButton.Enabled =
+            false;
         var setup =
             UiStyle.CreateActionButton(
                 "First-Run / Repair");
@@ -1200,7 +1207,8 @@ public sealed partial class MainForm
                 "Rollover Certificate...");
         buttons.Controls.AddRange([
             save,
-            connect,
+            _cloudConnectButton,
+            _cloudConnectCancelButton,
             setup,
             bootstrap,
             rollover
@@ -1216,8 +1224,37 @@ public sealed partial class MainForm
             new Size(900, 0);
         root.Controls.Add(_cloudStatus, 1, 9);
 
+        _cloudProgress.Name =
+            "CloudConnectionProgress";
+        _cloudProgress.AccessibleName =
+            "Microsoft Graph connection progress";
+        _cloudProgress.Dock =
+            DockStyle.Top;
+        _cloudProgress.Style =
+            ProgressBarStyle.Marquee;
+        _cloudProgress.MarqueeAnimationSpeed =
+            25;
+        _cloudProgress.Visible =
+            false;
+        _cloudProgress.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        root.Controls.Add(
+            _cloudProgress,
+            1,
+            10);
+
+        root.Controls.Add(
+            _cloudDiagnostics,
+            1,
+            11);
+
         save.Click += (_, _) => SaveCloudFields();
-        connect.Click += async (_, _) => await ConnectCloudAsync();
+        _cloudConnectButton.Click += async (_, _) => await ConnectCloudFromUiAsync();
+        _cloudConnectCancelButton.Click += (_, _) => CancelCloudConnection();
         setup.Click += async (_, _) => await RunNativeAutoSetupAsync();
         bootstrap.Click += (_, _) => ConfigureCustomBootstrap();
         rollover.Click += async (_, _) => await RolloverEntraCertificateGuiAsync();
