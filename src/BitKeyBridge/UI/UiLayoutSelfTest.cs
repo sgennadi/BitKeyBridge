@@ -859,87 +859,39 @@ public static class UiLayoutSelfTest
             FindByName(
                 root,
                 "RecoverySourceSelector");
-        var connect =
+        var openStart =
             FindByName(
                 root,
-                "ConnectAdButton");
-        var cancel =
-            FindByName(
-                root,
-                "ConnectAdCancelButton");
-        var disconnect =
-            FindByName(
-                root,
-                "DisconnectAdButton");
-        var status =
-            FindByName(
-                root,
-                "AdConnectionStatus");
+                "RecoveryOpenStartButton");
+
         if (source is null ||
-            connect is null ||
-            cancel is null ||
-            disconnect is null ||
-            status is null)
+            openStart is null)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: recovery connection controls were not found by name.");
+                $"{formName}/{scenario.Name}: Recovery source / Start connection shortcut was not found.");
             return;
         }
 
-        if (source.Parent is not
-                TableLayoutPanel table ||
-            !ReferenceEquals(
-                connect.Parent,
-                table) ||
-            !ReferenceEquals(
-                cancel.Parent,
-                table) ||
-            !ReferenceEquals(
-                disconnect.Parent,
-                table) ||
-            !ReferenceEquals(
-                status.Parent,
-                table))
-        {
-            failures.Add(
-                $"{formName}/{scenario.Name}: Source, Connect, Cancel, Disconnect and connection status are not in one responsive table.");
-            return;
-        }
+        var forbidden =
+            new[]
+            {
+                "ConnectAdButton",
+                "ConnectAdCancelButton",
+                "DisconnectAdButton",
+                "AdvancedConnectionGroup"
+            };
 
-        if (table.GetColumnSpan(
-                status) !=
-            table.ColumnCount)
+        foreach (var controlName in
+                 forbidden)
         {
-            failures.Add(
-                $"{formName}/{scenario.Name}: connection status does not span the full connection bar.");
+            if (FindByName(
+                    root,
+                    controlName) is not null)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Recovery must not own '{controlName}'; AD connection is managed on Start.");
+            }
         }
-
-        if (source.Width <= 0 ||
-            connect.Width <= 0 ||
-            Math.Abs(
-                source.Width -
-                connect.Width) >
-            24)
-        {
-            failures.Add(
-                $"{formName}/{scenario.Name}: Live AD selector and Connect button are not visually balanced.");
-        }
-
-        if (source.TabIndex != 0 ||
-            connect.TabIndex != 1 ||
-            cancel.TabIndex != 2 ||
-            disconnect.TabIndex != 3)
-        {
-            failures.Add(
-                $"{formName}/{scenario.Name}: connection keyboard order must be Source -> Connect -> Cancel -> Disconnect.");
-        }
-
-        if (status.TabStop)
-        {
-            failures.Add(
-                $"{formName}/{scenario.Name}: connection status must not participate in keyboard tab navigation.");
-        }
-
     }
 
     private static T? FindFirst<T>(
