@@ -252,9 +252,30 @@ public sealed class ExportService
         {
             result.Finished = result.Finished == default ? DateTime.Now : result.Finished;
             result.DurationSeconds = (result.Finished - started).TotalSeconds;
-            try { JsonStore.WriteAtomic(_config.StatusFile, result); } catch { }
+            try
+            {
+                JsonStore.WriteAtomic(_config.StatusFile, result);
+            }
+            catch (Exception ex)
+            {
+                _log.Error(
+                    "Could not persist export status: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
             lockStream?.Dispose();
-            try { if (File.Exists(_config.LockFile)) File.Delete(_config.LockFile); } catch { }
+
+            try
+            {
+                if (File.Exists(_config.LockFile))
+                    File.Delete(_config.LockFile);
+            }
+            catch (Exception ex)
+            {
+                _log.Error(
+                    "Could not remove export lock file: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
         }
 
         return result;
