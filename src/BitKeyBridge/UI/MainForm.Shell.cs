@@ -1693,12 +1693,17 @@ public sealed partial class MainForm
                 authMode: _cloudToken?.AuthMode,
                 details: ex.Message);
 
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Devices",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _unifiedDiagnostics.ShowError(
+                "Entra recovery-key retrieval failed.",
+                "GetEntraRecoveryKey",
+                ex,
+                ("RecoveryId", recoveryId),
+                ("Computer", row.ComputerName));
+
+            UiStyle.SetStatus(
+                _unifiedStatus,
+                "Recovery-key retrieval failed. Review diagnostics above.",
+                UiStatusKind.Error);
 
             return null;
         }
