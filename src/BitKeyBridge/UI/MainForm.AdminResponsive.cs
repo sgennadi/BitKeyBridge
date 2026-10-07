@@ -389,25 +389,20 @@ public sealed partial class MainForm
 
         _runExport.Text =
             "Run Export";
-        _runExport.AutoSize =
-            true;
-        _runExport.Padding =
-            new Padding(
-                8,
-                2,
-                8,
-                2);
+        UiStyle.ConfigureActionButton(
+            _runExport);
 
         _dryRun.Text =
             "Dry Run";
-        _dryRun.AutoSize =
-            true;
-        _dryRun.Padding =
-            new Padding(
-                8,
-                2,
-                8,
-                2);
+        UiStyle.ConfigureActionButton(
+            _dryRun);
+
+        _exportCancel.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _exportCancel);
+        _exportCancel.Enabled =
+            false;
 
         _forcePublish.Text =
             "Override publish guards (row drop / scope change)";
@@ -417,10 +412,26 @@ public sealed partial class MainForm
         runActions.Controls.AddRange([
             _runExport,
             _dryRun,
+            _exportCancel,
             _forcePublish
         ]);
         root.Controls.Add(
             runActions);
+
+        _exportProgress.Name =
+            "ExportProgress";
+        _exportProgress.AccessibleName =
+            "Export progress";
+        _exportProgress.Dock =
+            DockStyle.Top;
+        _exportProgress.Style =
+            ProgressBarStyle.Marquee;
+        _exportProgress.MarqueeAnimationSpeed =
+            25;
+        _exportProgress.Visible =
+            false;
+        root.Controls.Add(
+            _exportProgress);
 
         _lastSuccess.AutoSize =
             true;
@@ -474,6 +485,9 @@ public sealed partial class MainForm
         root.Controls.Add(
             _exportLog);
 
+        root.Controls.Add(
+            _exportDiagnostics);
+
         _runExport.Click +=
             async (_, _) =>
                 await RunExportAsync(
@@ -482,6 +496,9 @@ public sealed partial class MainForm
             async (_, _) =>
                 await RunExportAsync(
                     true);
+        _exportCancel.Click +=
+            (_, _) =>
+                CancelExport();
 
         return page;
     }
@@ -504,9 +521,16 @@ public sealed partial class MainForm
         var controls =
             CreateActionFlow();
 
-        var run =
-            NewActionButton(
-                "Run Coverage");
+        _coverageRun.Text =
+            "Run Coverage";
+        UiStyle.ConfigureActionButton(
+            _coverageRun);
+        _coverageCancel.Text =
+            "Cancel";
+        UiStyle.ConfigureActionButton(
+            _coverageCancel);
+        _coverageCancel.Enabled =
+            false;
         var export =
             NewActionButton(
                 "Export Visible CSV");
@@ -515,7 +539,8 @@ public sealed partial class MainForm
                 "Policy...");
 
         controls.Controls.AddRange([
-            run,
+            _coverageRun,
+            _coverageCancel,
             export
         ]);
 
@@ -582,6 +607,21 @@ public sealed partial class MainForm
         root.Controls.Add(
             controls);
 
+        _coverageProgress.Name =
+            "CoverageProgress";
+        _coverageProgress.AccessibleName =
+            "Coverage progress";
+        _coverageProgress.Dock =
+            DockStyle.Top;
+        _coverageProgress.Style =
+            ProgressBarStyle.Marquee;
+        _coverageProgress.MarqueeAnimationSpeed =
+            25;
+        _coverageProgress.Visible =
+            false;
+        root.Controls.Add(
+            _coverageProgress);
+
         _coverageSummary.AutoSize =
             true;
         _coverageSummary.Font =
@@ -635,10 +675,15 @@ public sealed partial class MainForm
             UiStatusKind.Neutral);
         root.Controls.Add(
             _coverageStatus);
+        root.Controls.Add(
+            _coverageDiagnostics);
 
-        run.Click +=
+        _coverageRun.Click +=
             async (_, _) =>
                 await RunCoverageAsync();
+        _coverageCancel.Click +=
+            (_, _) =>
+                CancelCoverage();
         export.Click +=
             (_, _) =>
                 ExportCoverageCsv();
