@@ -150,6 +150,67 @@ public sealed partial class CloudGraphService
         return result;
     }
 
+    public async Task<List<LapsSearchResult>> SearchLapsDevicesAsync(
+        string token,
+        string query,
+        int maximumItems = 100,
+        CancellationToken ct = default)
+    {
+        Require(
+            token,
+            nameof(token));
+
+        query =
+            (query ?? string.Empty).Trim();
+
+        if (query.Length == 0)
+            return [];
+
+        var devices =
+            await GetCollectionAsync(
+                token,
+                "https://graph.microsoft.com/v1.0/devices?$select=deviceId,displayName&$top=999",
+                50000,
+                ct);
+
+        return devices
+            .Select(
+                item =>
+                    new LapsSearchResult
+                    {
+                        ComputerName =
+                            GetString(
+                                item,
+                                "displayName"),
+                        ComputerId =
+                            GetString(
+                                item,
+                                "deviceId"),
+                        Source =
+                            "Microsoft Entra ID",
+                        DirectoryServer =
+                            "Microsoft Graph"
+                    })
+            .Where(
+                row =>
+                    row.ComputerName.Contains(
+                        query,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    SearchText.IdentifierContains(
+                        row.ComputerId,
+                        query))
+            .OrderBy(
+                row =>
+                    row.ComputerName,
+                StringComparer.OrdinalIgnoreCase)
+            .Take(
+                Math.Clamp(
+                    maximumItems,
+                    1,
+                    500))
+            .ToList();
+    }
+
     private async Task<(string DeviceId, string DeviceName)> ResolveLapsDeviceAsync(
         string token,
         string query,
