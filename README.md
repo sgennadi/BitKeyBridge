@@ -195,7 +195,8 @@ Visible to:
 Contains:
 
 - **Cloud** — Entra / Intune authentication and App Registration management
-- **Security & Settings** — verified updates, Remote API, RBAC, privileged-access policy, diagnostics
+- **Updates** — verified updater, manual check/update, release channel and automatic-check preference
+- **Security & Settings** — Remote API, RBAC, privileged-access policy, diagnostics
 - **Export & Automation** — output storage, export scopes, offline cache export
 
 ### Health & Audit
@@ -507,7 +508,17 @@ Older configurations are migrated using the existing backup-and-migrate mechanis
 
 ## Verified updates and supply-chain security
 
-BitKeyBridge can check and install verified releases from the configured GitHub repository.
+BitKeyBridge can check and install verified releases from the configured GitHub repository. The GUI controls are in **Administration → Updates**. **Check for Updates** and **Update Now** remain available even when automatic startup checks are disabled.
+
+CLI provides the same controls:
+
+```text
+BitKeyBridge.exe --check-update
+BitKeyBridge.exe --update
+BitKeyBridge.exe --update-checks-status
+BitKeyBridge.exe --update-checks-enable
+BitKeyBridge.exe --update-checks-disable
+```
 
 Release CI builds:
 
@@ -547,6 +558,9 @@ BitKeyBridge.exe --rbac-status
 BitKeyBridge.exe --privileged-status
 BitKeyBridge.exe --check-update
 BitKeyBridge.exe --update
+BitKeyBridge.exe --update-checks-status
+BitKeyBridge.exe --update-checks-enable
+BitKeyBridge.exe --update-checks-disable
 ```
 
 ## Build
