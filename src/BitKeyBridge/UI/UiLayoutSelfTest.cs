@@ -131,12 +131,8 @@ public static class UiLayoutSelfTest
 
                     ReportProgress($"{factory.Name}/{scenario.Name}: layout");
                     form.CreateControl();
-                    NormalizeDockFillSizes(
-                        form);
                     form.PrepareResponsiveLayoutForTesting();
                     form.PerformLayout();
-                    NormalizeDockFillSizes(
-                        form);
                     form.PrepareResponsiveLayoutForTesting();
 
                     ReportProgress($"{factory.Name}/{scenario.Name}: verify");
@@ -311,54 +307,6 @@ public static class UiLayoutSelfTest
             System.Drawing.Imaging.ImageFormat.Png);
     }
 
-    private static void NormalizeDockFillSizes(
-        Control root)
-    {
-        if (root is TabControl tabs)
-        {
-            var pageTarget =
-                tabs.DisplayRectangle.Size;
-
-            if (pageTarget.Width > 0 &&
-                pageTarget.Height > 0)
-            {
-                foreach (TabPage page in
-                         tabs.TabPages)
-                {
-                    if (page.Size !=
-                        pageTarget)
-                    {
-                        page.Size =
-                            pageTarget;
-                    }
-                }
-            }
-        }
-
-        foreach (Control child in
-                 root.Controls)
-        {
-            if (child.Dock ==
-                    DockStyle.Fill &&
-                child.Parent is not null)
-            {
-                var target =
-                    child.Parent.DisplayRectangle.Size;
-
-                if (target.Width > 0 &&
-                    target.Height > 0 &&
-                    child.Size != target)
-                {
-                    child.Size =
-                        target;
-                }
-            }
-
-            NormalizeDockFillSizes(
-                child);
-        }
-    }
-
     private static void VerifyForm(
         DpiAwareForm form,
         string formName,
@@ -497,25 +445,16 @@ public static class UiLayoutSelfTest
                     }
                 }
 
-                // Tab selection and Dock=Fill layout are message-loop driven in
-                // WinForms. A headless WinExe can retain the framework's default
-                // 200x100 child size, so normalize Dock=Fill geometry before and
-                // after pumping pending layout work.
-                NormalizeDockFillSizes(
-                    form);
+                // Exercise the actual visible-window layout and pending messages.
                 Application.DoEvents();
                 form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
-                NormalizeDockFillSizes(
-                    form);
                 form.PrepareResponsiveLayoutForTesting();
                 Application.DoEvents();
                 form.PerformLayout();
                 tabs.PerformLayout();
                 page.PerformLayout();
-                NormalizeDockFillSizes(
-                    form);
 
                 VerifyControlTree(
                     page,
