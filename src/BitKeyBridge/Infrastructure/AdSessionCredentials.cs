@@ -73,7 +73,7 @@ public static class AdSessionCredentials
             return credential?.ToNetworkCredential()
                 ?? throw new InvalidOperationException(
                     "No Current User AD credential is stored for BitKeyBridge. " +
-                    "Save it in Directory Connection or switch credential storage mode.");
+                    "Save it in Start > Advanced or switch credential storage mode.");
         }
 
         if (mode.Equals("LocalMachine", StringComparison.OrdinalIgnoreCase))
@@ -102,7 +102,7 @@ public static class AdSessionCredentials
         if (string.IsNullOrEmpty(password))
             throw new InvalidOperationException(
                 "Session credential mode is selected, but no session password is loaded. " +
-                "Enter the password in Directory Connection or use --ad-password-prompt.");
+                "Enter the password from Start > Connect to AD / Advanced or use --ad-password-prompt.");
 
         if (username.Contains('@'))
             return new NetworkCredential(username, password);
