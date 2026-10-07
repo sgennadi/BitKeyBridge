@@ -1839,7 +1839,14 @@ public sealed partial class MainForm
         _adMode.SelectedIndexChanged +=
             (_, _) => UpdateDirectoryConnectionUi();
         _adExplicitCredentials.CheckedChanged +=
-            (_, _) => UpdateDirectoryConnectionUi();
+            (_, _) =>
+            {
+                _homeUseOtherAccount.Checked =
+                    _adExplicitCredentials.Checked;
+                _homeUseWindowsIdentity.Checked =
+                    !_adExplicitCredentials.Checked;
+                UpdateDirectoryConnectionUi();
+            };
         _adCredentialStorage.SelectedIndexChanged +=
             (_, _) =>
             {
