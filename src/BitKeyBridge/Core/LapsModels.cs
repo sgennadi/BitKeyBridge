@@ -66,3 +66,32 @@ public sealed class LapsReadResult : IDisposable
         Entries.Clear();
     }
 }
+
+
+public enum LapsAccessState
+{
+    Available,
+    NotDetected,
+    NotProbed,
+    Failed
+}
+
+public sealed class LapsAccessCheckItem
+{
+    public string Name { get; init; } = string.Empty;
+    public LapsAccessState State { get; init; }
+    public string Detail { get; init; } = string.Empty;
+}
+
+public sealed class LapsAccessCheckResult
+{
+    public string Source { get; init; } = string.Empty;
+    public string ComputerName { get; init; } = string.Empty;
+    public string ComputerId { get; init; } = string.Empty;
+    public string DirectoryServer { get; init; } = string.Empty;
+    public List<LapsAccessCheckItem> Checks { get; } = [];
+
+    public bool HasFailure =>
+        Checks.Any(
+            x => x.State == LapsAccessState.Failed);
+}
