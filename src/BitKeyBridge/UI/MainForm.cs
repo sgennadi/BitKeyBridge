@@ -4683,7 +4683,11 @@ public sealed partial class MainForm : DpiAwareForm
                 ("Source", row.Source));
             UiStyle.SetStatus(
                 _startPurposeStatus,
-                "Recovery-key retrieval failed. Review diagnostics below.",
+                row.Source.Equals(
+                    "Local cache",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "Recovery-key retrieval failed. Review diagnostics below."
+                    : "Recovery-key retrieval failed. Review diagnostics below; use AD access help... if the recovery object is visible but the password is denied or blank.",
                 UiStatusKind.Error);
             return null;
         }
