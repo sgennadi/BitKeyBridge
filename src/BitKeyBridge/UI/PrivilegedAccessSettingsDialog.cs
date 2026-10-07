@@ -29,6 +29,7 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
     private readonly NumericUpDown _siemMaxOutbox = new();
     private readonly CheckBox _siemFailClosed = new();
     private readonly UiStatusLabel _siemStatus = new();
+    private readonly UiDiagnosticPanel _diagnostics = new();
 
     public PrivilegedAccessSettingsDialog(
         AppConfig config)
@@ -47,10 +48,10 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 6
+            RowCount = 7
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var row = 0; row < 6; row++)
+        for (var row = 0; row < 7; row++)
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
 
@@ -110,7 +111,8 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(save);
         footer.Controls.Add(buttons, 1, 0);
-        root.Controls.Add(footer, 0, 5);
+        root.Controls.Add(_diagnostics, 0, 5);
+        root.Controls.Add(footer, 0, 6);
 
         AcceptButton = save;
         CancelButton = cancel;
@@ -495,12 +497,7 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Privileged Access",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ShowError(ex);
         }
     }
 
@@ -759,20 +756,22 @@ public sealed class PrivilegedAccessSettingsDialog : DpiAwareForm
             WindowsServiceHost.Stop();
             WindowsServiceHost.Start();
         }
-        catch
+        catch (Exception ex)
         {
-            // Settings are already persisted. Service restart can be performed
-            // manually if SCM access is temporarily unavailable.
+            WindowsEventLogService.TryWrite(
+                "Privileged-access settings were saved, but the running service could not be restarted: " +
+                ex.Message,
+                EventLogSeverity.Warning,
+                4594,
+                "PrivilegedAccess");
         }
     }
 
     private void ShowError(Exception ex)
     {
-        MessageBox.Show(
-            this,
-            ex.Message,
-            "Privileged Access",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error);
+        _diagnostics.ShowError(
+            "Privileged-access operation failed.",
+            "PrivilegedAccess",
+            ex);
     }
 }
