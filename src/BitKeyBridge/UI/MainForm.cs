@@ -466,6 +466,7 @@ public sealed partial class MainForm : DpiAwareForm
 
         try
         {
+            _cloudDiagnostics.Clear();
             SaveCloudFields();
             UiStyle.SetStatus(
                 _cloudStatus,
@@ -548,6 +549,18 @@ public sealed partial class MainForm : DpiAwareForm
                 ("Authentication", _cloudAuthMode.Text),
                 ("Username", _cloudUsername.Text),
                 ("LapsOnly", forLaps.ToString()));
+
+            if (forLaps)
+            {
+                _lapsDiagnostics.ShowError(
+                    "Entra authentication for LAPS failed.",
+                    "AuthenticateEntraLaps",
+                    ex,
+                    ("Tenant", _cloudTenant.Text),
+                    ("ClientId", _cloudClient.Text),
+                    ("Authentication", _cloudAuthMode.Text),
+                    ("Username", _cloudUsername.Text));
+            }
 
             return false;
         }
@@ -774,13 +787,13 @@ public sealed partial class MainForm : DpiAwareForm
                 _cloudStatus,
                 "Auto Setup failed: " + ex.Message,
                 UiStatusKind.Error);
-            MessageBox.Show(
-                this,
-                ex.Message + Environment.NewLine + Environment.NewLine +
-                "If your tenant blocks the Microsoft first-party bootstrap through Conditional Access, use Bootstrap... to configure a tenant-approved public-client Application ID and run setup again.",
-                "First-Run / Repair Entra Setup",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _cloudDiagnostics.ShowError(
+                "First-Run / Repair Entra setup failed. If Conditional Access blocks the Microsoft first-party bootstrap, configure a tenant-approved public-client Application ID with Bootstrap... and try again.",
+                "EntraAutoSetup",
+                ex,
+                ("Tenant", _cloudTenant.Text),
+                ("BootstrapClientId", _cloudConfig.BootstrapClientId),
+                ("IncludeLapsPermissions", _cloudLapsPermissions.Checked.ToString()));
         }
         finally { Enabled = true; }
     }
@@ -901,12 +914,13 @@ public sealed partial class MainForm : DpiAwareForm
                 ex.Message,
                 UiStatusKind.Error);
 
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Entra Certificate Rollover",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            _cloudDiagnostics.ShowError(
+                "Entra certificate rollover failed.",
+                "EntraCertificateRollover",
+                ex,
+                ("Tenant", _cloudTenant.Text),
+                ("ClientId", _cloudClient.Text),
+                ("Thumbprint", _cloudThumbprint.Text));
         }
         finally
         {
