@@ -445,7 +445,11 @@ public static class UiLayoutSelfTest
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
                     "HomeBitLockerButton",
-                    "HomeLapsButton"
+                    "HomeLapsButton",
+                    "HomeUnifiedQuery",
+                    "HomeUnifiedSearchResults",
+                    "HomeRecentComputers",
+                    "AdvancedConnectionGroup"
                 };
 
             foreach (var controlName in
@@ -506,7 +510,7 @@ public static class UiLayoutSelfTest
                 if (checkRecoveryConnection &&
                     string.Equals(
                         page.Text,
-                        "Recovery",
+                        "Start",
                         StringComparison.OrdinalIgnoreCase))
                 {
                     var advanced =
@@ -860,17 +864,11 @@ public static class UiLayoutSelfTest
             FindByName(
                 root,
                 "AdConnectionStatus");
-        var advanced =
-            FindByName(
-                root,
-                "AdvancedConnectionButton");
-
         if (source is null ||
             connect is null ||
             cancel is null ||
             disconnect is null ||
-            status is null ||
-            advanced is null)
+            status is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: recovery connection controls were not found by name.");
@@ -890,9 +888,6 @@ public static class UiLayoutSelfTest
                 table) ||
             !ReferenceEquals(
                 status.Parent,
-                table) ||
-            !ReferenceEquals(
-                advanced.Parent,
                 table))
         {
             failures.Add(
@@ -922,11 +917,10 @@ public static class UiLayoutSelfTest
         if (source.TabIndex != 0 ||
             connect.TabIndex != 1 ||
             cancel.TabIndex != 2 ||
-            disconnect.TabIndex != 3 ||
-            advanced.TabIndex != 4)
+            disconnect.TabIndex != 3)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: connection keyboard order must be Source -> Connect -> Cancel -> Disconnect -> Advanced.");
+                $"{formName}/{scenario.Name}: connection keyboard order must be Source -> Connect -> Cancel -> Disconnect.");
         }
 
         if (status.TabStop)
