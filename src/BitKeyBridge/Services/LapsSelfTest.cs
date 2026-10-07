@@ -110,6 +110,47 @@ public static class LapsSelfTest
         });
         Check("Entra password uses UTF-16LE", () =>
             Assert(LapsSecretCodec.DecodeEntraPassword(Convert.ToBase64String(Encoding.Unicode.GetBytes(secret))) == secret));
+        Check("Entra Graph JSON accepts UTF-8 and UTF-16 BOM", () =>
+        {
+            var payload =
+                "{\"value\":{\"deviceName\":\"PC-TEST\",\"credentials\":[]}}";
+
+            var utf8 =
+                Encoding.UTF8.GetPreamble()
+                    .Concat(
+                        Encoding.UTF8.GetBytes(
+                            payload))
+                    .ToArray();
+
+            using (var document =
+                   CloudGraphService.ParseLapsJsonResponse(
+                       utf8,
+                       "utf-8"))
+            {
+                Assert(
+                    document.RootElement.TryGetProperty(
+                        "value",
+                        out _));
+            }
+
+            var utf16 =
+                Encoding.Unicode.GetPreamble()
+                    .Concat(
+                        Encoding.Unicode.GetBytes(
+                            payload))
+                    .ToArray();
+
+            using (var document =
+                   CloudGraphService.ParseLapsJsonResponse(
+                       utf16,
+                       "utf-16"))
+            {
+                Assert(
+                    document.RootElement.TryGetProperty(
+                        "value",
+                        out _));
+            }
+        });
         Check("Entra current-only and unordered history (direct and wrapped responses)", () =>
         {
             var base64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(secret));
