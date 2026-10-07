@@ -377,8 +377,13 @@ public sealed class ConfigurationMaintenanceService
                         recursive: true);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Configuration maintenance temporary directory cleanup failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4560,
+                    "Configuration");
             }
         }
     }
