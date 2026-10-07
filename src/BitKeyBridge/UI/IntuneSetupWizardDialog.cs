@@ -1,3 +1,6 @@
+using System.Text;
+using System.Text.Json;
+
 namespace BitKeyBridge;
 
 public sealed class IntuneSetupWizardDialog : DpiAwareForm
@@ -669,6 +672,83 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             true;
     }
 
+    private static HashSet<string> ReadApplicationRoles(
+        string accessToken)
+    {
+        var parts =
+            accessToken.Split(
+                '.');
+
+        if (parts.Length < 2)
+        {
+            throw new InvalidOperationException(
+                "Microsoft Graph returned an invalid access token.");
+        }
+
+        var payload =
+            parts[1]
+                .Replace(
+                    '-',
+                    '+')
+                .Replace(
+                    '_',
+                    '/');
+
+        payload =
+            payload.PadRight(
+                payload.Length +
+                ((4 - payload.Length % 4) % 4),
+                '=');
+
+        var json =
+            Encoding.UTF8.GetString(
+                Convert.FromBase64String(
+                    payload));
+
+        using var document =
+            JsonDocument.Parse(
+                json);
+
+        var roles =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        if (document.RootElement.TryGetProperty(
+                "roles",
+                out var roleElement) &&
+            roleElement.ValueKind ==
+                JsonValueKind.Array)
+        {
+            foreach (var role in
+                     roleElement.EnumerateArray())
+            {
+                var value =
+                    role.GetString();
+
+                if (!string.IsNullOrWhiteSpace(
+                        value))
+                {
+                    roles.Add(
+                        value);
+                }
+            }
+        }
+
+        return roles;
+    }
+
+    private static void RequireRole(
+        IReadOnlySet<string> roles,
+        string role)
+    {
+        if (!roles.Contains(
+                role))
+        {
+            throw new InvalidOperationException(
+                $"Certificate authentication succeeded, but the access token does not contain the required Microsoft Graph application role '{role}'. Verify admin consent and rerun the wizard.");
+        }
+    }
+
     private async Task RunSetupAsync()
     {
         using var cancellation =
@@ -731,6 +811,27 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                     SetupResult.CertificateThumbprint,
                     cancellation.Token);
 
+            var grantedRoles =
+                ReadApplicationRoles(
+                    token.AccessToken);
+
+            RequireRole(
+                grantedRoles,
+                "BitlockerKey.Read.All");
+            RequireRole(
+                grantedRoles,
+                "Device.Read.All");
+            RequireRole(
+                grantedRoles,
+                "DeviceManagementManagedDevices.ReadWrite.All");
+
+            if (_laps.Checked)
+            {
+                RequireRole(
+                    grantedRoles,
+                    "DeviceLocalCredential.Read.All");
+            }
+
             var recoveryObjects =
                 await graph.TestAccessAsync(
                     token.AccessToken,
@@ -769,13 +870,22 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 SetupResult.CertificateNotAfter.ToString(
                     "yyyy-MM-dd") +
                 Environment.NewLine +
+                "Verified app-only roles: " +
+                string.Join(
+                    ", ",
+                    grantedRoles
+                        .OrderBy(
+                            role =>
+                                role,
+                            StringComparer.OrdinalIgnoreCase)) +
+                Environment.NewLine +
                 "BitLocker metadata objects visible during test: " +
                 recoveryObjects +
                 Environment.NewLine +
                 "Intune managed-device endpoint: accessible" +
                 Environment.NewLine +
                 (_laps.Checked
-                    ? "Entra LAPS permission: configured; use LAPS > Check access for a per-device metadata-only validation."
+                    ? "Entra LAPS app role: verified. Use LAPS > Check access for per-device metadata/role validation."
                     : "Entra LAPS permission: not requested."));
         }
         catch (OperationCanceledException)
