@@ -558,6 +558,12 @@ public sealed partial class MainForm
         if (_recoveryWorkspaceTab is null)
             return;
 
+        if (_recoverySource.SelectedIndex != 0)
+        {
+            _recoverySource.SelectedIndex =
+                0;
+        }
+
         _mainTabs.SelectedTab =
             _recoveryWorkspaceTab;
         _startQuery.Focus();
@@ -567,6 +573,12 @@ public sealed partial class MainForm
     {
         if (_lapsWorkspaceTab is null)
             return;
+
+        if (_lapsSource.SelectedIndex != 0)
+        {
+            _lapsSource.SelectedIndex =
+                0;
+        }
 
         _mainTabs.SelectedTab =
             _lapsWorkspaceTab;
@@ -1972,22 +1984,50 @@ public sealed partial class MainForm
     private async Task InitializeRecoveryWorkspaceAsync()
     {
         RestoreRecoveryUiState();
-
-        if (_recoverySource.SelectedIndex == 1)
-        {
-            UpdateRecoverySourceUi();
-            return;
-        }
+        RefreshHomeConnectionUi();
 
         if (!_config.AutoConnectOnStart)
         {
-            UpdateRecoverySourceUi();
+            SetDirectoryConnectionStatus(
+                "Automatic AD connection is disabled. Use Connect to AD to start a session.",
+                UiStatusKind.Neutral);
+            return;
+        }
+
+        if (!CanAttemptAutomaticDirectoryConnection())
+        {
+            SetDirectoryConnectionStatus(
+                "AD connection requires a session password. Use Connect to AD to enter credentials.",
+                UiStatusKind.Warning);
             return;
         }
 
         await TestDirectoryConnectionAsync(
-            promptForOu:
-                _startScope is null);
+            promptForOu: false,
+            promptForSessionCredentials: false);
+    }
+
+    private bool CanAttemptAutomaticDirectoryConnection()
+    {
+        if (!_config.AdUseExplicitCredentials)
+            return true;
+
+        var mode =
+            string.IsNullOrWhiteSpace(
+                _config.AdCredentialStorageMode)
+                ? "Session"
+                : _config.AdCredentialStorageMode.Trim();
+
+        if (!mode.Equals(
+                "Session",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return AdSessionCredentials.HasPassword ||
+               !string.IsNullOrEmpty(
+                   _adPassword.Text);
     }
 
     private void RestoreRecoveryUiState()
