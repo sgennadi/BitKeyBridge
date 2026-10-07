@@ -173,6 +173,29 @@ public static class LapsSelfTest
                     schemaAttributeDetected: false) ==
                 LapsAccessState.NotDetected);
         });
+        Check("search identifier normalization ignores braces, hyphens and case", () =>
+        {
+            Assert(
+                SearchText.IdentifierContains(
+                    "{B1E4-2056-D492}",
+                    "b1e42056"));
+            Assert(
+                SearchText.IdentifierContains(
+                    "B1E42056D492442E9996CC6405CD3EDC",
+                    "056-d49"));
+            Assert(
+                !SearchText.IdentifierContains(
+                    "B1E42056",
+                    "ABCDEF"));
+        });
+        Check("live search thresholds remain stable", () =>
+        {
+            Assert(
+                SearchText.DebounceMilliseconds >= 300 &&
+                SearchText.DebounceMilliseconds <= 1000);
+            Assert(
+                SearchText.MinimumLiveSearchCharacters == 2);
+        });
         Check("multi-valued AD history sorts by time within each source", () =>
         {
             using var result = new LapsReadResult();
