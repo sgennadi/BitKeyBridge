@@ -6,8 +6,26 @@ public static class LapsCloudCodec
 {
     public static LapsReadResult Read(JsonElement root, string deviceId, string deviceName, bool includeHistory)
     {
-        if (root.TryGetProperty("value", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object)
-            root = wrapped;
+        if (root.TryGetProperty(
+                "value",
+                out var wrapped))
+        {
+            if (wrapped.ValueKind ==
+                JsonValueKind.Object)
+            {
+                root =
+                    wrapped;
+            }
+            else if (wrapped.ValueKind ==
+                         JsonValueKind.Array &&
+                     wrapped.GetArrayLength() ==
+                         1)
+            {
+                root =
+                    wrapped.EnumerateArray()
+                        .First();
+            }
+        }
         var result = new LapsReadResult
         {
             ComputerId = deviceId, ComputerName = Text(root, "deviceName") ?? deviceName,
