@@ -118,9 +118,13 @@ public sealed class UnifiedDeviceService
                         row.AdLastLogonTimestamp = ad.LastLogonTimestamp;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Unified search remains useful even if this individual AD lookup fails.
+                    WindowsEventLogService.TryWrite(
+                        "Unified device AD enrichment lookup failed: " + ex.Message,
+                        EventLogSeverity.Warning,
+                        4577,
+                        "Devices");
                 }
             }
         }
@@ -162,9 +166,13 @@ public sealed class UnifiedDeviceService
                     foreach (var key in keys) AddRecoveryId(row, key.RecoveryId);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Missing BitLocker metadata should not hide the device from unified results.
+                WindowsEventLogService.TryWrite(
+                    "Unified device recovery metadata enrichment failed: " + ex.Message,
+                    EventLogSeverity.Warning,
+                    4578,
+                    "Devices");
             }
             finally
             {
