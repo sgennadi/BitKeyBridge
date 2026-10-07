@@ -346,7 +346,7 @@ public sealed partial class MainForm
         _disconnectAdButton.TabIndex =
             3;
         _disconnectAdButton.Text =
-            "Disconnect";
+            "Disconnect / Forget session";
         UiStyle.ConfigureActionButton(
             _disconnectAdButton);
         _disconnectAdButton.Enabled =
