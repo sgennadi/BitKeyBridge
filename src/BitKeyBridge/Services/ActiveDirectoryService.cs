@@ -109,14 +109,56 @@ public sealed class ActiveDirectoryService
                     ipv4 = Dns.GetHostAddresses(host)
                         .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)?.ToString() ?? string.Empty;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"DNS lookup failed for domain controller {host}: {ex.Message}",
+                        EventLogSeverity.Warning,
+                        4550,
+                        "ActiveDirectory");
+                }
 
                 var site = string.Empty;
                 var isGlobalCatalog = false;
                 var operatingSystem = string.Empty;
-                try { site = dc.SiteName ?? string.Empty; } catch { }
-                try { isGlobalCatalog = dc.IsGlobalCatalog(); } catch { }
-                try { operatingSystem = dc.OSVersion ?? string.Empty; } catch { }
+                try
+                {
+                    site = dc.SiteName ?? string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"Site lookup failed for domain controller {host}: {ex.Message}",
+                        EventLogSeverity.Warning,
+                        4551,
+                        "ActiveDirectory");
+                }
+
+                try
+                {
+                    isGlobalCatalog = dc.IsGlobalCatalog();
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"Global Catalog status lookup failed for domain controller {host}: {ex.Message}",
+                        EventLogSeverity.Warning,
+                        4552,
+                        "ActiveDirectory");
+                }
+
+                try
+                {
+                    operatingSystem = dc.OSVersion ?? string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        $"OS version lookup failed for domain controller {host}: {ex.Message}",
+                        EventLogSeverity.Warning,
+                        4553,
+                        "ActiveDirectory");
+                }
 
                 result.Add(new DomainControllerInfo
                 {
