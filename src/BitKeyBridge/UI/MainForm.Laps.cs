@@ -1213,11 +1213,45 @@ public sealed partial class MainForm
                 computerName: _lapsResult.ComputerName,
                 recoveryId: resourceId, source: source,
                 details: $"Records={_lapsResult.Entries.Count}; Available={available}; IncludeHistory={history}; DC={_lapsResult.DirectoryServer}");
-            _lapsDetails.Text = $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
-                $"Device / AD object ID: {_lapsResult.ComputerId} | Password version: {_lapsResult.PasswordVersion}\r\n{_lapsResult.Note}";
-            UiStyle.SetStatus(_lapsStatus, $"{_lapsResult.Entries.Count} record(s), {available} readable password(s). " +
-                "Select a record to reveal or copy. Passwords clear after two minutes.",
-                available == _lapsResult.Entries.Count && available > 0 ? UiStatusKind.Success : UiStatusKind.Warning);
+            _lapsDetails.Text =
+                BuildLapsSummaryText(
+                    _lapsResult);
+
+            var expiredCurrent =
+                _lapsResult.Entries.Any(
+                    row =>
+                        !row.IsHistory &&
+                        row.HasPassword &&
+                        row.Status ==
+                            LapsPasswordStatus.Available &&
+                        IsLapsExpired(
+                            row));
+
+            var historyMissing =
+                history &&
+                _lapsResult.Entries.Count > 0 &&
+                !_lapsResult.Entries.Any(
+                    row =>
+                        row.IsHistory);
+
+            var readStatus =
+                expiredCurrent
+                    ? "Password read successfully, but the current LAPS expiration time is in the past. Rotation may be overdue."
+                    : historyMissing &&
+                      available > 0
+                        ? $"{available} readable password record(s). No password history was returned by the selected source."
+                        : $"{_lapsResult.Entries.Count} record(s), {available} readable password(s).";
+
+            UiStyle.SetStatus(
+                _lapsStatus,
+                readStatus +
+                " Passwords clear after two minutes.",
+                expiredCurrent ||
+                available == 0 ||
+                available !=
+                    _lapsResult.Entries.Count
+                    ? UiStatusKind.Warning
+                    : UiStatusKind.Success);
             _lapsClearTimer = new System.Windows.Forms.Timer { Interval = 120000 };
             _lapsClearTimer.Tick += (_, _) => ClearLapsResult();
             _lapsClearTimer.Start();
@@ -1323,11 +1357,89 @@ public sealed partial class MainForm
                   "For encrypted Windows LAPS, read ACL and DPAPI-NG decrypt authorization are separate."
                 : string.Empty;
 
+        var details =
+            new List<string>
+            {
+                $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}"
+            };
+
+        var identity =
+            new List<string>
+            {
+                $"Attribute: {row.Attribute}"
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                row.AccountSid))
+        {
+            identity.Add(
+                $"Account SID: {row.AccountSid}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                _lapsResult.PasswordVersion))
+        {
+            identity.Add(
+                $"Password version: {_lapsResult.PasswordVersion}");
+        }
+
+        details.Add(
+            string.Join(
+                " | ",
+                identity));
+
+        details.Add(
+            $"Type: {(row.IsHistory ? "History" : "Current")} | " +
+            $"Age: {FormatLapsAge(row.UpdatedAtUtc)} | " +
+            $"Expires: {FormatLapsExpiry(row)}");
+
+        var statusText =
+            row.Status.ToString();
+
+        if (IsLapsExpired(
+                row))
+        {
+            statusText +=
+                " / Expired";
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                row.StatusDetail))
+        {
+            statusText +=
+                ". " +
+                row.StatusDetail;
+        }
+
+        details.Add(
+            "Status: " +
+            statusText);
+
+        if (IsLapsExpired(
+                row))
+        {
+            details.Add(
+                "Warning: current LAPS expiration is in the past; password rotation may be overdue.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                _lapsResult.Note))
+        {
+            details.Add(
+                _lapsResult.Note);
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                accessHint))
+        {
+            details.Add(
+                accessHint.Trim());
+        }
+
         _lapsDetails.Text =
-            $"Computer: {_lapsResult.ComputerName} | Directory: {_lapsResult.DirectoryServer}\r\n" +
-            $"Attribute: {row.Attribute} | Account SID: {row.AccountSid} | Password version: {_lapsResult.PasswordVersion}\r\n" +
-            $"Type: {(row.IsHistory ? "History" : "Current")} | Age: {FormatLapsAge(row.UpdatedAtUtc)} | Expires: {row.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Not stored"}\r\n" +
-            $"Status: {row.Status}. {row.StatusDetail}\r\n{_lapsResult.Note}{accessHint}";
+            string.Join(
+                Environment.NewLine,
+                details);
     }
 
     private void RevealLapsPassword(bool copy)
@@ -1426,13 +1538,87 @@ public sealed partial class MainForm
                     FormatLapsAge(
                         row.UpdatedAtUtc),
                     row.ExpiresAtUtc,
-                    row.Status.ToString());
+                    IsLapsExpired(
+                        row)
+                        ? row.Status + " / Expired"
+                        : row.Status.ToString());
 
             _lapsRows.Rows[rowIndex].Tag =
                 row;
         }
 
         _lapsRows.ClearSelection();
+
+        if (_lapsRows.Rows.Count == 1)
+        {
+            _lapsRows.Rows[0].Selected =
+                true;
+            _lapsRows.CurrentCell =
+                _lapsRows.Rows[0].Cells[0];
+            SelectLapsEntry();
+        }
+    }
+
+    private static bool IsLapsExpired(
+        LapsPasswordEntry row)
+    {
+        return !row.IsHistory &&
+               row.ExpiresAtUtc.HasValue &&
+               row.ExpiresAtUtc.Value
+                   .ToUniversalTime() <
+               DateTime.UtcNow;
+    }
+
+    private static string FormatLapsExpiry(
+        LapsPasswordEntry row)
+    {
+        if (!row.ExpiresAtUtc.HasValue)
+            return "Not stored";
+
+        var text =
+            row.ExpiresAtUtc.Value
+                .ToUniversalTime()
+                .ToString(
+                    "yyyy-MM-dd HH:mm:ss 'UTC'");
+
+        return IsLapsExpired(
+            row)
+            ? text + " (expired)"
+            : text;
+    }
+
+    private static string BuildLapsSummaryText(
+        LapsReadResult result)
+    {
+        var parts =
+            new List<string>
+            {
+                $"Computer: {result.ComputerName}",
+                $"Directory: {result.DirectoryServer}",
+                $"Device / AD object ID: {result.ComputerId}"
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                result.PasswordVersion))
+        {
+            parts.Add(
+                $"Password version: {result.PasswordVersion}");
+        }
+
+        var text =
+            string.Join(
+                " | ",
+                parts);
+
+        if (!string.IsNullOrWhiteSpace(
+                result.Note))
+        {
+            text +=
+                Environment.NewLine +
+                result.Note;
+        }
+
+        return text;
     }
 
     private static string FormatLapsAge(
