@@ -90,3 +90,13 @@ Legacy Microsoft LAPS doesn't provide password history. No ACL change can make l
 - **Entra LAPS**: AD ACL commands don't apply. Use the Intune / Entra Setup Wizard and verify `DeviceLocalCredential.Read.All` plus an applicable Entra role.
 
 Use **LAPS → Check access** for a metadata-only diagnostic. It intentionally doesn't retrieve a password. For BitLocker, use the Recovery page; if recovery metadata is visible but secret retrieval fails, open **AD access help...** and provide the generated commands to an AD administrator.
+
+
+## Microsoft references
+
+- Windows LAPS with Windows Server Active Directory: https://learn.microsoft.com/windows-server/identity/laps/laps-scenarios-windows-server-active-directory
+- Set-LapsADReadPasswordPermission: https://learn.microsoft.com/powershell/module/laps/set-lapsadreadpasswordpermission
+- Windows LAPS policy settings, including ADPasswordEncryptionPrincipal and ADEncryptedPasswordHistorySize: https://learn.microsoft.com/windows-server/identity/laps/laps-management-policy-settings
+- msFVE-RecoveryPassword schema attribute: https://learn.microsoft.com/windows/win32/adschema/a-msfve-recoverypassword
+
+Validate delegation in a test OU before applying it broadly. Prefer dedicated groups and the smallest required OU scope.
