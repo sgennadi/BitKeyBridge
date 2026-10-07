@@ -15,7 +15,9 @@ public sealed partial class MainForm
     private readonly Button _lapsReveal = new();
     private readonly Button _lapsCopy = new();
     private readonly Button _lapsCopyAccount = new();
-    private readonly ListView _lapsRows = new();
+    private readonly Button _lapsSearchButton = new();
+    private readonly DataGridView _lapsSearchRows = new();
+    private readonly DataGridView _lapsRows = new();
     private readonly TextBox _lapsPassword = new();
     private readonly RichTextBox _lapsDetails = new();
     private readonly UiStatusLabel _lapsStatus = new();
@@ -23,8 +25,12 @@ public sealed partial class MainForm
     private readonly UiDiagnosticPanel _lapsDiagnostics = new();
     private LapsReadResult? _lapsResult;
     private CancellationTokenSource? _lapsReadCancellation;
+    private CancellationTokenSource? _lapsSearchCancellation;
     private System.Windows.Forms.Timer? _lapsClearTimer;
+    private System.Windows.Forms.Timer? _lapsSearchDebounceTimer;
     private int _lapsGeneration;
+    private int _lapsSearchGeneration;
+    private bool _suppressLapsSearchQueue;
     private bool _lapsReading;
     private string _lapsResourceId = string.Empty;
     private string _lapsAuditSource = string.Empty;
@@ -35,11 +41,11 @@ public sealed partial class MainForm
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(UiStyle.PagePadding),
-            ColumnCount = 1, RowCount = 9
+            ColumnCount = 1, RowCount = 10
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 9; i++)
-            root.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, i == 3 ? 100F : 0F));
+        for (var i = 0; i < 10; i++)
+            root.RowStyles.Add(new RowStyle(i == 4 ? SizeType.Percent : SizeType.AutoSize, i == 4 ? 100F : 0F));
         tab.Controls.Add(root);
         root.Controls.Add(new Label
         {
