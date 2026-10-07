@@ -74,7 +74,34 @@ public sealed partial class MainForm
         tab.Controls.Add(
             root);
 
-        root.Controls.Add(
+        var titlePanel =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    2,
+                RowCount =
+                    1,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.SectionGap)
+            };
+
+        titlePanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        titlePanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        titlePanel.Controls.Add(
             new Label
             {
                 Text =
@@ -83,13 +110,41 @@ public sealed partial class MainForm
                     true,
                 Font =
                     UiStyle.CreatePageTitleFont(),
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.SectionGap)
+                Anchor =
+                    AnchorStyles.Left
             },
+            0,
+            0);
+
+        _lapsBackToStart.Name =
+            "LapsBackToStart";
+        _lapsBackToStart.Text =
+            "Back to Start";
+        _lapsBackToStart.Visible =
+            false;
+        UiStyle.ConfigureActionButton(
+            _lapsBackToStart);
+        titlePanel.Controls.Add(
+            _lapsBackToStart,
+            1,
+            0);
+
+        _lapsBackToStart.Click +=
+            (_, _) =>
+            {
+                _lapsBackToStart.Visible =
+                    false;
+
+                if (_homeWorkspaceTab is not null)
+                {
+                    _mainTabs.SelectedTab =
+                        _homeWorkspaceTab;
+                    _homeQuery.Focus();
+                }
+            };
+
+        root.Controls.Add(
+            titlePanel,
             0,
             0);
 
