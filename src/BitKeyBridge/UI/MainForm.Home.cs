@@ -457,9 +457,14 @@ public sealed partial class MainForm
             !_directoryConnecting;
 
         _homeBitLockerButton.Enabled =
-            connected;
+            connected &&
+            (selected is null ||
+             selected.BitLockerKeyCount > 0);
+
         _homeLapsButton.Enabled =
-            connected;
+            connected &&
+            (selected is null ||
+             selected.LapsDetected);
     }
 
     private async void
@@ -493,6 +498,16 @@ public sealed partial class MainForm
             selected.BitLockerKeyCount == 0)
         {
             await OpenSelectedHomeLapsAsync();
+            return;
+        }
+
+        if (selected.BitLockerKeyCount == 0 &&
+            !selected.LapsDetected)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                $"No BitLocker or LAPS backup metadata is available for {selected.ComputerName}.",
+                UiStatusKind.Warning);
             return;
         }
 
