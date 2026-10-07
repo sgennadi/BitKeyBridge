@@ -3150,6 +3150,7 @@ internal static class Program
                         "Tampered elevated update plan was not rejected.");
                 }
 
+                var invalidHealthPortRejected = false;
                 try
                 {
                     ConfigurationMaintenanceService.ValidateAppConfig(
@@ -3157,13 +3158,19 @@ internal static class Program
                         {
                             HealthEndpointPort = 80
                         });
-                    failures.Add(
-                        "Configuration validation accepted an invalid health port.");
                 }
                 catch (InvalidOperationException)
                 {
+                    invalidHealthPortRejected = true;
                 }
 
+                if (!invalidHealthPortRejected)
+                {
+                    failures.Add(
+                        "Configuration validation accepted an invalid health port.");
+                }
+
+                var invalidRemoteApiTokenRejected = false;
                 try
                 {
                     ConfigurationMaintenanceService.ValidateAppConfig(
@@ -3175,11 +3182,16 @@ internal static class Program
                             RemoteApiTokenSha256 =
                                 "not-a-valid-sha256"
                         });
-                    failures.Add(
-                        "Configuration validation accepted an invalid Remote API token hash.");
                 }
                 catch (InvalidOperationException)
                 {
+                    invalidRemoteApiTokenRejected = true;
+                }
+
+                if (!invalidRemoteApiTokenRejected)
+                {
+                    failures.Add(
+                        "Configuration validation accepted an invalid Remote API token hash.");
                 }
 
                 var auditText = File.ReadAllText(auditPath);
