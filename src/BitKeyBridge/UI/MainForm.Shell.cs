@@ -123,6 +123,25 @@ public sealed partial class MainForm
                 true;
         }
 
+        _mainTabs.SelectedIndexChanged +=
+            (_, _) =>
+            {
+                if (ReferenceEquals(
+                        _mainTabs.SelectedTab,
+                        _recoveryWorkspaceTab))
+                {
+                    _recoveryBackToStart.Visible =
+                        false;
+                }
+                else if (ReferenceEquals(
+                             _mainTabs.SelectedTab,
+                             _lapsWorkspaceTab))
+                {
+                    _lapsBackToStart.Visible =
+                        false;
+                }
+            };
+
         _mainTabs.SelectedTab =
             _homeWorkspaceTab;
 
@@ -1020,10 +1039,10 @@ public sealed partial class MainForm
                 0;
         }
 
-        _recoveryBackToStart.Visible =
-            fromStart;
         _mainTabs.SelectedTab =
             _recoveryWorkspaceTab;
+        _recoveryBackToStart.Visible =
+            fromStart;
         _startQuery.Focus();
     }
 
@@ -1039,10 +1058,10 @@ public sealed partial class MainForm
                 0;
         }
 
-        _lapsBackToStart.Visible =
-            fromStart;
         _mainTabs.SelectedTab =
             _lapsWorkspaceTab;
+        _lapsBackToStart.Visible =
+            fromStart;
         _lapsQuery.Focus();
     }
 
