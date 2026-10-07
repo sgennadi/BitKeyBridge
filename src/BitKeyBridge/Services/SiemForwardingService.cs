@@ -716,8 +716,13 @@ public sealed class SiemForwardingService
                 _statusPath,
                 status);
         }
-        catch
+        catch (Exception ex)
         {
+            WindowsEventLogService.TryWrite(
+                "SIEM forwarding status persistence failed: " + ex.Message,
+                EventLogSeverity.Warning,
+                4586,
+                "SIEM");
         }
     }
 
