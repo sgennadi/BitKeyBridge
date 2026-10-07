@@ -219,7 +219,7 @@ public sealed partial class MainForm
             UiStyle.SetStatus(_lapsStatus, "Reading LAPS passwords and history...", UiStatusKind.Busy);
             if (cloud)
             {
-                if (!await EnsureCloudTokenAsync(forLaps: true))
+                if (!await EnsureCloudTokenAsync(forLaps: true, cancellation.Token))
                 {
                     UiStyle.SetStatus(_lapsStatus, "Entra authentication was not completed. Configure the cloud connection and try again.", UiStatusKind.Warning);
                     return;
