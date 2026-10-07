@@ -249,14 +249,18 @@ public sealed partial class MainForm : DpiAwareForm
         var selected = _scopes.CheckedItems.OfType<BitLockerScope>().ToList();
         if (selected.Count == 0)
         {
-            MessageBox.Show(this, "Check at least one OU before saving defaults.", "Default Scopes", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ShowAppMessage(
+                "Default Scopes",
+                "Check at least one OU before saving defaults.");
             return;
         }
         try
         {
             _config.DefaultScopes = selected;
             ConfigService.SaveAppConfig(_config);
-            MessageBox.Show(this, $"Saved {selected.Count} default OU scope(s) to:{Environment.NewLine}{AppPaths.AppSettingsFile}", "Default Scopes", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ShowAppMessage(
+                "Default Scopes",
+                $"Saved {selected.Count} default OU scope(s) to:{Environment.NewLine}{AppPaths.AppSettingsFile}");
         }
         catch (Exception ex)
         {
@@ -1850,12 +1854,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (_coverageCurrent is null)
         {
-            MessageBox.Show(
-                this,
-                "Run Coverage first.",
+            ShowAppMessage(
                 "BitLocker Coverage",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Run Coverage first.");
             return;
         }
 
@@ -2159,23 +2160,17 @@ public sealed partial class MainForm : DpiAwareForm
         if (_unifiedResults.SelectedItems.Count == 0 ||
             _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row)
         {
-            MessageBox.Show(
-                this,
-                "Select an Intune-managed device first.",
+            ShowAppMessage(
                 "Rotate BitLocker Key",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Select an Intune-managed device first.");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(row.ManagedDeviceId))
         {
-            MessageBox.Show(
-                this,
-                "The selected device is not linked to an Intune managedDevice object.",
+            ShowAppMessage(
                 "Rotate BitLocker Key",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "The selected device is not linked to an Intune managedDevice object.");
             return;
         }
 
@@ -2214,9 +2209,9 @@ public sealed partial class MainForm : DpiAwareForm
 
         if (!await EnsureCloudTokenAsync()) return;
 
-        var answer = MessageBox.Show(
-            this,
-            $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
+        var answer = ShowAppMessage(
+                "Rotate BitLocker Key",
+                $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
             "Only rotate after the recovery operation is complete and the device can process the Intune action." +
             (string.IsNullOrWhiteSpace(context.Reference)
                 ? string.Empty
@@ -2258,10 +2253,7 @@ public sealed partial class MainForm : DpiAwareForm
                 UiStatusKind.Success);
             MessageBox.Show(
                 this,
-                "Intune accepted the rotation request. The new recovery key appears after the device processes the action and backs up the new key.",
-                "Rotate BitLocker Key",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Intune accepted the rotation request. The new recovery key appears after the device processes the action and backs up the new key.");
         }
         catch (Exception ex)
         {
@@ -2311,17 +2303,14 @@ public sealed partial class MainForm : DpiAwareForm
                 $"CurrentIdentity={AuthorizationService.CurrentIdentityName()}; " +
                 $"CurrentRecoveryRead={read.Allowed}; CurrentRotate={rotate.Allowed}; CurrentAdminUI={admin.Allowed}");
 
-        MessageBox.Show(
-            this,
-            $"RBAC settings saved.{Environment.NewLine}{Environment.NewLine}" +
+        ShowAppMessage(
+                "BitKeyBridge RBAC",
+                $"RBAC settings saved.{Environment.NewLine}{Environment.NewLine}" +
             $"Current identity: {AuthorizationService.CurrentIdentityName()}{Environment.NewLine}" +
             $"RecoveryRead: {(read.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
             $"Rotate: {(rotate.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}" +
             $"Administration UI: {(admin.Allowed ? "Allowed" : "Denied")}{Environment.NewLine}{Environment.NewLine}" +
-            "Navigation roles are evaluated when the GUI starts.",
-            "BitKeyBridge RBAC",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
+            "Navigation roles are evaluated when the GUI starts.");
     }
 
     private void ConfigurePrivilegedAccessFromGui()
@@ -2372,12 +2361,9 @@ public sealed partial class MainForm : DpiAwareForm
         var repository = _updateRepository.Text.Trim();
         if (string.IsNullOrWhiteSpace(repository) || repository.Split('/').Length != 2)
         {
-            MessageBox.Show(
-                this,
-                "Update repository must use owner/repository format.",
+            ShowAppMessage(
                 "Update Settings",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+                "Update repository must use owner/repository format.");
             return;
         }
 
@@ -2414,23 +2400,17 @@ public sealed partial class MainForm : DpiAwareForm
             if (!string.IsNullOrWhiteSpace(_lastUpdateInfo.Error))
             {
                 if (!silentWhenCurrent)
-                    MessageBox.Show(
-                        this,
-                        _lastUpdateInfo.Error,
-                        "BitKeyBridge Update",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    ShowAppMessage(
+                "BitKeyBridge Update",
+                _lastUpdateInfo.Error);
                 return;
             }
 
             if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
             {
-                MessageBox.Show(
-                    this,
-                    $"BitKeyBridge {_lastUpdateInfo.CurrentVersion} is current.",
-                    "BitKeyBridge Update",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                ShowAppMessage(
+                "BitKeyBridge Update",
+                $"BitKeyBridge {_lastUpdateInfo.CurrentVersion} is current.");
             }
 
             if (_lastUpdateInfo.UpdateAvailable)
@@ -2492,9 +2472,9 @@ public sealed partial class MainForm : DpiAwareForm
             !info.UpdateAvailable)
             return;
 
-        var answer = MessageBox.Show(
-            this,
-            $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
+        var answer = ShowAppMessage(
+                "Remote API",
+                $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
             "The ZIP SHA-256 will be verified against SHA256SUMS.txt and GitHub's asset digest when available. " +
             "The downloaded EXE must also pass --self-test before installation. " +
             "The GUI will close during replacement and reopen automatically.",
@@ -2618,7 +2598,7 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!_config.RemoteApiEnabled)
         {
-            MessageBox.Show(this, "Remote API is not enabled.", "Remote API", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Remote API is not enabled.");
             return;
         }
 
@@ -2654,9 +2634,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!_config.RemoteApiEnabled) return;
 
-        var answer = MessageBox.Show(
-            this,
-            "Disable the Remote API and invalidate the current bearer token?",
+        var answer = ShowAppMessage(
+                "Configuration Backup",
+                "Disable the Remote API and invalidate the current bearer token?",
             "Disable Remote API",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
@@ -2745,10 +2725,7 @@ public sealed partial class MainForm : DpiAwareForm
                 path +
                 Environment.NewLine +
                 Environment.NewLine +
-                "Credential blobs, access tokens, private keys, and BitLocker recovery passwords are not included.",
-                "Configuration Backup",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Credential blobs, access tokens, private keys, and BitLocker recovery passwords are not included.");
         }
         catch (Exception ex)
         {
@@ -2776,8 +2753,8 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
-            var answer = MessageBox.Show(
-                this,
+            var answer = ShowAppMessage(
+                "Configuration Restore",
                 "Restore this BitKeyBridge configuration?" +
                 Environment.NewLine +
                 Environment.NewLine +
@@ -2833,12 +2810,7 @@ public sealed partial class MainForm : DpiAwareForm
                               x => "- " + x))) +
                 Environment.NewLine +
                 Environment.NewLine +
-                "Restart the BitKeyBridge GUI to reload all restored settings.",
-                "Configuration Restore",
-                MessageBoxButtons.OK,
-                result.Warnings.Count == 0
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
+                "Restart the BitKeyBridge GUI to reload all restored settings.");
         }
         catch (Exception ex)
         {
@@ -2882,18 +2854,15 @@ public sealed partial class MainForm : DpiAwareForm
                 details:
                     $"Path={result.ZipPath}; Files={result.IncludedFiles.Count}");
 
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Diagnostics Bundle",
                 "Sanitized diagnostics bundle created." +
                 Environment.NewLine +
                 Environment.NewLine +
                 result.ZipPath +
                 Environment.NewLine +
                 Environment.NewLine +
-                "Recovery CSV/passwords, audit contents, credential blobs, bearer tokens/hashes, Graph tokens, and private keys are excluded.",
-                "Diagnostics Bundle",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Recovery CSV/passwords, audit contents, credential blobs, bearer tokens/hashes, Graph tokens, and private keys are excluded.");
         }
         catch (Exception ex)
         {
@@ -2908,12 +2877,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!_config.RemoteApiEnabled)
         {
-            MessageBox.Show(
-                this,
-                "Enable the Remote API before creating scoped tokens.",
+            ShowAppMessage(
                 "Remote API",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Enable the Remote API before creating scoped tokens.");
             return;
         }
 
@@ -3164,16 +3130,11 @@ public sealed partial class MainForm : DpiAwareForm
 
         if (showConfirmation)
         {
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "BitKeyBridge",
                 persisted
                     ? "Active Directory and recovery-search settings saved."
-                    : "Settings are active for this BitKeyBridge session, but the machine configuration could not be updated.",
-                "BitKeyBridge",
-                MessageBoxButtons.OK,
-                persisted
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
+                    : "Settings are active for this BitKeyBridge session, but the machine configuration could not be updated.");
         }
     }
 
@@ -3189,12 +3150,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!_adExplicitCredentials.Checked)
         {
-            MessageBox.Show(
-                this,
-                "Enable explicit AD credentials first.",
+            ShowAppMessage(
                 "Credential Vault",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Enable explicit AD credentials first.");
             return;
         }
 
@@ -3202,12 +3160,9 @@ public sealed partial class MainForm : DpiAwareForm
         var password = _adPassword.Text;
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password))
         {
-            MessageBox.Show(
-                this,
-                "Enter the AD user and password before saving the credential.",
+            ShowAppMessage(
                 "Credential Vault",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+                "Enter the AD user and password before saving the credential.");
             return;
         }
 
@@ -3259,14 +3214,11 @@ public sealed partial class MainForm : DpiAwareForm
                 _adPassword.Clear();
 
             RefreshCredentialVaultStatus();
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Credential Vault",
                 mode.Equals("Session", StringComparison.OrdinalIgnoreCase)
                     ? "Credential loaded for this BitKeyBridge process only."
-                    : "Credential saved successfully in the selected protected Windows vault.",
-                "Credential Vault",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                    : "Credential saved successfully in the selected protected Windows vault.");
         }
         catch (Exception ex)
         {
@@ -4887,13 +4839,10 @@ public sealed partial class MainForm : DpiAwareForm
                 source: "WindowsService",
                 details: $"Executable={AppPaths.ServiceExecutable}; Identity={WindowsServiceHost.GetInfo().Identity}");
             RefreshDashboard();
-            MessageBox.Show(
-                this,
-                $"BitKeyBridge service is installed and running.{Environment.NewLine}{Environment.NewLine}" +
-                $"Executable: {AppPaths.ServiceExecutable}",
+            ShowAppMessage(
                 "BitKeyBridge Service",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                $"BitKeyBridge service is installed and running.{Environment.NewLine}{Environment.NewLine}" +
+                $"Executable: {AppPaths.ServiceExecutable}");
         }
         catch (Exception ex)
         {
@@ -5003,15 +4952,12 @@ public sealed partial class MainForm : DpiAwareForm
                     $"Tenant={tenant}; Client={client}; Certificate={thumbprint}; Expires={cert.NotAfter:yyyy-MM-dd}; KeyAccess={access?.Status ?? "NotApplicable"}; KeyAccount={access?.Account ?? string.Empty}");
 
             RefreshMachineCloudStatus();
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Machine Cloud Configuration",
                 "Machine cloud configuration saved for Windows Service / Task Scheduler." +
                 Environment.NewLine + Environment.NewLine +
                 "Only Tenant ID, Client ID, certificate thumbprint, and Certificate auth mode were stored. " +
-                "No password, access token, or private key was written to the config file.",
-                "Machine Cloud Configuration",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "No password, access token, or private key was written to the config file.");
         }
         catch (Exception ex)
         {
@@ -5082,17 +5028,14 @@ public sealed partial class MainForm : DpiAwareForm
             RefreshDashboard();
             RefreshAuditSigningStatus();
 
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Service Access",
                 "Windows Service access has been verified/repaired." +
                 Environment.NewLine +
                 Environment.NewLine +
                 $"Account: {service.Identity}" +
                 Environment.NewLine +
-                "Checked: configured certificate private keys, Machine / Service AD credential access, and protected storage.",
-                "Service Access",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                "Checked: configured certificate private keys, Machine / Service AD credential access, and protected storage.");
         }
         catch (Exception ex)
         {
@@ -5283,16 +5226,13 @@ public sealed partial class MainForm : DpiAwareForm
             RefreshMachineCloudStatus();
             RefreshDashboard();
 
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Service Identity",
                 "Windows Service identity updated successfully." +
                 Environment.NewLine + Environment.NewLine +
                 (GetSelectedServiceIdentityMode().Equals("gMSA", StringComparison.OrdinalIgnoreCase)
                     ? "The gMSA password is managed by Active Directory and is not stored by BitKeyBridge."
-                    : "BitKeyBridge does not store the Windows Service account password."),
-                "Service Identity",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                    : "BitKeyBridge does not store the Windows Service account password."));
         }
         catch (Exception ex)
         {
@@ -5350,9 +5290,9 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void UninstallServiceFromGui()
     {
-        var answer = MessageBox.Show(
-            this,
-            "Stop and remove the BitKeyBridge Windows Service? Configuration, audit logs and exported recovery data will be preserved.",
+        var answer = ShowAppMessage(
+                "Secure BitLocker Output",
+                "Stop and remove the BitKeyBridge Windows Service? Configuration, audit logs and exported recovery data will be preserved.",
             "Uninstall BitKeyBridge Service",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
@@ -5519,10 +5459,7 @@ public sealed partial class MainForm : DpiAwareForm
                 $"Directory: {result.DirectoryPath}{Environment.NewLine}{shareText}{Environment.NewLine}{Environment.NewLine}" +
                 (dialog.UpdateApplicationConfig
                     ? "BitKeyBridge export configuration was updated. If an existing WinPE workflow still reads NETLOGON/SYSVOL, update that consumer before switching production export."
-                    : "BitKeyBridge export configuration was not changed."),
-                "Secure BitLocker Output",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                    : "BitKeyBridge export configuration was not changed."));
         }
         catch (Exception ex)
         {
@@ -5605,14 +5542,11 @@ public sealed partial class MainForm : DpiAwareForm
             4501,
             "RBAC");
 
-        MessageBox.Show(
-            this,
-            $"Access denied for {permission}.{Environment.NewLine}{Environment.NewLine}" +
+        ShowAppMessage(
+                "BitKeyBridge RBAC",
+                $"Access denied for {permission}.{Environment.NewLine}{Environment.NewLine}" +
             $"Windows identity: {decision.Identity}{Environment.NewLine}" +
-            decision.Reason,
-            "BitKeyBridge RBAC",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Warning);
+            decision.Reason);
 
         return false;
     }
@@ -5693,16 +5627,9 @@ public sealed partial class MainForm : DpiAwareForm
                 "A second authorized Windows user can approve this session from BitKeyBridge Privileged Access settings or with --approval-approve.";
         }
 
-        MessageBox.Show(
-            this,
-            message,
-            "Privileged Recovery Access",
-            MessageBoxButtons.OK,
-            decision.Status is
-                "ApprovalPending" or
-                "JitRequired"
-                ? MessageBoxIcon.Information
-                : MessageBoxIcon.Warning);
+        ShowAppMessage(
+                "Privileged Recovery Access",
+                message);
 
         return false;
     }
@@ -5909,8 +5836,8 @@ public sealed partial class MainForm : DpiAwareForm
             RefreshAuditSigningStatus();
             RefreshDashboard();
 
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Audit Signing",
                 "Audit signing is enabled." +
                 Environment.NewLine +
                 $"Certificate: {cert.Thumbprint}" +
@@ -5919,10 +5846,7 @@ public sealed partial class MainForm : DpiAwareForm
                 Environment.NewLine +
                 (checkpoint is null
                     ? "Checkpoint will be created after the first chained audit entry."
-                    : $"Signed checkpoint entries: {checkpoint.TotalEntries}"),
-                "Audit Signing",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                    : $"Signed checkpoint entries: {checkpoint.TotalEntries}"));
         }
         catch (Exception ex)
         {
@@ -5945,14 +5869,11 @@ public sealed partial class MainForm : DpiAwareForm
             RefreshAuditSigningStatus();
             RefreshDashboard();
 
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Audit Signing",
                 $"Signed {checkpoint.TotalEntries} audit entries." +
                 Environment.NewLine +
-                $"Hash: {checkpoint.LastHash}",
-                "Audit Signing",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                $"Hash: {checkpoint.LastHash}");
         }
         catch (Exception ex)
         {
@@ -5974,8 +5895,8 @@ public sealed partial class MainForm : DpiAwareForm
 
             RefreshAuditSigningStatus();
 
-            MessageBox.Show(
-                this,
+            ShowAppMessage(
+                "Audit Signature Verification",
                 $"Status: {result.Status}" +
                 Environment.NewLine +
                 $"Signature valid: {result.SignatureValid}" +
@@ -5988,12 +5909,7 @@ public sealed partial class MainForm : DpiAwareForm
                 (string.IsNullOrWhiteSpace(result.Error)
                     ? string.Empty
                     : Environment.NewLine +
-                      "Error: " + result.Error),
-                "Audit Signature Verification",
-                MessageBoxButtons.OK,
-                result.Valid
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
+                      "Error: " + result.Error));
         }
         catch (Exception ex)
         {
@@ -6014,8 +5930,8 @@ public sealed partial class MainForm : DpiAwareForm
                     "Enable audit signing before certificate rollover.");
             }
 
-            var answer = MessageBox.Show(
-                this,
+            var answer = ShowAppMessage(
+                "Audit Signing Rollover",
                 "Roll over the audit-signing certificate?" +
                 Environment.NewLine +
                 Environment.NewLine +
@@ -6081,10 +5997,7 @@ public sealed partial class MainForm : DpiAwareForm
                     $"Checkpoint valid: {result.NewCheckpointValid}" +
                     Environment.NewLine +
                     Environment.NewLine +
-                    $"Transition history: {AppPaths.AuditSigningTransitionsDirectory}",
-                    "Audit Signing Rollover",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    $"Transition history: {AppPaths.AuditSigningTransitionsDirectory}");
             }
             finally
             {
@@ -6118,8 +6031,8 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
-            var answer = MessageBox.Show(
-                this,
+            var answer = ShowAppMessage(
+                "Open",
                 "Disable creation of new signed audit checkpoints?" +
                 Environment.NewLine +
                 Environment.NewLine +
@@ -6314,7 +6227,7 @@ public sealed partial class MainForm : DpiAwareForm
         {
             if (!File.Exists(path) && !Directory.Exists(path))
             {
-                MessageBox.Show(this, $"Path does not exist:{Environment.NewLine}{path}", "Open", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, $"Path does not exist:{Environment.NewLine}{path}");
                 return;
             }
             if (executable is null)
