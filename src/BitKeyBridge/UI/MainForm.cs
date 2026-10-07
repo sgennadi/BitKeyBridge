@@ -2208,9 +2208,9 @@ public sealed partial class MainForm : DpiAwareForm
 
         if (!await EnsureCloudTokenAsync()) return;
 
-        var answer = ShowAppMessage(
-                "Rotate BitLocker Key",
-                $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
+        var answer = MessageBox.Show(
+            this,
+            $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
             "Only rotate after the recovery operation is complete and the device can process the Intune action." +
             (string.IsNullOrWhiteSpace(context.Reference)
                 ? string.Empty
@@ -2471,9 +2471,9 @@ public sealed partial class MainForm : DpiAwareForm
             !info.UpdateAvailable)
             return;
 
-        var answer = ShowAppMessage(
-                "Remote API",
-                $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
+        var answer = MessageBox.Show(
+            this,
+            $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
             "The ZIP SHA-256 will be verified against SHA256SUMS.txt and GitHub's asset digest when available. " +
             "The downloaded EXE must also pass --self-test before installation. " +
             "The GUI will close during replacement and reopen automatically.",
@@ -2635,9 +2635,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         if (!_config.RemoteApiEnabled) return;
 
-        var answer = ShowAppMessage(
-                "Configuration Backup",
-                "Disable the Remote API and invalidate the current bearer token?",
+        var answer = MessageBox.Show(
+            this,
+            "Disable the Remote API and invalidate the current bearer token?",
             "Disable Remote API",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
@@ -2751,8 +2751,8 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
-            var answer = ShowAppMessage(
-                "Configuration Restore",
+            var answer = MessageBox.Show(
+                this,
                 "Restore this BitKeyBridge configuration?" +
                 Environment.NewLine +
                 Environment.NewLine +
@@ -4541,9 +4541,9 @@ public sealed partial class MainForm : DpiAwareForm
                 "BitLocker recovery-key retrieval failed.",
                 "GetRecoveryKey",
                 ex,
-                ("Computer", computerName),
-                ("RecoveryId", recoveryId),
-                ("Source", source));
+                ("Computer", row.ComputerName),
+                ("RecoveryId", row.RecoveryId),
+                ("Source", row.Source));
             UiStyle.SetStatus(
                 _startPurposeStatus,
                 "Recovery-key retrieval failed. Review diagnostics below.",
@@ -5285,9 +5285,9 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void UninstallServiceFromGui()
     {
-        var answer = ShowAppMessage(
-                "Secure BitLocker Output",
-                "Stop and remove the BitKeyBridge Windows Service? Configuration, audit logs and exported recovery data will be preserved.",
+        var answer = MessageBox.Show(
+            this,
+            "Stop and remove the BitKeyBridge Windows Service? Configuration, audit logs and exported recovery data will be preserved.",
             "Uninstall BitKeyBridge Service",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
@@ -5924,8 +5924,8 @@ public sealed partial class MainForm : DpiAwareForm
                     "Enable audit signing before certificate rollover.");
             }
 
-            var answer = ShowAppMessage(
-                "Audit Signing Rollover",
+            var answer = MessageBox.Show(
+                this,
                 "Roll over the audit-signing certificate?" +
                 Environment.NewLine +
                 Environment.NewLine +
@@ -6022,8 +6022,8 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
-            var answer = ShowAppMessage(
-                "Open",
+            var answer = MessageBox.Show(
+                this,
                 "Disable creation of new signed audit checkpoints?" +
                 Environment.NewLine +
                 Environment.NewLine +
