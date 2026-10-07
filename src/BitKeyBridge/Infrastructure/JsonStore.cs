@@ -33,7 +33,17 @@ public static class JsonStore
         }
         finally
         {
-            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+            try
+            {
+                if (File.Exists(temp))
+                    File.Delete(temp);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "Atomic JSON temporary file cleanup failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
         }
     }
 }
