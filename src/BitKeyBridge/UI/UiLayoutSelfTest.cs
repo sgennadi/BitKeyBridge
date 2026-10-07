@@ -782,6 +782,10 @@ public static class UiLayoutSelfTest
             FindByName(
                 root,
                 "ConnectAdCancelButton");
+        var disconnect =
+            FindByName(
+                root,
+                "DisconnectAdButton");
         var status =
             FindByName(
                 root,
@@ -794,6 +798,7 @@ public static class UiLayoutSelfTest
         if (source is null ||
             connect is null ||
             cancel is null ||
+            disconnect is null ||
             status is null ||
             advanced is null)
         {
@@ -811,6 +816,9 @@ public static class UiLayoutSelfTest
                 cancel.Parent,
                 table) ||
             !ReferenceEquals(
+                disconnect.Parent,
+                table) ||
+            !ReferenceEquals(
                 status.Parent,
                 table) ||
             !ReferenceEquals(
@@ -818,7 +826,7 @@ public static class UiLayoutSelfTest
                 table))
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Source, Connect, Cancel and connection status are not in one responsive table.");
+                $"{formName}/{scenario.Name}: Source, Connect, Cancel, Disconnect and connection status are not in one responsive table.");
             return;
         }
 
@@ -844,10 +852,11 @@ public static class UiLayoutSelfTest
         if (source.TabIndex != 0 ||
             connect.TabIndex != 1 ||
             cancel.TabIndex != 2 ||
-            advanced.TabIndex != 3)
+            disconnect.TabIndex != 3 ||
+            advanced.TabIndex != 4)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: connection keyboard order must be Source -> Connect -> Cancel -> Advanced.");
+                $"{formName}/{scenario.Name}: connection keyboard order must be Source -> Connect -> Cancel -> Disconnect -> Advanced.");
         }
 
         if (status.TabStop)
