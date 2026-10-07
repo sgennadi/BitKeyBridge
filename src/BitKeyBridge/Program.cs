@@ -35,6 +35,7 @@ internal static class Program
         {
             ConsoleHelper.EnsureConsole();
             ApplicationConfiguration.Initialize();
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             return UiLayoutSelfTest.Run();
         }
 
@@ -3220,7 +3221,7 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("GUI:");
         Console.WriteLine("  BitKeyBridge.exe");
-        Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout without showing the UI");
+        Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout using test windows");
         Console.WriteLine();
         Console.WriteLine("CLI:");
         Console.WriteLine("  --cli                 Export using saved scopes");
