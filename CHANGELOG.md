@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.2
+
+- Fixed **Devices → Search AD + Cloud** so Entra/Intune search no longer fails when Active Directory uses **Session only** credentials but no session password is currently loaded. Cloud search can now run independently while AD is disconnected.
+- Unified device search now skips AD cleanly when there is no active AD session, preserves Entra/Intune results, and reports whether results came from **AD + Entra + Intune**, **Entra + Intune**, or **AD only** instead of masking Cloud with an AD credential exception.
+- If Microsoft Graph authentication does not complete and AD is also disconnected, Devices now shows an explicit source/authentication message rather than throwing the misleading `Session credential mode is selected` error.
+- Fixed the tiny yellow control under **Save settings** in **Start → Advanced**. It is the AD credential-status surface (not a button); hidden WinForms layout could collapse its wrapping width before Advanced was opened.
+- The credential-status surface is now labeled explicitly (`Credential status: ...`) and receives a stable control name for UI diagnostics.
+- Added a runtime UI regression check so hidden Advanced layout cannot silently collapse the credential-status banner again.
+
+
 ## 0.24.1
 
 - Fixed Start startup connection behavior. BitKeyBridge now attempts the configured AD connection on launch and opens the AD credential prompt when automatic connection cannot proceed or fails. When automatic connection is explicitly disabled, Start asks how to connect instead of silently remaining disconnected.
