@@ -8,24 +8,223 @@ public sealed partial class CloudGraphService
     private const string LapsDelegatedScopes =
         "https://graph.microsoft.com/DeviceLocalCredential.Read.All https://graph.microsoft.com/Device.Read.All";
 
+    public async Task<LapsAccessCheckResult> CheckLapsAccessAsync(
+        string token,
+        string query,
+        CancellationToken ct = default)
+    {
+        Require(
+            query,
+            nameof(query));
+
+        var (
+            deviceId,
+            deviceName) =
+            await ResolveLapsDeviceAsync(
+                token,
+                query,
+                ct);
+
+        var result =
+            new LapsAccessCheckResult
+            {
+                Source = "Microsoft Entra ID",
+                ComputerName = deviceName,
+                ComputerId = deviceId,
+                DirectoryServer = "Microsoft Graph"
+            };
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Entra device resolution",
+                State = LapsAccessState.Available,
+                Detail =
+                    $"Resolved Entra device ID {deviceId}."
+            });
+
+        var uri =
+            $"https://graph.microsoft.com/v1.0/directory/deviceLocalCredentials/{deviceId}?$select=id,deviceName,lastBackupDateTime,refreshDateTime";
+
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                uri);
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                token);
+
+        using var response =
+            await _http.SendAsync(
+                request,
+                ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            result.Checks.Add(
+                new LapsAccessCheckItem
+                {
+                    Name = "DeviceLocalCredential.Read.All",
+                    State = LapsAccessState.Failed,
+                    Detail =
+                        $"Metadata-only LAPS endpoint returned HTTP {(int)response.StatusCode}. Verify DeviceLocalCredential.Read.All consent and an applicable Entra role."
+                });
+
+            return result;
+        }
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "DeviceLocalCredential.Read.All",
+                State = LapsAccessState.Available,
+                Detail =
+                    "Metadata-only deviceLocalCredentials request succeeded without requesting the credentials collection."
+            });
+
+        try
+        {
+            using var json =
+                await JsonDocument.ParseAsync(
+                    await response.Content.ReadAsStreamAsync(
+                        ct),
+                    cancellationToken:
+                        ct);
+
+            var root =
+                json.RootElement;
+            var lastBackup =
+                GetString(
+                    root,
+                    "lastBackupDateTime");
+            var refresh =
+                GetString(
+                    root,
+                    "refreshDateTime");
+
+            result.Checks.Add(
+                new LapsAccessCheckItem
+                {
+                    Name = "Entra LAPS backup indicator",
+                    State =
+                        string.IsNullOrWhiteSpace(
+                            lastBackup) &&
+                        string.IsNullOrWhiteSpace(
+                            refresh)
+                            ? LapsAccessState.NotDetected
+                            : LapsAccessState.Available,
+                    Detail =
+                        !string.IsNullOrWhiteSpace(
+                            lastBackup)
+                            ? $"Last backup metadata: {lastBackup}."
+                            : !string.IsNullOrWhiteSpace(
+                                refresh)
+                                ? $"Refresh metadata: {refresh}."
+                                : "No backup/refresh metadata was returned."
+                });
+        }
+        catch (JsonException ex)
+        {
+            result.Checks.Add(
+                new LapsAccessCheckItem
+                {
+                    Name = "Entra LAPS metadata",
+                    State = LapsAccessState.Failed,
+                    Detail =
+                        "Metadata response could not be parsed: " +
+                        DiagnosticRedaction.Sanitize(
+                            ex.Message)
+                });
+        }
+
+        result.Checks.Add(
+            new LapsAccessCheckItem
+            {
+                Name = "Password retrieval",
+                State = LapsAccessState.NotProbed,
+                Detail =
+                    "Not probed. This access check intentionally omits the credentials property so no LAPS password is returned."
+            });
+
+        return result;
+    }
+
+    private async Task<(string DeviceId, string DeviceName)> ResolveLapsDeviceAsync(
+        string token,
+        string query,
+        CancellationToken ct)
+    {
+        if (Guid.TryParse(
+                query,
+                out var id))
+        {
+            return (
+                id.ToString("D"),
+                query.Trim());
+        }
+
+        var escaped =
+            query.Trim()
+                .Replace(
+                    "'",
+                    "''");
+        var filter =
+            Uri.EscapeDataString(
+                $"displayName eq '{escaped}'");
+
+        var devices =
+            await GetCollectionAsync(
+                token,
+                $"https://graph.microsoft.com/v1.0/devices?$filter={filter}&$select=deviceId,displayName&$top=2",
+                2,
+                ct);
+
+        if (devices.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The exact device name was not found in Entra ID.");
+        }
+
+        if (devices.Count > 1)
+        {
+            throw new InvalidOperationException(
+                "Several Entra devices have this name. Enter the Entra device ID.");
+        }
+
+        var deviceId =
+            GetString(
+                devices[0],
+                "deviceId");
+        var deviceName =
+            GetString(
+                devices[0],
+                "displayName");
+
+        if (!Guid.TryParse(
+                deviceId,
+                out _))
+        {
+            throw new InvalidOperationException(
+                "Entra returned an invalid device ID.");
+        }
+
+        return (
+            deviceId,
+            deviceName);
+    }
+
     public async Task<LapsReadResult> ReadLapsPasswordsAsync(string token, string query,
         bool includeHistory, CancellationToken ct = default)
     {
         Require(query, nameof(query));
-        string deviceId;
-        string deviceName = query.Trim();
-        if (Guid.TryParse(query, out var id)) deviceId = id.ToString("D");
-        else
-        {
-            var filter = Uri.EscapeDataString($"displayName eq '{query.Trim().Replace("'", "''")}'");
-            var devices = await GetCollectionAsync(token,
-                $"https://graph.microsoft.com/v1.0/devices?$filter={filter}&$select=deviceId,displayName&$top=2", 2, ct);
-            if (devices.Count == 0) throw new InvalidOperationException("The exact device name was not found in Entra ID.");
-            if (devices.Count > 1) throw new InvalidOperationException("Several Entra devices have this name. Enter the Entra device ID.");
-            deviceId = GetString(devices[0], "deviceId");
-            deviceName = GetString(devices[0], "displayName");
-            if (!Guid.TryParse(deviceId, out _)) throw new InvalidOperationException("Entra returned an invalid device ID.");
-        }
+        var (
+            deviceId,
+            deviceName) =
+            await ResolveLapsDeviceAsync(
+                token,
+                query,
+                ct);
 
         var uri = $"https://graph.microsoft.com/v1.0/directory/deviceLocalCredentials/{deviceId}?$select=id,deviceName,lastBackupDateTime,refreshDateTime,credentials";
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
