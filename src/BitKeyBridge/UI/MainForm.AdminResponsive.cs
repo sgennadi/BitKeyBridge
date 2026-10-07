@@ -169,9 +169,12 @@ public sealed partial class MainForm
 
         var helpdeskActions =
             CreateActionFlow();
+        var rbacWizard =
+            NewActionButton(
+                "RBAC Setup Wizard...");
         var rbac =
             NewActionButton(
-                "RBAC...");
+                "RBAC Advanced...");
         var privileged =
             NewActionButton(
                 "Privileged Access...");
@@ -179,6 +182,7 @@ public sealed partial class MainForm
             NewActionButton(
                 "Save Helpdesk Settings");
         helpdeskActions.Controls.AddRange([
+            rbacWizard,
             rbac,
             privileged,
             saveHelpdesk
@@ -191,6 +195,9 @@ public sealed partial class MainForm
         root.Controls.Add(
             helpdeskGrid);
 
+        rbacWizard.Click +=
+            (_, _) =>
+                ConfigureRbacWizardFromGui();
         rbac.Click +=
             (_, _) =>
                 ConfigureRbacFromGui();
