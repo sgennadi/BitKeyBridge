@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/BitKeyBridge/Core/LapsModels.cs" Link="LapsModels.cs" />
+    <Compile Include="../../src/BitKeyBridge/Core/SearchModels.cs" Link="SearchModels.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsSecretCodec.cs" Link="LapsSecretCodec.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsCloudCodec.cs" Link="LapsCloudCodec.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsSelfTest.cs" Link="LapsSelfTest.cs" />

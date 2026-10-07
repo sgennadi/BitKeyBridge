@@ -23,6 +23,288 @@ public sealed class LapsDirectoryService
         _ad = new ActiveDirectoryService(config, credential, useCredentialOverride: true);
     }
 
+    public List<LapsSearchResult> SearchMetadata(
+        string query,
+        int maximumItems = 100,
+        CancellationToken ct = default)
+    {
+        query =
+            (query ?? string.Empty).Trim();
+
+        if (query.Length == 0)
+            return [];
+
+        ct.ThrowIfCancellationRequested();
+
+        var server =
+            _ad.GetPreferredWritableDc();
+        var root =
+            _ad.GetRootDse(server);
+        var baseDn =
+            root["defaultNamingContext"];
+
+        using var connection =
+            _ad.CreateConnection(
+                server);
+
+        var rows =
+            new List<LapsSearchResult>();
+
+        void AddEntry(
+            SearchResultEntry entry)
+        {
+            var computerId =
+                BinaryGuid(
+                    entry,
+                    "objectGUID");
+
+            if (string.IsNullOrWhiteSpace(
+                    computerId))
+            {
+                return;
+            }
+
+            var legacyExpiry =
+                Expiration(
+                    entry,
+                    "ms-Mcs-AdmPwdExpirationTime");
+            var windowsExpiry =
+                Expiration(
+                    entry,
+                    "msLAPS-PasswordExpirationTime");
+            var passwordVersion =
+                BinaryGuid(
+                    entry,
+                    "msLAPS-CurrentPasswordVersion");
+
+            rows.Add(
+                new LapsSearchResult
+                {
+                    ComputerName =
+                        Text(
+                            entry,
+                            "name") ??
+                        string.Empty,
+                    ComputerId =
+                        computerId,
+                    KeyDateUtc =
+                        null,
+                    IsLatest =
+                        legacyExpiry.HasValue ||
+                        windowsExpiry.HasValue ||
+                        !string.IsNullOrWhiteSpace(
+                            passwordVersion)
+                            ? true
+                            : null,
+                    Source =
+                        "Active Directory",
+                    DirectoryServer =
+                        server
+                });
+        }
+
+        if (Guid.TryParse(
+                query.Trim(
+                    '{',
+                    '}'),
+                out var exactId))
+        {
+            var objectGuidFilter =
+                "(&(objectCategory=computer)(objectGUID=" +
+                string.Concat(
+                    exactId
+                        .ToByteArray()
+                        .Select(
+                            static value =>
+                                "\\" +
+                                value.ToString(
+                                    "x2",
+                                    CultureInfo.InvariantCulture))) +
+                "))";
+
+            var exactRequest =
+                new SearchRequest(
+                    baseDn,
+                    objectGuidFilter,
+                    SearchScope.Subtree,
+                    "name",
+                    "objectGUID",
+                    "ms-Mcs-AdmPwdExpirationTime",
+                    "msLAPS-PasswordExpirationTime",
+                    "msLAPS-CurrentPasswordVersion");
+
+            var exactResponse =
+                (SearchResponse)connection.SendRequest(
+                    exactRequest,
+                    TimeSpan.FromSeconds(30));
+
+            foreach (SearchResultEntry entry in
+                     exactResponse.Entries)
+            {
+                AddEntry(
+                    entry);
+            }
+        }
+        else
+        {
+            var escaped =
+                ActiveDirectoryService.EscapeLdapFilter(
+                    query);
+
+            var nameFilter =
+                "(&(objectCategory=computer)(|(name=*" +
+                escaped +
+                "*)(dNSHostName=*" +
+                escaped +
+                "*)))";
+
+            var nameRequest =
+                new SearchRequest(
+                    baseDn,
+                    nameFilter,
+                    SearchScope.Subtree,
+                    "name",
+                    "objectGUID",
+                    "ms-Mcs-AdmPwdExpirationTime",
+                    "msLAPS-PasswordExpirationTime",
+                    "msLAPS-CurrentPasswordVersion")
+                {
+                    SizeLimit =
+                        Math.Clamp(
+                            maximumItems,
+                            1,
+                            500)
+                };
+
+            var nameResponse =
+                (SearchResponse)connection.SendRequest(
+                    nameRequest,
+                    TimeSpan.FromSeconds(30));
+
+            foreach (SearchResultEntry entry in
+                     nameResponse.Entries)
+            {
+                AddEntry(
+                    entry);
+            }
+
+            var normalizedId =
+                SearchText.NormalizeIdentifierFragment(
+                    query);
+
+            if (normalizedId.Length >= 8 &&
+                normalizedId.All(
+                    static ch =>
+                        ch is >= '0' and <= '9' ||
+                        ch is >= 'A' and <= 'F'))
+            {
+                const int pageSize =
+                    500;
+
+                var idRequest =
+                    new SearchRequest(
+                        baseDn,
+                        "(objectCategory=computer)",
+                        SearchScope.Subtree,
+                        "name",
+                        "objectGUID",
+                        "ms-Mcs-AdmPwdExpirationTime",
+                        "msLAPS-PasswordExpirationTime",
+                        "msLAPS-CurrentPasswordVersion");
+
+                var page =
+                    new PageResultRequestControl(
+                        pageSize);
+                idRequest.Controls.Add(
+                    page);
+
+                var scanned =
+                    0;
+
+                while (true)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var idResponse =
+                        (SearchResponse)connection.SendRequest(
+                            idRequest,
+                            TimeSpan.FromSeconds(30));
+
+                    foreach (SearchResultEntry entry in
+                             idResponse.Entries)
+                    {
+                        scanned++;
+
+                        var computerId =
+                            BinaryGuid(
+                                entry,
+                                "objectGUID");
+
+                        if (SearchText.IdentifierContains(
+                                computerId,
+                                query))
+                        {
+                            AddEntry(
+                                entry);
+                        }
+
+                        if (rows.Count >=
+                            Math.Clamp(
+                                maximumItems,
+                                1,
+                                500))
+                        {
+                            break;
+                        }
+                    }
+
+                    if (rows.Count >=
+                        Math.Clamp(
+                            maximumItems,
+                            1,
+                            500) ||
+                        scanned >= 50000)
+                    {
+                        break;
+                    }
+
+                    var paging =
+                        idResponse.Controls
+                            .OfType<PageResultResponseControl>()
+                            .FirstOrDefault();
+
+                    if (paging?.Cookie is not
+                        { Length: > 0 })
+                    {
+                        break;
+                    }
+
+                    page.Cookie =
+                        paging.Cookie;
+                }
+            }
+        }
+
+        return rows
+            .GroupBy(
+                row =>
+                    row.ComputerId,
+                StringComparer.OrdinalIgnoreCase)
+            .Select(
+                group =>
+                    group.First())
+            .OrderBy(
+                row =>
+                    row.ComputerName,
+                StringComparer.OrdinalIgnoreCase)
+            .Take(
+                Math.Clamp(
+                    maximumItems,
+                    1,
+                    500))
+            .ToList();
+    }
+
     public LapsReadResult Read(string computer, bool includeHistory, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(computer))

@@ -561,19 +561,45 @@ public sealed partial class MainForm
 
         root.Controls.Add(searchGrid, 0, 4);
 
-        _startResults.View = View.Details;
-        _startResults.FullRowSelect = true;
-        _startResults.GridLines = true;
-        _startResults.HideSelection = false;
-        _startResults.Dock = DockStyle.Fill;
-        _startResults.MinimumSize = new Size(0, 180);
-        AddColumns(
+        _startResults.Name =
+            "BitLockerSearchResults";
+        _startResults.AccessibleName =
+            "BitLocker recovery search results";
+        _startResults.Dock =
+            DockStyle.Fill;
+        _startResults.MinimumSize =
+            new Size(0, 180);
+        UiStyle.ConfigureDataGridView(
+            _startResults);
+        _startResults.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn(
+                "Computer",
+                "Computer",
+                150),
+            UiStyle.CreateSortableTextColumn(
+                "RecoveryId",
+                "Recovery ID",
+                230),
+            UiStyle.CreateSortableTextColumn(
+                "KeyDate",
+                "Key date",
+                140),
+            UiStyle.CreateSortableTextColumn(
+                "Latest",
+                "Latest",
+                70),
+            UiStyle.CreateSortableTextColumn(
+                "Source",
+                "Source",
+                90)
+        ]);
+        _startResults.Columns["KeyDate"]!
+            .DefaultCellStyle.Format =
+            "yyyy-MM-dd HH:mm:ss";
+        root.Controls.Add(
             _startResults,
-            ("Computer", 220),
-            ("Recovery ID", 330),
-            ("Source", 120),
-            ("Created / checked", 180));
-        root.Controls.Add(_startResults, 0, 5);
+            0,
+            5);
 
         ConfigureRecoveryCard();
         root.Controls.Add(_recoveryCard, 0, 6);
@@ -612,11 +638,41 @@ public sealed partial class MainForm
                 if (e.KeyCode == Keys.Enter &&
                     _startSearch.Enabled)
                 {
+                    e.SuppressKeyPress =
+                        true;
+                    _startSearchDebounceTimer?.Stop();
                     await SearchStartRecoveryAsync();
                 }
             };
 
-        _startResults.SelectedIndexChanged +=
+        _startQuery.TextChanged +=
+            (_, _) =>
+            {
+                if (_layoutSelfTest)
+                    return;
+
+                QueueStartRecoveryLiveSearch();
+            };
+
+        _startSearchDebounceTimer ??=
+            new System.Windows.Forms.Timer
+            {
+                Interval =
+                    SearchText.DebounceMilliseconds
+            };
+        _startSearchDebounceTimer.Tick +=
+            async (_, _) =>
+            {
+                _startSearchDebounceTimer.Stop();
+
+                if (_startQuery.Text.Trim().Length >=
+                    SearchText.MinimumLiveSearchCharacters)
+                {
+                    await SearchStartRecoveryAsync();
+                }
+            };
+
+        _startResults.SelectionChanged +=
             (_, _) =>
                 SelectStartRecoveryRecord();
 

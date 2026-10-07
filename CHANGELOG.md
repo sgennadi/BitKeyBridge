@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.22.0
+
+- Added debounced live search to both **Recovery / BitLocker** and **LAPS**. Typing two or more characters queues a 450 ms metadata search; **Enter** or the Search button runs immediately.
+- BitLocker search now always combines partial computer-name matching with partial Recovery ID matching. Recovery ID fragments are normalized so braces, hyphens and case do not matter.
+- Replaced BitLocker search results with a sortable **DataGridView** showing **Computer**, **Recovery ID**, **Key date**, **Latest**, and **Source**. Live AD results identify the newest recovery object for each computer; legacy CSV cache rows keep **Latest** unknown when the export does not contain object-creation metadata.
+- Added a separate safe LAPS device-discovery stage. AD search supports partial computer names, exact object GUIDs and sufficiently long object-GUID fragments; Entra search supports partial device names and device-ID fragments.
+- LAPS discovery reads metadata only. AD search does not request password-bearing LAPS attributes, and Entra search uses deviceLocalCredentials metadata without requesting the `credentials` collection.
+- Added sortable **DataGridView** results to LAPS discovery and LAPS password/history records. LAPS key rows show **Key date** and **Latest**; current rows are marked latest and history rows are not.
+- Entra LAPS discovery populates key date from `lastBackupDateTime` / `refreshDateTime` when available. AD LAPS discovery does not invent a key date when the schema exposes only expiration/version metadata.
+- Added shared HiDPI-aware DataGridView styling and regression checks for debounce settings and punctuation-insensitive identifier matching.
+- Verified x64/x86/ARM64 builds, x64 offline self-test, LAPS regression tests and runtime UI layout/HiDPI self-test before release.
+
 ## 0.21.3
 
 - Moved the verified updater out of **Administration → Security & Settings** into its own **Administration → Updates** tab.

@@ -1,6 +1,6 @@
 # BitKeyBridge — кратко
 
-**Актуальная ветка релиза: 0.21.x.** В ней уже есть BitLocker Recovery, Legacy/Windows/Entra LAPS current/history, ручные AD credentials, мастера Intune/Entra и RBAC, Cancel/progress, безопасная диагностика и сборки x64/x86/ARM64.
+**Актуальная ветка релиза: 0.22.x.** В ней добавлены живой поиск с debounce и сортируемые DataGridView для BitLocker и LAPS, поиск по части имени/ID, дата ключа и пометка последнего ключа; остальные возможности BitLocker/LAPS, мастера, RBAC, диагностика и сборки x64/x86/ARM64 сохранены.
 
 BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
@@ -50,6 +50,18 @@ BitKeyBridge.exe --update-checks-disable
 ```
 
 Release pipeline после публикации запускает живой x64 smoke-test updater: проверяет GitHub release metadata, сохранение auto-check disable/enable и безопасный current-version `--update` path. SHA-256, asset digest, версия EXE, staged `--self-test`, apply-plan hash и rollback остаются обязательными.
+
+## Живой поиск BitLocker и LAPS — 0.22.0
+
+- В **Recovery** и **LAPS** ввод от двух символов запускает metadata-поиск через debounce 450 мс.
+- **Enter** и кнопка Search запускают поиск сразу.
+- BitLocker ищет одновременно по части имени компьютера и по фрагменту **Recovery ID**; дефисы, фигурные скобки и регистр для ID не мешают совпадению.
+- Результаты BitLocker переведены на сортируемый **DataGridView**: **Computer**, **Recovery ID**, **Key date**, **Latest**, **Source**.
+- Для Live AD пометка **Latest** вычисляется по самому новому recovery object данного компьютера. Для старого CSV cache, где нет creation time recovery object, поле остаётся неизвестным вместо догадки.
+- В LAPS появился отдельный безопасный metadata-search: по части имени компьютера, exact/partial AD object GUID и Entra device ID. Живой поиск не читает пароли.
+- Entra LAPS search запрашивает только metadata `lastBackupDateTime/refreshDateTime` без `credentials`; AD LAPS search не запрашивает password-bearing attributes.
+- И discovery-результаты LAPS, и список LAPS current/history теперь сортируемые DataGridView. Для записей пароля показываются **Key date** и **Latest**.
+- Если AD не даёт точную дату создания/backup текущего LAPS-пароля без чтения секрета, поле даты остаётся пустым — программа не подменяет его expiration time.
 
 ## LAPS и ручное подключение
 

@@ -107,7 +107,9 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly ProgressBar _startProgress = new();
     private readonly UiDiagnosticPanel _startDiagnostics = new();
     private CancellationTokenSource? _startSearchCancellation;
-    private readonly ListView _startResults = new();
+    private readonly DataGridView _startResults = new();
+    private System.Windows.Forms.Timer? _startSearchDebounceTimer;
+    private int _startSearchGeneration;
     private readonly TextBox _startKey = new();
     private readonly Button _startShow = new();
     private BitLockerScope? _startScope;
@@ -216,7 +218,10 @@ public sealed partial class MainForm : DpiAwareForm
 
         FormClosing +=
             (_, _) =>
+            {
+                _startSearchDebounceTimer?.Stop();
                 ClearSensitiveState();
+            };
 
         Shown += async (_, _) =>
         {
@@ -3834,7 +3839,7 @@ public sealed partial class MainForm : DpiAwareForm
                 false;
             _startSearch.Enabled =
                 false;
-            _startResults.Items.Clear();
+            _startResults.Rows.Clear();
             _startCurrentKey =
                 null;
             _startKey.Clear();
@@ -3926,9 +3931,8 @@ public sealed partial class MainForm : DpiAwareForm
             null;
         _startOuStatus.Text =
             string.Empty;
-        _startResults.Items.Clear();
-        _startResults.Visible =
-            true;
+        _startResults.Rows.Clear();
+        
         _startCurrentKey =
             null;
         _startKey.Clear();
@@ -4073,7 +4077,7 @@ public sealed partial class MainForm : DpiAwareForm
             ResetRecoverySearchState();
             _deviceCurrentKey = null;
             _deviceRecoveryKey.Clear();
-            _startResults.Items.Clear();
+            _startResults.Rows.Clear();
             _recoveryAccessContexts.Clear();
             _adDomain.Text = prompt.DomainName;
             _adServer.Text = prompt.Server;
@@ -4375,44 +4379,89 @@ public sealed partial class MainForm : DpiAwareForm
                                 computer.DistinguishedName));
                     }
 
-                    if (computers.Count == 0)
+                    ct.ThrowIfCancellationRequested();
+
+                    var idQuery =
+                        query
+                            .Trim()
+                            .Trim(
+                                '{',
+                                '}');
+                    var normalizedIdQuery =
+                        SearchText.NormalizeIdentifierFragment(
+                            idQuery);
+
+                    if (normalizedIdQuery.Length >= 4)
                     {
-                        ct.ThrowIfCancellationRequested();
-
-                        var idQuery =
-                            query
-                                .Trim()
-                                .Trim(
-                                    '{',
-                                    '}');
-
-                        if (idQuery.Length >= 4)
-                        {
-                            found.AddRange(
-                                service.SearchRecoveryMetadataInScope(
-                                    dc,
-                                    scope,
-                                    idQuery,
-                                    200));
-                        }
+                        found.AddRange(
+                            service.SearchRecoveryMetadataInScope(
+                                dc,
+                                scope,
+                                idQuery,
+                                200));
                     }
 
                     ct.ThrowIfCancellationRequested();
 
-                    return found
-                        .GroupBy(
-                            x =>
-                                x.ComputerName +
-                                "|" +
-                                x.RecoveryId,
-                            StringComparer.OrdinalIgnoreCase)
-                        .Select(
-                            x =>
-                                x.First())
+                    var merged =
+                        found
+                            .GroupBy(
+                                x =>
+                                    x.ComputerName +
+                                    "|" +
+                                    x.RecoveryId,
+                                StringComparer.OrdinalIgnoreCase)
+                            .Select(
+                                x =>
+                                    x.First())
+                            .ToList();
+
+                    foreach (var group in
+                             merged.GroupBy(
+                                 x =>
+                                     x.ComputerDistinguishedName,
+                                 StringComparer.OrdinalIgnoreCase))
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var computerDn =
+                            group.Key;
+
+                        if (string.IsNullOrWhiteSpace(
+                                computerDn))
+                        {
+                            continue;
+                        }
+
+                        var allForComputer =
+                            service.GetRecoveryMetadataForComputer(
+                                dc,
+                                computerDn);
+
+                        var latestId =
+                            allForComputer
+                                .FirstOrDefault(
+                                    x =>
+                                        x.IsLatest ==
+                                        true)
+                                ?.RecoveryId;
+
+                        foreach (var row in group)
+                        {
+                            row.IsLatest =
+                                !string.IsNullOrWhiteSpace(
+                                    latestId) &&
+                                string.Equals(
+                                    row.RecoveryId,
+                                    latestId,
+                                    StringComparison.OrdinalIgnoreCase);
+                        }
+                    }
+
+                    return merged
                         .OrderByDescending(
                             x =>
-                                x.CreatedDateTime ??
-                                x.LastChecked)
+                                x.KeyDate)
                         .Take(200)
                         .ToList();
                 });
@@ -4446,8 +4495,9 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task SearchStartRecoveryAsync()
     {
-        if (_startSearchCancellation is not null)
-            return;
+        _startSearchDebounceTimer?.Stop();
+
+        _startSearchCancellation?.Cancel();
 
         var localCache =
             _recoverySource.SelectedIndex == 1;
@@ -4506,6 +4556,8 @@ public sealed partial class MainForm : DpiAwareForm
 
         using var cancellation =
             new CancellationTokenSource();
+        var generation =
+            ++_startSearchGeneration;
         _startSearchCancellation =
             cancellation;
         _startSearch.Enabled =
@@ -4515,8 +4567,6 @@ public sealed partial class MainForm : DpiAwareForm
         _startProgress.Visible =
             true;
         _startDiagnostics.Clear();
-        _startQuery.Enabled =
-            false;
         _recoverySource.Enabled =
             false;
         _startSelectOu.Enabled =
@@ -4524,8 +4574,8 @@ public sealed partial class MainForm : DpiAwareForm
 
         try
         {
-            _startResults.Items.Clear();
-            _startResults.Visible = true;
+            _startResults.Rows.Clear();
+            
             _startCurrentKey = null;
             _startKey.Clear();
             _startKey.UseSystemPasswordChar = true;
@@ -4614,38 +4664,44 @@ public sealed partial class MainForm : DpiAwareForm
             cancellation.Token
                 .ThrowIfCancellationRequested();
 
+            if (generation !=
+                _startSearchGeneration)
+            {
+                return;
+            }
+
             foreach (var row in rows)
             {
-                var item =
-                    new ListViewItem(
-                        row.ComputerName);
+                var rowIndex =
+                    _startResults.Rows.Add(
+                        row.ComputerName,
+                        row.RecoveryId,
+                        row.KeyDate,
+                        row.IsLatest is null
+                            ? "-"
+                            : row.IsLatest.Value
+                                ? "Yes"
+                                : "No",
+                        row.Source);
 
-                item.SubItems.Add(
-                    row.RecoveryId);
-                item.SubItems.Add(
-                    row.Source);
-                item.SubItems.Add(
-                    (row.CreatedDateTime ??
-                     row.LastChecked)?
-                        .ToString(
-                            "yyyy-MM-dd HH:mm:ss") ??
-                    "-");
-                item.Tag =
+                _startResults.Rows[rowIndex].Tag =
                     row;
-
-                _startResults.Items.Add(
-                    item);
             }
 
             if (rows.Count == 1)
             {
-                _startResults.Items[0].Selected =
+                _startResults.ClearSelection();
+                _startResults.Rows[0].Selected =
                     true;
-                _startResults.Items[0].Focused =
-                    true;
-                _startResults.Visible =
-                    false;
+                _startResults.CurrentCell =
+                    _startResults.Rows[0].Cells[0];
                 SelectStartRecoveryRecord();
+            }
+            else
+            {
+                _startResults.ClearSelection();
+                _startResults.CurrentCell =
+                    null;
             }
 
             var scopeLabel =
@@ -4670,13 +4726,25 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (OperationCanceledException)
         {
-            UiStyle.SetStatus(
-                _startPurposeStatus,
-                "BitLocker recovery search canceled.",
-                UiStatusKind.Warning);
+            if (!IsDisposed &&
+                generation ==
+                    _startSearchGeneration)
+            {
+                UiStyle.SetStatus(
+                    _startPurposeStatus,
+                    "BitLocker recovery search canceled.",
+                    UiStatusKind.Warning);
+            }
         }
         catch (Exception ex)
         {
+            if (IsDisposed ||
+                generation !=
+                    _startSearchGeneration)
+            {
+                return;
+            }
+
             UiStyle.SetStatus(
                 _startPurposeStatus,
                 "BitLocker search failed. Review diagnostics below.",
@@ -4700,23 +4768,26 @@ public sealed partial class MainForm : DpiAwareForm
                     null;
             }
 
-            _startSearch.Enabled =
-                localCache
-                    ? File.Exists(
-                        _config.OutputCsv)
-                    : _startScope is not null;
-            _startCancel.Enabled =
-                false;
-            _startProgress.Visible =
-                false;
-            _startQuery.Enabled =
-                true;
-            _recoverySource.Enabled =
-                true;
-            _startSelectOu.Enabled =
-                !localCache &&
-                !string.IsNullOrWhiteSpace(
-                    _startDomainDn);
+            if (!IsDisposed &&
+                generation ==
+                    _startSearchGeneration)
+            {
+                _startSearch.Enabled =
+                    localCache
+                        ? File.Exists(
+                            _config.OutputCsv)
+                        : _startScope is not null;
+                _startCancel.Enabled =
+                    false;
+                _startProgress.Visible =
+                    false;
+                _recoverySource.Enabled =
+                    true;
+                _startSelectOu.Enabled =
+                    !localCache &&
+                    !string.IsNullOrWhiteSpace(
+                        _startDomainDn);
+            }
         }
     }
 
@@ -4734,10 +4805,37 @@ public sealed partial class MainForm : DpiAwareForm
         _startSearchCancellation.Cancel();
     }
 
+    private RecoverySearchResult? GetSelectedStartRecoveryRow()
+    {
+        return _startResults.SelectedRows.Count == 1
+            ? _startResults.SelectedRows[0].Tag as
+                RecoverySearchResult
+            : null;
+    }
+
+    private void QueueStartRecoveryLiveSearch()
+    {
+        _startSearchDebounceTimer ??=
+            new System.Windows.Forms.Timer
+            {
+                Interval =
+                    SearchText.DebounceMilliseconds
+            };
+
+        _startSearchDebounceTimer.Stop();
+
+        if (_startQuery.Text.Trim().Length <
+            SearchText.MinimumLiveSearchCharacters)
+        {
+            return;
+        }
+
+        _startSearchDebounceTimer.Start();
+    }
+
     private void SelectStartRecoveryRecord()
     {
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
+        if (GetSelectedStartRecoveryRow() is not
                 RecoverySearchResult row)
         {
             _startCurrentKey =
@@ -4877,8 +4975,7 @@ public sealed partial class MainForm : DpiAwareForm
             return;
         }
 
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
+        if (GetSelectedStartRecoveryRow() is not
                 RecoverySearchResult row)
         {
             return;
@@ -4948,8 +5045,7 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task CopyStartRecoveryKeyAsync()
     {
-        if (_startResults.SelectedItems.Count == 0 ||
-            _startResults.SelectedItems[0].Tag is not
+        if (GetSelectedStartRecoveryRow() is not
                 RecoverySearchResult row)
         {
             return;
@@ -6004,8 +6100,8 @@ public sealed partial class MainForm : DpiAwareForm
     private void ResetRecoverySearchState()
     {
         ClearTrackedRecoveryClipboard();
-        _startResults.Items.Clear();
-        _startResults.Visible = true;
+        _startResults.Rows.Clear();
+        
         _startCurrentKey = null;
         _startKey.Clear();
         _startKey.UseSystemPasswordChar = true;

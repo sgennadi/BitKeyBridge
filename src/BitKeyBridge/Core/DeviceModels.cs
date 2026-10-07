@@ -16,9 +16,14 @@ public sealed class RecoverySearchResult
     public string RecoveryId { get; set; } = string.Empty;
     public DateTime? CreatedDateTime { get; set; }
     public DateTime? LastChecked { get; set; }
+    public bool? IsLatest { get; set; }
     public string Source { get; set; } = "AD";
     public string ComputerDistinguishedName { get; set; } = string.Empty;
     public string RecoveryDistinguishedName { get; set; } = string.Empty;
+
+    public DateTime? KeyDate =>
+        CreatedDateTime ??
+        LastChecked;
 }
 
 public sealed class ManagedDeviceInfo

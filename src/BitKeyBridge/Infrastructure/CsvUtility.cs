@@ -73,8 +73,12 @@ public static class CsvUtility
                 continue;
 
             if (!string.IsNullOrWhiteSpace(query) &&
-                !fields[0].Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                !fields[1].Contains(query, StringComparison.OrdinalIgnoreCase))
+                !fields[0].Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase) &&
+                !SearchText.IdentifierContains(
+                    fields[1],
+                    query))
             {
                 continue;
             }
