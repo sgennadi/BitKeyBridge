@@ -4764,13 +4764,52 @@ public sealed partial class MainForm : DpiAwareForm
                     row;
             }
 
-            if (rows.Count == 1)
+            var oneComputer =
+                rows.Count > 0 &&
+                rows
+                    .Select(
+                        row =>
+                            row.ComputerName)
+                    .Distinct(
+                        StringComparer.OrdinalIgnoreCase)
+                    .Count() == 1;
+
+            var preferredIndex =
+                rows.Count == 1
+                    ? 0
+                    : oneComputer
+                        ? rows.FindIndex(
+                            row =>
+                                row.IsLatest == true)
+                        : -1;
+
+            if (preferredIndex < 0 &&
+                oneComputer &&
+                rows.Count > 0)
+            {
+                preferredIndex =
+                    rows
+                        .Select(
+                            (row, index) =>
+                                new
+                                {
+                                    Row = row,
+                                    Index = index
+                                })
+                        .OrderByDescending(
+                            item =>
+                                item.Row.KeyDate)
+                        .First()
+                        .Index;
+            }
+
+            if (preferredIndex >= 0)
             {
                 _startResults.ClearSelection();
-                _startResults.Rows[0].Selected =
+                _startResults.Rows[preferredIndex].Selected =
                     true;
                 _startResults.CurrentCell =
-                    _startResults.Rows[0].Cells[0];
+                    _startResults.Rows[preferredIndex].Cells[0];
                 SelectStartRecoveryRecord();
             }
             else
