@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.20.0
+
+- Completed the native **LAPS** helpdesk workflow for Legacy Microsoft LAPS, Windows LAPS plaintext/encrypted current passwords, encrypted password history, DSRM current/history, and Microsoft Entra LAPS. The LAPS table now supports **All / Current / History** views, account names, password age, expiry, per-record read/decryption status, account-name copy, and Reveal/Copy only for successfully available secrets.
+- Added a secret-free **Check access** workflow for LAPS. Active Directory checks LDAP bind, computer resolution, LAPS schema/history availability, and non-secret backup/version metadata without reading password-bearing attributes; secret-read and DPAPI-NG decrypt authorization are explicitly reported as **NotProbed** when they cannot be verified safely without touching a real secret. Entra checks DeviceLocalCredential.Read.All and backup metadata without requesting the credentials collection.
+- Standardized **Cancel + progress + non-blocking diagnostics** across long-running helpdesk/admin operations, including Active Directory connection, BitLocker Live AD search, Devices search, LAPS reads, Microsoft Graph connection, DC comparison, Export/Dry Run, Coverage, Entra First-Run / Repair, and Entra certificate rollover. Slow native LDAP operations run off the UI thread and stale results are discarded after cancellation.
+- Replaced blocking error MessageBoxes with shared secret-safe **UiDiagnosticPanel** surfaces, including Copy diagnostics and Dismiss. Modal dialogs remain only where the operator must make an explicit decision, such as Yes/No confirmations or Device Code interaction.
+- Removed silent empty catch blocks from the application paths and added CI enforcement that rejects future empty catches. Non-fatal cleanup/fallback failures now emit sanitized Debug/Event Log diagnostics instead of disappearing.
+- Added CI enforcement that rejects blocking error MessageBoxes, fixed-position WinForms layout, direct unshared button/font/ListView construction, and missing version changelog entries. Runtime UI tests continue to cover compact, large-text, High Contrast, and 200% scaling scenarios.
+- Added **SecureClipboard** handling for BitLocker/LAPS/other secrets. Sensitive clipboard items are marked to stay out of Windows clipboard history and cloud clipboard processing, and timed cleanup clears the clipboard only if the same secret is still present.
+- Added an explicit **Disconnect / Forget session** Active Directory action. The connection status now shows the selected DC, resolved domain, Windows/explicit identity, and LDAP sign/seal or LDAPS port without exposing a password. Disconnect clears only the in-memory session credential and loaded recovery/LAPS state; Credential Manager or machine-DPAPI credentials are not deleted.
+- Removed obsolete SYSVOL/NETLOGON/BL export assumptions and the retired SysvolScriptsRoot setting from current configuration and documentation. The normal local default remains %ProgramData%\\BitKeyBridge\\RecoveryExport, with optional local/UNC output configuration.
+- **RBAC/JIT/two-person/SIEM defaults are intentionally unchanged in this release.** RBAC remains opt-in while the secure-by-default policy design is being considered separately.
+- Runtime remains PowerShell-free: C#/.NET 10 WinForms, native LDAP/DirectoryServices, Microsoft Graph HTTPS/OAuth, Windows APIs, Credential Manager, certificate store, and DPAPI-NG are used directly.
+
+
 ## 0.19.3
 
 - Added **Cancel**, marquee progress, and secret-safe inline diagnostics to **Discover and Test DCs**. The existing CancellationToken is now wired from the GUI through domain-controller comparison.
