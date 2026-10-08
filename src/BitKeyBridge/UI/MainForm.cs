@@ -2468,6 +2468,10 @@ public sealed partial class MainForm : DpiAwareForm
             _config.AutoInstallUpdatesOnStart;
         _allowPrereleaseUpdates.Checked =
             _config.AllowPrereleaseUpdates;
+        _requireTrustedUpdateSignature.Checked =
+            _config.RequireTrustedUpdateSignature;
+        _trustedUpdatePublisher.Text =
+            _config.TrustedUpdatePublisher;
 
         try
         {
@@ -2541,6 +2545,10 @@ public sealed partial class MainForm : DpiAwareForm
                 _autoInstallUpdatesOnStart.Checked;
             _config.AllowPrereleaseUpdates =
                 _allowPrereleaseUpdates.Checked;
+            _config.RequireTrustedUpdateSignature =
+                _requireTrustedUpdateSignature.Checked;
+            _config.TrustedUpdatePublisher =
+                _trustedUpdatePublisher.Text.Trim();
 
             ConfigService.SaveAppConfig(
                 _config);
@@ -2549,7 +2557,7 @@ public sealed partial class MainForm : DpiAwareForm
                 "SaveUpdateSettings",
                 source: "Local",
                 details:
-                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}");
+                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RequireTrustedSignature={_config.RequireTrustedUpdateSignature}; TrustedPublisher={_config.TrustedUpdatePublisher}");
 
             if (showConfirmation)
             {
