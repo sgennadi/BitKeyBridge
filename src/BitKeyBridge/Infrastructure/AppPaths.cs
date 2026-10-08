@@ -25,6 +25,7 @@ public static class AppPaths
     public static string CloudConfigFile => Path.Combine(LocalConfigDirectory, "cloud_auth_config.json");
     public static string RecentComputersFile => Path.Combine(LocalConfigDirectory, "recent_computers.json");
     public static string HelpdeskProfilesFile => Path.Combine(LocalConfigDirectory, "helpdesk_profiles.json");
+    public static string SupportBundlesDirectory => Path.Combine(LocalConfigDirectory, "SupportBundles");
     public static string MachineCloudConfigFile => Path.Combine(MachineConfigDirectory, "cloud_auth_machine.json");
     public static string CoverageStatusFile => Path.Combine(MachineConfigDirectory, "coverage_status.json");
     public static string AuditLogFile => Path.Combine(MachineConfigDirectory, "audit.jsonl");
