@@ -345,6 +345,7 @@ public sealed class ConfigurationMaintenanceService
                                     x.RecoverySearchSource,
                                     x.CloudTenant,
                                     x.CloudClientId,
+                                    x.CloudUsername,
                                     x.CloudAuthMode,
                                     x.UpdatedAtUtc
                                 })
