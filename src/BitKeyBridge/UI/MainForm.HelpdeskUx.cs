@@ -778,12 +778,21 @@ public sealed partial class MainForm
             {
                 try
                 {
-                    var metadata =
+                    var adComputer =
                         await Task.Run(
                             () =>
-                                _ad.GetRecoveryMetadataForComputer(
+                                _ad.FindComputerByName(
                                     dc,
                                     computer));
+
+                    var metadata =
+                        adComputer is null
+                            ? []
+                            : await Task.Run(
+                                () =>
+                                    _ad.GetRecoveryMetadataForComputer(
+                                        dc,
+                                        adComputer.DistinguishedName));
 
                     AddAccessHealthRow(
                         "AD",
@@ -1369,6 +1378,153 @@ public sealed partial class MainForm
                 "Creating the support bundle failed.",
                 "CreateQuickDiagnosticsBundle",
                 ex);
+        }
+    }
+
+    private void ApplyAuditFilter()
+    {
+        if (_auditResults.IsDisposed)
+            return;
+
+        IEnumerable<AuditEntry> rows =
+            _auditRows;
+
+        if (_auditFrom.Checked)
+        {
+            var fromUtc =
+                _auditFrom.Value.Date.ToUniversalTime();
+            rows =
+                rows.Where(
+                    x =>
+                        x.TimestampUtc >=
+                        fromUtc);
+        }
+
+        if (_auditTo.Checked)
+        {
+            var toUtc =
+                _auditTo.Value.Date
+                    .AddDays(1)
+                    .ToUniversalTime();
+            rows =
+                rows.Where(
+                    x =>
+                        x.TimestampUtc <
+                        toUtc);
+        }
+
+        var query =
+            _auditFilter.Text.Trim();
+
+        if (!string.IsNullOrWhiteSpace(
+                query))
+        {
+            var field =
+                _auditFilterField.SelectedItem as
+                    string ??
+                "All fields";
+
+            bool Match(
+                string? value) =>
+                !string.IsNullOrWhiteSpace(
+                    value) &&
+                value.Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase);
+
+            rows =
+                rows.Where(
+                    entry =>
+                        field switch
+                        {
+                            "Computer" =>
+                                Match(
+                                    entry.ComputerName),
+                            "Ticket / Reference" =>
+                                Match(
+                                    entry.Reference),
+                            "User" =>
+                                Match(
+                                    entry.User),
+                            "Action" =>
+                                Match(
+                                    entry.Action),
+                            "Recovery ID" =>
+                                Match(
+                                    entry.RecoveryId),
+                            "Source" =>
+                                Match(
+                                    entry.Source),
+                            _ =>
+                                Match(
+                                    entry.ComputerName) ||
+                                Match(
+                                    entry.Reference) ||
+                                Match(
+                                    entry.User) ||
+                                Match(
+                                    entry.Action) ||
+                                Match(
+                                    entry.RecoveryId) ||
+                                Match(
+                                    entry.Source) ||
+                                Match(
+                                    entry.Reason) ||
+                                Match(
+                                    entry.Details) ||
+                                Match(
+                                    entry.CorrelationId)
+                        });
+        }
+
+        _auditResults.BeginUpdate();
+        try
+        {
+            _auditResults.Items.Clear();
+
+            foreach (var entry in
+                     rows.Take(
+                         5000))
+            {
+                var item =
+                    new ListViewItem(
+                        entry.TimestampUtc.ToString(
+                            "yyyy-MM-dd HH:mm:ss"));
+
+                item.SubItems.Add(
+                    entry.User);
+                item.SubItems.Add(
+                    entry.Host);
+                item.SubItems.Add(
+                    entry.Action);
+                item.SubItems.Add(
+                    entry.Result);
+                item.SubItems.Add(
+                    entry.ComputerName);
+                item.SubItems.Add(
+                    entry.RecoveryId);
+                item.SubItems.Add(
+                    entry.Source);
+                item.SubItems.Add(
+                    entry.AuthMode);
+                item.SubItems.Add(
+                    entry.Reference);
+                item.SubItems.Add(
+                    entry.CorrelationId);
+                item.SubItems.Add(
+                    entry.Reason);
+                item.SubItems.Add(
+                    entry.Details);
+
+                item.Tag =
+                    entry;
+                _auditResults.Items.Add(
+                    item);
+            }
+        }
+        finally
+        {
+            _auditResults.EndUpdate();
         }
     }
 
