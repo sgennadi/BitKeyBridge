@@ -1595,6 +1595,9 @@ internal static class Program
             Directory.CreateDirectory(tempDirectory);
 
             failures.AddRange(LapsSelfTest.Run());
+            failures.AddRange(
+                HelpdeskIntegrationSelfTest.Run(
+                    tempDirectory));
 
             try
             {
