@@ -136,6 +136,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly UiStatusLabel _updateStatus = new();
     private readonly TextBox _updateRepository = new();
     private readonly CheckBox _checkUpdatesOnStart = new();
+    private readonly CheckBox _autoInstallUpdatesOnStart = new();
     private readonly CheckBox _allowPrereleaseUpdates = new();
     private UpdateInfo? _lastUpdateInfo;
 
@@ -228,14 +229,12 @@ public sealed partial class MainForm : DpiAwareForm
 
         Shown += async (_, _) =>
         {
-            await InitializeRecoveryWorkspaceAsync();
+            // Update first. A startup update must not be delayed by AD discovery,
+            // credential prompts, or helpdesk workflow initialization.
+            if (await TryAutomaticUpdateOnStartAsync())
+                return;
 
-            if (_config.CheckForUpdatesOnStart &&
-                AdministrationAllowed)
-            {
-                await CheckForUpdatesGuiAsync(
-                    silentWhenCurrent: true);
-            }
+            await InitializeRecoveryWorkspaceAsync();
         };
     }
 
@@ -2464,6 +2463,8 @@ public sealed partial class MainForm : DpiAwareForm
             _config.UpdateRepository;
         _checkUpdatesOnStart.Checked =
             _config.CheckForUpdatesOnStart;
+        _autoInstallUpdatesOnStart.Checked =
+            _config.AutoInstallUpdatesOnStart;
         _allowPrereleaseUpdates.Checked =
             _config.AllowPrereleaseUpdates;
 
@@ -2483,7 +2484,9 @@ public sealed partial class MainForm : DpiAwareForm
                 UiStyle.SetStatus(
                     _updateStatus,
                     _config.CheckForUpdatesOnStart
-                        ? "Automatic startup update checks are enabled. Use Check for Updates for an immediate check."
+                        ? _config.AutoInstallUpdatesOnStart
+                            ? "Automatic startup updates are enabled. BitKeyBridge will check, verify, install, and restart when a newer release is available."
+                            : "Automatic startup update checks are enabled. Installation remains manual."
                         : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
                     UiStatusKind.Neutral);
             }
@@ -2530,6 +2533,8 @@ public sealed partial class MainForm : DpiAwareForm
                 repository;
             _config.CheckForUpdatesOnStart =
                 _checkUpdatesOnStart.Checked;
+            _config.AutoInstallUpdatesOnStart =
+                _autoInstallUpdatesOnStart.Checked;
             _config.AllowPrereleaseUpdates =
                 _allowPrereleaseUpdates.Checked;
 
@@ -2540,14 +2545,16 @@ public sealed partial class MainForm : DpiAwareForm
                 "SaveUpdateSettings",
                 source: "Local",
                 details:
-                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}");
+                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}");
 
             if (showConfirmation)
             {
                 UiStyle.SetStatus(
                     _updateStatus,
                     _config.CheckForUpdatesOnStart
-                        ? "Update settings saved. Automatic startup checks are enabled."
+                        ? _config.AutoInstallUpdatesOnStart
+                            ? "Update settings saved. Automatic startup installation is enabled."
+                            : "Update settings saved. Startup checks are enabled; installation remains manual."
                         : "Update settings saved. Automatic startup checks are disabled; manual checks remain available.",
                     UiStatusKind.Success);
             }
@@ -2581,6 +2588,8 @@ public sealed partial class MainForm : DpiAwareForm
         {
             _config.CheckForUpdatesOnStart =
                 enabled;
+            _config.AutoInstallUpdatesOnStart =
+                _autoInstallUpdatesOnStart.Checked;
             _checkUpdatesOnStart.Checked =
                 enabled;
 
@@ -2593,12 +2602,14 @@ public sealed partial class MainForm : DpiAwareForm
                     : "DisableAutomaticUpdateChecks",
                 source: "Local",
                 details:
-                    $"CheckOnStart={enabled}");
+                    $"CheckOnStart={enabled}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}");
 
             UiStyle.SetStatus(
                 _updateStatus,
                 enabled
-                    ? "Automatic startup update checks are enabled."
+                    ? _config.AutoInstallUpdatesOnStart
+                        ? "Automatic startup updates are enabled."
+                        : "Automatic startup update checks are enabled; installation remains manual."
                     : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
                 enabled
                     ? UiStatusKind.Success
@@ -2645,6 +2656,83 @@ public sealed partial class MainForm : DpiAwareForm
                 $"RemotePort={_config.RemoteApiPort}; RemoteManagement={_config.RemoteApiAllowManagement}; RequireReference={_config.RequireRecoveryAccessReference}; SuggestRotation={_config.SuggestRotationAfterCloudKeyRetrieval}");
 
         RefreshRemoteApiStatus();
+    }
+
+    private async Task<bool> TryAutomaticUpdateOnStartAsync()
+    {
+        if (!_config.CheckForUpdatesOnStart)
+            return false;
+
+        try
+        {
+            UiStyle.SetStatus(
+                _updateStatus,
+                _config.AutoInstallUpdatesOnStart
+                    ? "Checking for automatic BitKeyBridge updates..."
+                    : "Checking GitHub Releases...",
+                UiStatusKind.Busy);
+
+            using var updater =
+                new UpdateService(
+                    _config);
+            using var startupCheckTimeout =
+                new CancellationTokenSource(
+                    TimeSpan.FromSeconds(
+                        20));
+
+            _lastUpdateInfo =
+                await updater.CheckAsync(
+                    startupCheckTimeout.Token);
+
+            DisplayUpdateInfo(
+                _lastUpdateInfo);
+
+            if (!string.IsNullOrWhiteSpace(
+                    _lastUpdateInfo.Error))
+            {
+                WindowsEventLogService.TryWrite(
+                    "Automatic update check failed: " +
+                    _lastUpdateInfo.Error,
+                    EventLogSeverity.Warning,
+                    4102,
+                    "Update");
+                return false;
+            }
+
+            if (!_lastUpdateInfo.UpdateAvailable)
+                return false;
+
+            WindowsEventLogService.TryWrite(
+                $"BitKeyBridge update {_lastUpdateInfo.LatestVersion} is available.",
+                EventLogSeverity.Information,
+                4101,
+                "Update");
+
+            if (!_config.AutoInstallUpdatesOnStart)
+                return false;
+
+            return await InstallVerifiedUpdateGuiAsync(
+                _lastUpdateInfo,
+                automatic:
+                    true);
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Automatic update failed: " +
+                ex.Message,
+                UiStatusKind.Error);
+
+            WindowsEventLogService.TryWrite(
+                "Automatic updater failed: " +
+                ex.Message,
+                EventLogSeverity.Warning,
+                4103,
+                "Update");
+
+            return false;
+        }
     }
 
     private async Task CheckForUpdatesGuiAsync(bool silentWhenCurrent)
@@ -2721,7 +2809,9 @@ public sealed partial class MainForm : DpiAwareForm
             Environment.NewLine +
             $"Checked: {info.CheckedAtUtc:u}" +
             Environment.NewLine +
-            $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}",
+            $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}" +
+            Environment.NewLine +
+            $"Automatic install: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}",
             info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);
@@ -2754,43 +2844,95 @@ public sealed partial class MainForm : DpiAwareForm
             MessageBoxDefaultButton.Button2);
         if (answer != DialogResult.Yes) return;
 
+        await InstallVerifiedUpdateGuiAsync(
+            info,
+            automatic:
+                false);
+    }
+
+    private async Task<bool> InstallVerifiedUpdateGuiAsync(
+        UpdateInfo info,
+        bool automatic)
+    {
         try
         {
-            Enabled = false;
+            Enabled =
+                false;
+
             UiStyle.SetStatus(
                 _updateStatus,
-                $"Downloading and verifying BitKeyBridge {info.LatestVersion}...",
+                automatic
+                    ? $"Automatic update: downloading and verifying BitKeyBridge {info.LatestVersion}..."
+                    : $"Downloading and verifying BitKeyBridge {info.LatestVersion}...",
                 UiStatusKind.Busy);
-            using var updater = new UpdateService(_config);
-            var prepared = await updater.PrepareAsync(info);
+
+            using var updater =
+                new UpdateService(
+                    _config);
+
+            var prepared =
+                await updater.PrepareAsync(
+                    info);
+
             _audit.Write(
                 "PrepareVerifiedUpdate",
                 source: "GitHub",
-                details: $"Version={info.LatestVersion}; Asset={info.AssetName}; SHA256={info.ExpectedSha256}");
-            updater.LaunchApplyHelper(prepared, restartGui: true);
+                details:
+                    $"Version={info.LatestVersion}; Asset={info.AssetName}; SHA256={info.ExpectedSha256}; Automatic={automatic}");
+
+            updater.LaunchApplyHelper(
+                prepared,
+                restartGui:
+                    true);
+
             _audit.Write(
                 "LaunchUpdateHelper",
                 source: "Local",
-                details: $"Version={info.LatestVersion}");
+                details:
+                    $"Version={info.LatestVersion}; Automatic={automatic}");
+
             Close();
+            return true;
         }
         catch (Exception ex)
         {
-            Enabled = true;
+            Enabled =
+                true;
+
             UiStyle.SetStatus(
                 _updateStatus,
-                "Update preparation failed: " + ex.Message,
+                (automatic
+                    ? "Automatic update failed: "
+                    : "Update preparation failed: ") +
+                ex.Message,
                 UiStatusKind.Error);
+
             _audit.Write(
                 "PrepareVerifiedUpdate",
                 "Failed",
                 source: "GitHub",
-                details: ex.Message);
-            ShowAppError(
-                "Preparing the verified update failed.",
-                "PrepareVerifiedUpdate",
-                ex,
-                ("Repository", _config.UpdateRepository));
+                details:
+                    $"Automatic={automatic}; {ex.Message}");
+
+            if (automatic)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Automatic update preparation failed: " +
+                    ex.Message,
+                    EventLogSeverity.Warning,
+                    4104,
+                    "Update");
+            }
+            else
+            {
+                ShowAppError(
+                    "Preparing the verified update failed.",
+                    "PrepareVerifiedUpdate",
+                    ex,
+                    ("Repository", _config.UpdateRepository));
+            }
+
+            return false;
         }
     }
 

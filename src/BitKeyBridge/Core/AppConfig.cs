@@ -54,6 +54,7 @@ public sealed class AppConfig
 
     public string UpdateRepository { get; set; } = "sgennadi/BitKeyBridge";
     public bool CheckForUpdatesOnStart { get; set; } = true;
+    public bool AutoInstallUpdatesOnStart { get; set; } = true;
     public bool AllowPrereleaseUpdates { get; set; } = false;
 
     public bool RemoteApiEnabled { get; set; } = false;

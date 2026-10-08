@@ -485,6 +485,14 @@ public static class UiLayoutSelfTest
 
         if (FindByName(
                 form,
+                "AutomaticUpdateInstall") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Updates workspace is missing the automatic-install control.");
+        }
+
+        if (FindByName(
+                form,
                 "GlobalStatusBar") is null)
         {
             failures.Add(

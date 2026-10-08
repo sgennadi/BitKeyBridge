@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.24.3
+
+- Fixed the meaning of **automatic updates**. Previous builds only checked GitHub at GUI startup and never installed the discovered release automatically.
+- Added `AutoInstallUpdatesOnStart` (enabled by default). When startup checks find a newer verified release, BitKeyBridge now downloads the architecture-specific ZIP, validates GitHub/SHA256 metadata, runs the staged EXE self-test, launches the elevated replacement helper, closes, and restarts the GUI on the new version.
+- Startup update handling now runs **before** AD discovery and credential prompts, so an AD connection workflow cannot delay or hide a pending application update.
+- Startup release checks have a 20-second bound. Network/GitHub failures are logged and the normal BitKeyBridge startup continues instead of being blocked.
+- Automatic release checks/install are no longer gated by the BitKeyBridge Administration workspace. The updater is an application-maintenance path, not a helpdesk RBAC feature.
+- Added an **Automatically install verified updates and restart** option under Administration → Updates. The status panel now shows startup-check and automatic-install state separately.
+- Added CLI controls `--auto-update-status`, `--auto-update-enable`, and `--auto-update-disable`. Enabling automatic updates also enables startup update checks.
+- A failure to write the optional machine-wide update-status cache no longer turns an otherwise successful GitHub release check into a false update failure.
+- Added CI persistence checks for automatic-update preferences and a UI regression check for the automatic-install control.
+- Bootstrap note: v0.24.2 can detect v0.24.3 but cannot install it automatically because that behavior did not exist yet. Use **Update Now** once (or install v0.24.3 manually); future releases can then install automatically.
+
+
 ## 0.24.2
 
 - Fixed **Devices → Search AD + Cloud** so Entra/Intune search no longer fails when Active Directory uses **Session only** credentials but no session password is currently loaded. Cloud search can now run independently while AD is disconnected.
