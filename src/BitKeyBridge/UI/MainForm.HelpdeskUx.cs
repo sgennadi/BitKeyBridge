@@ -11,6 +11,7 @@ public sealed partial class MainForm
     private readonly Button _homeDeviceDetailsButton = new();
     private readonly UiStatusLabel _secretLifetimeStatus = new();
     private readonly UiStatusLabel _setupStatus = new();
+    private readonly UiStatusLabel _startSetupStatus = new();
     private readonly Button _clearSecretNow = new();
     private System.Windows.Forms.Timer? _secretLifetimeTimer;
     private DateTime? _secretVisibleUntilUtc;
@@ -1022,12 +1023,20 @@ public sealed partial class MainForm
             $"Auto update: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "On" : "Off")} • " +
             $"Enterprise recovery policies: {(enterpriseEnabled ? "Configured" : "Off by default")}";
 
+        var kind =
+            _directoryConnected
+                ? UiStatusKind.Success
+                : UiStatusKind.Neutral;
+
         UiStyle.SetStatus(
             _setupStatus,
             text,
-            _directoryConnected
-                ? UiStatusKind.Success
-                : UiStatusKind.Neutral);
+            kind);
+
+        UiStyle.SetStatus(
+            _startSetupStatus,
+            text,
+            kind);
     }
 
     private void CreateQuickDiagnosticsBundleGui()
