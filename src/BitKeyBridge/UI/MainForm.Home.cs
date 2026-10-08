@@ -462,13 +462,13 @@ public sealed partial class MainForm
 
         _homeBitLockerButton.Enabled =
             connected &&
-            (selected is null ||
-             selected.BitLockerKeyCount > 0);
+            selected is not null &&
+            selected.BitLockerKeyCount > 0;
 
         _homeLapsButton.Enabled =
             connected &&
-            (selected is null ||
-             selected.LapsDetected);
+            selected is not null &&
+            selected.LapsDetected;
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
@@ -489,6 +489,11 @@ public sealed partial class MainForm
                 _cloudConfig.TenantId) &&
             !string.IsNullOrWhiteSpace(
                 _cloudConfig.ClientId);
+
+        _homeSelectionPanel.Visible =
+            selected is not null ||
+            _secretVisibleUntilUtc is not null ||
+            _clipboardClearAtUtc is not null;
 
         RefreshHomeSelectionSummary();
     }
