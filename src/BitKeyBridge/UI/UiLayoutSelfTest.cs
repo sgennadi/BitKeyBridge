@@ -447,6 +447,7 @@ public static class UiLayoutSelfTest
                     "HomeBitLockerButton",
                     "HomeRevealBitLockerButton",
                     "HomeCopyBitLockerButton",
+                    "HomeRotateBitLockerButton",
                     "HomeDeviceDetailsButton",
                     "HomeLapsButton",
                     "HomeSelectionSummary",
