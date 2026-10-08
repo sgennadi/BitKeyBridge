@@ -835,6 +835,15 @@ public sealed partial class MainForm
         _homeCopyBitLockerButton.Enabled =
             false;
 
+        _homeRotateBitLockerButton.Name =
+            "HomeRotateBitLockerButton";
+        _homeRotateBitLockerButton.Text =
+            "Rotate via Intune";
+        UiStyle.ConfigureActionButton(
+            _homeRotateBitLockerButton);
+        _homeRotateBitLockerButton.Enabled =
+            false;
+
         _homeDeviceDetailsButton.Name =
             "HomeDeviceDetailsButton";
         _homeDeviceDetailsButton.Text =
@@ -848,6 +857,7 @@ public sealed partial class MainForm
             _homeRevealBitLockerButton,
             _homeCopyBitLockerButton,
             _homeLapsButton,
+            _homeRotateBitLockerButton,
             _homeDeviceDetailsButton,
             _homeBitLockerButton
         ]);
@@ -1041,6 +1051,10 @@ public sealed partial class MainForm
         _homeCopyBitLockerButton.Click +=
             async (_, _) =>
                 await CopyHomeBitLockerAsync();
+
+        _homeRotateBitLockerButton.Click +=
+            async (_, _) =>
+                await RotateHomeBitLockerAsync();
 
         _homeDeviceDetailsButton.Click +=
             (_, _) =>
