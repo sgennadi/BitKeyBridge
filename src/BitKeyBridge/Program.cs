@@ -1689,6 +1689,15 @@ internal static class Program
                         StringComparison.Ordinal))
                     failures.Add("Updater repository normalization failed.");
 
+                var updateDefaults =
+                    new AppConfig();
+                if (!updateDefaults.CheckForUpdatesOnStart ||
+                    !updateDefaults.AutoInstallUpdatesOnStart)
+                {
+                    failures.Add(
+                        "Automatic verified updates must be enabled by default.");
+                }
+
                 var expectedHash = new string('a', 64);
                 var sums = expectedHash + "  BitKeyBridge-win-x64.zip" + Environment.NewLine;
                 var parsedHash = UpdateService.ParseChecksum(sums, "BitKeyBridge-win-x64.zip");
