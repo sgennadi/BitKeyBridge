@@ -4334,6 +4334,9 @@ public sealed partial class MainForm : DpiAwareForm
             _homeSearchProgress.Visible =
                 false;
         }
+
+        UpdateHomeSearchSelection();
+        RefreshSetupStatus();
     }
 
     private void ShowAppError(
@@ -6836,25 +6839,11 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void RefreshAudit()
     {
-        _auditResults.Items.Clear();
-        foreach (var row in _audit.ReadRecent(1000))
-        {
-            var item = new ListViewItem(row.TimestampUtc.ToString("yyyy-MM-dd HH:mm:ss"));
-            item.SubItems.Add(row.User);
-            item.SubItems.Add(row.Host);
-            item.SubItems.Add(row.Action);
-            item.SubItems.Add(row.Result);
-            item.SubItems.Add(row.ComputerName);
-            item.SubItems.Add(row.RecoveryId);
-            item.SubItems.Add(row.Source);
-            item.SubItems.Add(row.AuthMode);
-            item.SubItems.Add(row.Reference);
-            item.SubItems.Add(row.CorrelationId);
-            item.SubItems.Add(row.Reason);
-            item.SubItems.Add(row.Details);
-            item.Tag = row;
-            _auditResults.Items.Add(item);
-        }
+        _auditRows =
+            _audit.ReadRecent(
+                5000);
+
+        ApplyAuditFilter();
     }
 
     private void CopyKeyWithAutoClear(string? key)
