@@ -1396,38 +1396,37 @@ public sealed partial class MainForm
         }
     }
 
-    private async Task MaybeSuggestCloudRotationAfterRecoveryAsync(
+    private Task MaybeSuggestCloudRotationAfterRecoveryAsync(
         RecoveryAccessContext context,
         UnifiedDeviceInfo row,
         string recoveryId)
     {
+        _ = recoveryId;
+
         if (!_config.SuggestRotationAfterCloudKeyRetrieval ||
             string.IsNullOrWhiteSpace(
                 row.ManagedDeviceId) ||
             !_rotationSuggestionSessions.Add(
                 context.SessionId))
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var answer =
-            MessageBox.Show(
-                this,
-                $"Recovery access for {row.ComputerName} is complete.{Environment.NewLine}{Environment.NewLine}" +
-                "Request Intune to rotate its BitLocker recovery key now?",
-                "BitLocker Key Rotation",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2);
+        var message =
+            $"Recovery key accessed for {row.ComputerName}. " +
+            "After recovery is complete, use Rotate BitLocker Key in Intune.";
 
-        if (answer != DialogResult.Yes)
-            return;
+        UiStyle.SetStatus(
+            _unifiedStatus,
+            message,
+            UiStatusKind.Warning);
 
-        await RotateManagedDeviceAsync(
-            row.ManagedDeviceId,
-            row.ComputerName,
-            recoveryId,
-            context);
+        UiStyle.SetStatus(
+            _homeSearchStatus,
+            message,
+            UiStatusKind.Warning);
+
+        return Task.CompletedTask;
     }
 
     private void StartSecretLifetimeCountdown(
