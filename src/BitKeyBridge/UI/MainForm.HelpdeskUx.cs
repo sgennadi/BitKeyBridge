@@ -8,6 +8,7 @@ public sealed partial class MainForm
     private readonly UiStatusLabel _homeSelectionSummary = new();
     private readonly Button _homeRevealBitLockerButton = new();
     private readonly Button _homeCopyBitLockerButton = new();
+    private readonly Button _homeRotateBitLockerButton = new();
     private readonly Button _homeDeviceDetailsButton = new();
     private readonly UiStatusLabel _secretLifetimeStatus = new();
     private readonly UiStatusLabel _setupStatus = new();
@@ -1762,6 +1763,83 @@ public sealed partial class MainForm
             _homeSearchStatus,
             $"Recovery key copied. Clipboard clears in {_config.SensitiveClipboardSeconds} seconds.",
             UiStatusKind.Success);
+    }
+
+    private async Task RotateHomeBitLockerAsync()
+    {
+        var selected =
+            GetSelectedHomeSearchResult();
+
+        if (selected is null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(
+                _cloudConfig.TenantId) ||
+            string.IsNullOrWhiteSpace(
+                _cloudConfig.ClientId))
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Intune rotation is unavailable because Cloud is not configured.",
+                UiStatusKind.Warning);
+            return;
+        }
+
+        if (!await EnsureCloudTokenAsync())
+            return;
+
+        try
+        {
+            using var graph =
+                new CloudGraphService();
+
+            var devices =
+                await graph.SearchManagedDevicesAsync(
+                    _cloudToken!.AccessToken,
+                    selected.ComputerName,
+                    20);
+
+            var device =
+                devices.FirstOrDefault(
+                    x =>
+                        x.DeviceName.Equals(
+                            selected.ComputerName,
+                            StringComparison.OrdinalIgnoreCase)) ??
+                devices.FirstOrDefault();
+
+            if (device is null ||
+                string.IsNullOrWhiteSpace(
+                    device.ManagedDeviceId))
+            {
+                UiStyle.SetStatus(
+                    _homeSearchStatus,
+                    $"No Intune managed device was found for {selected.ComputerName}.",
+                    UiStatusKind.Warning);
+                return;
+            }
+
+            await RotateManagedDeviceAsync(
+                device.ManagedDeviceId,
+                selected.ComputerName,
+                selected.LatestRecoveryId);
+
+            RecordRecentComputer(
+                selected,
+                "Intune rotate");
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Intune key rotation failed. Review diagnostics.",
+                UiStatusKind.Error);
+
+            _appDiagnostics.ShowError(
+                "Intune key rotation failed.",
+                "RotateHomeBitLocker",
+                ex,
+                ("Computer", selected.ComputerName));
+        }
     }
 
     private void OpenHomeDeviceDetails()
