@@ -2820,10 +2820,18 @@ public sealed partial class MainForm : DpiAwareForm
                 : "No newer release is available.") +
             Environment.NewLine +
             $"Checked: {info.CheckedAtUtc:u}" +
+            (string.IsNullOrWhiteSpace(info.ExpectedSha256)
+                ? string.Empty
+                : Environment.NewLine + $"SHA-256: {info.ExpectedSha256}") +
             Environment.NewLine +
             $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}" +
             Environment.NewLine +
-            $"Automatic install: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}",
+            $"Automatic install: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}" +
+            Environment.NewLine +
+            $"Authenticode trust required: {(_config.RequireTrustedUpdateSignature ? "Yes" : "No")}" +
+            (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)
+                ? string.Empty
+                : $" • Publisher: {_config.TrustedUpdatePublisher}"),
             info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);
@@ -2849,6 +2857,9 @@ public sealed partial class MainForm : DpiAwareForm
             $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
             "The ZIP SHA-256 will be verified against SHA256SUMS.txt and GitHub's asset digest when available. " +
             "The downloaded EXE must also pass --self-test before installation. " +
+            (_config.RequireTrustedUpdateSignature
+                ? "A trusted Authenticode signature is required by policy. "
+                : string.Empty) +
             "The GUI will close during replacement and reopen automatically.",
             "Install Verified Update",
             MessageBoxButtons.YesNo,
