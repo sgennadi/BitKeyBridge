@@ -56,7 +56,8 @@ public static class HelpdeskIntegrationSelfTest
                     !defaults.RequireRecoveryAccessReference &&
                     !defaults.SuggestRotationAfterCloudKeyRetrieval &&
                     !defaults.AuditSigningEnabled &&
-                    !defaults.RemoteApiEnabled,
+                    !defaults.RemoteApiEnabled &&
+                    !defaults.RequireTrustedUpdateSignature,
                     "A fresh AppConfig enabled an enterprise recovery policy.");
             });
 
