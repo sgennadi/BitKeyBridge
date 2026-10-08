@@ -1220,8 +1220,14 @@ public sealed partial class MainForm
                 Clipboard.SetText(
                     result.ZipPath);
             }
-            catch
+            catch (Exception ex)
             {
+                WindowsEventLogService.TryWrite(
+                    "Support bundle path copy failed: " +
+                    ex.Message,
+                    EventLogSeverity.Warning,
+                    4660,
+                    "Diagnostics");
             }
 
             ShowAppMessage(
