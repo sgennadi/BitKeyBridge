@@ -35,6 +35,7 @@ public sealed class UpdateApplyPlan
     public string ExpectedVersion { get; set; } = string.Empty;
     public string PreviousVersion { get; set; } = string.Empty;
     public bool Automatic { get; set; }
+    public bool Rollback { get; set; }
     public string AuthenticodePublisher { get; set; } = string.Empty;
     public List<string> TargetExecutables { get; set; } = [];
     public int WaitForProcessId { get; set; }
