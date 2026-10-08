@@ -1317,9 +1317,6 @@ public sealed partial class MainForm
                 SizeType.AutoSize));
         root.RowStyles.Add(
             new RowStyle(
-                SizeType.AutoSize));
-        root.RowStyles.Add(
-            new RowStyle(
                 SizeType.Percent,
                 100F));
         page.Controls.Add(
@@ -1366,12 +1363,16 @@ public sealed partial class MainForm
             verifyIncident
         ]);
         root.Controls.Add(
-            actions);
+            actions,
+            0,
+            0);
 
         root.Controls.Add(
             CreateSectionTitle(
                 "Tamper-Evident Recovery Audit",
-                "Recovery passwords are never written to audit. Entries are SHA-256 chained and can use signed checkpoints."));
+                "Search by computer, ticket/reference, operator, Recovery ID, action, session or date. Recovery passwords are never written to audit."),
+            0,
+            1);
 
         var filters =
             new TableLayoutPanel
@@ -1389,211 +1390,6 @@ public sealed partial class MainForm
                         0,
                         UiStyle.ControlGap)
             };
-
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                35F));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                25F));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-        filters.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.AutoSize));
-
-        filters.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Filter:",
-                AutoSize =
-                    true,
-                Anchor =
-                    AnchorStyles.Left,
-                Margin =
-                    new Padding(
-                        0,
-                        7,
-                        8,
-                        0)
-            },
-            0,
-            0);
-
-        _auditFilter.Dock =
-            DockStyle.Fill;
-        _auditFilter.PlaceholderText =
-            "Computer, ticket, user, action, Recovery ID...";
-        filters.Controls.Add(
-            _auditFilter,
-            1,
-            0);
-
-        _auditFilterField.DropDownStyle =
-            ComboBoxStyle.DropDownList;
-        _auditFilterField.Items.AddRange([
-            "All fields",
-            "Computer",
-            "Ticket / Reference",
-            "User",
-            "Action",
-            "Recovery ID",
-            "Source"
-        ]);
-        _auditFilterField.SelectedIndex =
-            0;
-        filters.Controls.Add(
-            _auditFilterField,
-            2,
-            0);
-
-        _auditFrom.Format =
-            DateTimePickerFormat.Short;
-        _auditFrom.ShowCheckBox =
-            true;
-        _auditFrom.Checked =
-            false;
-        filters.Controls.Add(
-            _auditFrom,
-            3,
-            0);
-
-        filters.Controls.Add(
-            new Label
-            {
-                Text =
-                    "to",
-                AutoSize =
-                    true,
-                Anchor =
-                    AnchorStyles.Left,
-                Margin =
-                    new Padding(
-                        8,
-                        7,
-                        8,
-                        0)
-            },
-            4,
-            0);
-
-        _auditTo.Format =
-            DateTimePickerFormat.Short;
-        _auditTo.ShowCheckBox =
-            true;
-        _auditTo.Checked =
-            false;
-        filters.Controls.Add(
-            _auditTo,
-            5,
-            0);
-
-        var clearFilters =
-            NewActionButton(
-                "Clear");
-        filters.Controls.Add(
-            clearFilters,
-            6,
-            0);
-
-        var exportFiltered =
-            NewActionButton(
-                "Copy Session ID");
-        filters.Controls.Add(
-            exportFiltered,
-            7,
-            0);
-
-        root.Controls.Add(
-            filters);
-
-        _auditFilter.TextChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-        _auditFilterField.SelectedIndexChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-        _auditFrom.ValueChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-        _auditTo.ValueChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-
-        clearFilters.Click +=
-            (_, _) =>
-            {
-                _auditFilter.Clear();
-                _auditFilterField.SelectedIndex =
-                    0;
-                _auditFrom.Checked =
-                    false;
-                _auditTo.Checked =
-                    false;
-                ApplyAuditFilter();
-            };
-
-        exportFiltered.Click +=
-            (_, _) =>
-            {
-                if (_auditResults.SelectedItems.Count ==
-                        0 ||
-                    _auditResults.SelectedItems[0].SubItems.Count <
-                        11)
-                {
-                    return;
-                }
-
-                Clipboard.SetText(
-                    _auditResults.SelectedItems[0].SubItems[10].Text);
-            };
-
-        UiStyle.ConfigureStatusLabel(
-            _auditSigningStatus);
-        _auditSigningStatus.AccessibleName =
-            "Audit signing status";
-        _auditSigningStatus.MaximumSize =
-            new Size(1000, 0);
-        _auditSigningStatus.Text =
-            "Audit signing status has not been checked.";
-        UiStyle.ApplyStatusLabel(
-            _auditSigningStatus,
-            UiStatusKind.Neutral);
-        root.Controls.Add(
-            _auditSigningStatus);
-
-        var filters =
-            new TableLayoutPanel
-            {
-                Dock =
-                    DockStyle.Top,
-                AutoSize =
-                    true,
-                ColumnCount =
-                    7,
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.ControlGap)
-            };
         filters.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.AutoSize));
@@ -1604,6 +1400,9 @@ public sealed partial class MainForm
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
         filters.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.AutoSize));
@@ -1655,12 +1454,6 @@ public sealed partial class MainForm
             2,
             0);
 
-        _auditFrom.Format =
-            DateTimePickerFormat.Short;
-        _auditFrom.ShowCheckBox =
-            true;
-        _auditFrom.Checked =
-            false;
         filters.Controls.Add(
             new Label
             {
@@ -1671,17 +1464,18 @@ public sealed partial class MainForm
             },
             3,
             0);
+
+        _auditFrom.Format =
+            DateTimePickerFormat.Short;
+        _auditFrom.ShowCheckBox =
+            true;
+        _auditFrom.Checked =
+            false;
         filters.Controls.Add(
             _auditFrom,
             4,
             0);
 
-        _auditTo.Format =
-            DateTimePickerFormat.Short;
-        _auditTo.ShowCheckBox =
-            true;
-        _auditTo.Checked =
-            false;
         filters.Controls.Add(
             new Label
             {
@@ -1692,26 +1486,78 @@ public sealed partial class MainForm
             },
             5,
             0);
+
+        _auditTo.Format =
+            DateTimePickerFormat.Short;
+        _auditTo.ShowCheckBox =
+            true;
+        _auditTo.Checked =
+            false;
         filters.Controls.Add(
             _auditTo,
             6,
             0);
 
-        root.Controls.Add(
-            filters);
+        var clearFilters =
+            NewActionButton(
+                "Clear");
+        filters.Controls.Add(
+            clearFilters,
+            7,
+            0);
 
-        _auditFilter.TextChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-        _auditFilterField.SelectedIndexChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-        _auditFrom.ValueChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
-        _auditTo.ValueChanged +=
-            (_, _) =>
-                ApplyAuditFilter();
+        root.Controls.Add(
+            filters,
+            0,
+            2);
+
+        var statusAndSelection =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    2
+            };
+        statusAndSelection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        statusAndSelection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        UiStyle.ConfigureStatusLabel(
+            _auditSigningStatus);
+        _auditSigningStatus.AccessibleName =
+            "Audit signing status";
+        _auditSigningStatus.MaximumSize =
+            new Size(
+                1000,
+                0);
+        _auditSigningStatus.Text =
+            "Audit signing status has not been checked.";
+        UiStyle.ApplyStatusLabel(
+            _auditSigningStatus,
+            UiStatusKind.Neutral);
+        statusAndSelection.Controls.Add(
+            _auditSigningStatus,
+            0,
+            0);
+
+        var copySession =
+            NewActionButton(
+                "Copy Session ID");
+        statusAndSelection.Controls.Add(
+            copySession,
+            1,
+            0);
+        root.Controls.Add(
+            statusAndSelection,
+            0,
+            3);
 
         _auditResults.View =
             View.Details;
@@ -1737,7 +1583,9 @@ public sealed partial class MainForm
             ("Reason", 180),
             ("Details", 260));
         root.Controls.Add(
-            _auditResults);
+            _auditResults,
+            0,
+            4);
 
         refresh.Click +=
             (_, _) =>
@@ -1771,6 +1619,49 @@ public sealed partial class MainForm
         verifyIncident.Click +=
             (_, _) =>
                 VerifyRecoveryIncidentGui();
+
+        _auditFilter.TextChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditFilterField.SelectedIndexChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditFrom.ValueChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditTo.ValueChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+
+        clearFilters.Click +=
+            (_, _) =>
+            {
+                _auditFilter.Clear();
+                _auditFilterField.SelectedIndex =
+                    0;
+                _auditFrom.Checked =
+                    false;
+                _auditTo.Checked =
+                    false;
+                ApplyAuditFilter();
+            };
+
+        copySession.Click +=
+            (_, _) =>
+            {
+                if (_auditResults.SelectedItems.Count ==
+                        0 ||
+                    _auditResults.SelectedItems[0].Tag is not
+                        AuditEntry entry ||
+                    string.IsNullOrWhiteSpace(
+                        entry.CorrelationId))
+                {
+                    return;
+                }
+
+                Clipboard.SetText(
+                    entry.CorrelationId);
+            };
 
         if (!_layoutSelfTest)
         {
