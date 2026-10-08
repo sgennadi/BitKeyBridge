@@ -1478,6 +1478,9 @@ public sealed partial class MainForm
                     15,
                     seconds));
 
+        _homeSelectionPanel.Visible =
+            true;
+
         EnsureSecretLifetimeTimer(
             label);
     }
@@ -1489,6 +1492,9 @@ public sealed partial class MainForm
                 Math.Max(
                     5,
                     _config.SensitiveClipboardSeconds));
+
+        _homeSelectionPanel.Visible =
+            true;
 
         EnsureSecretLifetimeTimer(
             "Recovery secret");
@@ -1609,6 +1615,9 @@ public sealed partial class MainForm
             _secretLifetimeStatus,
             "Recovery secrets cleared.",
             UiStatusKind.Success);
+
+        _homeSelectionPanel.Visible =
+            GetSelectedHomeSearchResult() is not null;
     }
 
     private async Task<RecoverySearchResult?>
