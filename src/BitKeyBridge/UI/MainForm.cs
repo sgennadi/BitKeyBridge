@@ -5282,6 +5282,10 @@ public sealed partial class MainForm : DpiAwareForm
         _startShow.Text =
             "Hide Key";
 
+        StartSecretLifetimeCountdown(
+            "BitLocker recovery key",
+            _config.SecretDisplaySeconds);
+
         WriteRecoveryAudit(
             "RevealRecoveryKey",
             context,
@@ -6866,7 +6870,11 @@ public sealed partial class MainForm : DpiAwareForm
         _clipboardClearTimer =
             new System.Windows.Forms.Timer
             {
-                Interval = 60000
+                Interval =
+                    Math.Max(
+                        5,
+                        _config.SensitiveClipboardSeconds) *
+                    1000
             };
 
         _clipboardClearTimer.Tick +=
@@ -6894,6 +6902,7 @@ public sealed partial class MainForm : DpiAwareForm
             };
 
         _clipboardClearTimer.Start();
+        MarkClipboardLifetime();
     }
 
     private static void AddColumns(
