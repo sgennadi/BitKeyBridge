@@ -35,6 +35,146 @@ public sealed partial class MainForm
     private readonly TextBox _accessHealthComputer = new();
     private readonly DateTimePicker _auditFrom = new();
     private readonly DateTimePicker _auditTo = new();
+    private readonly ListView _updateHistoryResults = new();
+    private readonly Button _rollbackUpdateButton = new();
+
+    private void RefreshUpdateHistory()
+    {
+        if (_updateHistoryResults.IsDisposed)
+            return;
+
+        _updateHistoryResults.BeginUpdate();
+        try
+        {
+            _updateHistoryResults.Items.Clear();
+
+            foreach (var row in
+                     new UpdateHistoryService()
+                         .Read(
+                             100))
+            {
+                var item =
+                    new ListViewItem(
+                        row.TimestampUtc.ToString(
+                            "yyyy-MM-dd HH:mm:ss"));
+                item.SubItems.Add(
+                    row.Action);
+                item.SubItems.Add(
+                    row.FromVersion);
+                item.SubItems.Add(
+                    row.ToVersion);
+                item.SubItems.Add(
+                    row.Result);
+                item.SubItems.Add(
+                    row.Automatic
+                        ? "Automatic"
+                        : "Manual");
+                item.SubItems.Add(
+                    row.Publisher);
+                item.SubItems.Add(
+                    row.Details);
+                _updateHistoryResults.Items.Add(
+                    item);
+            }
+        }
+        finally
+        {
+            _updateHistoryResults.EndUpdate();
+        }
+
+        var current =
+            Environment.ProcessPath;
+        _rollbackUpdateButton.Enabled =
+            !string.IsNullOrWhiteSpace(
+                current) &&
+            File.Exists(
+                current + ".bak");
+    }
+
+    private void RollbackPreviousUpdateGui()
+    {
+        var current =
+            Environment.ProcessPath;
+
+        if (string.IsNullOrWhiteSpace(
+                current) ||
+            !File.Exists(
+                current + ".bak"))
+        {
+            UiStyle.SetStatus(
+                _updateStatus,
+                "No retained previous executable is available for rollback.",
+                UiStatusKind.Warning);
+            RefreshUpdateHistory();
+            return;
+        }
+
+        var previousVersion =
+            System.Diagnostics.FileVersionInfo
+                .GetVersionInfo(
+                    current + ".bak")
+                .FileVersion ??
+            "unknown";
+
+        var answer =
+            MessageBox.Show(
+                this,
+                $"Rollback BitKeyBridge to {previousVersion}?{Environment.NewLine}{Environment.NewLine}" +
+                "The current executable will become the next rollback backup and BitKeyBridge will restart.",
+                "Rollback BitKeyBridge",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+        if (answer != DialogResult.Yes)
+            return;
+
+        try
+        {
+            using var updater =
+                new UpdateService(
+                    _config);
+
+            updater.LaunchRollbackHelper(
+                restartGui:
+                    true);
+
+            _audit.Write(
+                "LaunchUpdateRollback",
+                source:
+                    "Local",
+                details:
+                    $"TargetVersion={previousVersion}");
+
+            Close();
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(
+                _updateStatus,
+                "Rollback could not be started: " +
+                ex.Message,
+                UiStatusKind.Error);
+
+            new UpdateHistoryService()
+                .Append(
+                    new UpdateHistoryEntry
+                    {
+                        Action =
+                            "Rollback",
+                        FromVersion =
+                            GetType().Assembly.GetName().Version?.ToString(3) ??
+                            string.Empty,
+                        ToVersion =
+                            previousVersion,
+                        Result =
+                            "FailedToStart",
+                        Details =
+                            DiagnosticRedaction.Sanitize(
+                                ex.Message)
+                    });
+        }
+    }
 
     private void ApplyAuditFilter()
     {
