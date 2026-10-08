@@ -2884,7 +2884,9 @@ public sealed partial class MainForm : DpiAwareForm
             updater.LaunchApplyHelper(
                 prepared,
                 restartGui:
-                    true);
+                    true,
+                automatic:
+                    automatic);
 
             _audit.Write(
                 "LaunchUpdateHelper",
