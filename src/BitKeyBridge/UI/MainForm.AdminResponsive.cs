@@ -16,8 +16,8 @@ public sealed partial class MainForm
         root.Controls.Add(
             CreateSectionTitle(
                 "Verified Updater",
-                "Check manually at any time, install a verified GitHub release, or disable automatic startup checks. " +
-                "Downloaded packages must match SHA-256 metadata and the staged EXE must pass --self-test before replacement."));
+                "By default BitKeyBridge checks for a newer verified release before the normal startup workflow, installs it automatically, and restarts. " +
+                "Manual check/install controls remain available. Downloaded packages must match SHA-256 metadata and the staged EXE must pass --self-test before replacement."));
 
         var updateGrid =
             CreateTwoColumnGrid();
@@ -45,6 +45,19 @@ public sealed partial class MainForm
             1,
             1);
 
+        _autoInstallUpdatesOnStart.Name =
+            "AutomaticUpdateInstall";
+        _autoInstallUpdatesOnStart.AccessibleName =
+            "Automatically install verified updates when the GUI starts";
+        _autoInstallUpdatesOnStart.Text =
+            "Automatically install verified updates and restart";
+        _autoInstallUpdatesOnStart.AutoSize =
+            true;
+        updateGrid.Controls.Add(
+            _autoInstallUpdatesOnStart,
+            1,
+            2);
+
         _allowPrereleaseUpdates.Name =
             "AllowPrereleaseUpdates";
         _allowPrereleaseUpdates.Text =
@@ -54,7 +67,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _allowPrereleaseUpdates,
             1,
-            2);
+            3);
 
         var updateActions =
             CreateActionFlow();
@@ -94,7 +107,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             updateActions,
             1,
-            3);
+            4);
 
         UiStyle.ConfigureStatusLabel(
             _updateStatus);
@@ -112,22 +125,38 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _updateStatus,
             1,
-            4);
+            5);
 
         root.Controls.Add(
             updateGrid);
 
-        void RefreshAutomaticToggleText()
+        void RefreshAutomaticControls()
         {
             toggleAutomatic.Text =
                 _checkUpdatesOnStart.Checked
-                    ? "Disable Automatic Checks"
-                    : "Enable Automatic Checks";
+                    ? "Disable Startup Checks"
+                    : "Enable Startup Checks";
+
+            _autoInstallUpdatesOnStart.Enabled =
+                _checkUpdatesOnStart.Checked;
         }
 
         _checkUpdatesOnStart.CheckedChanged +=
             (_, _) =>
-                RefreshAutomaticToggleText();
+                RefreshAutomaticControls();
+
+        _autoInstallUpdatesOnStart.CheckedChanged +=
+            (_, _) =>
+            {
+                if (_autoInstallUpdatesOnStart.Checked &&
+                    !_checkUpdatesOnStart.Checked)
+                {
+                    _checkUpdatesOnStart.Checked =
+                        true;
+                }
+
+                RefreshAutomaticControls();
+            };
 
         saveUpdate.Click +=
             (_, _) =>
@@ -152,7 +181,7 @@ public sealed partial class MainForm
             (_, _) =>
                 OpenLatestRelease();
 
-        RefreshAutomaticToggleText();
+        RefreshAutomaticControls();
         return page;
     }
 
