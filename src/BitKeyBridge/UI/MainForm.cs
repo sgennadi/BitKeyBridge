@@ -136,6 +136,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly UiStatusLabel _updateStatus = new();
     private readonly TextBox _updateRepository = new();
     private readonly CheckBox _checkUpdatesOnStart = new();
+    private readonly CheckBox _autoInstallUpdatesOnStart = new();
     private readonly CheckBox _allowPrereleaseUpdates = new();
     private UpdateInfo? _lastUpdateInfo;
 
@@ -228,14 +229,12 @@ public sealed partial class MainForm : DpiAwareForm
 
         Shown += async (_, _) =>
         {
-            await InitializeRecoveryWorkspaceAsync();
+            // Update first. A startup update must not be delayed by AD discovery,
+            // credential prompts, or helpdesk workflow initialization.
+            if (await TryAutomaticUpdateOnStartAsync())
+                return;
 
-            if (_config.CheckForUpdatesOnStart &&
-                AdministrationAllowed)
-            {
-                await CheckForUpdatesGuiAsync(
-                    silentWhenCurrent: true);
-            }
+            await InitializeRecoveryWorkspaceAsync();
         };
     }
 
