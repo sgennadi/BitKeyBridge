@@ -6,6 +6,7 @@ public sealed partial class MainForm
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly UiStatusLabel _homeSelectionSummary = new();
+    private readonly TableLayoutPanel _homeSelectionPanel = new();
     private readonly Button _homeRevealBitLockerButton = new();
     private readonly Button _homeCopyBitLockerButton = new();
     private readonly Button _homeRotateBitLockerButton = new();
