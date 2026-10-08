@@ -74,6 +74,7 @@ public sealed class RecoveryAccessContext
     public string Reference { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public bool RemindRotation { get; set; }
+    public bool RememberForComputer { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
