@@ -10,10 +10,14 @@ public sealed class HelpdeskProfile
     public bool AdUseLdaps { get; set; }
     public bool AdUseExplicitCredentials { get; set; }
     public string AdUsername { get; set; } = string.Empty;
+    public string AdCredentialStorageMode { get; set; } = "Session";
+    public bool AutoConnectOnStart { get; set; } = true;
     public string RecoverySearchSource { get; set; } = "LiveAD";
     public string CloudTenant { get; set; } = string.Empty;
     public string CloudClientId { get; set; } = string.Empty;
     public string CloudAuthMode { get; set; } = "DeviceCode";
+    public string CloudUsername { get; set; } = string.Empty;
     public string CloudCertificateThumbprint { get; set; } = string.Empty;
+    public bool CloudEnableLapsPermissions { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }
