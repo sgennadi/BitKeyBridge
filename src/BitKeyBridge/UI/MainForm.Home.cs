@@ -483,6 +483,13 @@ public sealed partial class MainForm
         _homeDeviceDetailsButton.Enabled =
             selected is not null;
 
+        _homeRotateBitLockerButton.Enabled =
+            selected is not null &&
+            !string.IsNullOrWhiteSpace(
+                _cloudConfig.TenantId) &&
+            !string.IsNullOrWhiteSpace(
+                _cloudConfig.ClientId);
+
         RefreshHomeSelectionSummary();
     }
 
