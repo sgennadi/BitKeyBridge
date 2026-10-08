@@ -130,6 +130,10 @@ public sealed class ConfigMigrationService
         config.SchemaVersion =
             ConfigSchema.CurrentVersion;
 
+        ApplyMigrationDefaults(
+            config,
+            storedVersion);
+
         try
         {
             ConfigurationMaintenanceService
@@ -180,6 +184,33 @@ public sealed class ConfigMigrationService
 
         TryPersistStatus(status);
         return config;
+    }
+
+    private static void ApplyMigrationDefaults(
+        AppConfig config,
+        int storedVersion)
+    {
+        if (storedVersion >= 5)
+            return;
+
+        // 0.25 makes all enterprise/helpdesk policy gates explicit opt-ins.
+        // Older personal/helpdesk configurations sometimes retained the
+        // ticket/rotation prompts even though no privileged enterprise policy
+        // was enabled. Reset only that non-enterprise case; real configured
+        // RBAC/JIT/approval/SIEM deployments keep their existing choices.
+        var enterprisePolicyConfigured =
+            config.RbacEnabled ||
+            config.JitRecoveryEnabled ||
+            config.TwoPersonApprovalEnabled ||
+            config.SiemEnabled;
+
+        if (!enterprisePolicyConfigured)
+        {
+            config.RequireRecoveryAccessReference =
+                false;
+            config.SuggestRotationAfterCloudKeyRetrieval =
+                false;
+        }
     }
 
     public ConfigMigrationStatus? ReadStatus()
