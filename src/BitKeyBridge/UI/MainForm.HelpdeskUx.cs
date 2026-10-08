@@ -27,6 +27,1060 @@ public sealed partial class MainForm
 
     private readonly ComboBox _helpdeskProfile = new();
     private readonly UiStatusLabel _helpdeskProfileStatus = new();
+    private readonly TextBox _recoveryReferencePatternSetting = new();
+    private readonly TextBox _recoveryReferenceExampleSetting = new();
+    private readonly NumericUpDown _secretDisplaySecondsSetting = new();
+    private readonly NumericUpDown _clipboardSecondsSetting = new();
+    private readonly TextBox _accessHealthComputer = new();
+    private readonly DateTimePicker _auditFrom = new();
+    private readonly DateTimePicker _auditTo = new();
+
+    private TabPage BuildHelpdeskBasicsResponsiveTab()
+    {
+        var page =
+            new TabPage(
+                "Helpdesk")
+            {
+                Name =
+                    "HelpdeskBasicsTab"
+            };
+
+        var root =
+            CreateVerticalWorkspace();
+        page.Controls.Add(
+            root);
+
+        root.Controls.Add(
+            CreateSectionTitle(
+                "Helpdesk Basics",
+                "Normal recovery work stays simple. Enterprise policy gates are opt-in and live under Advanced."));
+
+        var setupActions =
+            CreateActionFlow();
+        var refreshSetup =
+            NewActionButton(
+                "Refresh Setup Status");
+        var quickDiagnostics =
+            NewActionButton(
+                "Create Support Bundle");
+        var openSupport =
+            NewActionButton(
+                "Open Support Bundles");
+        setupActions.Controls.AddRange([
+            refreshSetup,
+            quickDiagnostics,
+            openSupport
+        ]);
+        root.Controls.Add(
+            setupActions);
+
+        UiStyle.ConfigureStatusLabel(
+            _setupStatus);
+        _setupStatus.Name =
+            "SetupStatus";
+        _setupStatus.AccessibleName =
+            "BitKeyBridge setup status";
+        _setupStatus.MaximumSize =
+            new Size(
+                1000,
+                0);
+        root.Controls.Add(
+            _setupStatus);
+
+        root.Controls.Add(
+            CreateSectionTitle(
+                "Environment Profile",
+                "Profiles store non-secret AD/Cloud endpoints and preferences only. Passwords, tokens and recovery secrets are never saved in a profile."));
+
+        var profileGrid =
+            CreateTwoColumnGrid();
+
+        _helpdeskProfile.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        AddGridField(
+            profileGrid,
+            0,
+            "Profile:",
+            _helpdeskProfile);
+
+        var profileActions =
+            CreateActionFlow();
+        var applyProfile =
+            NewActionButton(
+                "Apply Profile");
+        var saveProfile =
+            NewActionButton(
+                "Save Current As...");
+        var deleteProfile =
+            NewActionButton(
+                "Delete Profile");
+        profileActions.Controls.AddRange([
+            applyProfile,
+            saveProfile,
+            deleteProfile
+        ]);
+        profileGrid.Controls.Add(
+            profileActions,
+            1,
+            1);
+
+        UiStyle.ConfigureStatusLabel(
+            _helpdeskProfileStatus);
+        _helpdeskProfileStatus.MaximumSize =
+            new Size(
+                900,
+                0);
+        profileGrid.Controls.Add(
+            _helpdeskProfileStatus,
+            1,
+            2);
+        root.Controls.Add(
+            profileGrid);
+
+        root.Controls.Add(
+            CreateSectionTitle(
+                "Recovery Access",
+                "Ticket/reference is optional by default. Turn it on only when your helpdesk process requires a case number."));
+
+        var recoveryGrid =
+            CreateTwoColumnGrid();
+
+        _requireRecoveryReference.Text =
+            "Require a ticket/reference before recovery-key access";
+        _requireRecoveryReference.AutoSize =
+            true;
+        recoveryGrid.Controls.Add(
+            _requireRecoveryReference,
+            1,
+            0);
+
+        _suggestRotationAfterRecovery.Text =
+            "Suggest Intune key rotation after cloud recovery-key access";
+        _suggestRotationAfterRecovery.AutoSize =
+            true;
+        recoveryGrid.Controls.Add(
+            _suggestRotationAfterRecovery,
+            1,
+            1);
+
+        _recoveryReferencePatternSetting.PlaceholderText =
+            "Optional regex, e.g. ^INC-[0-9]+$";
+        AddGridField(
+            recoveryGrid,
+            2,
+            "Ticket format:",
+            _recoveryReferencePatternSetting);
+
+        _recoveryReferenceExampleSetting.PlaceholderText =
+            "INC-12345";
+        AddGridField(
+            recoveryGrid,
+            3,
+            "Ticket example:",
+            _recoveryReferenceExampleSetting);
+
+        _secretDisplaySecondsSetting.Minimum =
+            15;
+        _secretDisplaySecondsSetting.Maximum =
+            3600;
+        AddGridField(
+            recoveryGrid,
+            4,
+            "Secret lifetime (sec):",
+            _secretDisplaySecondsSetting);
+
+        _clipboardSecondsSetting.Minimum =
+            5;
+        _clipboardSecondsSetting.Maximum =
+            600;
+        AddGridField(
+            recoveryGrid,
+            5,
+            "Clipboard lifetime (sec):",
+            _clipboardSecondsSetting);
+
+        var save =
+            NewActionButton(
+                "Save Helpdesk Settings");
+        recoveryGrid.Controls.Add(
+            save,
+            1,
+            6);
+        root.Controls.Add(
+            recoveryGrid);
+
+        refreshSetup.Click +=
+            (_, _) =>
+                RefreshSetupStatus();
+        quickDiagnostics.Click +=
+            (_, _) =>
+                CreateQuickDiagnosticsBundleGui();
+        openSupport.Click +=
+            (_, _) =>
+                OpenPath(
+                    AppPaths.SupportBundlesDirectory);
+        applyProfile.Click +=
+            (_, _) =>
+                ApplySelectedHelpdeskProfile();
+        saveProfile.Click +=
+            (_, _) =>
+                SaveCurrentHelpdeskProfile();
+        deleteProfile.Click +=
+            (_, _) =>
+                DeleteSelectedHelpdeskProfile();
+        save.Click +=
+            (_, _) =>
+                SaveHelpdeskBasics();
+
+        if (!_layoutSelfTest)
+        {
+            RefreshHelpdeskProfiles();
+            RefreshSetupStatus();
+        }
+
+        return page;
+    }
+
+    private TabPage BuildAccessHealthResponsiveTab()
+    {
+        var page =
+            new TabPage(
+                "Access Health")
+            {
+                Name =
+                    "AccessHealthTab"
+            };
+
+        var root =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Fill,
+                Padding =
+                    new Padding(
+                        UiStyle.PagePadding),
+                ColumnCount =
+                    1,
+                RowCount =
+                    5
+            };
+        root.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.Percent,
+                100F));
+        page.Controls.Add(
+            root);
+
+        root.Controls.Add(
+            CreateSectionTitle(
+                "Security / Access Health Center",
+                "Runs metadata-only checks for AD, BitLocker, LAPS, Graph and Intune. It never requests a BitLocker recovery password or LAPS password."),
+            0,
+            0);
+
+        var query =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    3
+            };
+        query.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        query.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        query.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        query.Controls.Add(
+            new Label
+            {
+                Text =
+                    "Test computer (optional):",
+                AutoSize =
+                    true,
+                Anchor =
+                    AnchorStyles.Left,
+                Margin =
+                    new Padding(
+                        0,
+                        7,
+                        8,
+                        0)
+            },
+            0,
+            0);
+
+        _accessHealthComputer.Dock =
+            DockStyle.Fill;
+        _accessHealthComputer.PlaceholderText =
+            "CLINIC-300489";
+        query.Controls.Add(
+            _accessHealthComputer,
+            1,
+            0);
+
+        _accessHealthRun.Text =
+            "Run Access Checks";
+        UiStyle.ConfigureActionButton(
+            _accessHealthRun);
+        query.Controls.Add(
+            _accessHealthRun,
+            2,
+            0);
+        root.Controls.Add(
+            query,
+            0,
+            1);
+
+        _accessHealthProgress.Dock =
+            DockStyle.Top;
+        _accessHealthProgress.Style =
+            ProgressBarStyle.Marquee;
+        _accessHealthProgress.Visible =
+            false;
+        root.Controls.Add(
+            _accessHealthProgress,
+            0,
+            2);
+
+        UiStyle.ConfigureStatusLabel(
+            _accessHealthStatus);
+        _accessHealthStatus.MaximumSize =
+            new Size(
+                1000,
+                0);
+        UiStyle.SetStatus(
+            _accessHealthStatus,
+            "Access checks have not been run.",
+            UiStatusKind.Neutral);
+        root.Controls.Add(
+            _accessHealthStatus,
+            0,
+            3);
+
+        _accessHealthResults.View =
+            View.Details;
+        _accessHealthResults.FullRowSelect =
+            true;
+        _accessHealthResults.GridLines =
+            true;
+        _accessHealthResults.Dock =
+            DockStyle.Fill;
+        AddColumns(
+            _accessHealthResults,
+            ("Source", 100),
+            ("Check", 210),
+            ("State", 95),
+            ("Detail / How to fix", 620));
+        root.Controls.Add(
+            _accessHealthResults,
+            0,
+            4);
+
+        _accessHealthRun.Click +=
+            async (_, _) =>
+                await RunAccessHealthAsync();
+
+        return page;
+    }
+
+    private void AddAccessHealthRow(
+        string source,
+        string check,
+        string state,
+        string detail)
+    {
+        var item =
+            new ListViewItem(
+                source);
+        item.SubItems.Add(
+            check);
+        item.SubItems.Add(
+            state);
+        item.SubItems.Add(
+            detail);
+        _accessHealthResults.Items.Add(
+            item);
+    }
+
+    private async Task RunAccessHealthAsync()
+    {
+        if (_accessHealthRun.Enabled ==
+            false)
+        {
+            return;
+        }
+
+        _accessHealthRun.Enabled =
+            false;
+        _accessHealthProgress.Visible =
+            true;
+        _accessHealthResults.Items.Clear();
+
+        UiStyle.SetStatus(
+            _accessHealthStatus,
+            "Running metadata-only access checks...",
+            UiStatusKind.Busy);
+
+        var errors =
+            0;
+        var warnings =
+            0;
+        var computer =
+            _accessHealthComputer.Text.Trim();
+
+        try
+        {
+            string? dc =
+                null;
+
+            try
+            {
+                dc =
+                    await Task.Run(
+                        () =>
+                            _ad.GetPreferredWritableDc());
+
+                var root =
+                    await Task.Run(
+                        () =>
+                            _ad.TestConnection(
+                                dc));
+
+                AddAccessHealthRow(
+                    "AD",
+                    "LDAP bind",
+                    "OK",
+                    $"Connected to {dc}; naming context {root.GetValueOrDefault("defaultNamingContext", "-")}.");
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                AddAccessHealthRow(
+                    "AD",
+                    "LDAP bind",
+                    "Failed",
+                    DiagnosticRedaction.Sanitize(
+                        ex.Message) +
+                    " Check Start > AD connection and the selected credentials.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    computer) &&
+                !string.IsNullOrWhiteSpace(
+                    dc))
+            {
+                try
+                {
+                    var metadata =
+                        await Task.Run(
+                            () =>
+                                _ad.GetRecoveryMetadataForComputer(
+                                    dc,
+                                    computer));
+
+                    AddAccessHealthRow(
+                        "AD",
+                        "BitLocker metadata",
+                        metadata.Count > 0
+                            ? "OK"
+                            : "Warning",
+                        metadata.Count > 0
+                            ? $"{metadata.Count} recovery object(s) visible. Password attributes were not read."
+                            : "No recovery object is visible. Check backup policy, computer name and msFVE recovery-object read permissions.");
+
+                    if (metadata.Count == 0)
+                        warnings++;
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    AddAccessHealthRow(
+                        "AD",
+                        "BitLocker metadata",
+                        "Failed",
+                        DiagnosticRedaction.Sanitize(
+                            ex.Message) +
+                        " Check computer-object/recovery-object read permissions.");
+                }
+
+                try
+                {
+                    var credential =
+                        AdSessionCredentials
+                            .CreateNetworkCredential(
+                                _config);
+                    var laps =
+                        await Task.Run(
+                            () =>
+                                new LapsDirectoryService(
+                                    _config,
+                                    credential)
+                                .CheckAccess(
+                                    computer));
+
+                    foreach (var check in
+                             laps.Checks)
+                    {
+                        var state =
+                            check.State.ToString();
+
+                        AddAccessHealthRow(
+                            "AD LAPS",
+                            check.Name,
+                            state,
+                            check.Detail);
+
+                        if (check.State ==
+                            LapsAccessState.Failed)
+                        {
+                            errors++;
+                        }
+                        else if (check.State is
+                                 LapsAccessState.NotDetected or
+                                 LapsAccessState.NotProbed)
+                        {
+                            warnings++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    AddAccessHealthRow(
+                        "AD LAPS",
+                        "Metadata access",
+                        "Failed",
+                        DiagnosticRedaction.Sanitize(
+                            ex.Message));
+                }
+            }
+
+            var cloudConfigured =
+                !string.IsNullOrWhiteSpace(
+                    _cloudConfig.TenantId) &&
+                !string.IsNullOrWhiteSpace(
+                    _cloudConfig.ClientId);
+
+            if (!cloudConfigured)
+            {
+                warnings++;
+                AddAccessHealthRow(
+                    "Cloud",
+                    "Configuration",
+                    "Not configured",
+                    "Use Administration > Cloud > Intune / Entra Setup Wizard when cloud access is required.");
+            }
+            else
+            {
+                if (await EnsureCloudTokenAsync())
+                {
+                    using var graph =
+                        new CloudGraphService();
+
+                    try
+                    {
+                        var count =
+                            await graph.TestAccessAsync(
+                                _cloudToken!.AccessToken);
+
+                        AddAccessHealthRow(
+                            "Entra",
+                            "BitLocker metadata",
+                            "OK",
+                            $"Microsoft Graph metadata request succeeded ({count} object(s) sampled).");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        AddAccessHealthRow(
+                            "Entra",
+                            "BitLocker metadata",
+                            "Failed",
+                            DiagnosticRedaction.Sanitize(
+                                ex.Message) +
+                            " Verify Graph application permissions/admin consent.");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(
+                            computer))
+                    {
+                        try
+                        {
+                            var devices =
+                                await graph.SearchManagedDevicesAsync(
+                                    _cloudToken!.AccessToken,
+                                    computer,
+                                    10);
+
+                            AddAccessHealthRow(
+                                "Intune",
+                                "Managed device",
+                                devices.Count > 0
+                                    ? "OK"
+                                    : "Warning",
+                                devices.Count > 0
+                                    ? $"{devices.Count} matching managed device(s) visible."
+                                    : "No matching Intune managed device is visible. Check enrollment and DeviceManagementManagedDevices permissions.");
+
+                            if (devices.Count == 0)
+                                warnings++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors++;
+                            AddAccessHealthRow(
+                                "Intune",
+                                "Managed device",
+                                "Failed",
+                                DiagnosticRedaction.Sanitize(
+                                    ex.Message));
+                        }
+
+                        try
+                        {
+                            var laps =
+                                await graph.CheckLapsAccessAsync(
+                                    _cloudToken!.AccessToken,
+                                    computer);
+
+                            foreach (var check in
+                                     laps.Checks)
+                            {
+                                AddAccessHealthRow(
+                                    "Entra LAPS",
+                                    check.Name,
+                                    check.State.ToString(),
+                                    check.Detail);
+
+                                if (check.State ==
+                                    LapsAccessState.Failed)
+                                {
+                                    errors++;
+                                }
+                                else if (check.State is
+                                         LapsAccessState.NotDetected or
+                                         LapsAccessState.NotProbed)
+                                {
+                                    warnings++;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            warnings++;
+                            AddAccessHealthRow(
+                                "Entra LAPS",
+                                "Metadata access",
+                                "Warning",
+                                DiagnosticRedaction.Sanitize(
+                                    ex.Message) +
+                                " This is expected when Entra LAPS is not enabled for the tenant/device.");
+                        }
+                    }
+                }
+                else
+                {
+                    errors++;
+                    AddAccessHealthRow(
+                        "Cloud",
+                        "Authentication",
+                        "Failed",
+                        "Microsoft Graph authentication did not complete. Review Administration > Cloud diagnostics.");
+                }
+            }
+
+            UiStyle.SetStatus(
+                _accessHealthStatus,
+                errors > 0
+                    ? $"Access health completed with {errors} error(s) and {warnings} warning(s)."
+                    : warnings > 0
+                        ? $"Access health completed with {warnings} warning(s)."
+                        : "Access health checks completed successfully.",
+                errors > 0
+                    ? UiStatusKind.Error
+                    : warnings > 0
+                        ? UiStatusKind.Warning
+                        : UiStatusKind.Success);
+        }
+        finally
+        {
+            _accessHealthProgress.Visible =
+                false;
+            _accessHealthRun.Enabled =
+                true;
+        }
+    }
+
+    private void RefreshHelpdeskProfiles()
+    {
+        var selected =
+            _config.ActiveHelpdeskProfile;
+
+        _helpdeskProfile.Items.Clear();
+
+        foreach (var profile in
+                 new HelpdeskProfileService()
+                     .Load())
+        {
+            _helpdeskProfile.Items.Add(
+                profile.Name);
+        }
+
+        if (_helpdeskProfile.Items.Count ==
+            0)
+        {
+            UiStyle.SetStatus(
+                _helpdeskProfileStatus,
+                "No saved environment profiles. The current configuration remains active.",
+                UiStatusKind.Neutral);
+            return;
+        }
+
+        var match =
+            _helpdeskProfile.Items
+                .Cast<string>()
+                .FirstOrDefault(
+                    x =>
+                        x.Equals(
+                            selected,
+                            StringComparison.OrdinalIgnoreCase));
+
+        _helpdeskProfile.SelectedItem =
+            match ??
+            _helpdeskProfile.Items[0];
+
+        UiStyle.SetStatus(
+            _helpdeskProfileStatus,
+            $"Active profile: {_config.ActiveHelpdeskProfile}. Profiles contain no passwords or secrets.",
+            UiStatusKind.Success);
+    }
+
+    private void SaveCurrentHelpdeskProfile()
+    {
+        using var dialog =
+            new InputDialog(
+                "Save Environment Profile",
+                "Profile name:",
+                _config.ActiveHelpdeskProfile);
+
+        if (dialog.ShowDialog(this) !=
+                DialogResult.OK ||
+            string.IsNullOrWhiteSpace(
+                dialog.Value))
+        {
+            return;
+        }
+
+        var profile =
+            new HelpdeskProfile
+            {
+                Name =
+                    dialog.Value,
+                AdConnectionMode =
+                    _adMode.SelectedIndex == 1
+                        ? "Explicit"
+                        : "Auto",
+                AdServer =
+                    _adServer.Text.Trim(),
+                AdDomain =
+                    _adDomain.Text.Trim(),
+                AdPort =
+                    (int)_adPort.Value,
+                AdUseLdaps =
+                    _adUseLdaps.Checked,
+                AdUseExplicitCredentials =
+                    _adExplicitCredentials.Checked,
+                AdUsername =
+                    _adUsername.Text.Trim(),
+                RecoverySearchSource =
+                    _recoverySource.SelectedIndex == 1
+                        ? "LocalCache"
+                        : "LiveAD",
+                CloudTenant =
+                    _cloudTenant.Text.Trim(),
+                CloudClientId =
+                    _cloudClient.Text.Trim(),
+                CloudAuthMode =
+                    _cloudConfig.AuthMode,
+                CloudCertificateThumbprint =
+                    _cloudThumbprint.Text.Trim()
+            };
+
+        new HelpdeskProfileService()
+            .Save(
+                profile);
+
+        _config.ActiveHelpdeskProfile =
+            profile.Name;
+        ConfigService.SaveAppConfig(
+            _config);
+
+        RefreshHelpdeskProfiles();
+
+        _helpdeskProfile.SelectedItem =
+            profile.Name;
+    }
+
+    private void ApplySelectedHelpdeskProfile()
+    {
+        if (_helpdeskProfile.SelectedItem is not
+                string name)
+        {
+            return;
+        }
+
+        var profile =
+            new HelpdeskProfileService()
+                .Load()
+                .FirstOrDefault(
+                    x =>
+                        x.Name.Equals(
+                            name,
+                            StringComparison.OrdinalIgnoreCase));
+
+        if (profile is null)
+            return;
+
+        DisconnectDirectorySession();
+
+        _adMode.SelectedIndex =
+            profile.AdConnectionMode.Equals(
+                "Explicit",
+                StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
+        _adServer.Text =
+            profile.AdServer;
+        _adDomain.Text =
+            profile.AdDomain;
+        _adPort.Value =
+            Math.Clamp(
+                profile.AdPort,
+                1,
+                65535);
+        _adUseLdaps.Checked =
+            profile.AdUseLdaps;
+        _adExplicitCredentials.Checked =
+            profile.AdUseExplicitCredentials;
+        _adUsername.Text =
+            profile.AdUsername;
+        _recoverySource.SelectedIndex =
+            profile.RecoverySearchSource.Equals(
+                "LocalCache",
+                StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
+
+        _cloudTenant.Text =
+            profile.CloudTenant;
+        _cloudClient.Text =
+            profile.CloudClientId;
+        _cloudThumbprint.Text =
+            profile.CloudCertificateThumbprint;
+
+        _config.ActiveHelpdeskProfile =
+            profile.Name;
+
+        SaveDirectorySettings(
+            showConfirmation:
+                false);
+        SaveCloudFields();
+        ConfigService.SaveAppConfig(
+            _config);
+
+        UiStyle.SetStatus(
+            _helpdeskProfileStatus,
+            $"Applied profile {profile.Name}. Credentials were not changed.",
+            UiStatusKind.Success);
+
+        RefreshSetupStatus();
+    }
+
+    private void DeleteSelectedHelpdeskProfile()
+    {
+        if (_helpdeskProfile.SelectedItem is not
+                string name)
+        {
+            return;
+        }
+
+        new HelpdeskProfileService()
+            .Delete(
+                name);
+
+        if (_config.ActiveHelpdeskProfile.Equals(
+                name,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _config.ActiveHelpdeskProfile =
+                "Default";
+            ConfigService.SaveAppConfig(
+                _config);
+        }
+
+        RefreshHelpdeskProfiles();
+    }
+
+    private void SaveHelpdeskBasics()
+    {
+        _config.RequireRecoveryAccessReference =
+            _requireRecoveryReference.Checked;
+        _config.SuggestRotationAfterCloudKeyRetrieval =
+            _suggestRotationAfterRecovery.Checked;
+        _config.RecoveryReferencePattern =
+            _recoveryReferencePatternSetting.Text.Trim();
+        _config.RecoveryReferenceExample =
+            _recoveryReferenceExampleSetting.Text.Trim();
+        _config.SecretDisplaySeconds =
+            (int)_secretDisplaySecondsSetting.Value;
+        _config.SensitiveClipboardSeconds =
+            (int)_clipboardSecondsSetting.Value;
+
+        ConfigService.SaveAppConfig(
+            _config);
+
+        _recoveryAccessContexts.Clear();
+
+        _audit.Write(
+            "SaveHelpdeskSettings",
+            source:
+                "Local",
+            details:
+                $"RequireReference={_config.RequireRecoveryAccessReference}; " +
+                $"SuggestRotation={_config.SuggestRotationAfterCloudKeyRetrieval}; " +
+                $"SecretSeconds={_config.SecretDisplaySeconds}; " +
+                $"ClipboardSeconds={_config.SensitiveClipboardSeconds}");
+
+        RefreshSetupStatus();
+    }
+
+    private void LoadHelpdeskBasics()
+    {
+        _recoveryReferencePatternSetting.Text =
+            _config.RecoveryReferencePattern;
+        _recoveryReferenceExampleSetting.Text =
+            _config.RecoveryReferenceExample;
+
+        _secretDisplaySecondsSetting.Value =
+            Math.Clamp(
+                _config.SecretDisplaySeconds,
+                15,
+                3600);
+        _clipboardSecondsSetting.Value =
+            Math.Clamp(
+                _config.SensitiveClipboardSeconds,
+                5,
+                600);
+
+        RefreshHelpdeskProfiles();
+        RefreshSetupStatus();
+    }
+
+    private void RefreshSetupStatus()
+    {
+        var cloudConfigured =
+            !string.IsNullOrWhiteSpace(
+                _cloudConfig.TenantId) &&
+            !string.IsNullOrWhiteSpace(
+                _cloudConfig.ClientId);
+
+        var enterpriseEnabled =
+            _config.RbacEnabled ||
+            _config.JitRecoveryEnabled ||
+            _config.TwoPersonApprovalEnabled ||
+            _config.SiemEnabled ||
+            _config.RequireRecoveryAccessReference;
+
+        var text =
+            $"AD: {(_directoryConnected ? "Connected" : "Not connected")} • " +
+            $"Cloud: {(cloudConfigured ? "Configured" : "Not configured")} • " +
+            $"Auto update: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "On" : "Off")} • " +
+            $"Enterprise recovery policies: {(enterpriseEnabled ? "Configured" : "Off by default")}";
+
+        UiStyle.SetStatus(
+            _setupStatus,
+            text,
+            _directoryConnected
+                ? UiStatusKind.Success
+                : UiStatusKind.Neutral);
+    }
+
+    private void CreateQuickDiagnosticsBundleGui()
+    {
+        try
+        {
+            Directory.CreateDirectory(
+                AppPaths.SupportBundlesDirectory);
+
+            var path =
+                Path.Combine(
+                    AppPaths.SupportBundlesDirectory,
+                    "BitKeyBridge-Support-" +
+                    DateTime.Now.ToString(
+                        "yyyyMMdd-HHmmss") +
+                    ".zip");
+
+            var result =
+                new ConfigurationMaintenanceService()
+                    .CreateDiagnosticsBundle(
+                        path);
+
+            _audit.Write(
+                "CreateQuickDiagnosticsBundle",
+                source:
+                    "Diagnostics",
+                details:
+                    $"Path={result.ZipPath}; Files={result.IncludedFiles.Count}");
+
+            try
+            {
+                Clipboard.SetText(
+                    result.ZipPath);
+            }
+            catch
+            {
+            }
+
+            ShowAppMessage(
+                "Support bundle created.",
+                result.ZipPath +
+                Environment.NewLine +
+                Environment.NewLine +
+                "The path was copied to the clipboard. Recovery passwords, LAPS passwords, tokens, credential blobs and private keys are excluded.");
+        }
+        catch (Exception ex)
+        {
+            ShowAppError(
+                "Creating the support bundle failed.",
+                "CreateQuickDiagnosticsBundle",
+                ex);
+        }
+    }
 
     private async Task MaybeSuggestCloudRotationAfterRecoveryAsync(
         RecoveryAccessContext context,
