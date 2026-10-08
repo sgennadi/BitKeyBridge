@@ -269,7 +269,7 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    10
+                    9
             };
 
         root.ColumnStyles.Add(
@@ -278,20 +278,20 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 10;
+             index < 9;
              index++)
         {
             root.RowStyles.Add(
                 new RowStyle(
                     index == 5
                         ? SizeType.Percent
-                        : index == 8
+                        : index == 7
                             ? SizeType.Percent
                             : SizeType.AutoSize,
                     index == 5
-                        ? 58F
-                        : index == 8
-                            ? 42F
+                        ? 62F
+                        : index == 7
+                            ? 38F
                             : 0F));
         }
 
@@ -761,10 +761,38 @@ public sealed partial class MainForm
         _homeSearchResults.Columns["LapsDate"]!
             .DefaultCellStyle.Format =
             "yyyy-MM-dd HH:mm:ss";
-        root.Controls.Add(
+        var resultsArea =
+            new TableLayoutPanel
+            {
+                Name =
+                    "HomeSearchResultsArea",
+                Dock =
+                    DockStyle.Fill,
+                ColumnCount =
+                    1,
+                RowCount =
+                    2,
+                Margin =
+                    new Padding(
+                        0)
+            };
+
+        resultsArea.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        resultsArea.RowStyles.Add(
+            new RowStyle(
+                SizeType.Percent,
+                100F));
+        resultsArea.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
+
+        resultsArea.Controls.Add(
             _homeSearchResults,
             0,
-            5);
+            0);
 
         var taskActions =
             new FlowLayoutPanel
@@ -862,25 +890,26 @@ public sealed partial class MainForm
             _homeBitLockerButton
         ]);
 
-        var selectionPanel =
-            new TableLayoutPanel
-            {
-                Dock =
-                    DockStyle.Top,
-                AutoSize =
-                    true,
-                ColumnCount =
-                    1,
-                RowCount =
-                    3,
-                Margin =
-                    new Padding(
-                        0,
-                        UiStyle.ControlGap,
-                        0,
-                        UiStyle.SectionGap)
-            };
-        selectionPanel.ColumnStyles.Add(
+        _homeSelectionPanel.Name =
+            "HomeSelectionPanel";
+        _homeSelectionPanel.Dock =
+            DockStyle.Top;
+        _homeSelectionPanel.AutoSize =
+            true;
+        _homeSelectionPanel.ColumnCount =
+            1;
+        _homeSelectionPanel.RowCount =
+            3;
+        _homeSelectionPanel.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        _homeSelectionPanel.Visible =
+            false;
+        _homeSelectionPanel.ColumnStyles.Clear();
+        _homeSelectionPanel.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
@@ -899,7 +928,7 @@ public sealed partial class MainForm
             _homeSelectionSummary,
             "Select a result to see the helpdesk actions and source summary.",
             UiStatusKind.Neutral);
-        selectionPanel.Controls.Add(
+        _homeSelectionPanel.Controls.Add(
             _homeSelectionSummary,
             0,
             0);
@@ -910,7 +939,7 @@ public sealed partial class MainForm
                 UiStyle.ControlGap,
                 0,
                 0);
-        selectionPanel.Controls.Add(
+        _homeSelectionPanel.Controls.Add(
             taskActions,
             0,
             1);
@@ -960,15 +989,20 @@ public sealed partial class MainForm
             _secretLifetimeStatus);
         secretLifetime.Controls.Add(
             _clearSecretNow);
-        selectionPanel.Controls.Add(
+        _homeSelectionPanel.Controls.Add(
             secretLifetime,
             0,
             2);
 
-        root.Controls.Add(
-            selectionPanel,
+        resultsArea.Controls.Add(
+            _homeSelectionPanel,
             0,
-            6);
+            1);
+
+        root.Controls.Add(
+            resultsArea,
+            0,
+            5);
 
         root.Controls.Add(
             new Label
@@ -987,7 +1021,7 @@ public sealed partial class MainForm
                         UiStyle.ControlGap)
             },
             0,
-            7);
+            6);
 
         _homeRecentResults.Name =
             "HomeRecentComputers";
@@ -1021,7 +1055,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             _homeRecentResults,
             0,
-            8);
+            7);
 
         root.Controls.Add(
             new Label
@@ -1042,7 +1076,7 @@ public sealed partial class MainForm
                         0)
             },
             0,
-            9);
+            8);
 
         _homeRevealBitLockerButton.Click +=
             async (_, _) =>

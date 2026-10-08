@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.25.1
+
+- Fixed the **Start** layout regression visible in 0.25.0 where the large **LAPS Passwords** / **BitLocker Recovery** action buttons could be painted over the unified search-results grid at some window sizes or DPI/scaling combinations.
+- Search results and selected-device actions now live in one nested responsive layout: the grid always occupies the first row and the action/status area always occupies the row below it.
+- The selected-device action area stays hidden while no result is selected, so an empty search grid no longer contains floating action text.
+- BitLocker/LAPS workspace actions are no longer enabled without a selected result; direct Reveal/Copy/Rotate/Device Details actions remain context-aware.
+- Secret/clipboard lifetime information can keep the action area visible while sensitive data is active, then collapses again when the secret is cleared and no result is selected.
+- Added a runtime UI regression check that verifies the Start result grid and action panel are in separate layout rows and that the action panel is hidden in the initial empty state.
+
+
 ## 0.25.0
 
 - Reworked the recovery-access prompt so **Ticket / Reference is optional by default**. A fresh installation no longer interrupts BitLocker/LAPS reads with a ticket dialog; the dialog appears only when the helpdesk policy explicitly requires a reference.

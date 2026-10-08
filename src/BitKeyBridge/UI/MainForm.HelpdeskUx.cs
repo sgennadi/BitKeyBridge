@@ -6,6 +6,7 @@ public sealed partial class MainForm
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly UiStatusLabel _homeSelectionSummary = new();
+    private readonly TableLayoutPanel _homeSelectionPanel = new();
     private readonly Button _homeRevealBitLockerButton = new();
     private readonly Button _homeCopyBitLockerButton = new();
     private readonly Button _homeRotateBitLockerButton = new();
@@ -1477,6 +1478,9 @@ public sealed partial class MainForm
                     15,
                     seconds));
 
+        _homeSelectionPanel.Visible =
+            true;
+
         EnsureSecretLifetimeTimer(
             label);
     }
@@ -1488,6 +1492,9 @@ public sealed partial class MainForm
                 Math.Max(
                     5,
                     _config.SensitiveClipboardSeconds));
+
+        _homeSelectionPanel.Visible =
+            true;
 
         EnsureSecretLifetimeTimer(
             "Recovery secret");
@@ -1608,6 +1615,9 @@ public sealed partial class MainForm
             _secretLifetimeStatus,
             "Recovery secrets cleared.",
             UiStatusKind.Success);
+
+        _homeSelectionPanel.Visible =
+            GetSelectedHomeSearchResult() is not null;
     }
 
     private async Task<RecoverySearchResult?>
