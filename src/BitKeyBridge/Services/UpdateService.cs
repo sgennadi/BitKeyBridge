@@ -429,6 +429,10 @@ public sealed class UpdateService : IDisposable
                 "The staged BitKeyBridge executable changed while it was being verified.");
         }
 
+        AuthenticodeVerificationService.EnforcePolicy(
+            _config,
+            executable);
+
         return new PreparedUpdate
         {
             Info = info,
@@ -581,6 +585,10 @@ public sealed class UpdateService : IDisposable
             throw new InvalidDataException(
                 "The rollback backup does not contain a valid file version.");
         }
+
+        AuthenticodeVerificationService.EnforcePolicy(
+            _config,
+            staged);
 
         var prepared =
             new PreparedUpdate
