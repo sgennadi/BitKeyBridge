@@ -37,6 +37,8 @@ public sealed partial class MainForm
     private readonly DateTimePicker _auditTo = new();
     private readonly ListView _updateHistoryResults = new();
     private readonly Button _rollbackUpdateButton = new();
+    private readonly CheckBox _requireTrustedUpdateSignature = new();
+    private readonly TextBox _trustedUpdatePublisher = new();
 
     private void RefreshUpdateHistory()
     {
