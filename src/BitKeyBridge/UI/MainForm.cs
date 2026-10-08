@@ -2506,6 +2506,9 @@ public sealed partial class MainForm : DpiAwareForm
                 "Previous update status could not be loaded. Manual update actions are still available.",
                 UiStatusKind.Warning);
         }
+
+        if (!_layoutSelfTest)
+            RefreshUpdateHistory();
     }
 
     private bool SaveUpdateSettings(
