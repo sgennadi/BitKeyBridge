@@ -66,14 +66,33 @@ public sealed partial class MainForm
         string label,
         int seconds)
     {
-        _secretLifetimeTimer?.Stop();
-        _secretLifetimeTimer?.Dispose();
-
         _secretVisibleUntilUtc =
             DateTime.UtcNow.AddSeconds(
                 Math.Max(
                     15,
                     seconds));
+
+        EnsureSecretLifetimeTimer(
+            label);
+    }
+
+    private void MarkClipboardLifetime()
+    {
+        _clipboardClearAtUtc =
+            DateTime.UtcNow.AddSeconds(
+                Math.Max(
+                    5,
+                    _config.SensitiveClipboardSeconds));
+
+        EnsureSecretLifetimeTimer(
+            "Recovery secret");
+    }
+
+    private void EnsureSecretLifetimeTimer(
+        string label)
+    {
+        _secretLifetimeTimer?.Stop();
+        _secretLifetimeTimer?.Dispose();
 
         _secretLifetimeTimer =
             new System.Windows.Forms.Timer
@@ -103,6 +122,23 @@ public sealed partial class MainForm
                              DateTime.UtcNow)
                             .TotalSeconds));
 
+            if (_secretVisibleUntilUtc is not null &&
+                secretSeconds <= 0)
+            {
+                ClearVisibleSecretsNow();
+                return;
+            }
+
+            if (_clipboardClearAtUtc is not null &&
+                clipboardSeconds <= 0)
+            {
+                ClearTrackedRecoveryClipboard();
+                _clipboardClearAtUtc =
+                    null;
+                clipboardSeconds =
+                    0;
+            }
+
             if (secretSeconds <= 0 &&
                 clipboardSeconds <= 0)
             {
@@ -110,6 +146,7 @@ public sealed partial class MainForm
                     _secretLifetimeStatus,
                     "No recovery secret is currently retained.",
                     UiStatusKind.Neutral);
+                _secretLifetimeTimer?.Stop();
                 return;
             }
 
@@ -140,26 +177,6 @@ public sealed partial class MainForm
 
         Refresh();
         _secretLifetimeTimer.Start();
-    }
-
-    private void MarkClipboardLifetime()
-    {
-        _clipboardClearAtUtc =
-            DateTime.UtcNow.AddSeconds(
-                Math.Max(
-                    5,
-                    _config.SensitiveClipboardSeconds));
-
-        StartSecretLifetimeCountdown(
-            "Recovery secret",
-            _secretVisibleUntilUtc is null
-                ? _config.SecretDisplaySeconds
-                : Math.Max(
-                    15,
-                    (int)Math.Ceiling(
-                        (_secretVisibleUntilUtc.Value -
-                         DateTime.UtcNow)
-                        .TotalSeconds)));
     }
 
     private void ClearVisibleSecretsNow()
