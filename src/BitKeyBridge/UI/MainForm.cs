@@ -2455,6 +2455,7 @@ public sealed partial class MainForm : DpiAwareForm
         _suggestRotationAfterRecovery.Checked =
             _config.SuggestRotationAfterCloudKeyRetrieval;
         RefreshRemoteApiStatus();
+        LoadHelpdeskBasics();
     }
 
     private void LoadUpdateSettings()
