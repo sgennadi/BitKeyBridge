@@ -25,7 +25,7 @@ The GUI opens on **Start**. BitKeyBridge first shows the shared Active Directory
 
 After connection, one field accepts a partial computer name, Recovery ID, AD object/device ID, or other identifier. Typing two or more characters starts the existing 450 ms debounced metadata search; **Enter** searches immediately. The unified result grid combines BitLocker and LAPS metadata for each computer and shows compact states such as **Available**, **Multiple keys**, **Old key**, **No backup**, **Detected** and **Expired**, plus the source used for the result.
 
-Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. The selected result shows a compact helpdesk summary and enables only actions that have matching backup metadata. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
+Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. When Cloud is configured, **Rotate via Intune** is available as a separate post-recovery action. The selected result shows a compact helpdesk summary and enables only actions that have matching backup metadata. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
 
 **Recent computers** stores only computer/device identifiers, the last helpdesk action and timestamp in the current user's LocalAppData. Recovery keys and LAPS passwords are never written to Recent.
 
@@ -33,7 +33,7 @@ The bottom status bar remains visible across workspaces and shows the current AD
 
 ## Helpdesk defaults and Access Health
 
-BitKeyBridge 0.25 keeps enterprise enforcement out of the default recovery path. A fresh configuration does **not** enable RBAC, JIT recovery, two-person approval, SIEM, mandatory Ticket/Reference, audit signing, Remote API, storage ACL hardening, or trusted-update-signature enforcement. Administrators can opt into those controls under **Administration → Advanced** or the relevant Updates/Audit page.
+BitKeyBridge 0.25 keeps enterprise enforcement out of the default recovery path. A fresh configuration does **not** enable RBAC, JIT recovery, two-person approval, SIEM, mandatory Ticket/Reference, audit signing, Remote API, Coverage policy/service Coverage, storage ACL hardening, or trusted-update-signature enforcement. Administrators can opt into those controls under **Administration → Advanced** or the relevant Updates/Audit page.
 
 **Administration → Helpdesk** is the normal configuration surface. It provides an at-a-glance setup status, non-secret environment profiles, optional Ticket/Reference rules (including an optional regex format), optional post-recovery Intune rotation suggestion, configurable secret/clipboard lifetimes, and a one-click sanitized support bundle.
 
