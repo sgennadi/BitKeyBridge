@@ -130,6 +130,62 @@ public sealed partial class MainForm
         root.Controls.Add(
             updateGrid);
 
+        root.Controls.Add(
+            CreateSectionTitle(
+                "Update History / Rollback",
+                "The immediately previous executable is retained as .bak after a successful update. Publisher information is shown when the staged executable contains Authenticode metadata."));
+
+        var historyActions =
+            CreateActionFlow();
+        var refreshHistory =
+            NewActionButton(
+                "Refresh History");
+        _rollbackUpdateButton.Text =
+            "Rollback Previous Build";
+        UiStyle.ConfigureActionButton(
+            _rollbackUpdateButton);
+        historyActions.Controls.AddRange([
+            refreshHistory,
+            _rollbackUpdateButton
+        ]);
+        root.Controls.Add(
+            historyActions);
+
+        _updateHistoryResults.Name =
+            "UpdateHistory";
+        _updateHistoryResults.View =
+            View.Details;
+        _updateHistoryResults.FullRowSelect =
+            true;
+        _updateHistoryResults.GridLines =
+            true;
+        _updateHistoryResults.Height =
+            190;
+        _updateHistoryResults.Dock =
+            DockStyle.Top;
+        AddColumns(
+            _updateHistoryResults,
+            ("Time (UTC)", 155),
+            ("Action", 90),
+            ("From", 90),
+            ("To", 90),
+            ("Result", 90),
+            ("Mode", 90),
+            ("Publisher", 170),
+            ("Details", 360));
+        root.Controls.Add(
+            _updateHistoryResults);
+
+        refreshHistory.Click +=
+            (_, _) =>
+                RefreshUpdateHistory();
+        _rollbackUpdateButton.Click +=
+            (_, _) =>
+                RollbackPreviousUpdateGui();
+
+        if (!_layoutSelfTest)
+            RefreshUpdateHistory();
+
         void RefreshAutomaticControls()
         {
             toggleAutomatic.Text =
