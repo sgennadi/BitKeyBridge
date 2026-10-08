@@ -119,7 +119,7 @@ public sealed class AppConfig
     public int CoverageStaleIntuneDays { get; set; } = 30;
     public int CoverageOldCloudKeyDays { get; set; } = 365;
 
-    public bool CoveragePolicyEnabled { get; set; } = true;
+    public bool CoveragePolicyEnabled { get; set; } = false;
     public int CoveragePolicyMaxNoRecoveryKey { get; set; } = 0;
     public int CoveragePolicyMaxIntuneNotEncrypted { get; set; } = 0;
     public int CoveragePolicyMaxIntuneStale { get; set; } = 0;
