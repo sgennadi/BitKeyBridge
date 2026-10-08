@@ -361,8 +361,7 @@ public sealed partial class MainForm
                 CreateQuickDiagnosticsBundleGui();
         openSupport.Click +=
             (_, _) =>
-                OpenPath(
-                    AppPaths.SupportBundlesDirectory);
+                OpenSupportBundlesFolder();
         applyProfile.Click +=
             (_, _) =>
                 ApplySelectedHelpdeskProfile();
@@ -1209,6 +1208,25 @@ public sealed partial class MainForm
             _startSetupStatus,
             text,
             kind);
+    }
+
+    private void OpenSupportBundlesFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(
+                AppPaths.SupportBundlesDirectory);
+
+            OpenPath(
+                AppPaths.SupportBundlesDirectory);
+        }
+        catch (Exception ex)
+        {
+            ShowAppError(
+                "Opening the support-bundle folder failed.",
+                "OpenSupportBundles",
+                ex);
+        }
     }
 
     private void CreateQuickDiagnosticsBundleGui()
