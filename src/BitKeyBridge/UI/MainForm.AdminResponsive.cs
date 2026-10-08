@@ -69,6 +69,27 @@ public sealed partial class MainForm
             1,
             3);
 
+        _requireTrustedUpdateSignature.Name =
+            "RequireTrustedUpdateSignature";
+        _requireTrustedUpdateSignature.Text =
+            "Require a valid trusted Authenticode signature";
+        _requireTrustedUpdateSignature.AutoSize =
+            true;
+        updateGrid.Controls.Add(
+            _requireTrustedUpdateSignature,
+            1,
+            4);
+
+        _trustedUpdatePublisher.Name =
+            "TrustedUpdatePublisher";
+        _trustedUpdatePublisher.PlaceholderText =
+            "Optional expected publisher name";
+        AddGridField(
+            updateGrid,
+            5,
+            "Trusted publisher:",
+            _trustedUpdatePublisher);
+
         var updateActions =
             CreateActionFlow();
         var saveUpdate =
@@ -107,7 +128,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             updateActions,
             1,
-            4);
+            6);
 
         UiStyle.ConfigureStatusLabel(
             _updateStatus);
@@ -125,7 +146,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _updateStatus,
             1,
-            5);
+            7);
 
         root.Controls.Add(
             updateGrid);
@@ -195,6 +216,11 @@ public sealed partial class MainForm
 
             _autoInstallUpdatesOnStart.Enabled =
                 _checkUpdatesOnStart.Checked;
+
+            _trustedUpdatePublisher.Enabled =
+                _requireTrustedUpdateSignature.Checked ||
+                !string.IsNullOrWhiteSpace(
+                    _trustedUpdatePublisher.Text);
         }
 
         _checkUpdatesOnStart.CheckedChanged +=
@@ -213,6 +239,10 @@ public sealed partial class MainForm
 
                 RefreshAutomaticControls();
             };
+
+        _requireTrustedUpdateSignature.CheckedChanged +=
+            (_, _) =>
+                RefreshAutomaticControls();
 
         saveUpdate.Click +=
             (_, _) =>
