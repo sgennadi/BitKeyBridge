@@ -2869,6 +2869,15 @@ public sealed partial class MainForm
             recoveryId: recoveryId,
             source: "Entra",
             authMode: _cloudToken?.AuthMode);
+
+        StartSecretLifetimeCountdown(
+            "BitLocker recovery key",
+            _config.SecretDisplaySeconds);
+
+        await MaybeSuggestCloudRotationAfterRecoveryAsync(
+            access.Value.Context,
+            row,
+            recoveryId);
     }
 
     private async Task CopySelectedDeviceCloudKeyAsync()
@@ -2896,6 +2905,11 @@ public sealed partial class MainForm
 
         CopyKeyWithAutoClear(
             access.Value.Key);
+
+        await MaybeSuggestCloudRotationAfterRecoveryAsync(
+            access.Value.Context,
+            row,
+            recoveryId);
     }
 
 }
