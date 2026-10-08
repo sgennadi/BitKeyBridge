@@ -53,6 +53,9 @@ internal static class Program
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
@@ -242,6 +245,7 @@ internal static class Program
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
@@ -910,6 +914,15 @@ internal static class Program
         if (args.Any(x => x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase)))
             return SetUpdateCheckSettings(config, enabled: false);
 
+        if (args.Any(x => x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase)))
+            return ShowAutomaticUpdateSettings(config);
+
+        if (args.Any(x => x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase)))
+            return SetAutomaticUpdateSettings(config, enabled: true);
+
+        if (args.Any(x => x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase)))
+            return SetAutomaticUpdateSettings(config, enabled: false);
+
         if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
             return CheckUpdateAsync(config).GetAwaiter().GetResult();
 
@@ -972,7 +985,7 @@ internal static class Program
         AppConfig config)
     {
         Console.WriteLine(
-            $"AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}");
+            $"AutomaticChecks={config.CheckForUpdatesOnStart}; AutomaticInstall={config.AutoInstallUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}");
         return 0;
     }
 
@@ -991,6 +1004,46 @@ internal static class Program
                 enabled
                     ? "Automatic update checks enabled."
                     : "Automatic update checks disabled. Manual --check-update and --update remain available.");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                ex.Message);
+            return 1;
+        }
+    }
+
+    private static int ShowAutomaticUpdateSettings(
+        AppConfig config)
+    {
+        Console.WriteLine(
+            $"AutomaticInstall={config.AutoInstallUpdatesOnStart}; AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}");
+        return 0;
+    }
+
+    private static int SetAutomaticUpdateSettings(
+        AppConfig config,
+        bool enabled)
+    {
+        try
+        {
+            config.AutoInstallUpdatesOnStart =
+                enabled;
+
+            if (enabled)
+            {
+                config.CheckForUpdatesOnStart =
+                    true;
+            }
+
+            ConfigService.SaveAppConfig(
+                config);
+
+            Console.WriteLine(
+                enabled
+                    ? "Automatic verified updates enabled. Startup checks were also enabled."
+                    : "Automatic installation disabled. Startup checks keep their current setting.");
             return 0;
         }
         catch (Exception ex)
