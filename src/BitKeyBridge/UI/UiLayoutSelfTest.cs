@@ -488,6 +488,44 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: hidden Advanced layout collapsed the AD credential status width to {credentialStatus.MaximumSize.Width}px.");
             }
+
+            if (FindByName(
+                    startPage,
+                    "HomeSearchResultsArea") is TableLayoutPanel resultsArea &&
+                FindByName(
+                    startPage,
+                    "HomeUnifiedSearchResults") is DataGridView resultsGrid &&
+                FindByName(
+                    startPage,
+                    "HomeSelectionPanel") is TableLayoutPanel selectionPanel)
+            {
+                var gridPosition =
+                    resultsArea.GetPositionFromControl(
+                        resultsGrid);
+                var selectionPosition =
+                    resultsArea.GetPositionFromControl(
+                        selectionPanel);
+
+                if (gridPosition.Row != 0 ||
+                    selectionPosition.Row != 1)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Start result actions are not structurally below the results grid.");
+                }
+
+                if (selectionPanel.Visible)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Start selection actions must stay hidden until a result is selected.");
+                }
+            }
+            else
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Start results/action layout container is missing.");
+            }
+
+
         }
 
         if (FindByName(
