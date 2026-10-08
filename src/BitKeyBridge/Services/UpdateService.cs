@@ -259,7 +259,23 @@ public sealed class UpdateService : IDisposable
                     $"Release {tag} checksum sources disagree for {assetName}.");
             }
 
-            JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info);
+            try
+            {
+                JsonStore.WriteAtomic(
+                    AppPaths.UpdateStatusFile,
+                    info);
+            }
+            catch (Exception statusException)
+            {
+                // Update availability must not be turned into a false failure
+                // only because the optional machine-wide status file is not
+                // writable in the current session.
+                Debug.WriteLine(
+                    "Update status persistence failed: " +
+                    DiagnosticRedaction.Sanitize(
+                        statusException.Message));
+            }
+
             return info;
         }
         catch (Exception ex)
