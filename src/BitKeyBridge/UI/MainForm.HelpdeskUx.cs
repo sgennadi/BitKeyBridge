@@ -36,6 +36,147 @@ public sealed partial class MainForm
     private readonly DateTimePicker _auditFrom = new();
     private readonly DateTimePicker _auditTo = new();
 
+    private void ApplyAuditFilter()
+    {
+        if (_auditResults.IsDisposed)
+            return;
+
+        var query =
+            _auditFilter.Text.Trim();
+        var field =
+            _auditFilterField.SelectedItem?.ToString() ??
+            "All";
+
+        IEnumerable<AuditEntry> rows =
+            _auditRows;
+
+        if (_auditFrom.Checked)
+        {
+            var fromUtc =
+                _auditFrom.Value.Date
+                    .ToUniversalTime();
+
+            rows =
+                rows.Where(
+                    x =>
+                        x.TimestampUtc >=
+                        fromUtc);
+        }
+
+        if (_auditTo.Checked)
+        {
+            var toUtc =
+                _auditTo.Value.Date
+                    .AddDays(1)
+                    .ToUniversalTime();
+
+            rows =
+                rows.Where(
+                    x =>
+                        x.TimestampUtc <
+                        toUtc);
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                query))
+        {
+            bool Contains(
+                string? value) =>
+                (value ?? string.Empty)
+                    .Contains(
+                        query,
+                        StringComparison.OrdinalIgnoreCase);
+
+            rows =
+                rows.Where(
+                    row =>
+                        field switch
+                        {
+                            "Computer" =>
+                                Contains(
+                                    row.ComputerName),
+                            "Ticket / Reference" =>
+                                Contains(
+                                    row.Reference),
+                            "Operator" =>
+                                Contains(
+                                    row.User),
+                            "Recovery ID" =>
+                                Contains(
+                                    row.RecoveryId),
+                            "Action" =>
+                                Contains(
+                                    row.Action),
+                            "Session" =>
+                                Contains(
+                                    row.CorrelationId),
+                            _ =>
+                                Contains(
+                                    row.ComputerName) ||
+                                Contains(
+                                    row.Reference) ||
+                                Contains(
+                                    row.User) ||
+                                Contains(
+                                    row.RecoveryId) ||
+                                Contains(
+                                    row.Action) ||
+                                Contains(
+                                    row.CorrelationId) ||
+                                Contains(
+                                    row.Reason)
+                        });
+        }
+
+        _auditResults.BeginUpdate();
+        try
+        {
+            _auditResults.Items.Clear();
+
+            foreach (var row in
+                     rows.Take(
+                         2000))
+            {
+                var item =
+                    new ListViewItem(
+                        row.TimestampUtc.ToString(
+                            "yyyy-MM-dd HH:mm:ss"));
+                item.SubItems.Add(
+                    row.User);
+                item.SubItems.Add(
+                    row.Host);
+                item.SubItems.Add(
+                    row.Action);
+                item.SubItems.Add(
+                    row.Result);
+                item.SubItems.Add(
+                    row.ComputerName);
+                item.SubItems.Add(
+                    row.RecoveryId);
+                item.SubItems.Add(
+                    row.Source);
+                item.SubItems.Add(
+                    row.AuthMode);
+                item.SubItems.Add(
+                    row.Reference);
+                item.SubItems.Add(
+                    row.CorrelationId);
+                item.SubItems.Add(
+                    row.Reason);
+                item.SubItems.Add(
+                    row.Details);
+                item.Tag =
+                    row;
+                _auditResults.Items.Add(
+                    item);
+            }
+        }
+        finally
+        {
+            _auditResults.EndUpdate();
+        }
+    }
+
     private TabPage BuildHelpdeskBasicsResponsiveTab()
     {
         var page =
