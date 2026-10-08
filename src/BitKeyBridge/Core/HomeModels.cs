@@ -26,6 +26,9 @@ public sealed class HomeSearchResult
 
     public string LapsStatus { get; set; } =
         "No backup";
+
+    public string SourceSummary { get; set; } =
+        "AD";
 }
 
 public sealed class RecentComputerEntry

@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.24.x** — turns Start into the primary helpdesk dashboard: one metadata-only search for BitLocker + LAPS, context-aware actions, Recent computers without secrets, simplified AD account choices, Start-owned advanced connection settings, a persistent connection bar, compact LAPS details and consistent Enter behavior. The existing Recovery/LAPS/Devices/Administration workflows remain available.
+**Current release line: 0.25.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -16,20 +16,32 @@ Administration → **Cloud** now includes **Intune / Entra Setup Wizard...** as 
 
 Required Graph capabilities configured by the wizard are **BitlockerKey.Read.All**, **Device.Read.All**, and **DeviceManagementManagedDevices.ReadWrite.All**. **DeviceLocalCredential.Read.All** is optional for Entra LAPS. After setup, the wizard verifies the required application roles are present in the issued certificate-authentication token so missing admin consent is reported immediately.
 
-Administration → Security & Settings now includes **RBAC Setup Wizard...**. It guides the administrator through enabling/disabling RBAC, local-Administrators bypass, Recovery Readers, Rotation Operators, and BitKeyBridge Administrators. Principals are validated before saving, the current Windows identity is previewed against the proposed policy, and the wizard blocks a configuration that would remove the current non-bypass administrator from BitKeyBridge Administration. Nothing changes until **Finish**. JIT recovery, two-person approval, and SIEM remain separate opt-in controls under **Privileged Access...**.
+Administration → **Advanced** contains **RBAC Setup Wizard...**, **RBAC Advanced...**, and **Privileged Access...**. RBAC, JIT recovery, two-person approval, SIEM, mandatory Ticket/Reference, audit signing and Remote API are **not enabled by default**. They are opt-in enterprise controls and are never required for the normal helpdesk flow unless an administrator deliberately enables them.
 
-The detailed **First-Run / Repair**, **Bootstrap...**, **RBAC Advanced...**, and **Privileged Access...** controls remain available for repair and manual/advanced configuration.
+Administration → **Helpdesk** contains the normal recovery settings: setup status, non-secret environment profiles, one-click sanitized support bundles, optional ticket/reference policy, optional post-recovery Intune rotation suggestion, and secret/clipboard lifetime settings. The detailed Cloud **First-Run / Repair** and **Bootstrap...** controls remain available for repair/manual configuration.
 ## Start helpdesk dashboard (0.24.0)
 
 The GUI opens on **Start**. BitKeyBridge first shows the shared Active Directory session state and automatically connects when possible. Normal credential selection is reduced to **Use current Windows account** or **Use another AD account**; DC/FQDN, domain, LDAP port, LDAPS, protected credential storage and vault actions are kept under **Advanced** on the same Start page.
 
-After connection, one field accepts a partial computer name, Recovery ID, AD object/device ID, or other identifier. Typing two or more characters starts the existing 450 ms debounced metadata search; **Enter** searches immediately. The unified result grid combines BitLocker and LAPS metadata for each computer and shows compact states such as **Available**, **Multiple keys**, **Old key**, **No backup**, **Detected** and **Expired**.
+After connection, one field accepts a partial computer name, Recovery ID, AD object/device ID, or other identifier. Typing two or more characters starts the existing 450 ms debounced metadata search; **Enter** searches immediately. The unified result grid combines BitLocker and LAPS metadata for each computer and shows compact states such as **Available**, **Multiple keys**, **Old key**, **No backup**, **Detected** and **Expired**, plus the source used for the result.
 
-Search remains secret-free. BitLocker recovery passwords are still fetched only after **Reveal/Copy**, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. The selected result enables only the actions that have matching backup metadata.
+Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. When Cloud is configured, **Rotate via Intune** is available as a separate post-recovery action. The selected result shows a compact helpdesk summary and enables only actions that have matching backup metadata. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
 
 **Recent computers** stores only computer/device identifiers, the last helpdesk action and timestamp in the current user's LocalAppData. Recovery keys and LAPS passwords are never written to Recent.
 
 The bottom status bar remains visible across workspaces and shows the current AD session plus BitKeyBridge version. Clicking the connection status returns to Start and opens **Advanced**. The direct Recovery, Devices, LAPS, Administration and Health & Audit tabs remain available for advanced, Local-cache and Entra/Intune workflows.
+
+## Helpdesk defaults and Access Health
+
+BitKeyBridge 0.25 keeps enterprise enforcement out of the default recovery path. A fresh configuration does **not** enable RBAC, JIT recovery, two-person approval, SIEM, mandatory Ticket/Reference, audit signing, Remote API, Coverage policy/service Coverage, storage ACL hardening, or trusted-update-signature enforcement. Administrators can opt into those controls under **Administration → Advanced** or the relevant Updates/Audit page.
+
+**Administration → Helpdesk** is the normal configuration surface. It provides an at-a-glance setup status, non-secret environment profiles, optional Ticket/Reference rules (including an optional regex format), optional post-recovery Intune rotation suggestion, configurable secret/clipboard lifetimes, and a one-click sanitized support bundle.
+
+**Health & Audit → Access Health** runs metadata-only checks for AD bind, AD BitLocker recovery-object visibility, AD LAPS, Microsoft Graph BitLocker metadata, Intune managed-device visibility and Entra LAPS. Access Health does not request a BitLocker recovery password or LAPS password.
+
+The Audit page can filter recent recovery activity by computer, ticket/reference, operator, action, Recovery ID, source and date range. Recovery passwords and LAPS passwords are never written to the audit trail.
+
+Environment profiles store only non-secret endpoint/preferences such as AD/DC/domain/LDAPS and Cloud tenant/client/certificate selection. They do not store passwords, tokens, BitLocker recovery keys or LAPS passwords.
 
 ## LAPS and manual AD connections
 
@@ -41,7 +53,7 @@ Legacy LAPS and unencrypted Windows LAPS do not provide password history. Window
 
 For Entra, enter the **device ID**, not the object ID. The caller needs **DeviceLocalCredential.Read.All** and an applicable Entra role/admin consent. Opt in to **Include LAPS read permissions in setup** on Administration → Cloud before First-Run / Repair to provision the application's delegated/application permissions. Existing permissions are preserved when the option is disabled. LAPS requests its own read scopes and does not depend on a successful BitLocker access test.
 
-LAPS Read/Reveal/Copy use the existing RecoveryRead role, optional privileged-access policies and audit trail. Passwords are never included in exports, settings or diagnostics. Recovery/LAPS failures use non-blocking inline diagnostics with a redacted **Copy diagnostics** action instead of blocking error dialogs. Loaded passwords clear after two minutes, on source/computer/account changes, on reconnect, on explicit clearing, and when the window closes. Sensitive clipboard copies are excluded from Windows clipboard history/cloud processing and are cleared after the timeout only if the same secret is still present. Only retained records returned by AD/Entra can be displayed.
+LAPS Read/Reveal/Copy use the existing RecoveryRead role, optional privileged-access policies and audit trail. Passwords are never included in exports, settings or diagnostics. Recovery/LAPS failures use non-blocking inline diagnostics with a redacted **Copy diagnostics** action instead of blocking error dialogs. Loaded passwords clear after the configured secret lifetime (120 seconds by default), on source/computer/account changes, on reconnect, on explicit clearing, and when the window closes. Sensitive clipboard copies are excluded from Windows clipboard history/cloud processing, show a visible countdown, and are cleared after the configured timeout (60 seconds by default) only if the same secret is still present. Only retained records returned by AD/Entra can be displayed.
 
 Technical details and permission references: [LAPS guide](docs/LAPS.md).
 
@@ -55,8 +67,8 @@ The GUI is intentionally simplified around the real helpdesk workflow.
 - **Recovery** — advanced BitLocker workspace with Live AD/Local cache, OU scope, debounced partial-name/Recovery-ID search, latest-record selection and on-demand Reveal/Copy.
 - **Devices** — one AD device search with optional Entra/Intune enrichment, Entra recovery-key retrieval, and Intune key rotation.
 - **LAPS** — debounced device discovery, direct Enter/double-click reading, compact status/results and optional technical Details.
-- **Administration** — Cloud, Updates, security/settings, export, and automation. Visible only to authorized BitKeyBridge administrators.
-- **Health & Audit** — service/health, domain-controller comparison, and security audit. Visible to the same administrator role.
+- **Administration** — **Helpdesk** basics/profiles/support bundle, Cloud, Updates, **Advanced** enterprise policies, export, and automation. Visible only to authorized BitKeyBridge administrators.
+- **Health & Audit** — **Access Health** metadata-only permission checks, service/health, domain-controller comparison, and searchable recovery audit history. Visible to the same administrator role.
 - **Tools** — consolidated shortcuts for export files/logs/folders, Windows Event Log, and the latest GitHub release.
 
 The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / Unified Devices pages are no longer part of the active UI.
@@ -72,7 +84,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - Configurable OU scope with remembered last OU and **Entire domain** support.
 - **Live AD** and **Local cache** in the same Recovery workspace.
 - Metadata-only search: normal search does not read or retain the 48-digit recovery password.
-- Exact on-demand password retrieval only after RBAC/JIT/approval checks.
+- Exact on-demand password retrieval only after the configured authorization checks; RBAC/JIT/two-person approval are optional and disabled by default.
 - Single-result recovery card with computer, scope, Recovery ID, timestamp, source, and explicit Reveal/Copy actions.
 - Automatic AD connection on GUI startup, enabled by default.
 - AD-only Devices search works even when Microsoft Graph is not configured or temporarily unavailable.
@@ -83,11 +95,11 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - Responsive WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, text scaling, and smaller displays.
 - Native Windows Service for scheduled export / coverage.
 - Metadata-only AD + Entra + Intune BitLocker Coverage reporting.
-- Tamper-evident JSONL recovery audit with optional signed checkpoints.
-- Optional JIT recovery, two-person approval, and SIEM forwarding — all disabled by default.
+- Tamper-evident JSONL recovery audit with optional signed checkpoints and GUI filters by computer/ticket/user/action/Recovery ID/date.
+- Optional RBAC, mandatory ticket/reference, JIT recovery, two-person approval, SIEM forwarding, audit signing and Remote API — all disabled by default.
 - Optional TLS Remote API with scoped bearer tokens.
 - Credential storage using Current User Credential Manager or machine-scope DPAPI with restricted ACL.
-- Verified self-update from GitHub Releases with SHA-256 checks, self-test, rollback, SBOM, and attestations.
+- Verified self-update from GitHub Releases with SHA-256 checks, staged self-test, update history, retry, one-click rollback, SBOM and attestations; optional Authenticode trust/publisher policy is available and disabled by default.
 - Release automation removes stale `release/*` branches only after preserving any unmerged branch tip under an `archive/*` tag.
 
 ## Platform
@@ -166,7 +178,7 @@ Legacy Microsoft LAPS and plaintext Windows LAPS do not provide password history
 5. Retrieve an Entra BitLocker recovery key only when required.
 6. Use **Rotate BitLocker Key** for an explicit Intune rotation request; rotation is never performed automatically.
 
-For first-time cloud configuration, administrators should use **Administration → Cloud → Intune / Entra Setup Wizard...**. For role configuration, use **Administration → Security & Settings → RBAC Setup Wizard...**.
+For first-time cloud configuration, administrators should use **Administration → Cloud → Intune / Entra Setup Wizard...**. Normal helpdesk policy belongs under **Administration → Helpdesk**; optional RBAC/JIT/approval/SIEM controls are under **Administration → Advanced**.
 
 ### Local cache fallback
 

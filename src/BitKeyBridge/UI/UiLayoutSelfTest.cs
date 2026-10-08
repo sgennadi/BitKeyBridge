@@ -256,8 +256,8 @@ public static class UiLayoutSelfTest
                         "PC-12345",
                         Guid.Empty.ToString(),
                         requireReference: true,
-                        allowRotationReminder: true,
-                        defaultRotationReminder: true)),
+                        referencePattern: "^INC-[0-9]+$",
+                        referenceExample: "INC-12345")),
             (
                 "Incident verification",
                 () =>
@@ -445,7 +445,14 @@ public static class UiLayoutSelfTest
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
                     "HomeBitLockerButton",
+                    "HomeRevealBitLockerButton",
+                    "HomeCopyBitLockerButton",
+                    "HomeRotateBitLockerButton",
+                    "HomeDeviceDetailsButton",
                     "HomeLapsButton",
+                    "HomeSelectionSummary",
+                    "SecretLifetimeStatus",
+                    "StartSetupStatus",
                     "HomeUnifiedQuery",
                     "HomeUnifiedSearchResults",
                     "HomeRecentComputers",
@@ -489,6 +496,44 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Updates workspace is missing the automatic-install control.");
+        }
+
+        if (FindByName(
+                form,
+                "RetryUpdateButton") is null ||
+            FindByName(
+                form,
+                "RequireTrustedUpdateSignature") is null ||
+            FindByName(
+                form,
+                "TrustedUpdatePublisher") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Updates workspace is missing retry or Authenticode policy controls.");
+        }
+
+        if (FindByName(
+                form,
+                "HelpdeskBasicsTab") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Administration is missing the Helpdesk basics workspace.");
+        }
+
+        if (FindByName(
+                form,
+                "AccessHealthTab") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Health & Audit is missing the Access Health workspace.");
+        }
+
+        if (FindByName(
+                form,
+                "UpdateHistory") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Updates workspace is missing update history.");
         }
 
         if (FindByName(

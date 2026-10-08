@@ -1384,7 +1384,7 @@ public sealed partial class MainForm
             }
 
             readMessages.Add(
-                "Passwords clear after two minutes.");
+                $"Passwords clear after {_config.SecretDisplaySeconds} seconds.");
 
             UiStyle.SetStatus(
                 _lapsStatus,
@@ -1397,9 +1397,23 @@ public sealed partial class MainForm
                     _lapsResult.Entries.Count
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
-            _lapsClearTimer = new System.Windows.Forms.Timer { Interval = 120000 };
-            _lapsClearTimer.Tick += (_, _) => ClearLapsResult();
+            _lapsClearTimer =
+                new System.Windows.Forms.Timer
+                {
+                    Interval =
+                        Math.Max(
+                            15,
+                            _config.SecretDisplaySeconds) *
+                        1000
+                };
+            _lapsClearTimer.Tick +=
+                (_, _) =>
+                    ClearLapsResult();
             _lapsClearTimer.Start();
+
+            StartSecretLifetimeCountdown(
+                "LAPS password",
+                _config.SecretDisplaySeconds);
         }
         catch (OperationCanceledException)
         {

@@ -25,6 +25,7 @@ public sealed class PreparedUpdate
     public string ZipPath { get; set; } = string.Empty;
     public string StagedExecutable { get; set; } = string.Empty;
     public string StagedExecutableSha256 { get; set; } = string.Empty;
+    public string AuthenticodePublisher { get; set; } = string.Empty;
 }
 
 public sealed class UpdateApplyPlan
@@ -32,6 +33,10 @@ public sealed class UpdateApplyPlan
     public string StagedExecutable { get; set; } = string.Empty;
     public string StagedExecutableSha256 { get; set; } = string.Empty;
     public string ExpectedVersion { get; set; } = string.Empty;
+    public string PreviousVersion { get; set; } = string.Empty;
+    public bool Automatic { get; set; }
+    public bool Rollback { get; set; }
+    public string AuthenticodePublisher { get; set; } = string.Empty;
     public List<string> TargetExecutables { get; set; } = [];
     public int WaitForProcessId { get; set; }
     public bool RestartService { get; set; }
@@ -54,4 +59,17 @@ public sealed class RemoteApiScopedTokenResult
     public string Scope { get; set; } = string.Empty;
     public string Token { get; set; } = string.Empty;
     public int Port { get; set; }
+}
+
+
+public sealed class UpdateHistoryEntry
+{
+    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    public string Action { get; set; } = string.Empty;
+    public string FromVersion { get; set; } = string.Empty;
+    public string ToVersion { get; set; } = string.Empty;
+    public string Result { get; set; } = string.Empty;
+    public bool Automatic { get; set; }
+    public string Publisher { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
 }

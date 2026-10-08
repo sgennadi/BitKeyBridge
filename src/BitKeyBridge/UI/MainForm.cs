@@ -2443,6 +2443,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         LoadUpdateSettings();
 
+        _remoteApiPort.Minimum = 1024;
+        _remoteApiPort.Maximum = 65535;
+
         _remoteApiPort.Value =
             Math.Clamp(
                 _config.RemoteApiPort,
@@ -2455,6 +2458,7 @@ public sealed partial class MainForm : DpiAwareForm
         _suggestRotationAfterRecovery.Checked =
             _config.SuggestRotationAfterCloudKeyRetrieval;
         RefreshRemoteApiStatus();
+        LoadHelpdeskBasics();
     }
 
     private void LoadUpdateSettings()
@@ -2467,6 +2471,10 @@ public sealed partial class MainForm : DpiAwareForm
             _config.AutoInstallUpdatesOnStart;
         _allowPrereleaseUpdates.Checked =
             _config.AllowPrereleaseUpdates;
+        _requireTrustedUpdateSignature.Checked =
+            _config.RequireTrustedUpdateSignature;
+        _trustedUpdatePublisher.Text =
+            _config.TrustedUpdatePublisher;
 
         try
         {
@@ -2505,6 +2513,9 @@ public sealed partial class MainForm : DpiAwareForm
                 "Previous update status could not be loaded. Manual update actions are still available.",
                 UiStatusKind.Warning);
         }
+
+        if (!_layoutSelfTest)
+            RefreshUpdateHistory();
     }
 
     private bool SaveUpdateSettings(
@@ -2537,6 +2548,10 @@ public sealed partial class MainForm : DpiAwareForm
                 _autoInstallUpdatesOnStart.Checked;
             _config.AllowPrereleaseUpdates =
                 _allowPrereleaseUpdates.Checked;
+            _config.RequireTrustedUpdateSignature =
+                _requireTrustedUpdateSignature.Checked;
+            _config.TrustedUpdatePublisher =
+                _trustedUpdatePublisher.Text.Trim();
 
             ConfigService.SaveAppConfig(
                 _config);
@@ -2545,7 +2560,7 @@ public sealed partial class MainForm : DpiAwareForm
                 "SaveUpdateSettings",
                 source: "Local",
                 details:
-                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}");
+                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RequireTrustedSignature={_config.RequireTrustedUpdateSignature}; TrustedPublisher={_config.TrustedUpdatePublisher}");
 
             if (showConfirmation)
             {
@@ -2808,10 +2823,18 @@ public sealed partial class MainForm : DpiAwareForm
                 : "No newer release is available.") +
             Environment.NewLine +
             $"Checked: {info.CheckedAtUtc:u}" +
+            (string.IsNullOrWhiteSpace(info.ExpectedSha256)
+                ? string.Empty
+                : Environment.NewLine + $"SHA-256: {info.ExpectedSha256}") +
             Environment.NewLine +
             $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}" +
             Environment.NewLine +
-            $"Automatic install: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}",
+            $"Automatic install: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}" +
+            Environment.NewLine +
+            $"Authenticode trust required: {(_config.RequireTrustedUpdateSignature ? "Yes" : "No")}" +
+            (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)
+                ? string.Empty
+                : $" • Publisher: {_config.TrustedUpdatePublisher}"),
             info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);
@@ -2837,6 +2860,9 @@ public sealed partial class MainForm : DpiAwareForm
             $"Install BitKeyBridge {info.LatestVersion} for {info.Architecture}?{Environment.NewLine}{Environment.NewLine}" +
             "The ZIP SHA-256 will be verified against SHA256SUMS.txt and GitHub's asset digest when available. " +
             "The downloaded EXE must also pass --self-test before installation. " +
+            (_config.RequireTrustedUpdateSignature
+                ? "A trusted Authenticode signature is required by policy. "
+                : string.Empty) +
             "The GUI will close during replacement and reopen automatically.",
             "Install Verified Update",
             MessageBoxButtons.YesNo,
@@ -2883,7 +2909,9 @@ public sealed partial class MainForm : DpiAwareForm
             updater.LaunchApplyHelper(
                 prepared,
                 restartGui:
-                    true);
+                    true,
+                automatic:
+                    automatic);
 
             _audit.Write(
                 "LaunchUpdateHelper",
@@ -4333,6 +4361,9 @@ public sealed partial class MainForm : DpiAwareForm
             _homeSearchProgress.Visible =
                 false;
         }
+
+        UpdateHomeSearchSelection();
+        RefreshSetupStatus();
     }
 
     private void ShowAppError(
@@ -5282,6 +5313,10 @@ public sealed partial class MainForm : DpiAwareForm
         _startShow.Text =
             "Hide Key";
 
+        StartSecretLifetimeCountdown(
+            "BitLocker recovery key",
+            _config.SecretDisplaySeconds);
+
         WriteRecoveryAudit(
             "RevealRecoveryKey",
             context,
@@ -5368,6 +5403,16 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadDashboardSettings()
     {
+        // These controls may not be parented when Administration is hidden by
+        // authorization, so establish their numeric ranges before assigning
+        // persisted values.
+        _serviceInterval.Minimum = 1;
+        _serviceInterval.Maximum = 10080;
+        _healthPort.Minimum = 1024;
+        _healthPort.Maximum = 65535;
+        _serviceCoverageInterval.Minimum = 15;
+        _serviceCoverageInterval.Maximum = 10080;
+
         _serviceInterval.Value = Math.Clamp(_config.ServiceIntervalMinutes, 1, 10080);
         _healthPort.Value = Math.Clamp(_config.HealthEndpointPort, 1024, 65535);
         _healthEnabled.Checked = _config.HealthEndpointEnabled;
@@ -6295,39 +6340,71 @@ public sealed partial class MainForm : DpiAwareForm
         string computerName,
         bool allowRotationReminder)
     {
+        _ = allowRotationReminder;
+
         var normalizedId = string.IsNullOrWhiteSpace(recoveryId)
             ? computerName
             : recoveryId;
         var cacheKey = source + ":" + normalizedId;
+        var computerCacheKey =
+            source + ":computer:" + computerName.Trim();
 
-        if (_recoveryAccessContexts.TryGetValue(cacheKey, out var existing))
-            return existing;
-
-        var prompt =
-            _config.RequireRecoveryAccessReference ||
-            (allowRotationReminder &&
-             _config.SuggestRotationAfterCloudKeyRetrieval);
-
-        if (!prompt)
+        if (_recoveryAccessContexts.TryGetValue(
+                cacheKey,
+                out var existing))
         {
-            var empty = new RecoveryAccessContext();
-            _recoveryAccessContexts[cacheKey] = empty;
+            return existing;
+        }
+
+        if (_recoveryAccessContexts.TryGetValue(
+                computerCacheKey,
+                out existing))
+        {
+            _recoveryAccessContexts[cacheKey] =
+                existing;
+            return existing;
+        }
+
+        // Rotation reminders are intentionally post-recovery and are never a
+        // reason to interrupt secret retrieval with a ticket dialog.
+        if (!_config.RequireRecoveryAccessReference)
+        {
+            var empty =
+                new RecoveryAccessContext();
+            _recoveryAccessContexts[cacheKey] =
+                empty;
             return empty;
         }
 
-        using var dialog = new RecoveryAccessDialog(
-            computerName,
-            normalizedId,
-            _config.RequireRecoveryAccessReference,
-            allowRotationReminder,
-            allowRotationReminder &&
-            _config.SuggestRotationAfterCloudKeyRetrieval);
+        using var dialog =
+            new RecoveryAccessDialog(
+                computerName,
+                normalizedId,
+                requireReference:
+                    true,
+                referencePattern:
+                    _config.RecoveryReferencePattern,
+                referenceExample:
+                    _config.RecoveryReferenceExample);
 
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        if (dialog.ShowDialog(this) !=
+            DialogResult.OK)
+        {
             return null;
+        }
 
-        var context = dialog.Context;
-        _recoveryAccessContexts[cacheKey] = context;
+        var context =
+            dialog.Context;
+
+        _recoveryAccessContexts[cacheKey] =
+            context;
+
+        if (context.RememberForComputer)
+        {
+            _recoveryAccessContexts[computerCacheKey] =
+                context;
+        }
+
         return context;
     }
 
@@ -6799,25 +6876,11 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void RefreshAudit()
     {
-        _auditResults.Items.Clear();
-        foreach (var row in _audit.ReadRecent(1000))
-        {
-            var item = new ListViewItem(row.TimestampUtc.ToString("yyyy-MM-dd HH:mm:ss"));
-            item.SubItems.Add(row.User);
-            item.SubItems.Add(row.Host);
-            item.SubItems.Add(row.Action);
-            item.SubItems.Add(row.Result);
-            item.SubItems.Add(row.ComputerName);
-            item.SubItems.Add(row.RecoveryId);
-            item.SubItems.Add(row.Source);
-            item.SubItems.Add(row.AuthMode);
-            item.SubItems.Add(row.Reference);
-            item.SubItems.Add(row.CorrelationId);
-            item.SubItems.Add(row.Reason);
-            item.SubItems.Add(row.Details);
-            item.Tag = row;
-            _auditResults.Items.Add(item);
-        }
+        _auditRows =
+            _audit.ReadRecent(
+                5000);
+
+        ApplyAuditFilter();
     }
 
     private void CopyKeyWithAutoClear(string? key)
@@ -6834,7 +6897,11 @@ public sealed partial class MainForm : DpiAwareForm
         _clipboardClearTimer =
             new System.Windows.Forms.Timer
             {
-                Interval = 60000
+                Interval =
+                    Math.Max(
+                        5,
+                        _config.SensitiveClipboardSeconds) *
+                    1000
             };
 
         _clipboardClearTimer.Tick +=
@@ -6862,6 +6929,7 @@ public sealed partial class MainForm : DpiAwareForm
             };
 
         _clipboardClearTimer.Start();
+        MarkClipboardLifetime();
     }
 
     private static void AddColumns(

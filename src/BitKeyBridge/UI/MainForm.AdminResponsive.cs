@@ -69,6 +69,27 @@ public sealed partial class MainForm
             1,
             3);
 
+        _requireTrustedUpdateSignature.Name =
+            "RequireTrustedUpdateSignature";
+        _requireTrustedUpdateSignature.Text =
+            "Require a valid trusted Authenticode signature";
+        _requireTrustedUpdateSignature.AutoSize =
+            true;
+        updateGrid.Controls.Add(
+            _requireTrustedUpdateSignature,
+            1,
+            4);
+
+        _trustedUpdatePublisher.Name =
+            "TrustedUpdatePublisher";
+        _trustedUpdatePublisher.PlaceholderText =
+            "Optional expected publisher name";
+        AddGridField(
+            updateGrid,
+            5,
+            "Trusted publisher:",
+            _trustedUpdatePublisher);
+
         var updateActions =
             CreateActionFlow();
         var saveUpdate =
@@ -86,6 +107,11 @@ public sealed partial class MainForm
                 "Update Now");
         install.Name =
             "UpdateNowButton";
+        var retry =
+            NewActionButton(
+                "Retry Update");
+        retry.Name =
+            "RetryUpdateButton";
         var toggleAutomatic =
             NewActionButton(
                 "Disable Automatic Checks");
@@ -101,13 +127,14 @@ public sealed partial class MainForm
             saveUpdate,
             check,
             install,
+            retry,
             toggleAutomatic,
             openRelease
         ]);
         updateGrid.Controls.Add(
             updateActions,
             1,
-            4);
+            6);
 
         UiStyle.ConfigureStatusLabel(
             _updateStatus);
@@ -125,10 +152,66 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _updateStatus,
             1,
-            5);
+            7);
 
         root.Controls.Add(
             updateGrid);
+
+        root.Controls.Add(
+            CreateSectionTitle(
+                "Update History / Rollback",
+                "The immediately previous executable is retained as .bak after a successful update. Publisher information is shown when the staged executable contains Authenticode metadata."));
+
+        var historyActions =
+            CreateActionFlow();
+        var refreshHistory =
+            NewActionButton(
+                "Refresh History");
+        _rollbackUpdateButton.Text =
+            "Rollback Previous Build";
+        UiStyle.ConfigureActionButton(
+            _rollbackUpdateButton);
+        historyActions.Controls.AddRange([
+            refreshHistory,
+            _rollbackUpdateButton
+        ]);
+        root.Controls.Add(
+            historyActions);
+
+        _updateHistoryResults.Name =
+            "UpdateHistory";
+        _updateHistoryResults.View =
+            View.Details;
+        _updateHistoryResults.FullRowSelect =
+            true;
+        _updateHistoryResults.GridLines =
+            true;
+        _updateHistoryResults.Height =
+            190;
+        _updateHistoryResults.Dock =
+            DockStyle.Top;
+        AddColumns(
+            _updateHistoryResults,
+            ("Time (UTC)", 155),
+            ("Action", 90),
+            ("From", 90),
+            ("To", 90),
+            ("Result", 90),
+            ("Mode", 90),
+            ("Publisher", 170),
+            ("Details", 360));
+        root.Controls.Add(
+            _updateHistoryResults);
+
+        refreshHistory.Click +=
+            (_, _) =>
+                RefreshUpdateHistory();
+        _rollbackUpdateButton.Click +=
+            (_, _) =>
+                RollbackPreviousUpdateGui();
+
+        if (!_layoutSelfTest)
+            RefreshUpdateHistory();
 
         void RefreshAutomaticControls()
         {
@@ -139,6 +222,11 @@ public sealed partial class MainForm
 
             _autoInstallUpdatesOnStart.Enabled =
                 _checkUpdatesOnStart.Checked;
+
+            _trustedUpdatePublisher.Enabled =
+                _requireTrustedUpdateSignature.Checked ||
+                !string.IsNullOrWhiteSpace(
+                    _trustedUpdatePublisher.Text);
         }
 
         _checkUpdatesOnStart.CheckedChanged +=
@@ -158,6 +246,10 @@ public sealed partial class MainForm
                 RefreshAutomaticControls();
             };
 
+        _requireTrustedUpdateSignature.CheckedChanged +=
+            (_, _) =>
+                RefreshAutomaticControls();
+
         saveUpdate.Click +=
             (_, _) =>
                 SaveUpdateSettings(
@@ -171,6 +263,14 @@ public sealed partial class MainForm
         install.Click +=
             async (_, _) =>
                 await InstallLatestUpdateGuiAsync();
+
+        retry.Click +=
+            async (_, _) =>
+            {
+                _lastUpdateInfo =
+                    null;
+                await InstallLatestUpdateGuiAsync();
+            };
 
         toggleAutomatic.Click +=
             (_, _) =>
@@ -187,7 +287,7 @@ public sealed partial class MainForm
 
     private TabPage BuildSecuritySettingsResponsiveTab()
     {
-        var page = new TabPage("Security & Settings");
+        var page = new TabPage("Advanced");
         var root = CreateVerticalWorkspace();
         page.Controls.Add(root);
 
@@ -273,31 +373,10 @@ public sealed partial class MainForm
 
         root.Controls.Add(
             CreateSectionTitle(
-                "Helpdesk Recovery Policy",
-                "RBAC, JIT recovery and two-person approval stay optional and disabled unless explicitly configured."));
+                "Enterprise Recovery Policies",
+                "RBAC, JIT recovery, two-person approval, SIEM and related gates are optional. Fresh installations keep all of them disabled."));
 
-        var helpdeskGrid =
-            CreateTwoColumnGrid();
-
-        _requireRecoveryReference.Text =
-            "Require a ticket/reference before recovery-key access";
-        _requireRecoveryReference.AutoSize =
-            true;
-        helpdeskGrid.Controls.Add(
-            _requireRecoveryReference,
-            1,
-            0);
-
-        _suggestRotationAfterRecovery.Text =
-            "Suggest Intune key rotation after cloud recovery-key access";
-        _suggestRotationAfterRecovery.AutoSize =
-            true;
-        helpdeskGrid.Controls.Add(
-            _suggestRotationAfterRecovery,
-            1,
-            1);
-
-        var helpdeskActions =
+        var enterpriseActions =
             CreateActionFlow();
         var rbacWizard =
             NewActionButton(
@@ -308,22 +387,13 @@ public sealed partial class MainForm
         var privileged =
             NewActionButton(
                 "Privileged Access...");
-        var saveHelpdesk =
-            NewActionButton(
-                "Save Helpdesk Settings");
-        helpdeskActions.Controls.AddRange([
+        enterpriseActions.Controls.AddRange([
             rbacWizard,
             rbac,
-            privileged,
-            saveHelpdesk
+            privileged
         ]);
-        helpdeskGrid.Controls.Add(
-            helpdeskActions,
-            1,
-            2);
-
         root.Controls.Add(
-            helpdeskGrid);
+            enterpriseActions);
 
         rbacWizard.Click +=
             (_, _) =>
@@ -334,9 +404,6 @@ public sealed partial class MainForm
         privileged.Click +=
             (_, _) =>
                 ConfigurePrivilegedAccessFromGui();
-        saveHelpdesk.Click +=
-            (_, _) =>
-                SaveOperationsSettings();
 
         root.Controls.Add(
             CreateSectionTitle(
@@ -1274,12 +1341,15 @@ public sealed partial class MainForm
                 Dock = DockStyle.Fill,
                 Padding = new Padding(16),
                 ColumnCount = 1,
-                RowCount = 4
+                RowCount = 5
             };
         root.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
         root.RowStyles.Add(
             new RowStyle(
                 SizeType.AutoSize));
@@ -1337,26 +1407,201 @@ public sealed partial class MainForm
             verifyIncident
         ]);
         root.Controls.Add(
-            actions);
+            actions,
+            0,
+            0);
 
         root.Controls.Add(
             CreateSectionTitle(
                 "Tamper-Evident Recovery Audit",
-                "Recovery passwords are never written to audit. Entries are SHA-256 chained and can use signed checkpoints."));
+                "Search by computer, ticket/reference, operator, Recovery ID, action, session or date. Recovery passwords are never written to audit."),
+            0,
+            1);
+
+        var filters =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    8,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        filters.Controls.Add(
+            new Label
+            {
+                Text = "Filter:",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 7, 8, 0)
+            },
+            0,
+            0);
+
+        _auditFilterField.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _auditFilterField.Items.AddRange([
+            "All",
+            "Computer",
+            "Ticket / Reference",
+            "Operator",
+            "Recovery ID",
+            "Action",
+            "Session"
+        ]);
+        _auditFilterField.SelectedIndex =
+            0;
+        filters.Controls.Add(
+            _auditFilterField,
+            1,
+            0);
+
+        _auditFilter.Dock =
+            DockStyle.Fill;
+        _auditFilter.PlaceholderText =
+            "Computer, ticket, operator, Recovery ID...";
+        filters.Controls.Add(
+            _auditFilter,
+            2,
+            0);
+
+        filters.Controls.Add(
+            new Label
+            {
+                Text = "From:",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(8, 7, 4, 0)
+            },
+            3,
+            0);
+
+        _auditFrom.Format =
+            DateTimePickerFormat.Short;
+        _auditFrom.ShowCheckBox =
+            true;
+        _auditFrom.Checked =
+            false;
+        filters.Controls.Add(
+            _auditFrom,
+            4,
+            0);
+
+        filters.Controls.Add(
+            new Label
+            {
+                Text = "To:",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(8, 7, 4, 0)
+            },
+            5,
+            0);
+
+        _auditTo.Format =
+            DateTimePickerFormat.Short;
+        _auditTo.ShowCheckBox =
+            true;
+        _auditTo.Checked =
+            false;
+        filters.Controls.Add(
+            _auditTo,
+            6,
+            0);
+
+        var clearFilters =
+            NewActionButton(
+                "Clear");
+        filters.Controls.Add(
+            clearFilters,
+            7,
+            0);
+
+        root.Controls.Add(
+            filters,
+            0,
+            2);
+
+        var statusAndSelection =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    2
+            };
+        statusAndSelection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        statusAndSelection.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
 
         UiStyle.ConfigureStatusLabel(
             _auditSigningStatus);
         _auditSigningStatus.AccessibleName =
             "Audit signing status";
         _auditSigningStatus.MaximumSize =
-            new Size(1000, 0);
+            new Size(
+                1000,
+                0);
         _auditSigningStatus.Text =
             "Audit signing status has not been checked.";
         UiStyle.ApplyStatusLabel(
             _auditSigningStatus,
             UiStatusKind.Neutral);
+        statusAndSelection.Controls.Add(
+            _auditSigningStatus,
+            0,
+            0);
+
+        var copySession =
+            NewActionButton(
+                "Copy Session ID");
+        statusAndSelection.Controls.Add(
+            copySession,
+            1,
+            0);
         root.Controls.Add(
-            _auditSigningStatus);
+            statusAndSelection,
+            0,
+            3);
 
         _auditResults.View =
             View.Details;
@@ -1382,7 +1627,9 @@ public sealed partial class MainForm
             ("Reason", 180),
             ("Details", 260));
         root.Controls.Add(
-            _auditResults);
+            _auditResults,
+            0,
+            4);
 
         refresh.Click +=
             (_, _) =>
@@ -1416,6 +1663,49 @@ public sealed partial class MainForm
         verifyIncident.Click +=
             (_, _) =>
                 VerifyRecoveryIncidentGui();
+
+        _auditFilter.TextChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditFilterField.SelectedIndexChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditFrom.ValueChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditTo.ValueChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+
+        clearFilters.Click +=
+            (_, _) =>
+            {
+                _auditFilter.Clear();
+                _auditFilterField.SelectedIndex =
+                    0;
+                _auditFrom.Checked =
+                    false;
+                _auditTo.Checked =
+                    false;
+                ApplyAuditFilter();
+            };
+
+        copySession.Click +=
+            (_, _) =>
+            {
+                if (_auditResults.SelectedItems.Count ==
+                        0 ||
+                    _auditResults.SelectedItems[0].Tag is not
+                        AuditEntry entry ||
+                    string.IsNullOrWhiteSpace(
+                        entry.CorrelationId))
+                {
+                    return;
+                }
+
+                Clipboard.SetText(
+                    entry.CorrelationId);
+            };
 
         if (!_layoutSelfTest)
         {

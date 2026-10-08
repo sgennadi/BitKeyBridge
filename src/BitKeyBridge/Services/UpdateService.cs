@@ -429,17 +429,27 @@ public sealed class UpdateService : IDisposable
                 "The staged BitKeyBridge executable changed while it was being verified.");
         }
 
+        AuthenticodeVerificationService.EnforcePolicy(
+            _config,
+            executable);
+
         return new PreparedUpdate
         {
             Info = info,
             ZipPath = zipPath,
             StagedExecutable = executable,
             StagedExecutableSha256 =
-                stagedHashAfterSelfTest
+                stagedHashAfterSelfTest,
+            AuthenticodePublisher =
+                UpdateHistoryService.GetAuthenticodePublisher(
+                    executable)
         };
     }
 
-    public string LaunchApplyHelper(PreparedUpdate prepared, bool restartGui)
+    public string LaunchApplyHelper(
+        PreparedUpdate prepared,
+        bool restartGui,
+        bool automatic = false)
     {
         var current = Environment.ProcessPath
             ?? throw new InvalidOperationException("Current executable path is unavailable.");
@@ -472,6 +482,16 @@ public sealed class UpdateService : IDisposable
                 prepared.StagedExecutableSha256,
             ExpectedVersion =
                 prepared.Info.LatestVersion,
+            PreviousVersion =
+                GetCurrentVersion().ToString(),
+            Automatic =
+                automatic,
+            Rollback =
+                prepared.Info.ReleaseTag.Equals(
+                    "rollback",
+                    StringComparison.OrdinalIgnoreCase),
+            AuthenticodePublisher =
+                prepared.AuthenticodePublisher,
             TargetExecutables = targets,
             WaitForProcessId = Environment.ProcessId,
             RestartService = service.Installed &&
@@ -510,6 +530,114 @@ public sealed class UpdateService : IDisposable
         _ = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start the BitKeyBridge update helper.");
         return planPath;
+    }
+
+    public string LaunchRollbackHelper(
+        bool restartGui)
+    {
+        var current =
+            Environment.ProcessPath
+            ?? throw new InvalidOperationException(
+                "Current executable path is unavailable.");
+
+        var backup =
+            current + ".bak";
+
+        if (!File.Exists(
+                backup))
+        {
+            throw new FileNotFoundException(
+                "No retained BitKeyBridge backup is available for rollback.",
+                backup);
+        }
+
+        Directory.CreateDirectory(
+            AppPaths.UpdatesDirectory);
+
+        var rollbackDirectory =
+            Path.Combine(
+                AppPaths.UpdatesDirectory,
+                "rollback-" +
+                Guid.NewGuid().ToString("N"));
+
+        Directory.CreateDirectory(
+            rollbackDirectory);
+
+        var staged =
+            Path.Combine(
+                rollbackDirectory,
+                "BitKeyBridge.exe");
+
+        File.Copy(
+            backup,
+            staged,
+            overwrite:
+                true);
+
+        var version =
+            FileVersionInfo.GetVersionInfo(
+                staged)
+                .FileVersion;
+
+        if (string.IsNullOrWhiteSpace(
+                version))
+        {
+            throw new InvalidDataException(
+                "The rollback backup does not contain a valid file version.");
+        }
+
+        AuthenticodeVerificationService.EnforcePolicy(
+            _config,
+            staged);
+
+        var prepared =
+            new PreparedUpdate
+            {
+                Info =
+                    new UpdateInfo
+                    {
+                        CurrentVersion =
+                            GetCurrentVersion().ToString(),
+                        LatestVersion =
+                            version,
+                        ReleaseTag =
+                            "rollback",
+                        Architecture =
+                            GetRid()
+                    },
+                StagedExecutable =
+                    staged,
+                StagedExecutableSha256 =
+                    ComputeSha256File(
+                        staged),
+                AuthenticodePublisher =
+                    UpdateHistoryService.GetAuthenticodePublisher(
+                        staged)
+            };
+
+        new UpdateHistoryService()
+            .Append(
+                new UpdateHistoryEntry
+                {
+                    Action =
+                        "RollbackRequested",
+                    FromVersion =
+                        prepared.Info.CurrentVersion,
+                    ToVersion =
+                        prepared.Info.LatestVersion,
+                    Result =
+                        "Prepared",
+                    Publisher =
+                        prepared.AuthenticodePublisher,
+                    Details =
+                        "Rollback staged from the retained previous executable."
+                });
+
+        return LaunchApplyHelper(
+            prepared,
+            restartGui,
+            automatic:
+                false);
     }
 
     public static int ApplyPlan(
@@ -637,19 +765,32 @@ public sealed class UpdateService : IDisposable
                 });
             }
 
-            foreach (var (_, backup) in backups)
-            {
-                try
-                {
-                    File.Delete(backup);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine(
-                        "Updater backup cleanup failed: " +
-                        DiagnosticRedaction.Sanitize(ex.Message));
-                }
-            }
+            // Keep the immediately previous executable as .bak so the
+            // operator has a one-click rollback path. A later successful
+            // update replaces that retained backup with the then-current build.
+            new UpdateHistoryService()
+                .Append(
+                    new UpdateHistoryEntry
+                    {
+                        Action =
+                            plan.Rollback
+                                ? "Rollback"
+                                : "Install",
+                        FromVersion =
+                            plan.PreviousVersion,
+                        ToVersion =
+                            plan.ExpectedVersion,
+                        Result =
+                            "Success",
+                        Automatic =
+                            plan.Automatic,
+                        Publisher =
+                            plan.AuthenticodePublisher,
+                        Details =
+                            backups.Count > 0
+                                ? "Previous executable retained as .bak for rollback."
+                                : "Installed without an existing target backup."
+                    });
 
             TryScheduleHelperCleanup(plan.CleanupDirectory);
             return 0;
@@ -675,6 +816,29 @@ public sealed class UpdateService : IDisposable
                         "Update");
                 }
             }
+
+            new UpdateHistoryService()
+                .Append(
+                    new UpdateHistoryEntry
+                    {
+                        Action =
+                            plan.Rollback
+                                ? "Rollback"
+                                : "Install",
+                        FromVersion =
+                            plan.PreviousVersion,
+                        ToVersion =
+                            plan.ExpectedVersion,
+                        Result =
+                            "Failed",
+                        Automatic =
+                            plan.Automatic,
+                        Publisher =
+                            plan.AuthenticodePublisher,
+                        Details =
+                            DiagnosticRedaction.Sanitize(
+                                ex.Message)
+                    });
 
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge update failed and rollback was attempted: " + ex.Message,

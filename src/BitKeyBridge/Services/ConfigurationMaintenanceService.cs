@@ -321,6 +321,72 @@ public sealed class ConfigurationMaintenanceService
                 "update-status.json",
                 result);
 
+            WriteStatusFile(
+                tempDirectory,
+                AppPaths.UpdateHistoryFile,
+                "update-history.json",
+                result);
+
+            try
+            {
+                var profiles =
+                    new HelpdeskProfileService()
+                        .Load()
+                        .Select(
+                            x =>
+                                new
+                                {
+                                    x.Name,
+                                    x.AdConnectionMode,
+                                    x.AdServer,
+                                    x.AdDomain,
+                                    x.AdPort,
+                                    x.AdUseLdaps,
+                                    x.RecoverySearchSource,
+                                    x.CloudTenant,
+                                    x.CloudClientId,
+                                    x.CloudAuthMode,
+                                    x.UpdatedAtUtc
+                                })
+                        .ToList();
+
+                WriteJson(
+                    tempDirectory,
+                    "helpdesk-profiles-metadata.json",
+                    profiles,
+                    result);
+            }
+            catch (Exception ex)
+            {
+                WriteText(
+                    tempDirectory,
+                    "helpdesk-profiles-error.txt",
+                    DiagnosticRedaction.Sanitize(
+                        ex.Message),
+                    result);
+            }
+
+            WriteJson(
+                tempDirectory,
+                "runtime.json",
+                new
+                {
+                    Version =
+                        typeof(ConfigurationMaintenanceService)
+                            .Assembly
+                            .GetName()
+                            .Version?
+                            .ToString(3) ??
+                        string.Empty,
+                    Architecture =
+                        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+                    OperatingSystem =
+                        System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+                    DotNet =
+                        System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
+                },
+                result);
+
             if (File.Exists(
                     AppPaths.ServiceLogFile))
             {
@@ -493,6 +559,36 @@ public sealed class ConfigurationMaintenanceService
         {
             throw new InvalidOperationException(
                 "TemporaryFileRetentionDays must be between 0 and 3650.");
+        }
+
+        if (config.SecretDisplaySeconds is < 15 or > 3600)
+        {
+            throw new InvalidOperationException(
+                "SecretDisplaySeconds must be between 15 and 3600.");
+        }
+
+        if (config.SensitiveClipboardSeconds is < 5 or > 600)
+        {
+            throw new InvalidOperationException(
+                "SensitiveClipboardSeconds must be between 5 and 600.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                config.RecoveryReferencePattern))
+        {
+            try
+            {
+                _ = new System.Text.RegularExpressions.Regex(
+                    config.RecoveryReferencePattern,
+                    System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(250));
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "RecoveryReferencePattern is not a valid regular expression: " +
+                    ex.Message);
+            }
         }
 
         if (config.JitRecoveryGrantMinutes is < 1 or > 1440)
