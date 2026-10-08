@@ -970,6 +970,10 @@ public sealed partial class MainForm
                     _adExplicitCredentials.Checked,
                 AdUsername =
                     _adUsername.Text.Trim(),
+                AdCredentialStorageMode =
+                    _config.AdCredentialStorageMode,
+                AutoConnectOnStart =
+                    _autoConnectOnStart.Checked,
                 RecoverySearchSource =
                     _recoverySource.SelectedIndex == 1
                         ? "LocalCache"
@@ -979,9 +983,18 @@ public sealed partial class MainForm
                 CloudClientId =
                     _cloudClient.Text.Trim(),
                 CloudAuthMode =
-                    _cloudConfig.AuthMode,
+                    _cloudAuthMode.SelectedIndex switch
+                    {
+                        2 => "Certificate",
+                        1 => "Password",
+                        _ => "DeviceCode"
+                    },
+                CloudUsername =
+                    _cloudUsername.Text.Trim(),
                 CloudCertificateThumbprint =
-                    _cloudThumbprint.Text.Trim()
+                    _cloudThumbprint.Text.Trim(),
+                CloudEnableLapsPermissions =
+                    _cloudLapsPermissions.Checked
             };
 
         new HelpdeskProfileService()
@@ -1042,6 +1055,21 @@ public sealed partial class MainForm
             profile.AdUseExplicitCredentials;
         _adUsername.Text =
             profile.AdUsername;
+
+        _adCredentialStorage.SelectedIndex =
+            profile.AdCredentialStorageMode.Equals(
+                "Machine",
+                StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : profile.AdCredentialStorageMode.Equals(
+                    "CurrentUser",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? 1
+                    : 0;
+
+        _autoConnectOnStart.Checked =
+            profile.AutoConnectOnStart;
+
         _recoverySource.SelectedIndex =
             profile.RecoverySearchSource.Equals(
                 "LocalCache",
@@ -1053,8 +1081,23 @@ public sealed partial class MainForm
             profile.CloudTenant;
         _cloudClient.Text =
             profile.CloudClientId;
+        _cloudUsername.Text =
+            profile.CloudUsername;
         _cloudThumbprint.Text =
             profile.CloudCertificateThumbprint;
+        _cloudLapsPermissions.Checked =
+            profile.CloudEnableLapsPermissions;
+
+        _cloudAuthMode.SelectedIndex =
+            profile.CloudAuthMode.Equals(
+                "Certificate",
+                StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : profile.CloudAuthMode.Equals(
+                    "Password",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? 1
+                    : 0;
 
         _config.ActiveHelpdeskProfile =
             profile.Name;
@@ -1134,6 +1177,14 @@ public sealed partial class MainForm
 
     private void LoadHelpdeskBasics()
     {
+        // Administration can be hidden for a non-admin operator. NumericUpDown
+        // defaults cap at 100, so configure ranges before loading values even
+        // when the Helpdesk tab was not constructed.
+        _secretDisplaySecondsSetting.Minimum = 15;
+        _secretDisplaySecondsSetting.Maximum = 3600;
+        _clipboardSecondsSetting.Minimum = 5;
+        _clipboardSecondsSetting.Maximum = 600;
+
         _recoveryReferencePatternSetting.Text =
             _config.RecoveryReferencePattern;
         _recoveryReferenceExampleSetting.Text =
