@@ -499,6 +499,20 @@ public static class UiLayoutSelfTest
 
         if (FindByName(
                 form,
+                "RetryUpdateButton") is null ||
+            FindByName(
+                form,
+                "RequireTrustedUpdateSignature") is null ||
+            FindByName(
+                form,
+                "TrustedUpdatePublisher") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Updates workspace is missing retry or Authenticode policy controls.");
+        }
+
+        if (FindByName(
+                form,
                 "HelpdeskBasicsTab") is null)
         {
             failures.Add(
