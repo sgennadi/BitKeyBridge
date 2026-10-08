@@ -2588,6 +2588,8 @@ public sealed partial class MainForm : DpiAwareForm
         {
             _config.CheckForUpdatesOnStart =
                 enabled;
+            _config.AutoInstallUpdatesOnStart =
+                _autoInstallUpdatesOnStart.Checked;
             _checkUpdatesOnStart.Checked =
                 enabled;
 
@@ -2600,7 +2602,7 @@ public sealed partial class MainForm : DpiAwareForm
                     : "DisableAutomaticUpdateChecks",
                 source: "Local",
                 details:
-                    $"CheckOnStart={enabled}");
+                    $"CheckOnStart={enabled}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}");
 
             UiStyle.SetStatus(
                 _updateStatus,
@@ -2673,9 +2675,14 @@ public sealed partial class MainForm : DpiAwareForm
             using var updater =
                 new UpdateService(
                     _config);
+            using var startupCheckTimeout =
+                new CancellationTokenSource(
+                    TimeSpan.FromSeconds(
+                        20));
 
             _lastUpdateInfo =
-                await updater.CheckAsync();
+                await updater.CheckAsync(
+                    startupCheckTimeout.Token);
 
             DisplayUpdateInfo(
                 _lastUpdateInfo);
