@@ -368,7 +368,7 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    6
+                    7
             };
 
         connection.ColumnStyles.Add(
@@ -377,7 +377,7 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 6;
+             index < 7;
              index++)
         {
             connection.RowStyles.Add(
@@ -538,10 +538,29 @@ public sealed partial class MainForm
             0,
             4);
 
+        UiStyle.ConfigureStatusLabel(
+            _startSetupStatus);
+        _startSetupStatus.Name =
+            "StartSetupStatus";
+        _startSetupStatus.AccessibleName =
+            "Start setup status";
+        _startSetupStatus.MaximumSize =
+            new Size(
+                1100,
+                0);
+        UiStyle.SetStatus(
+            _startSetupStatus,
+            "Setup status is loading...",
+            UiStatusKind.Neutral);
+        connection.Controls.Add(
+            _startSetupStatus,
+            0,
+            5);
+
         connection.Controls.Add(
             _recoveryDiagnostics,
             0,
-            5);
+            6);
 
         connectionGroup.Controls.Add(
             connection);
@@ -716,6 +735,10 @@ public sealed partial class MainForm
                 "Computer",
                 150),
             UiStyle.CreateSortableTextColumn(
+                "Source",
+                "Source",
+                90),
+            UiStyle.CreateSortableTextColumn(
                 "BitLocker",
                 "BitLocker",
                 105),
@@ -794,12 +817,156 @@ public sealed partial class MainForm
         _homeLapsButton.Enabled =
             false;
 
+        _homeRevealBitLockerButton.Name =
+            "HomeRevealBitLockerButton";
+        _homeRevealBitLockerButton.Text =
+            "Reveal BitLocker Key";
+        UiStyle.ConfigureActionButton(
+            _homeRevealBitLockerButton);
+        _homeRevealBitLockerButton.Enabled =
+            false;
+
+        _homeCopyBitLockerButton.Name =
+            "HomeCopyBitLockerButton";
+        _homeCopyBitLockerButton.Text =
+            "Copy BitLocker Key";
+        UiStyle.ConfigureActionButton(
+            _homeCopyBitLockerButton);
+        _homeCopyBitLockerButton.Enabled =
+            false;
+
+        _homeRotateBitLockerButton.Name =
+            "HomeRotateBitLockerButton";
+        _homeRotateBitLockerButton.Text =
+            "Rotate via Intune";
+        UiStyle.ConfigureActionButton(
+            _homeRotateBitLockerButton);
+        _homeRotateBitLockerButton.Enabled =
+            false;
+
+        _homeDeviceDetailsButton.Name =
+            "HomeDeviceDetailsButton";
+        _homeDeviceDetailsButton.Text =
+            "Device Details";
+        UiStyle.ConfigureActionButton(
+            _homeDeviceDetailsButton);
+        _homeDeviceDetailsButton.Enabled =
+            false;
+
         taskActions.Controls.AddRange([
-            _homeBitLockerButton,
-            _homeLapsButton
+            _homeRevealBitLockerButton,
+            _homeCopyBitLockerButton,
+            _homeLapsButton,
+            _homeRotateBitLockerButton,
+            _homeDeviceDetailsButton,
+            _homeBitLockerButton
         ]);
-        root.Controls.Add(
+
+        var selectionPanel =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    1,
+                RowCount =
+                    3,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        UiStyle.SectionGap)
+            };
+        selectionPanel.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+
+        UiStyle.ConfigureStatusLabel(
+            _homeSelectionSummary);
+        _homeSelectionSummary.Name =
+            "HomeSelectionSummary";
+        _homeSelectionSummary.AccessibleName =
+            "Selected helpdesk result summary";
+        _homeSelectionSummary.MaximumSize =
+            new Size(
+                1100,
+                0);
+        UiStyle.SetStatus(
+            _homeSelectionSummary,
+            "Select a result to see the helpdesk actions and source summary.",
+            UiStatusKind.Neutral);
+        selectionPanel.Controls.Add(
+            _homeSelectionSummary,
+            0,
+            0);
+
+        taskActions.Margin =
+            new Padding(
+                0,
+                UiStyle.ControlGap,
+                0,
+                0);
+        selectionPanel.Controls.Add(
             taskActions,
+            0,
+            1);
+
+        var secretLifetime =
+            new FlowLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                WrapContents =
+                    true,
+                FlowDirection =
+                    FlowDirection.LeftToRight,
+                Margin =
+                    new Padding(
+                        0,
+                        UiStyle.ControlGap,
+                        0,
+                        0)
+            };
+
+        UiStyle.ConfigureStatusLabel(
+            _secretLifetimeStatus);
+        _secretLifetimeStatus.Name =
+            "SecretLifetimeStatus";
+        _secretLifetimeStatus.AccessibleName =
+            "Recovery secret lifetime status";
+        _secretLifetimeStatus.MaximumSize =
+            new Size(
+                760,
+                0);
+        UiStyle.SetStatus(
+            _secretLifetimeStatus,
+            "No recovery secret is currently retained.",
+            UiStatusKind.Neutral);
+
+        _clearSecretNow.Name =
+            "ClearRecoverySecretsNow";
+        _clearSecretNow.Text =
+            "Clear secrets now";
+        UiStyle.ConfigureActionButton(
+            _clearSecretNow);
+
+        secretLifetime.Controls.Add(
+            _secretLifetimeStatus);
+        secretLifetime.Controls.Add(
+            _clearSecretNow);
+        selectionPanel.Controls.Add(
+            secretLifetime,
+            0,
+            2);
+
+        root.Controls.Add(
+            selectionPanel,
             0,
             6);
 
@@ -876,6 +1043,26 @@ public sealed partial class MainForm
             },
             0,
             9);
+
+        _homeRevealBitLockerButton.Click +=
+            async (_, _) =>
+                await RevealHomeBitLockerAsync();
+
+        _homeCopyBitLockerButton.Click +=
+            async (_, _) =>
+                await CopyHomeBitLockerAsync();
+
+        _homeRotateBitLockerButton.Click +=
+            async (_, _) =>
+                await RotateHomeBitLockerAsync();
+
+        _homeDeviceDetailsButton.Click +=
+            (_, _) =>
+                OpenHomeDeviceDetails();
+
+        _clearSecretNow.Click +=
+            (_, _) =>
+                ClearVisibleSecretsNow();
 
         _homeConnectAdButton.Click +=
             async (_, _) =>
@@ -2137,6 +2324,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill
         };
 
+        nested.TabPages.Add(BuildHelpdeskBasicsResponsiveTab());
         nested.TabPages.Add(BuildCloudAdministrationTab());
         nested.TabPages.Add(BuildUpdatesResponsiveTab());
         nested.TabPages.Add(BuildSecuritySettingsResponsiveTab());
@@ -2154,6 +2342,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill
         };
 
+        nested.TabPages.Add(BuildAccessHealthResponsiveTab());
         nested.TabPages.Add(BuildServiceHealthResponsiveTab());
         nested.TabPages.Add(BuildDomainControllersResponsiveTab());
         nested.TabPages.Add(BuildAuditResponsiveTab());
@@ -2694,6 +2883,15 @@ public sealed partial class MainForm
             recoveryId: recoveryId,
             source: "Entra",
             authMode: _cloudToken?.AuthMode);
+
+        StartSecretLifetimeCountdown(
+            "BitLocker recovery key",
+            _config.SecretDisplaySeconds);
+
+        await MaybeSuggestCloudRotationAfterRecoveryAsync(
+            access.Value.Context,
+            row,
+            recoveryId);
     }
 
     private async Task CopySelectedDeviceCloudKeyAsync()
@@ -2721,6 +2919,11 @@ public sealed partial class MainForm
 
         CopyKeyWithAutoClear(
             access.Value.Key);
+
+        await MaybeSuggestCloudRotationAfterRecoveryAsync(
+            access.Value.Context,
+            row,
+            recoveryId);
     }
 
 }

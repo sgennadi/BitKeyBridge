@@ -2,7 +2,7 @@ namespace BitKeyBridge;
 
 public static class ConfigSchema
 {
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 }
 
 public sealed class AppConfig
@@ -56,6 +56,8 @@ public sealed class AppConfig
     public bool CheckForUpdatesOnStart { get; set; } = true;
     public bool AutoInstallUpdatesOnStart { get; set; } = true;
     public bool AllowPrereleaseUpdates { get; set; } = false;
+    public bool RequireTrustedUpdateSignature { get; set; } = false;
+    public string TrustedUpdatePublisher { get; set; } = string.Empty;
 
     public bool RemoteApiEnabled { get; set; } = false;
     public int RemoteApiPort { get; set; } = 8751;
@@ -66,8 +68,15 @@ public sealed class AppConfig
     public string RemoteApiCoverageRunTokenSha256 { get; set; } = string.Empty;
     public string RemoteApiExportTokenSha256 { get; set; } = string.Empty;
 
+    // Helpdesk policy defaults stay friction-free. Enterprise controls remain
+    // explicit opt-ins and are never enabled by a fresh configuration.
     public bool RequireRecoveryAccessReference { get; set; } = false;
-    public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = true;
+    public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = false;
+    public string RecoveryReferencePattern { get; set; } = string.Empty;
+    public string RecoveryReferenceExample { get; set; } = "INC-12345";
+    public int SecretDisplaySeconds { get; set; } = 120;
+    public int SensitiveClipboardSeconds { get; set; } = 60;
+    public string ActiveHelpdeskProfile { get; set; } = "Default";
 
     public bool RbacEnabled { get; set; } = false;
     public bool RbacAllowLocalAdministrators { get; set; } = true;
@@ -110,7 +119,7 @@ public sealed class AppConfig
     public int CoverageStaleIntuneDays { get; set; } = 30;
     public int CoverageOldCloudKeyDays { get; set; } = 365;
 
-    public bool CoveragePolicyEnabled { get; set; } = true;
+    public bool CoveragePolicyEnabled { get; set; } = false;
     public int CoveragePolicyMaxNoRecoveryKey { get; set; } = 0;
     public int CoveragePolicyMaxIntuneNotEncrypted { get; set; } = 0;
     public int CoveragePolicyMaxIntuneStale { get; set; } = 0;

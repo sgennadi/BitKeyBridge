@@ -13,12 +13,41 @@ public sealed partial class CloudGraphService : IDisposable
     private readonly CertificateService _certificates = new();
 
     public CloudGraphService()
+        : this(
+            new HttpClientHandler())
     {
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        var version = typeof(CloudGraphService).Assembly.GetName().Version?.ToString(3) ?? "unknown";
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd($"BitKeyBridge/{version}");
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-name", "BitKeyBridge");
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("ocp-client-version", version);
+    }
+
+    internal CloudGraphService(
+        HttpMessageHandler handler)
+    {
+        _http =
+            new HttpClient(
+                handler,
+                disposeHandler:
+                    true)
+            {
+                Timeout =
+                    TimeSpan.FromSeconds(
+                        60)
+            };
+
+        var version =
+            typeof(CloudGraphService)
+                .Assembly
+                .GetName()
+                .Version?
+                .ToString(3) ??
+            "unknown";
+
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            $"BitKeyBridge/{version}");
+        _http.DefaultRequestHeaders.TryAddWithoutValidation(
+            "ocp-client-name",
+            "BitKeyBridge");
+        _http.DefaultRequestHeaders.TryAddWithoutValidation(
+            "ocp-client-version",
+            version);
     }
 
     public async Task<GraphToken> AcquirePasswordTokenAsync(

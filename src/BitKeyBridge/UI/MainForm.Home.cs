@@ -285,12 +285,15 @@ public sealed partial class MainForm
                                 _config.CoverageOldCloudKeyDays),
                         LapsStatus =
                             HelpdeskStatus.Laps(
-                                laps)
+                                laps),
+                        SourceSummary =
+                            "AD"
                     };
 
                 var rowIndex =
                     _homeSearchResults.Rows.Add(
                         result.ComputerName,
+                        result.SourceSummary,
                         result.BitLockerStatus,
                         result.LatestBitLockerKeyUtc,
                         result.LapsStatus,
@@ -466,6 +469,28 @@ public sealed partial class MainForm
             connected &&
             (selected is null ||
              selected.LapsDetected);
+
+        _homeRevealBitLockerButton.Enabled =
+            connected &&
+            selected is not null &&
+            selected.BitLockerKeyCount > 0;
+
+        _homeCopyBitLockerButton.Enabled =
+            connected &&
+            selected is not null &&
+            selected.BitLockerKeyCount > 0;
+
+        _homeDeviceDetailsButton.Enabled =
+            selected is not null;
+
+        _homeRotateBitLockerButton.Enabled =
+            selected is not null &&
+            !string.IsNullOrWhiteSpace(
+                _cloudConfig.TenantId) &&
+            !string.IsNullOrWhiteSpace(
+                _cloudConfig.ClientId);
+
+        RefreshHomeSelectionSummary();
     }
 
     private async void
