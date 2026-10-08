@@ -107,6 +107,11 @@ public sealed partial class MainForm
                 "Update Now");
         install.Name =
             "UpdateNowButton";
+        var retry =
+            NewActionButton(
+                "Retry Update");
+        retry.Name =
+            "RetryUpdateButton";
         var toggleAutomatic =
             NewActionButton(
                 "Disable Automatic Checks");
@@ -122,6 +127,7 @@ public sealed partial class MainForm
             saveUpdate,
             check,
             install,
+            retry,
             toggleAutomatic,
             openRelease
         ]);
@@ -257,6 +263,14 @@ public sealed partial class MainForm
         install.Click +=
             async (_, _) =>
                 await InstallLatestUpdateGuiAsync();
+
+        retry.Click +=
+            async (_, _) =>
+            {
+                _lastUpdateInfo =
+                    null;
+                await InstallLatestUpdateGuiAsync();
+            };
 
         toggleAutomatic.Click +=
             (_, _) =>
