@@ -66,8 +66,15 @@ public sealed class AppConfig
     public string RemoteApiCoverageRunTokenSha256 { get; set; } = string.Empty;
     public string RemoteApiExportTokenSha256 { get; set; } = string.Empty;
 
+    // Helpdesk policy defaults stay friction-free. Enterprise controls remain
+    // explicit opt-ins and are never enabled by a fresh configuration.
     public bool RequireRecoveryAccessReference { get; set; } = false;
-    public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = true;
+    public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = false;
+    public string RecoveryReferencePattern { get; set; } = string.Empty;
+    public string RecoveryReferenceExample { get; set; } = "INC-12345";
+    public int SecretDisplaySeconds { get; set; } = 120;
+    public int SensitiveClipboardSeconds { get; set; } = 60;
+    public string ActiveHelpdeskProfile { get; set; } = "Default";
 
     public bool RbacEnabled { get; set; } = false;
     public bool RbacAllowLocalAdministrators { get; set; } = true;
