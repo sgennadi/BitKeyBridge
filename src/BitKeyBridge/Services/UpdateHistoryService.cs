@@ -92,4 +92,5 @@ public sealed class UpdateHistoryService
                 publisher)
             ? "Unsigned"
             : publisher;
-    }}
+    }
+}
