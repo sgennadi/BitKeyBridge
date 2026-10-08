@@ -321,6 +321,72 @@ public sealed class ConfigurationMaintenanceService
                 "update-status.json",
                 result);
 
+            WriteStatusFile(
+                tempDirectory,
+                AppPaths.UpdateHistoryFile,
+                "update-history.json",
+                result);
+
+            try
+            {
+                var profiles =
+                    new HelpdeskProfileService()
+                        .Load()
+                        .Select(
+                            x =>
+                                new
+                                {
+                                    x.Name,
+                                    x.AdConnectionMode,
+                                    x.AdServer,
+                                    x.AdDomain,
+                                    x.AdPort,
+                                    x.AdUseLdaps,
+                                    x.RecoverySearchSource,
+                                    x.CloudTenant,
+                                    x.CloudClientId,
+                                    x.CloudAuthMode,
+                                    x.UpdatedAtUtc
+                                })
+                        .ToList();
+
+                WriteJson(
+                    tempDirectory,
+                    "helpdesk-profiles-metadata.json",
+                    profiles,
+                    result);
+            }
+            catch (Exception ex)
+            {
+                WriteText(
+                    tempDirectory,
+                    "helpdesk-profiles-error.txt",
+                    DiagnosticRedaction.Sanitize(
+                        ex.Message),
+                    result);
+            }
+
+            WriteJson(
+                tempDirectory,
+                "runtime.json",
+                new
+                {
+                    Version =
+                        typeof(ConfigurationMaintenanceService)
+                            .Assembly
+                            .GetName()
+                            .Version?
+                            .ToString(3) ??
+                        string.Empty,
+                    Architecture =
+                        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+                    OperatingSystem =
+                        System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+                    DotNet =
+                        System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
+                },
+                result);
+
             if (File.Exists(
                     AppPaths.ServiceLogFile))
             {
