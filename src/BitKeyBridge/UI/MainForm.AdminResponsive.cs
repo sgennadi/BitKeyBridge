@@ -1241,12 +1241,15 @@ public sealed partial class MainForm
                 Dock = DockStyle.Fill,
                 Padding = new Padding(16),
                 ColumnCount = 1,
-                RowCount = 4
+                RowCount = 5
             };
         root.ColumnStyles.Add(
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
+        root.RowStyles.Add(
+            new RowStyle(
+                SizeType.AutoSize));
         root.RowStyles.Add(
             new RowStyle(
                 SizeType.AutoSize));
@@ -1324,6 +1327,141 @@ public sealed partial class MainForm
             UiStatusKind.Neutral);
         root.Controls.Add(
             _auditSigningStatus);
+
+        var filters =
+            new TableLayoutPanel
+            {
+                Dock =
+                    DockStyle.Top,
+                AutoSize =
+                    true,
+                ColumnCount =
+                    7,
+                Margin =
+                    new Padding(
+                        0,
+                        0,
+                        0,
+                        UiStyle.ControlGap)
+            };
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.Percent,
+                100F));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+        filters.ColumnStyles.Add(
+            new ColumnStyle(
+                SizeType.AutoSize));
+
+        filters.Controls.Add(
+            new Label
+            {
+                Text = "Filter:",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 7, 8, 0)
+            },
+            0,
+            0);
+
+        _auditFilterField.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+        _auditFilterField.Items.AddRange([
+            "All",
+            "Computer",
+            "Ticket / Reference",
+            "Operator",
+            "Recovery ID",
+            "Action",
+            "Session"
+        ]);
+        _auditFilterField.SelectedIndex =
+            0;
+        filters.Controls.Add(
+            _auditFilterField,
+            1,
+            0);
+
+        _auditFilter.Dock =
+            DockStyle.Fill;
+        _auditFilter.PlaceholderText =
+            "Computer, ticket, operator, Recovery ID...";
+        filters.Controls.Add(
+            _auditFilter,
+            2,
+            0);
+
+        _auditFrom.Format =
+            DateTimePickerFormat.Short;
+        _auditFrom.ShowCheckBox =
+            true;
+        _auditFrom.Checked =
+            false;
+        filters.Controls.Add(
+            new Label
+            {
+                Text = "From:",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(8, 7, 4, 0)
+            },
+            3,
+            0);
+        filters.Controls.Add(
+            _auditFrom,
+            4,
+            0);
+
+        _auditTo.Format =
+            DateTimePickerFormat.Short;
+        _auditTo.ShowCheckBox =
+            true;
+        _auditTo.Checked =
+            false;
+        filters.Controls.Add(
+            new Label
+            {
+                Text = "To:",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(8, 7, 4, 0)
+            },
+            5,
+            0);
+        filters.Controls.Add(
+            _auditTo,
+            6,
+            0);
+
+        root.Controls.Add(
+            filters);
+
+        _auditFilter.TextChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditFilterField.SelectedIndexChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditFrom.ValueChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
+        _auditTo.ValueChanged +=
+            (_, _) =>
+                ApplyAuditFilter();
 
         _auditResults.View =
             View.Details;
