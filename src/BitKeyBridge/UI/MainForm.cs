@@ -6295,39 +6295,71 @@ public sealed partial class MainForm : DpiAwareForm
         string computerName,
         bool allowRotationReminder)
     {
+        _ = allowRotationReminder;
+
         var normalizedId = string.IsNullOrWhiteSpace(recoveryId)
             ? computerName
             : recoveryId;
         var cacheKey = source + ":" + normalizedId;
+        var computerCacheKey =
+            source + ":computer:" + computerName.Trim();
 
-        if (_recoveryAccessContexts.TryGetValue(cacheKey, out var existing))
-            return existing;
-
-        var prompt =
-            _config.RequireRecoveryAccessReference ||
-            (allowRotationReminder &&
-             _config.SuggestRotationAfterCloudKeyRetrieval);
-
-        if (!prompt)
+        if (_recoveryAccessContexts.TryGetValue(
+                cacheKey,
+                out var existing))
         {
-            var empty = new RecoveryAccessContext();
-            _recoveryAccessContexts[cacheKey] = empty;
+            return existing;
+        }
+
+        if (_recoveryAccessContexts.TryGetValue(
+                computerCacheKey,
+                out existing))
+        {
+            _recoveryAccessContexts[cacheKey] =
+                existing;
+            return existing;
+        }
+
+        // Rotation reminders are intentionally post-recovery and are never a
+        // reason to interrupt secret retrieval with a ticket dialog.
+        if (!_config.RequireRecoveryAccessReference)
+        {
+            var empty =
+                new RecoveryAccessContext();
+            _recoveryAccessContexts[cacheKey] =
+                empty;
             return empty;
         }
 
-        using var dialog = new RecoveryAccessDialog(
-            computerName,
-            normalizedId,
-            _config.RequireRecoveryAccessReference,
-            allowRotationReminder,
-            allowRotationReminder &&
-            _config.SuggestRotationAfterCloudKeyRetrieval);
+        using var dialog =
+            new RecoveryAccessDialog(
+                computerName,
+                normalizedId,
+                requireReference:
+                    true,
+                referencePattern:
+                    _config.RecoveryReferencePattern,
+                referenceExample:
+                    _config.RecoveryReferenceExample);
 
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        if (dialog.ShowDialog(this) !=
+            DialogResult.OK)
+        {
             return null;
+        }
 
-        var context = dialog.Context;
-        _recoveryAccessContexts[cacheKey] = context;
+        var context =
+            dialog.Context;
+
+        _recoveryAccessContexts[cacheKey] =
+            context;
+
+        if (context.RememberForComputer)
+        {
+            _recoveryAccessContexts[computerCacheKey] =
+                context;
+        }
+
         return context;
     }
 
