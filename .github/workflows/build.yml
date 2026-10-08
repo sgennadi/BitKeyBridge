@@ -287,6 +287,36 @@ jobs:
             throw "Automatic update checks were not persisted as enabled."
           }
 
+          $autoDisableOutput = & $exe --auto-update-disable --no-elevation 2>&1 | Out-String
+          $autoDisableExit = $LASTEXITCODE
+          Write-Host $autoDisableOutput
+          if ($autoDisableExit -ne 0) {
+            throw "--auto-update-disable failed with exit code $autoDisableExit."
+          }
+
+          $autoDisabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
+          $autoDisabledExit = $LASTEXITCODE
+          Write-Host $autoDisabledStatus
+          if ($autoDisabledExit -ne 0 -or $autoDisabledStatus -notmatch 'AutomaticInstall=False') {
+            throw "Automatic update installation was not persisted as disabled."
+          }
+
+          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          $autoEnableExit = $LASTEXITCODE
+          Write-Host $autoEnableOutput
+          if ($autoEnableExit -ne 0) {
+            throw "--auto-update-enable failed with exit code $autoEnableExit."
+          }
+
+          $autoEnabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
+          $autoEnabledExit = $LASTEXITCODE
+          Write-Host $autoEnabledStatus
+          if ($autoEnabledExit -ne 0 -or
+              $autoEnabledStatus -notmatch 'AutomaticInstall=True' -or
+              $autoEnabledStatus -notmatch 'AutomaticChecks=True') {
+            throw "Automatic update installation was not persisted as enabled."
+          }
+
       - name: Package architecture
         shell: cmd
         run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
@@ -453,6 +483,31 @@ jobs:
           Write-Host $enabledStatus
           if ($enabledStatus -notmatch 'AutomaticChecks=True') {
             throw "Automatic update checks were not persisted as enabled."
+          }
+
+          $autoDisableOutput = & $exe --auto-update-disable --no-elevation 2>&1 | Out-String
+          Write-Host $autoDisableOutput
+          if ($LASTEXITCODE -ne 0) {
+            throw "--auto-update-disable failed."
+          }
+
+          $autoDisabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
+          Write-Host $autoDisabledStatus
+          if ($autoDisabledStatus -notmatch 'AutomaticInstall=False') {
+            throw "Automatic update installation was not persisted as disabled."
+          }
+
+          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          Write-Host $autoEnableOutput
+          if ($LASTEXITCODE -ne 0) {
+            throw "--auto-update-enable failed."
+          }
+
+          $autoEnabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
+          Write-Host $autoEnabledStatus
+          if ($autoEnabledStatus -notmatch 'AutomaticInstall=True' -or
+              $autoEnabledStatus -notmatch 'AutomaticChecks=True') {
+            throw "Automatic update installation was not persisted as enabled."
           }
 
           if ($checkExit -eq 0) {
