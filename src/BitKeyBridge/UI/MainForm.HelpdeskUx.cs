@@ -978,8 +978,15 @@ public sealed partial class MainForm
                     _cloudTenant.Text.Trim(),
                 CloudClientId =
                     _cloudClient.Text.Trim(),
+                CloudUsername =
+                    _cloudUsername.Text.Trim(),
                 CloudAuthMode =
-                    _cloudConfig.AuthMode,
+                    _cloudAuthMode.SelectedIndex switch
+                    {
+                        2 => "Certificate",
+                        1 => "Password",
+                        _ => "DeviceCode"
+                    },
                 CloudCertificateThumbprint =
                     _cloudThumbprint.Text.Trim()
             };
@@ -1053,8 +1060,21 @@ public sealed partial class MainForm
             profile.CloudTenant;
         _cloudClient.Text =
             profile.CloudClientId;
+        _cloudUsername.Text =
+            profile.CloudUsername;
         _cloudThumbprint.Text =
             profile.CloudCertificateThumbprint;
+        _cloudAuthMode.SelectedIndex =
+            profile.CloudAuthMode.Equals(
+                "Certificate",
+                StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : profile.CloudAuthMode.Equals(
+                    "Password",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? 1
+                    : 0;
+        UpdateCloudAuthUi();
 
         _config.ActiveHelpdeskProfile =
             profile.Name;
