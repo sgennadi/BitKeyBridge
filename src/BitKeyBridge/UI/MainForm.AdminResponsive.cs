@@ -187,7 +187,7 @@ public sealed partial class MainForm
 
     private TabPage BuildSecuritySettingsResponsiveTab()
     {
-        var page = new TabPage("Security & Settings");
+        var page = new TabPage("Advanced");
         var root = CreateVerticalWorkspace();
         page.Controls.Add(root);
 
@@ -273,31 +273,10 @@ public sealed partial class MainForm
 
         root.Controls.Add(
             CreateSectionTitle(
-                "Helpdesk Recovery Policy",
-                "RBAC, JIT recovery and two-person approval stay optional and disabled unless explicitly configured."));
+                "Enterprise Recovery Policies",
+                "RBAC, JIT recovery, two-person approval, SIEM and related gates are optional. Fresh installations keep all of them disabled."));
 
-        var helpdeskGrid =
-            CreateTwoColumnGrid();
-
-        _requireRecoveryReference.Text =
-            "Require a ticket/reference before recovery-key access";
-        _requireRecoveryReference.AutoSize =
-            true;
-        helpdeskGrid.Controls.Add(
-            _requireRecoveryReference,
-            1,
-            0);
-
-        _suggestRotationAfterRecovery.Text =
-            "Suggest Intune key rotation after cloud recovery-key access";
-        _suggestRotationAfterRecovery.AutoSize =
-            true;
-        helpdeskGrid.Controls.Add(
-            _suggestRotationAfterRecovery,
-            1,
-            1);
-
-        var helpdeskActions =
+        var enterpriseActions =
             CreateActionFlow();
         var rbacWizard =
             NewActionButton(
@@ -308,22 +287,13 @@ public sealed partial class MainForm
         var privileged =
             NewActionButton(
                 "Privileged Access...");
-        var saveHelpdesk =
-            NewActionButton(
-                "Save Helpdesk Settings");
-        helpdeskActions.Controls.AddRange([
+        enterpriseActions.Controls.AddRange([
             rbacWizard,
             rbac,
-            privileged,
-            saveHelpdesk
+            privileged
         ]);
-        helpdeskGrid.Controls.Add(
-            helpdeskActions,
-            1,
-            2);
-
         root.Controls.Add(
-            helpdeskGrid);
+            enterpriseActions);
 
         rbacWizard.Click +=
             (_, _) =>
@@ -334,9 +304,6 @@ public sealed partial class MainForm
         privileged.Click +=
             (_, _) =>
                 ConfigurePrivilegedAccessFromGui();
-        saveHelpdesk.Click +=
-            (_, _) =>
-                SaveOperationsSettings();
 
         root.Controls.Add(
             CreateSectionTitle(
