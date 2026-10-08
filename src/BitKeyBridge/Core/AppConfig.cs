@@ -56,6 +56,8 @@ public sealed class AppConfig
     public bool CheckForUpdatesOnStart { get; set; } = true;
     public bool AutoInstallUpdatesOnStart { get; set; } = true;
     public bool AllowPrereleaseUpdates { get; set; } = false;
+    public bool RequireTrustedUpdateSignature { get; set; } = false;
+    public string TrustedUpdatePublisher { get; set; } = string.Empty;
 
     public bool RemoteApiEnabled { get; set; } = false;
     public int RemoteApiPort { get; set; } = 8751;
