@@ -445,7 +445,13 @@ public static class UiLayoutSelfTest
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
                     "HomeBitLockerButton",
+                    "HomeRevealBitLockerButton",
+                    "HomeCopyBitLockerButton",
+                    "HomeDeviceDetailsButton",
                     "HomeLapsButton",
+                    "HomeSelectionSummary",
+                    "SecretLifetimeStatus",
+                    "StartSetupStatus",
                     "HomeUnifiedQuery",
                     "HomeUnifiedSearchResults",
                     "HomeRecentComputers",
@@ -489,6 +495,30 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Updates workspace is missing the automatic-install control.");
+        }
+
+        if (FindByName(
+                form,
+                "HelpdeskBasicsTab") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Administration is missing the Helpdesk basics workspace.");
+        }
+
+        if (FindByName(
+                form,
+                "AccessHealthTab") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Health & Audit is missing the Access Health workspace.");
+        }
+
+        if (FindByName(
+                form,
+                "UpdateHistory") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Updates workspace is missing update history.");
         }
 
         if (FindByName(
