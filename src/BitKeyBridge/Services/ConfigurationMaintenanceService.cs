@@ -495,6 +495,36 @@ public sealed class ConfigurationMaintenanceService
                 "TemporaryFileRetentionDays must be between 0 and 3650.");
         }
 
+        if (config.SecretDisplaySeconds is < 15 or > 3600)
+        {
+            throw new InvalidOperationException(
+                "SecretDisplaySeconds must be between 15 and 3600.");
+        }
+
+        if (config.SensitiveClipboardSeconds is < 5 or > 600)
+        {
+            throw new InvalidOperationException(
+                "SensitiveClipboardSeconds must be between 5 and 600.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                config.RecoveryReferencePattern))
+        {
+            try
+            {
+                _ = new System.Text.RegularExpressions.Regex(
+                    config.RecoveryReferencePattern,
+                    System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(250));
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "RecoveryReferencePattern is not a valid regular expression: " +
+                    ex.Message);
+            }
+        }
+
         if (config.JitRecoveryGrantMinutes is < 1 or > 1440)
         {
             throw new InvalidOperationException(
