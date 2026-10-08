@@ -368,7 +368,7 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    6
+                    7
             };
 
         connection.ColumnStyles.Add(
@@ -377,7 +377,7 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 6;
+             index < 7;
              index++)
         {
             connection.RowStyles.Add(
@@ -538,10 +538,29 @@ public sealed partial class MainForm
             0,
             4);
 
+        UiStyle.ConfigureStatusLabel(
+            _startSetupStatus);
+        _startSetupStatus.Name =
+            "StartSetupStatus";
+        _startSetupStatus.AccessibleName =
+            "Start setup status";
+        _startSetupStatus.MaximumSize =
+            new Size(
+                1100,
+                0);
+        UiStyle.SetStatus(
+            _startSetupStatus,
+            "Setup status is loading...",
+            UiStatusKind.Neutral);
+        connection.Controls.Add(
+            _startSetupStatus,
+            0,
+            5);
+
         connection.Controls.Add(
             _recoveryDiagnostics,
             0,
-            5);
+            6);
 
         connectionGroup.Controls.Add(
             connection);
@@ -2291,6 +2310,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill
         };
 
+        nested.TabPages.Add(BuildHelpdeskBasicsResponsiveTab());
         nested.TabPages.Add(BuildCloudAdministrationTab());
         nested.TabPages.Add(BuildUpdatesResponsiveTab());
         nested.TabPages.Add(BuildSecuritySettingsResponsiveTab());
@@ -2308,6 +2328,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill
         };
 
+        nested.TabPages.Add(BuildAccessHealthResponsiveTab());
         nested.TabPages.Add(BuildServiceHealthResponsiveTab());
         nested.TabPages.Add(BuildDomainControllersResponsiveTab());
         nested.TabPages.Add(BuildAuditResponsiveTab());
