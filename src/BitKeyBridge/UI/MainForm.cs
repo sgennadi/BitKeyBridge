@@ -2443,6 +2443,9 @@ public sealed partial class MainForm : DpiAwareForm
     {
         LoadUpdateSettings();
 
+        _remoteApiPort.Minimum = 1024;
+        _remoteApiPort.Maximum = 65535;
+
         _remoteApiPort.Value =
             Math.Clamp(
                 _config.RemoteApiPort,
@@ -5400,6 +5403,16 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadDashboardSettings()
     {
+        // These controls may not be parented when Administration is hidden by
+        // authorization, so establish their numeric ranges before assigning
+        // persisted values.
+        _serviceInterval.Minimum = 1;
+        _serviceInterval.Maximum = 10080;
+        _healthPort.Minimum = 1024;
+        _healthPort.Maximum = 65535;
+        _serviceCoverageInterval.Minimum = 15;
+        _serviceCoverageInterval.Maximum = 10080;
+
         _serviceInterval.Value = Math.Clamp(_config.ServiceIntervalMinutes, 1, 10080);
         _healthPort.Value = Math.Clamp(_config.HealthEndpointPort, 1024, 65535);
         _healthEnabled.Checked = _config.HealthEndpointEnabled;
