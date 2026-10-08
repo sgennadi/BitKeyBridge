@@ -499,18 +499,18 @@ public static class UiLayoutSelfTest
                     startPage,
                     "HomeSelectionPanel") is TableLayoutPanel selectionPanel)
             {
-                var gridPosition =
-                    resultsArea.GetPositionFromControl(
+                var gridRow =
+                    resultsArea.GetRow(
                         resultsGrid);
-                var selectionPosition =
-                    resultsArea.GetPositionFromControl(
+                var selectionRow =
+                    resultsArea.GetRow(
                         selectionPanel);
 
-                if (gridPosition.Row != 0 ||
-                    selectionPosition.Row != 1)
+                if (gridRow != 0 ||
+                    selectionRow != 1)
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start result actions are not structurally below the results grid.");
+                        $"{formName}/{scenario.Name}: Start result actions are not structurally below the results grid (grid row {gridRow}, action row {selectionRow}).");
                 }
 
                 if (selectionPanel.Visible)
