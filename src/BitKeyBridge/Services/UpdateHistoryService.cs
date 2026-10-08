@@ -1,5 +1,3 @@
-using System.Security.Cryptography.X509Certificates;
-
 namespace BitKeyBridge;
 
 public sealed class UpdateHistoryService
@@ -86,27 +84,12 @@ public sealed class UpdateHistoryService
     public static string GetAuthenticodePublisher(
         string path)
     {
-        try
-        {
-            using var certificate =
-                new X509Certificate2(
-                    X509Certificate.CreateFromSignedFile(
-                        path));
+        var publisher =
+            AuthenticodeVerificationService.GetPublisher(
+                path);
 
-            var subject =
-                certificate.GetNameInfo(
-                    X509NameType.SimpleName,
-                    forIssuer:
-                        false);
-
-            return string.IsNullOrWhiteSpace(
-                    subject)
-                ? "Signed"
-                : subject;
-        }
-        catch
-        {
-            return "Unsigned";
-        }
-    }
-}
+        return string.IsNullOrWhiteSpace(
+                publisher)
+            ? "Unsigned"
+            : publisher;
+    }}
