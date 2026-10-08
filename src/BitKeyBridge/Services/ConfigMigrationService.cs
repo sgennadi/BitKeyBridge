@@ -210,6 +210,8 @@ public sealed class ConfigMigrationService
                 false;
             config.SuggestRotationAfterCloudKeyRetrieval =
                 false;
+            config.CoveragePolicyEnabled =
+                false;
         }
     }
 
