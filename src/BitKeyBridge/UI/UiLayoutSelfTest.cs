@@ -256,8 +256,8 @@ public static class UiLayoutSelfTest
                         "PC-12345",
                         Guid.Empty.ToString(),
                         requireReference: true,
-                        allowRotationReminder: true,
-                        defaultRotationReminder: true)),
+                        referencePattern: "^INC-[0-9]+$",
+                        referenceExample: "INC-12345")),
             (
                 "Incident verification",
                 () =>
