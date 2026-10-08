@@ -6,6 +6,9 @@ public sealed partial class MainForm
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly UiStatusLabel _homeSelectionSummary = new();
+    private readonly Button _homeRevealBitLockerButton = new();
+    private readonly Button _homeCopyBitLockerButton = new();
+    private readonly Button _homeDeviceDetailsButton = new();
     private readonly UiStatusLabel _secretLifetimeStatus = new();
     private readonly UiStatusLabel _setupStatus = new();
     private readonly Button _clearSecretNow = new();
@@ -183,6 +186,223 @@ public sealed partial class MainForm
             _secretLifetimeStatus,
             "Recovery secrets cleared.",
             UiStatusKind.Success);
+    }
+
+    private async Task<RecoverySearchResult?>
+        GetLatestHomeRecoveryRowAsync(
+            HomeSearchResult selected)
+    {
+        if (!_directoryConnected ||
+            _startScope is null)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Connect to Active Directory before reading a BitLocker recovery key.",
+                UiStatusKind.Warning);
+            return null;
+        }
+
+        var rows =
+            await SearchLiveAdRecoveryMetadataAsync(
+                selected.ComputerName,
+                _startScope,
+                CancellationToken.None);
+
+        return rows
+            .Where(
+                row =>
+                    row.ComputerName.Equals(
+                        selected.ComputerName,
+                        StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(
+                row =>
+                    row.IsLatest == true)
+            .ThenByDescending(
+                row =>
+                    row.KeyDate)
+            .FirstOrDefault();
+    }
+
+    private async Task<(string Key, RecoverySearchResult Row, RecoveryAccessContext Context)?>
+        GetHomeBitLockerSecretAsync(
+            string action)
+    {
+        var selected =
+            GetSelectedHomeSearchResult();
+
+        if (selected is null ||
+            selected.BitLockerKeyCount <= 0)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Select a computer with BitLocker recovery metadata.",
+                UiStatusKind.Warning);
+            return null;
+        }
+
+        var row =
+            await GetLatestHomeRecoveryRowAsync(
+                selected);
+
+        if (row is null)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "The selected BitLocker recovery record could not be resolved.",
+                UiStatusKind.Warning);
+            return null;
+        }
+
+        if (!AuthorizeAction(
+                BitKeyBridgePermission.RecoveryRead,
+                action,
+                row.ComputerName,
+                row.RecoveryId,
+                "AD"))
+        {
+            return null;
+        }
+
+        var context =
+            GetOrRequestRecoveryAccessContext(
+                "AD",
+                row.RecoveryId,
+                row.ComputerName,
+                allowRotationReminder:
+                    false);
+
+        if (context is null ||
+            !AuthorizePrivilegedRecoveryAccess(
+                context,
+                action,
+                row.ComputerName,
+                row.RecoveryId,
+                "AD"))
+        {
+            return null;
+        }
+
+        _startCurrentKey =
+            null;
+
+        var key =
+            await EnsureStartRecoveryKeyAsync(
+                row);
+
+        if (string.IsNullOrWhiteSpace(
+                key))
+        {
+            return null;
+        }
+
+        return (
+            key,
+            row,
+            context);
+    }
+
+    private async Task RevealHomeBitLockerAsync()
+    {
+        var access =
+            await GetHomeBitLockerSecretAsync(
+                "RevealHomeRecoveryKey");
+
+        if (access is null)
+            return;
+
+        WriteRecoveryAudit(
+            "RevealHomeRecoveryKey",
+            access.Value.Context,
+            computerName:
+                access.Value.Row.ComputerName,
+            recoveryId:
+                access.Value.Row.RecoveryId,
+            source:
+                "AD");
+
+        RecordRecentComputer(
+            access.Value.Row.ComputerName,
+            string.Empty,
+            "BitLocker reveal");
+
+        using var dialog =
+            new SecretDisplayDialog(
+                "BitLocker Recovery Key",
+                $"{access.Value.Row.ComputerName} • Recovery ID {access.Value.Row.RecoveryId}",
+                access.Value.Key,
+                $"The secret is kept only in memory and is cleared when this window closes. Clipboard copies clear after {_config.SensitiveClipboardSeconds} seconds.",
+                _config.SensitiveClipboardSeconds);
+
+        dialog.ShowDialog(this);
+
+        _startCurrentKey =
+            null;
+
+        UiStyle.SetStatus(
+            _homeSearchStatus,
+            "BitLocker recovery key view closed and the in-memory copy was cleared.",
+            UiStatusKind.Success);
+    }
+
+    private async Task CopyHomeBitLockerAsync()
+    {
+        var access =
+            await GetHomeBitLockerSecretAsync(
+                "CopyHomeRecoveryKey");
+
+        if (access is null)
+            return;
+
+        WriteRecoveryAudit(
+            "CopyHomeRecoveryKey",
+            access.Value.Context,
+            computerName:
+                access.Value.Row.ComputerName,
+            recoveryId:
+                access.Value.Row.RecoveryId,
+            source:
+                "AD");
+
+        RecordRecentComputer(
+            access.Value.Row.ComputerName,
+            string.Empty,
+            "BitLocker copy");
+
+        CopyKeyWithAutoClear(
+            access.Value.Key);
+
+        _startCurrentKey =
+            null;
+
+        UiStyle.SetStatus(
+            _homeSearchStatus,
+            $"Recovery key copied. Clipboard clears in {_config.SensitiveClipboardSeconds} seconds.",
+            UiStatusKind.Success);
+    }
+
+    private void OpenHomeDeviceDetails()
+    {
+        var selected =
+            GetSelectedHomeSearchResult();
+
+        if (selected is null)
+            return;
+
+        _unifiedQuery.Text =
+            selected.ComputerName;
+
+        foreach (TabPage page in
+                 _mainTabs.TabPages)
+        {
+            if (page.Text.Equals(
+                    "Devices",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _mainTabs.SelectedTab =
+                    page;
+                break;
+            }
+        }
     }
 
     private void RefreshHomeSelectionSummary()
