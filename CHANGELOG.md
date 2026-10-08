@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.25.0
+
+- Reworked the recovery-access prompt so **Ticket / Reference is optional by default**. A fresh installation no longer interrupts BitLocker/LAPS reads with a ticket dialog; the dialog appears only when the helpdesk policy explicitly requires a reference.
+- Decoupled the Intune rotation reminder from the ticket dialog. Optional BitLocker-key rotation is suggested **after** cloud recovery access instead of blocking the secret-read path.
+- Added optional ticket-format validation, an example/placeholder, **Copy reference**, and session reuse of the same ticket/reason for the same computer.
+- Added schema-5 migration for helpdesk-first defaults. Legacy ticket/rotation prompts are reset for non-enterprise configurations, while explicitly configured RBAC/JIT/approval/SIEM deployments are preserved.
+- Confirmed enterprise recovery controls remain explicit opt-ins: **RBAC, JIT recovery, two-person approval, SIEM, mandatory ticket/reference, audit signing, Remote API, storage ACL hardening and trusted-update-signature enforcement are disabled by default**.
+- Expanded **Start** with a selected-computer helpdesk summary, explicit source, direct **Reveal BitLocker Key**, **Copy BitLocker Key**, **LAPS Passwords**, **Device Details**, and **Clear secrets now** actions.
+- Added visible secret/clipboard lifetime status. BitLocker/LAPS secrets use configurable in-memory expiration and sensitive clipboard copies show a countdown and can be cleared immediately.
+- Added **Administration → Helpdesk** for normal settings: setup status, sanitized one-click support bundle, environment profiles, optional ticket policy, optional post-recovery rotation suggestion, and secret/clipboard timeouts.
+- Added non-secret **environment profiles** for switching AD/DC/domain/LDAPS/recovery-source and Cloud tenant/client/certificate preferences without storing passwords, access tokens, BitLocker keys or LAPS passwords.
+- Moved enterprise-only controls into **Administration → Advanced** and labeled RBAC/JIT/two-person/SIEM as optional policies rather than normal helpdesk requirements.
+- Added **Health & Audit → Access Health**. It runs metadata-only checks for AD LDAP bind, BitLocker recovery-object visibility, AD LAPS, Microsoft Graph BitLocker metadata, Intune managed-device visibility and Entra LAPS without retrieving recovery passwords or LAPS passwords.
+- Added searchable **Recovery Audit History** filters for computer, ticket/reference, user, action, Recovery ID, source and date range, plus session-ID copy for incident correlation.
+- Added a one-click **Create Support Bundle** workflow that writes a sanitized diagnostics ZIP under the current user's BitKeyBridge data and excludes recovery passwords, LAPS passwords, tokens, protected credential blobs and private keys.
+- Added updater **history, retry and one-click rollback** to the retained previous `.bak` executable. Install/rollback results record from/to version, automatic/manual mode, publisher and details.
+- Updater status now displays release SHA-256 metadata. Added optional Authenticode trust enforcement and optional expected-publisher matching; these controls are **off by default** so unsigned existing releases are not blocked unless an administrator opts in.
+- Refactored unified AD/Entra/Intune result merging so Cloud results survive an unavailable AD session, multiple recovery IDs are retained, and serial/UPN/Intune hits can still be enriched safely.
+- Added regression coverage for non-enterprise defaults, schema migration, AD-unavailable + Cloud-available search, Graph 403 behavior, multiple BitLocker recovery IDs, missing Session AD credentials, LAPS history, updater N→N+1/rollback history, secret-free helpdesk profiles, and the new HiDPI/UI controls.
+
+
 ## 0.24.3
 
 - Fixed the meaning of **automatic updates**. Previous builds only checked GitHub at GUI startup and never installed the discovered release automatically.
