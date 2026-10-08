@@ -482,6 +482,10 @@ public sealed class UpdateService : IDisposable
                 GetCurrentVersion().ToString(),
             Automatic =
                 automatic,
+            Rollback =
+                prepared.Info.ReleaseTag.Equals(
+                    "rollback",
+                    StringComparison.OrdinalIgnoreCase),
             AuthenticodePublisher =
                 prepared.AuthenticodePublisher,
             TargetExecutables = targets,
@@ -761,10 +765,8 @@ public sealed class UpdateService : IDisposable
                     new UpdateHistoryEntry
                     {
                         Action =
-                            plan.ExpectedVersion.Equals(
-                                plan.PreviousVersion,
-                                StringComparison.OrdinalIgnoreCase)
-                                ? "Replace"
+                            plan.Rollback
+                                ? "Rollback"
                                 : "Install",
                         FromVersion =
                             plan.PreviousVersion,
@@ -812,7 +814,9 @@ public sealed class UpdateService : IDisposable
                     new UpdateHistoryEntry
                     {
                         Action =
-                            "Install",
+                            plan.Rollback
+                                ? "Rollback"
+                                : "Install",
                         FromVersion =
                             plan.PreviousVersion,
                         ToVersion =
