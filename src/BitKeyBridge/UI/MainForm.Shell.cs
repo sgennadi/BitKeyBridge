@@ -25,6 +25,7 @@ public sealed partial class MainForm
     private readonly UiStatusLabel _homeConnectionStatus = new();
     private readonly Button _homeConnectAdButton = new();
     private readonly Button _homeDisconnectAdButton = new();
+    private readonly Button _homeEnvironmentCheckButton = new();
     private readonly Button _homeBitLockerButton = new();
     private readonly Button _homeLapsButton = new();
     private readonly ProgressBar _homeConnectionProgress = new();
@@ -500,6 +501,12 @@ public sealed partial class MainForm
         _homeDisconnectAdButton.Enabled =
             false;
 
+        _homeEnvironmentCheckButton.Name =
+            "HomeEnvironmentCheckButton";
+        _homeEnvironmentCheckButton.Text =
+            "Environment Check...";
+        UiStyle.ConfigureActionButton(_homeEnvironmentCheckButton);
+
         _homeAdvancedButton.Text =
             "Advanced...";
         _homeAdvancedButton.Name =
@@ -510,6 +517,7 @@ public sealed partial class MainForm
         connectionActions.Controls.AddRange([
             _homeConnectAdButton,
             _homeDisconnectAdButton,
+            _homeEnvironmentCheckButton,
             _homeAdvancedButton
         ]);
         connection.Controls.Add(
@@ -1108,6 +1116,10 @@ public sealed partial class MainForm
         _homeDisconnectAdButton.Click +=
             (_, _) =>
                 DisconnectDirectorySession();
+
+        _homeEnvironmentCheckButton.Click +=
+            (_, _) =>
+                ShowEnvironmentDiagnosticDialog();
 
         _homeUseWindowsIdentity.CheckedChanged +=
             (_, _) =>
