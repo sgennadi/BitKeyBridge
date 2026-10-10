@@ -25,6 +25,31 @@ internal static class Program
             return 0;
         }
 
+        // Standalone endpoint collector works offline and does not require AD,
+        // a service installation, elevation, RSAT or application configuration.
+        if (args.Any(x => x.Equals("--collect-endpoint", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConsoleHelper.EnsureConsole();
+            try
+            {
+                var chosenPath = GetOptionValue(args, "--output");
+                if (string.IsNullOrWhiteSpace(chosenPath))
+                    chosenPath = Path.Combine(
+                        AppPaths.SupportBundlesDirectory,
+                        "BitKeyBridge-Endpoint-" + Environment.MachineName + "-" +
+                        DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".zip");
+                Console.WriteLine(EndpointDiagnosticCollector.Write(chosenPath));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    "Endpoint collection failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+                return 1;
+            }
+        }
+
         if (args.Any(x => x.Equals("--self-test", StringComparison.OrdinalIgnoreCase)))
         {
             ConsoleHelper.EnsureConsole();
@@ -1595,6 +1620,7 @@ internal static class Program
             Directory.CreateDirectory(tempDirectory);
 
             failures.AddRange(LapsSelfTest.Run());
+            failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
                     tempDirectory));
@@ -3501,6 +3527,7 @@ internal static class Program
         Console.WriteLine("  --config-backup <path>     Create JSON config backup without credential/private-key material");
         Console.WriteLine("  --config-restore <path>    Validate and restore config; creates rollback backup");
         Console.WriteLine("  --diagnostics-bundle <zip> Create sanitized troubleshooting ZIP");
+        Console.WriteLine("  --collect-endpoint [--output <zip>] Capture a local, secret-free endpoint diagnosis (no RSAT)");
         Console.WriteLine("  --incident-verify <session-id> Verify incident bundle against retained audit hashes");
         Console.WriteLine("  --housekeeping-status    Show housekeeping policy and last result");
         Console.WriteLine("  --housekeeping-run       Run retention cleanup now");
