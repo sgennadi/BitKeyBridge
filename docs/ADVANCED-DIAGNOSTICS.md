@@ -21,8 +21,10 @@ not prove permission to read/decrypt confidential directory attributes.
    Windows identity.
 4. **Offline endpoint ZIP** — run on the affected PC from the GUI or CLI:
    BitKeyBridge.exe --collect-endpoint --output C:\Temp\endpoint.zip
-   The bundle captures OS info, whitelisted non-secret GPO registry values
-   and Windows BitLocker/LAPS Event IDs, level and timestamps ONLY.
+   The bundle captures OS info, whitelisted non-secret GPO registry values,
+   local BitLocker protection/conversion state and TPM enabled/activated/owned
+   WMI properties (if readable), plus Windows BitLocker/LAPS Event IDs,
+   level and timestamps ONLY.
    Event message texts, TPM/BitLocker protectors, credentials, secret values,
    tokens and private keys are NEVER collected. ZIP import limits size and
    allowed entry names and permits offline review by helpdesk.
