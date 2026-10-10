@@ -598,6 +598,45 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: LAPS Back to Start button was not found.");
         }
 
+        var lapsWarningPanel =
+            FindByName(form, "LapsZeroRecordWarningPanel") as TableLayoutPanel;
+        var lapsWarning =
+            FindByName(form, "LapsZeroRecordWarning") as UiStatusLabel;
+        var lapsCommands =
+            FindByName(form, "LapsDiagnosticCommandsButton") as Button;
+        var lapsKeyGrid =
+            FindByName(form, "LapsKeyResults") as DataGridView;
+
+        if (lapsWarningPanel is null ||
+            lapsWarning is null ||
+            lapsCommands is null ||
+            lapsKeyGrid is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: LAPS warning, key grid or diagnostic commands button is missing.");
+        }
+        else
+        {
+            if (lapsWarningPanel.Visible)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: LAPS warning is visible before a failed read.");
+            }
+
+            if (lapsWarning.StatusKind != UiStatusKind.Warning)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: the LAPS warning is not using the shared warning palette.");
+            }
+
+            if (lapsWarningPanel.Parent is not TableLayoutPanel workspace ||
+                workspace.GetRow(lapsWarningPanel) >= workspace.GetRow(lapsKeyGrid))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: LAPS warning must be positioned above the key results grid.");
+            }
+        }
+
         VerifyTabControlPages(
             tabs,
             formName,
