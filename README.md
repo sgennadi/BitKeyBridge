@@ -647,3 +647,7 @@ Use `config/appsettings.example.json` as a template and keep environment-specifi
 ## License
 
 See the repository license file.
+
+### Empty LAPS results (0.25.3)
+
+When an AD LAPS lookup returns metadata but no readable password attributes, the LAPS tab displays an immediate yellow warning above the results list. Diagnostic steps and commands... opens a copyable guide to workstation policy/event-log checks, AD OU read delegation, operator groups and separate Windows LAPS encrypted-password decryption rights. The selected AD computer DN and DC are used automatically. Entra-only lookups get Graph/role/backup-policy checks. Commands are not executed automatically and do not change directory ACLs, rotate passwords or enable enterprise policies.
