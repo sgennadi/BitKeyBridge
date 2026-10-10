@@ -971,9 +971,8 @@ public sealed partial class MainForm
                 AdUsername =
                     _adUsername.Text.Trim(),
                 RecoverySearchSource =
-                    _recoverySource.SelectedIndex == 1
-                        ? "LocalCache"
-                        : "LiveAD",
+                    _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
+                    _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD",
                 CloudTenant =
                     _cloudTenant.Text.Trim(),
                 CloudClientId =
@@ -1050,11 +1049,10 @@ public sealed partial class MainForm
         _adUsername.Text =
             profile.AdUsername;
         _recoverySource.SelectedIndex =
-            profile.RecoverySearchSource.Equals(
-                "LocalCache",
-                StringComparison.OrdinalIgnoreCase)
-                ? 1
-                : 0;
+            profile.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : profile.RecoverySearchSource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
+                    ? 1 : 0;
 
         _cloudTenant.Text =
             profile.CloudTenant;

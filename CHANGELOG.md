@@ -1,3 +1,16 @@
+## 0.26.0
+
+- Device Diagnostics Center: added Start > Device Diagnostics... with responsive, shared UiStyle WinForms controls and compact/200% DPI checks.
+- Exact-computer DC consistency: compare BitLocker Recovery ID metadata, Windows/legacy LAPS expiry/version, computer visibility, site/RODC status on up to 24 controllers; no password attributes requested.
+- Smart Diagnostic Engine: evidence-graded findings (Confirmed/Likely/Possible/NotVerified), explicit next action and execution location; absence of metadata never proves AccessDenied.
+- AD permission inspection: read-only computer-object DACL including observed explicit/inherited ACE SID, object GUID and control/read masks; confidential attribute and DPAPI-NG effective rights remain not verified without separate authorized tests.
+- Offline endpoint collector: --collect-endpoint [--output file.zip], GUI collect/import, bounded ZIP format, Windows OS and whitelisted nonsecret policy settings, local nonsecret BitLocker volume/TPM WMI states and BitLocker/LAPS event IDs/severity/timestamps. Event descriptions, keys and tokens are never exported.
+- Advanced LDAP/LDAPS: native SRV records, DC site/bind latency, strict TLS certificate SAN/expiry/chain verification; suggested writable DC requires explicit operator confirmation and reconnect.
+- AD versus Entra BitLocker recovery metadata comparison: only uniquely resolved Entra deviceId or explicit GUID accepted; partial sources reported without claiming no backup.
+- Protected recovery cache: DPAPI CurrentUser .bkb sidecar, atomic verified migration with protected previous version, Live AD / Local CSV / Protected cache choices, direct in-memory metadata and authorized on-demand key reading. Existing plaintext CSV is never silently removed.
+- Optional Authenticode signing in CI with a configured organizational signing provider/certificate; signature validation before packaging, all existing trust-enforcement toggles remain opt-in. Unsigned builds remain the default until a real signing certificate is provisioned.
+- Expanded offline/portable rules, CurrentUser cache tamper and round-trip, endpoint ZIP validation and responsive UI self-tests; no AD writes or automatic PowerShell.
+
 ## 0.25.5
 
 - Fixed the BitLocker diagnostic runbook to include the selected Active Directory OU/search scope when inspecting zero recovery records or permissions.

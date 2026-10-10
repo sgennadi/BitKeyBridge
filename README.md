@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.25.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Current release line: 0.26.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -659,3 +659,15 @@ Use **Start > Environment Check...** to check AD/DC DNS, selected LDAP/LDAPS TCP
 **Recovery** displays a yellow, above-grid warning when BitLocker metadata is absent, a local cache is missing, a search fails or a selected password could not be retrieved. **Diagnostic steps and commands...** opens read-only, copyable instructions for the affected Windows computer, DC/RSAT and the operator account, scoped to the selected computer, Recovery ID, OU and configured DC. A selected computer in **Start** also offers **BitLocker diagnostics...** when zero keys were returned. AD, local cache and Entra each have dedicated instructions. No commands run automatically; the optional secret-bearing AD read test is explicitly labeled.
 
 See [Workstation prerequisites and diagnostics](docs/ENVIRONMENT-DIAGNOSTICS.md).
+
+## Advanced Diagnostics Center (0.26.0)
+
+**Start > Device Diagnostics...** adds per-computer multi-DC BitLocker/LAPS metadata consistency, evidence-graded Smart Diagnostic Engine, read-only AD ACE/DACL permission inspection, optional LDAP/SRV/site/strict LDAPS certificate validation and user-confirmed writable DC selection. Compare on-prem AD with Microsoft Entra BitLocker metadata by exact unique Entra device ID, without reading recovery passwords.
+
+Run **Collect endpoint ZIP** directly on the problem workstation (also `BitKeyBridge.exe --collect-endpoint --output C:\Temp\endpoint.zip`) and import the resulting ZIP on an admin PC. The report contains only whitelisted non-secret Windows policy metadata, WMI BitLocker volume/TPM status and event IDs; never event messages, keys, tokens or password data.
+
+**Protect recovery CSV** creates a DPAPI CurrentUser-protected .bkb sidecar from an existing export and enables **Recovery > Protected cache** for local metadata-first search and authorized selected-secret reads. The plaintext original CSV remains unchanged and requires separate administrative retirement. The encrypted cache is tied to its original Windows identity.
+
+**Verify EXE signature** inspects the running EXE. GitHub Actions can optionally sign published binaries when your organization provisions a real Code Signing certificate/private key on the runner; otherwise they remain unsigned. The trusted-signature/publisher enforcement options are unchanged and disabled by default.
+
+See [Advanced Diagnostics](docs/ADVANCED-DIAGNOSTICS.md) and [Code signing](SIGNING.md).

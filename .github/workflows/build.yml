@@ -234,6 +234,32 @@ jobs:
         shell: cmd
         run: dotnet publish src\BitKeyBridge\BitKeyBridge.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o artifacts\${{ matrix.rid }}
 
+      # Optional signing is only active if the runner certificate store contains
+      # the trusted code-signing certificate AND its private key.
+      # Set repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT only after provisioning.
+      - name: Optional Authenticode sign and verify
+        if: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT != '' }}
+        shell: pwsh
+        env:
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = Join-Path (Join-Path "artifacts" "${{ matrix.rid }}") "BitKeyBridge.exe"
+          $tool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+          if (-not $tool) {
+            $candidate = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like "*\x64\signtool.exe" } |
+              Sort-Object FullName -Descending | Select-Object -First 1
+            if (-not $candidate) { throw "SignTool not found. Install Windows SDK on signing runner." }
+            $signToolPath = $candidate.FullName
+          } else { $signToolPath = $tool.Source }
+          if (-not (Test-Path $exe)) { throw "Published executable not found." }
+          & $signToolPath sign /sha1 $env:SIGNING_THUMBPRINT /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "$exe"
+          if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed." }
+          & $signToolPath verify /pa /all /v "$exe"
+          if ($LASTEXITCODE -ne 0) { throw "Authenticode validation failed." }
+          Write-Host "Signed executable verified. SHA256SUMS are created after packaging."
+
       - name: Offline self-test (supported Windows Server architecture)
         if: matrix.rid == 'win-x64'
         shell: cmd
