@@ -16,6 +16,8 @@ public sealed class EndpointDiagnosticBundle
     public DateTimeOffset CapturedAt { get; set; } = DateTimeOffset.UtcNow;
     public Dictionary<string, string> WhitelistedPolicyMetadata { get; set; } = [];
     public List<EndpointEventSummary> EventSummaries { get; set; } = [];
+    public List<EndpointBitLockerVolumeState> VolumeStates { get; set; } = [];
+    public EndpointTpmState? Tpm { get; set; }
     public List<string> Diagnostics { get; set; } = [];
 }
 public sealed record EndpointEventSummary(string Log, int Id, string Level, DateTimeOffset? TimeUtc);
@@ -53,10 +55,11 @@ public static class EndpointDiagnosticCollector
         ReadPolicy(bundle, @"SOFTWARE\Microsoft\Policies\LAPS",
             LapsAllowedValues, "LAPS CSP");
 
+        EndpointDeviceStateInspector.Append(bundle);
         ReadEvents(bundle, "Microsoft-Windows-LAPS/Operational");
         ReadEvents(bundle, "Microsoft-Windows-BitLocker-API/Management");
         bundle.Diagnostics.Add("Events contain only Event ID, level, time and provider log name. Event message payloads are NEVER collected.");
-        bundle.Diagnostics.Add("BitLocker protection state and TPM readiness are NotVerified by this metadata-only collector.");
+        bundle.Diagnostics.Add("BitLocker/TPM status is reported only when non-secret local WMI queries succeed; otherwise NotVerified.");
         bundle.Diagnostics.Add("The tool does not read BitLocker protectors, 48-digit recovery passwords, LAPS passwords, tokens, private keys, or registry secret values.");
         bundle.Diagnostics.Add("For actual protection state on this computer, use Get-BitLockerVolume -MountPoint $env:SystemDrive and inspect non-secret summary properties.");
         return bundle;
@@ -121,6 +124,17 @@ public static class EndpointDiagnosticCollector
         };
         lines.AddRange(value.WhitelistedPolicyMetadata.OrderBy(x => x.Key)
             .Select(x => DiagnosticRedaction.Sanitize(x.Key + " = " + x.Value)));
+        lines.Add("");
+        lines.Add("BITLOCKER VOLUME STATUS (LOCAL WMI; NO PROTECTOR SECRETS)");
+        lines.AddRange((value.VolumeStates ?? []).Take(30).Select(x =>
+            DiagnosticRedaction.Sanitize(x.MountPoint + " | Protection=" +
+                x.ProtectionStatus + " | Conversion=" + x.ConversionStatus +
+                " | Method=" + x.EncryptionMethod)));
+        lines.Add("TPM: " + (value.Tpm is null ? "NotVerified" :
+            DiagnosticRedaction.Sanitize("State=" + value.Tpm.Status +
+                ", Enabled=" + value.Tpm.Enabled + ", Activated=" +
+                value.Tpm.Activated + ", Owned=" + value.Tpm.Owned +
+                ", Spec=" + value.Tpm.SpecificationVersion)));
         lines.Add("");
         lines.Add("EVENT IDS / NO MESSAGE PAYLOADS");
         lines.AddRange(value.EventSummaries.Take(200).Select(x =>
