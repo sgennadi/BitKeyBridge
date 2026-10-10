@@ -207,6 +207,14 @@ public static class UiLayoutSelfTest
                 () => new EnvironmentDiagnosticDialog(
                     NewConfig(), cloudConfigured: false, computer: "PC-TEST", runOnOpen: false)),
             (
+                "Device diagnostics center",
+                () => new AdvancedDiagnosticCenterDialog(
+                    NewConfig(),
+                    () => Task.FromResult<string?>(null),
+                    _ => { },
+                    () => { },
+                    "PC-TEST")),
+            (
                 "BitLocker diagnostic commands",
                 () => new BitLockerDiagnosticCommandsDialog(
                     BitLockerDiagnosticRunbook.Build(
@@ -454,6 +462,7 @@ public static class UiLayoutSelfTest
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
                     "HomeEnvironmentCheckButton",
+                    "HomeAdvancedDiagnosticsButton",
                     "HomeBitLockerDiagnosticButton",
                     "HomeBitLockerButton",
                     "HomeRevealBitLockerButton",
