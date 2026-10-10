@@ -138,7 +138,10 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
                 "Identity configured: " + r.IdentityUsed +
                   (r.ExplicitCredentials ? " (explicit AD credentials)" : " (Windows token)"),
                 "Computer DN: " + r.ComputerDn, "OU/container: " + r.Scope,
-                "Status: " + r.Status, "",
+                "Status: " + r.Status,
+                "Group evidence: " + r.GroupResolutionStatus,
+                "Identity SID/group count: " + r.ResolvedPrincipalSids.Count,
+                "",
                 "DACL ENTRIES (ACE SID, access mask, type; inherited or explicit)"
             };
             lines.AddRange(r.DescriptorRules.Take(250));
