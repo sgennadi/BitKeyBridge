@@ -348,6 +348,7 @@ public sealed class LapsDirectoryService
         try
         {
             var legacyExpiry = Expiration(entry, "ms-Mcs-AdmPwdExpirationTime");
+            result.LegacyBackupIndicatorPresent = legacyExpiry.HasValue;
             if (Text(entry, "ms-Mcs-AdmPwd") is { Length: > 0 } legacy)
             {
                 var row = new LapsPasswordEntry
@@ -360,6 +361,9 @@ public sealed class LapsDirectoryService
                 result.Entries.Add(row);
             }
             var windowsExpiry = Expiration(entry, "msLAPS-PasswordExpirationTime");
+            result.WindowsBackupIndicatorPresent =
+                windowsExpiry.HasValue ||
+                !string.IsNullOrWhiteSpace(result.PasswordVersion);
             if (Text(entry, "msLAPS-Password") is { Length: > 0 } json)
             {
                 var row = new LapsPasswordEntry
@@ -381,8 +385,9 @@ public sealed class LapsDirectoryService
             }
             if (result.Entries.Count == 0)
             {
-                result.Note =
-                    "No readable LAPS password attributes were returned. Check backup policy and read/decrypt permissions.";
+                result.Note = LapsReadDiagnostics.EmptyAdNote(
+                    result.LegacyBackupIndicatorPresent,
+                    result.WindowsBackupIndicatorPresent);
             }
             return result;
         }
