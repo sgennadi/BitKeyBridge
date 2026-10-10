@@ -19,6 +19,7 @@ public sealed class RecoverySearchResult
     public bool? IsLatest { get; set; }
     public string Source { get; set; } = "AD";
     public string ComputerDistinguishedName { get; set; } = string.Empty;
+    public string DirectoryServer { get; set; } = string.Empty;
     public string RecoveryDistinguishedName { get; set; } = string.Empty;
 
     public DateTime? KeyDate =>
