@@ -3401,11 +3401,10 @@ public sealed partial class MainForm : DpiAwareForm
             _config.AutoConnectOnStart;
 
         _recoverySource.SelectedIndex =
-            _config.RecoverySearchSource.Equals(
-                "LocalCache",
-                StringComparison.OrdinalIgnoreCase)
-                ? 1
-                : 0;
+            _config.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : _config.RecoverySearchSource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
+                    ? 1 : 0;
 
         if (!string.IsNullOrWhiteSpace(
                 _config.LastRecoveryScopeSearchBase))
@@ -3475,9 +3474,8 @@ public sealed partial class MainForm : DpiAwareForm
         _config.AutoConnectOnStart =
             _autoConnectOnStart.Checked;
         _config.RecoverySearchSource =
-            _recoverySource.SelectedIndex == 1
-                ? "LocalCache"
-                : "LiveAD";
+            _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
+            _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD";
 
         if (_startScope is not null)
         {
@@ -4109,10 +4107,9 @@ public sealed partial class MainForm : DpiAwareForm
         _startSelectOu.Enabled =
             false;
 
-        if (_recoverySource.SelectedIndex != 1)
+        if (_recoverySource.SelectedIndex == 0)
         {
-            _startSearch.Enabled =
-                false;
+            _startSearch.Enabled = false;
         }
 
         _connectAdCancelButton.Enabled =
@@ -4737,7 +4734,11 @@ public sealed partial class MainForm : DpiAwareForm
         ClearBitLockerWarning();
 
         var localCache =
-            _recoverySource.SelectedIndex == 1;
+            _recoverySource.SelectedIndex != 0;
+        var protectedCache = _recoverySource.SelectedIndex == 2;
+        var cacheFile = protectedCache
+            ? ProtectedRecoveryCacheService.DefaultFile
+            : _config.OutputCsv;
 
         if (!localCache &&
             _startScope is null)
@@ -4753,12 +4754,11 @@ public sealed partial class MainForm : DpiAwareForm
         }
 
         if (localCache &&
-            !File.Exists(
-                _config.OutputCsv))
+            !File.Exists(cacheFile))
         {
             UiStyle.SetStatus(
                 _startPurposeStatus,
-                "Local recovery cache is unavailable. Run an export first or switch to Live AD.",
+                "Selected recovery cache is unavailable. Protect an existing CSV or switch to Live AD.",
                 UiStatusKind.Warning);
             ShowBitLockerWarning(
                 "Local BitLocker recovery cache is missing or inaccessible. " +
@@ -4766,8 +4766,7 @@ public sealed partial class MainForm : DpiAwareForm
             _startDiagnostics.ShowMessage(
                 "Local recovery cache is unavailable.",
                 "Expected cache path: " +
-                DiagnosticRedaction.Sanitize(
-                    _config.OutputCsv));
+                DiagnosticRedaction.Sanitize(cacheFile));
             return;
         }
 
@@ -4785,9 +4784,8 @@ public sealed partial class MainForm : DpiAwareForm
         }
 
         var searchSource =
-            localCache
-                ? "LocalCSV"
-                : "AD";
+            protectedCache ? "ProtectedCache" :
+            localCache ? "LocalCSV" : "AD";
 
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
@@ -4840,10 +4838,11 @@ public sealed partial class MainForm : DpiAwareForm
                 var worker =
                     Task.Run(
                         () =>
-                            CsvUtility.ReadRecoveryMetadata(
-                                _config.OutputCsv,
-                                query,
-                                200));
+                            protectedCache
+                                ? ProtectedRecoveryCacheService.ReadMetadata(
+                                    cacheFile, query, 200)
+                                : CsvUtility.ReadRecoveryMetadata(
+                                    cacheFile, query, 200));
 
                 var cancelSignal =
                     Task.Delay(
@@ -5074,7 +5073,7 @@ public sealed partial class MainForm : DpiAwareForm
                 _startSearch.Enabled =
                     localCache
                         ? File.Exists(
-                            _config.OutputCsv)
+                            cacheFile)
                         : _startScope is not null;
                 _startCancel.Enabled =
                     false;
@@ -5155,10 +5154,8 @@ public sealed partial class MainForm : DpiAwareForm
         _recoveryCardComputer.Text =
             row.ComputerName;
         _recoveryCardOu.Text =
-            row.Source.Equals(
-                "Local cache",
-                StringComparison.OrdinalIgnoreCase)
-                ? "Local cache"
+            IsLocalRecoveryRow(row)
+                ? row.Source
                 : _startScope?.SearchBase ??
                   row.ComputerDistinguishedName;
         _recoveryCardId.Text =
@@ -5202,17 +5199,20 @@ public sealed partial class MainForm : DpiAwareForm
         {
             UseWaitCursor = true;
 
-            if (row.Source.Equals(
-                    "Local cache",
-                    StringComparison.OrdinalIgnoreCase))
+            if (IsLocalRecoveryRow(row))
             {
                 _startCurrentKey =
                     await Task.Run(
                         () =>
-                            CsvUtility.GetRecoveryPassword(
-                                _config.OutputCsv,
-                                row.ComputerName,
-                                row.RecoveryId));
+                            IsProtectedRecoveryRow(row)
+                                ? ProtectedRecoveryCacheService.GetRecoveryPassword(
+                                    ProtectedRecoveryCacheService.DefaultFile,
+                                    row.ComputerName,
+                                    row.RecoveryId)
+                                : CsvUtility.GetRecoveryPassword(
+                                    _config.OutputCsv,
+                                    row.ComputerName,
+                                    row.RecoveryId));
             }
             else
             {
@@ -5251,9 +5251,7 @@ public sealed partial class MainForm : DpiAwareForm
                 ("Source", row.Source));
             UiStyle.SetStatus(
                 _startPurposeStatus,
-                row.Source.Equals(
-                    "Local cache",
-                    StringComparison.OrdinalIgnoreCase)
+                IsLocalRecoveryRow(row)
                     ? "Recovery-key retrieval failed. Review diagnostics below."
                     : "Recovery-key retrieval failed. Review diagnostics below; use AD access help... if the recovery object is visible but the password is denied or blank.",
                 UiStatusKind.Error);
@@ -5285,11 +5283,8 @@ public sealed partial class MainForm : DpiAwareForm
         }
 
         var auditSource =
-            row.Source.Equals(
-                "Local cache",
-                StringComparison.OrdinalIgnoreCase)
-                ? "LocalCSV"
-                : "AD";
+            IsProtectedRecoveryRow(row) ? "ProtectedCache" :
+            IsLocalRecoveryRow(row) ? "LocalCSV" : "AD";
 
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
@@ -5364,11 +5359,8 @@ public sealed partial class MainForm : DpiAwareForm
         }
 
         var auditSource =
-            row.Source.Equals(
-                "Local cache",
-                StringComparison.OrdinalIgnoreCase)
-                ? "LocalCSV"
-                : "AD";
+            IsProtectedRecoveryRow(row) ? "ProtectedCache" :
+            IsLocalRecoveryRow(row) ? "LocalCSV" : "AD";
 
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
