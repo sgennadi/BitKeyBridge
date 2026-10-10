@@ -155,6 +155,7 @@ public sealed class EnvironmentDiagnosticDialog : DpiAwareForm
         _close.Click += (_, _) => Close();
         FormClosing += (_, _) => _cancellation?.Cancel();
         Shown += async (_, _) => await RunChecksAsync();
+        AcceptButton = _run;
         CancelButton = _close;
     }
 
