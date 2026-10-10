@@ -30,6 +30,7 @@ public sealed partial class MainForm
     private readonly Button _homeConnectAdButton = new();
     private readonly Button _homeDisconnectAdButton = new();
     private readonly Button _homeEnvironmentCheckButton = new();
+    private readonly Button _homeAdvancedDiagnosticsButton = new();
     private readonly Button _homeBitLockerButton = new();
     private readonly Button _homeLapsButton = new();
     private readonly ProgressBar _homeConnectionProgress = new();
@@ -511,6 +512,10 @@ public sealed partial class MainForm
             "Environment Check...";
         UiStyle.ConfigureActionButton(_homeEnvironmentCheckButton);
 
+        _homeAdvancedDiagnosticsButton.Name = "HomeAdvancedDiagnosticsButton";
+        _homeAdvancedDiagnosticsButton.Text = "Device Diagnostics...";
+        UiStyle.ConfigureActionButton(_homeAdvancedDiagnosticsButton);
+
         _homeAdvancedButton.Text =
             "Advanced...";
         _homeAdvancedButton.Name =
@@ -522,6 +527,7 @@ public sealed partial class MainForm
             _homeConnectAdButton,
             _homeDisconnectAdButton,
             _homeEnvironmentCheckButton,
+            _homeAdvancedDiagnosticsButton,
             _homeAdvancedButton
         ]);
         connection.Controls.Add(
@@ -1137,6 +1143,9 @@ public sealed partial class MainForm
             (_, _) =>
                 ShowEnvironmentDiagnosticDialog();
 
+        _homeAdvancedDiagnosticsButton.Click +=
+            (_, _) => ShowAdvancedDiagnosticCenter();
+
         _homeUseWindowsIdentity.CheckedChanged +=
             (_, _) =>
             {
@@ -1469,7 +1478,8 @@ public sealed partial class MainForm
                 0);
         _recoverySource.Items.AddRange([
             "Live AD",
-            "Local cache"
+            "Local cache",
+            "Protected cache"
         ]);
         sourceFlow.Controls.Add(
             _recoverySource);
@@ -2741,7 +2751,9 @@ public sealed partial class MainForm
     private void UpdateRecoverySourceUi()
     {
         var local =
-            _recoverySource.SelectedIndex == 1;
+            _recoverySource.SelectedIndex != 0;
+        var selectedCache = _recoverySource.SelectedIndex == 2
+            ? ProtectedRecoveryCacheService.DefaultFile : _config.OutputCsv;
 
         _connectAdButton.Enabled = !local;
         _startSelectOu.Enabled =
@@ -2750,8 +2762,7 @@ public sealed partial class MainForm
                 _startDomainDn);
 
         var localCacheAvailable =
-            File.Exists(
-                _config.OutputCsv);
+            File.Exists(selectedCache);
 
         _startSearch.Enabled =
             local
@@ -2761,12 +2772,14 @@ public sealed partial class MainForm
         if (local)
         {
             SetDirectoryConnectionStatus(
-                File.Exists(_config.OutputCsv)
-                    ? "Local cache is available. AD connection is not required for this search."
-                    : "Local cache is selected, but the recovery export CSV does not exist yet.",
-                File.Exists(_config.OutputCsv)
-                    ? UiStatusKind.Neutral
-                    : UiStatusKind.Warning);
+                localCacheAvailable
+                    ? (_recoverySource.SelectedIndex == 2
+                        ? "DPAPI CurrentUser protected cache is available. Recovery keys are decrypted only in memory."
+                        : "Local CSV cache is available. AD connection is not required.")
+                    : (_recoverySource.SelectedIndex == 2
+                        ? "Protected cache does not exist. Open Start > Device Diagnostics to protect an existing CSV."
+                        : "Local CSV cache is selected, but the recovery export file is absent."),
+                localCacheAvailable ? UiStatusKind.Neutral : UiStatusKind.Warning);
 
             UiStyle.SetStatus(
                 _startOuStatus,
@@ -2789,9 +2802,8 @@ public sealed partial class MainForm
             _config.AutoConnectOnStart =
                 _autoConnectOnStart.Checked;
             _config.RecoverySearchSource =
-                _recoverySource.SelectedIndex == 1
-                    ? "LocalCache"
-                    : "LiveAD";
+                _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
+                _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD";
 
             if (_startScope is not null)
             {
