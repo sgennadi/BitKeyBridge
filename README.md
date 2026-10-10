@@ -651,3 +651,11 @@ See the repository license file.
 ### Empty LAPS results (0.25.3)
 
 When an AD LAPS lookup returns metadata but no readable password attributes, the LAPS tab displays an immediate yellow warning above the results list. Diagnostic steps and commands... opens a copyable guide to workstation policy/event-log checks, AD OU read delegation, operator groups and separate Windows LAPS encrypted-password decryption rights. The selected AD computer DN and DC are used automatically. Entra-only lookups get Graph/role/backup-policy checks. Commands are not executed automatically and do not change directory ACLs, rotate passwords or enable enterprise policies.
+
+### Workstation environment checks and BitLocker diagnostics (0.25.4)
+
+Use **Start > Environment Check...** to check AD/DC DNS, selected LDAP/LDAPS TCP port, Kerberos/RPC/SMB TCP reachability, authenticated LDAP bind and optional BitLocker/LAPS metadata for an exact computer. No domain membership, RSAT, separate .NET runtime or PowerShell modules are needed to use the portable GUI. Cloud-configured installations additionally check identity/Graph TCP 443. KDS/decryption, remote DC services and confidential-attribute permissions remain **NotVerified** without separate authorized checks; open ports never imply permission.
+
+**Recovery** displays a yellow, above-grid warning when BitLocker metadata is absent, a local cache is missing, a search fails or a selected password could not be retrieved. **Diagnostic steps and commands...** opens read-only, copyable instructions for the affected Windows computer, DC/RSAT and the operator account, scoped to the selected computer, Recovery ID, OU and configured DC. A selected computer in **Start** also offers **BitLocker diagnostics...** when zero keys were returned. AD, local cache and Entra each have dedicated instructions. No commands run automatically; the optional secret-bearing AD read test is explicitly labeled.
+
+See [Workstation prerequisites and diagnostics](docs/ENVIRONMENT-DIAGNOSTICS.md).
