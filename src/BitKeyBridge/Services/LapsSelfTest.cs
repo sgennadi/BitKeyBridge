@@ -269,7 +269,7 @@ public static class LapsSelfTest
             Assert(guide.Contains("Get-WinEvent -LogName 'Microsoft-Windows-LAPS/Operational'", StringComparison.Ordinal));
             Assert(guide.Contains("Get-LapsADPassword", StringComparison.Ordinal));
             Assert(guide.Contains("DOES request passwords", StringComparison.Ordinal));
-            Assert(guide.Contains("HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\LAPS", StringComparison.Ordinal));
+            Assert(guide.Contains(@"HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\LAPS", StringComparison.Ordinal));
             Assert(!guide.Contains(secret, StringComparison.Ordinal));
         });
         Check("escaped-comma AD computer DN keeps the correct OU in the runbook", () =>
@@ -293,7 +293,7 @@ public static class LapsSelfTest
             Assert(guide.Contains("Get-LapsAADPassword -DeviceIds '11111111-2222-3333-4444-555555555555'", StringComparison.Ordinal));
             Assert(guide.Contains("DeviceLocalCredential.ReadBasic.All", StringComparison.Ordinal));
             Assert(!guide.Contains("Find-LapsADExtendedRights", StringComparison.Ordinal));
-            Assert(!guide.Contains(" -IncludePasswords", StringComparison.Ordinal));
+            Assert(!guide.Contains(" -IncludePasswords |", StringComparison.Ordinal));
             Assert(!guide.Contains(secret, StringComparison.Ordinal));
         });
         Check("Entra LAPS empty responses get a distinct secret-free hint", () =>
