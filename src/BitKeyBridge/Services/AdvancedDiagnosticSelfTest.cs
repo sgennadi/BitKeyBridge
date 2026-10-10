@@ -23,6 +23,13 @@ public static class AdvancedDiagnosticSelfTest
             if (!ok) throw new InvalidOperationException(message);
         }
 
+        Check("ProtectedCache source is accepted by strict persisted configuration", () =>
+        {
+            var config = new AppConfig { RecoverySearchSource = "ProtectedCache" };
+            ConfigurationMaintenanceService.ValidateAppConfig(config);
+            Require(config.RecoverySearchSource == "ProtectedCache", "Protected cache source was changed.");
+        });
+
         Check("DPAPI CurrentUser protected recovery CSV metadata and one-time secret read", () =>
         {
             var path = Path.Combine(tempDirectory, "protected-cache-original.csv");
