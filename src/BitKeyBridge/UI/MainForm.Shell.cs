@@ -2722,11 +2722,10 @@ public sealed partial class MainForm
             _config.AutoConnectOnStart;
 
         _recoverySource.SelectedIndex =
-            _config.RecoverySearchSource.Equals(
-                "LocalCache",
-                StringComparison.OrdinalIgnoreCase)
-                ? 1
-                : 0;
+            _config.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : _config.RecoverySearchSource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
+                    ? 1 : 0;
 
         if (!string.IsNullOrWhiteSpace(
                 _config.LastRecoveryScopeSearchBase))
