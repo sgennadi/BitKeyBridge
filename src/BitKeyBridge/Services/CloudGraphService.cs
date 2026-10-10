@@ -355,6 +355,31 @@ public sealed partial class CloudGraphService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Resolve a real Entra device by its deviceId, never its directory object id.
+    /// Uses Graph device metadata only; no BitLocker secrets are requested.
+    /// </summary>
+    public async Task<(string DeviceId, string DisplayName)?> FindEntraDeviceByDeviceIdAsync(
+        string accessToken,
+        string deviceId,
+        CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(deviceId, out var id))
+            return null;
+        var value = id.ToString("D");
+        var filter = Uri.EscapeDataString("deviceId eq '" + value + "'");
+        var records = await GetCollectionAsync(accessToken,
+            "https://graph.microsoft.com/v1.0/devices?$filter=" + filter +
+            "&$select=id,deviceId,displayName&$top=2", 2, ct);
+        var matches = records
+            .Where(x => string.Equals(GetString(x, "deviceId"), value,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return matches.Count == 1
+            ? (value, GetString(matches[0], "displayName"))
+            : null;
+    }
+
     public async Task<List<CloudRecoveryMetadata>> GetRecoveryMetadataForDeviceAsync(
         string accessToken,
         string entraDeviceId,
