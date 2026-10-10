@@ -236,6 +236,66 @@ public static class LapsSelfTest
                 Assert(!details.Contains("permission denied", StringComparison.OrdinalIgnoreCase));
             }
         });
+        Check("empty AD results show the missing-permission warning without inventing a denial", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "PC-TEST",
+                DirectoryServer = "dc01.yosh.ac.il",
+                ComputerDistinguishedName = "CN=PC-TEST,OU=Win11,DC=yosh,DC=ac,DC=il",
+                WindowsBackupIndicatorPresent = true
+            };
+            var message = LapsReadDiagnostics.EmptyStatus(result, cloud: false);
+            Assert(message.Contains("LAPS metadata detected", StringComparison.Ordinal));
+            Assert(message.Contains("Most likely missing LAPS read permission", StringComparison.Ordinal));
+            Assert(message.Contains("not been independently verified", StringComparison.Ordinal));
+            Assert(!message.Contains("permission denied", StringComparison.OrdinalIgnoreCase));
+            var details = LapsReadDiagnostics.EmptyDetails(result, cloud: false);
+            Assert(details.Contains("CN=PC-TEST,OU=Win11,DC=yosh,DC=ac,DC=il", StringComparison.Ordinal));
+        });
+        Check("AD LAPS runbook uses the detected DC and OU without exposing secrets", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "PC-TEST",
+                ComputerDistinguishedName = "CN=PC-TEST,OU=Win11,DC=yosh,DC=ac,DC=il",
+                DirectoryServer = "yosh-dc02.yosh.ac.il",
+                WindowsBackupIndicatorPresent = true
+            };
+            var guide = LapsDiagnosticRunbook.Build(result, cloud: false);
+            Assert(guide.Contains("WHERE TO RUN THEM", StringComparison.Ordinal));
+            Assert(guide.Contains("Find-LapsADExtendedRights -Identity 'OU=Win11,DC=yosh,DC=ac,DC=il'", StringComparison.Ordinal));
+            Assert(guide.Contains("-DomainController 'yosh-dc02.yosh.ac.il'", StringComparison.Ordinal));
+            Assert(guide.Contains("Get-WinEvent -LogName 'Microsoft-Windows-LAPS/Operational'", StringComparison.Ordinal));
+            Assert(guide.Contains("Get-LapsADPassword", StringComparison.Ordinal));
+            Assert(guide.Contains("DOES request passwords", StringComparison.Ordinal));
+            Assert(guide.Contains("HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\LAPS", StringComparison.Ordinal));
+            Assert(!guide.Contains(secret, StringComparison.Ordinal));
+        });
+        Check("escaped-comma AD computer DN keeps the correct OU in the runbook", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "LAB,PC",
+                ComputerDistinguishedName = @"CN=LAB\,PC,OU=Lab,DC=yosh,DC=ac,DC=il"
+            };
+            var guide = LapsDiagnosticRunbook.Build(result, cloud: false);
+            Assert(guide.Contains("Find-LapsADExtendedRights -Identity 'OU=Lab,DC=yosh,DC=ac,DC=il'", StringComparison.Ordinal));
+        });
+        Check("Entra LAPS runbook does not suggest AD permission edits or password output", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "CLOUD-PC",
+                ComputerId = "11111111-2222-3333-4444-555555555555"
+            };
+            var guide = LapsDiagnosticRunbook.Build(result, cloud: true);
+            Assert(guide.Contains("Get-LapsAADPassword -DeviceIds '11111111-2222-3333-4444-555555555555'", StringComparison.Ordinal));
+            Assert(guide.Contains("DeviceLocalCredential.ReadBasic.All", StringComparison.Ordinal));
+            Assert(!guide.Contains("Find-LapsADExtendedRights", StringComparison.Ordinal));
+            Assert(!guide.Contains(" -IncludePasswords", StringComparison.Ordinal));
+            Assert(!guide.Contains(secret, StringComparison.Ordinal));
+        });
         Check("Entra LAPS empty responses get a distinct secret-free hint", () =>
         {
             using var result = new LapsReadResult
