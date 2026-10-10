@@ -8,6 +8,8 @@
   <ItemGroup>
     <Compile Include="../../src/BitKeyBridge/Core/LapsModels.cs" Link="LapsModels.cs" />
     <Compile Include="../../src/BitKeyBridge/Core/LapsDiagnosticRunbook.cs" Link="LapsDiagnosticRunbook.cs" />
+    <Compile Include="../../src/BitKeyBridge/Core/BitLockerDiagnosticRunbook.cs" Link="BitLockerDiagnosticRunbook.cs" />
+    <Compile Include="../../src/BitKeyBridge/Core/EnvironmentDiagnosticModels.cs" Link="EnvironmentDiagnosticModels.cs" />
     <Compile Include="../../src/BitKeyBridge/Core/SearchModels.cs" Link="SearchModels.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsSecretCodec.cs" Link="LapsSecretCodec.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsCloudCodec.cs" Link="LapsCloudCodec.cs" />
