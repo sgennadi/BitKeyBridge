@@ -483,6 +483,10 @@ public sealed partial class MainForm
         _homeDeviceDetailsButton.Enabled =
             selected is not null;
 
+        // Diagnostics remain available when backup metadata is absent.
+        _homeBitLockerDiagnosticButton.Enabled =
+            selected is not null;
+
         _homeRotateBitLockerButton.Enabled =
             selected is not null &&
             !string.IsNullOrWhiteSpace(

@@ -296,6 +296,69 @@ public static class LapsSelfTest
             Assert(!guide.Contains(" -IncludePasswords |", StringComparison.Ordinal));
             Assert(!guide.Contains(secret, StringComparison.Ordinal));
         });
+        Check("environment checks distinguish network reachability from authorization", () =>
+        {
+            var policy = EnvironmentDiagnosticPolicy.DomainPorts(ldaps: false);
+            Assert(policy.Any(x => x.Port == 389 && x.Essential));
+            Assert(policy.Any(x => x.Port == 135 && !x.Essential));
+            Assert(!policy.Any(x => x.Port >= 49152));
+            Assert(EnvironmentDiagnosticPolicy.DomainPorts(ldaps: true).Any(x => x.Port == 636 && x.Essential));
+            Assert(EnvironmentDiagnosticPolicy.KdsVerificationDetail.Contains("NOT VERIFIED", StringComparison.Ordinal));
+            Assert(EnvironmentDiagnosticPolicy.BitLockerMetadataDetail(0).Contains("does NOT prove", StringComparison.Ordinal));
+            Assert(EnvironmentDiagnosticPolicy.BitLockerMetadataDetail(2).Contains("NOT requested", StringComparison.Ordinal));
+        });
+        Check("environment report never reports unknown permission as success", () =>
+        {
+            var report = new EnvironmentDiagnosticReport { DomainController = "dc.yosh.ac.il" };
+            report.Checks.Add(new EnvironmentCheckRow("Permissions", "BitLocker", EnvironmentCheckState.NotVerified,
+                "Metadata-only: rights not tested."));
+            var safeText = report.SafeText();
+            Assert(report.NotVerified == 1);
+            Assert(report.Failures == 0 && report.Warnings == 0);
+            Assert(safeText.Contains("NotVerified", StringComparison.Ordinal));
+            Assert(safeText.Contains("NOT independently verified", StringComparison.Ordinal));
+            Assert(!safeText.Contains(secret, StringComparison.Ordinal));
+        });
+        Check("BitLocker AD runbook scopes metadata to the computer and never prints a key", () =>
+        {
+            var context = new BitLockerDiagnosticContext
+            {
+                SearchQuery = "PC-TEST",
+                ComputerDistinguishedName = "CN=PC-TEST,OU=Win11,DC=yosh,DC=ac,DC=il",
+                RecoveryDistinguishedName = "CN=2026-10-10T01:01:01+00:00{12345678-1111-2222-3333-444444444444},CN=PC-TEST,OU=Win11,DC=yosh,DC=ac,DC=il",
+                RecoveryId = "12345678-1111-2222-3333-444444444444",
+                DirectoryServer = "yosh-dc01.yosh.ac.il",
+                RecordsReturned = 1
+            };
+            var guide = BitLockerDiagnosticRunbook.Build(context);
+            Assert(guide.Contains("SearchScope OneLevel", StringComparison.Ordinal));
+            Assert(guide.Contains("msFVE-RecoveryInformation", StringComparison.Ordinal));
+            Assert(guide.Contains("dc01.yosh.ac.il", StringComparison.Ordinal));
+            Assert(guide.Contains("OPTIONAL: authorized read-right verification", StringComparison.Ordinal));
+            Assert(guide.Contains("DOES retrieve the password attribute", StringComparison.Ordinal));
+            Assert(guide.Contains("not msFVE-RecoveryPassword", StringComparison.Ordinal));
+            Assert(!guide.Contains(secret, StringComparison.Ordinal));
+        });
+        Check("BitLocker empty metadata warns without claiming denied access", () =>
+        {
+            var guide = BitLockerDiagnosticRunbook.Build(
+                new BitLockerDiagnosticContext { SearchQuery = "PC-TEST", RecordsReturned = 0 });
+            Assert(guide.Contains("0 visible objects can mean", StringComparison.Ordinal));
+            Assert(guide.Contains("does not", StringComparison.OrdinalIgnoreCase));
+            Assert(guide.Contains("Get-ADComputer -Identity 'PC-TEST'", StringComparison.Ordinal));
+        });
+        Check("BitLocker cache and Entra runbooks do not suggest AD secret reads", () =>
+        {
+            var cache = BitLockerDiagnosticRunbook.Build(
+                new BitLockerDiagnosticContext { LocalCache = true, LocalCachePath = @"C:\Temp\Recovery.csv" });
+            Assert(cache.Contains("Test-Path -LiteralPath 'C:\\Temp\\Recovery.csv'", StringComparison.Ordinal));
+            Assert(!cache.Contains("msFVE-RecoveryPassword", StringComparison.Ordinal));
+            var entra = BitLockerDiagnosticRunbook.Build(
+                new BitLockerDiagnosticContext { Entra = true });
+            Assert(entra.Contains("BitlockerKey.ReadBasic.All", StringComparison.Ordinal));
+            Assert(!entra.Contains("msFVE-RecoveryPassword", StringComparison.Ordinal));
+            Assert(!entra.Contains(" -Property key", StringComparison.OrdinalIgnoreCase));
+        });
         Check("Entra LAPS empty responses get a distinct secret-free hint", () =>
         {
             using var result = new LapsReadResult

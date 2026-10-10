@@ -1,3 +1,15 @@
+## 0.25.4
+
+- Added Start > Environment Check... for normal helpdesk operators, including on non-domain-joined workstations with explicit AD credentials. Probe is native C#/.NET, read-only and does not require PowerShell or RSAT.
+- Checks Windows OS/architecture, DC discovery and host DNS, configured LDAP/LDAPS TCP port, Kerberos TCP 88, RPC mapper TCP 135 and SMB TCP 445, and separately performs a signed/sealed or TLS authenticated LDAP bind.
+- When an exact computer is provided, reads only AD BitLocker recovery object metadata and LAPS expiration/version metadata. No recovery passwords or LAPS secret attributes are requested.
+- Cloud-configured installations additionally check outbound TCP 443 to Microsoft identity and Graph endpoints; token permissions and consent are explicitly not inferred from the result.
+- Reports remote DC service health, KDS/DPAPI-NG, dynamic RPC, confidential attribute read/decrypt authorization as NotVerified unless an actual authorized test proves it. Avoids false-positive permission diagnosis.
+- Added a prominent yellow BitLocker Recovery warning above the results grid for zero records, missing connection/scope/cache, LDAP search errors and recovery-password retrieval failures.
+- Added context-aware BitLocker diagnostic commands on Recovery and the selected Start computer (including when the computer has no key metadata). AD, local cache and Entra paths have separate safe instructions, with the optional secret-read test explicitly marked as sensitive.
+- Added cancellable, responsive/200-percent DPI environment GUI, safe report copy, cross-platform diagnostic regression checks and UI layout assertions.
+- All diagnostics remain read-only; no ACL/GPO/BitLocker secret edits, password rotations, remote scripts, or new mandatory RBAC/JIT/two-person/ticket/SIEM controls.
+
 ## 0.25.3
 
 - Added a prominent yellow LAPS zero-readable-password warning immediately above the password results grid. Visible backup metadata triggers a likely read-delegation explanation, without falsely asserting that an actual stored password or access denial was verified.

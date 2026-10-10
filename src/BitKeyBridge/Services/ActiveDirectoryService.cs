@@ -415,6 +415,7 @@ public sealed class ActiveDirectoryService
                 CreatedDateTime = ParseLdapDateTime(
                     GetString(entry, "whenCreated")),
                 Source = "AD Live",
+                DirectoryServer = server,
                 ComputerDistinguishedName = computerDistinguishedName,
                 RecoveryDistinguishedName = entry.DistinguishedName
             });
@@ -622,6 +623,7 @@ public sealed class ActiveDirectoryService
                                 "whenCreated")),
                     Source =
                         "AD Live",
+                DirectoryServer = server,
                     ComputerDistinguishedName =
                         GetParentDistinguishedName(
                             entry.DistinguishedName),

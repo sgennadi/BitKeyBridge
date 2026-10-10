@@ -4734,6 +4734,7 @@ public sealed partial class MainForm : DpiAwareForm
         _startSearchDebounceTimer?.Stop();
 
         _startSearchCancellation?.Cancel();
+        ClearBitLockerWarning();
 
         var localCache =
             _recoverySource.SelectedIndex == 1;
@@ -4745,6 +4746,9 @@ public sealed partial class MainForm : DpiAwareForm
                 _startPurposeStatus,
                 "Connect to Active Directory and select an OU first.",
                 UiStatusKind.Warning);
+            ShowBitLockerWarning(
+                "BitLocker AD search cannot start: connect to AD and choose a recovery scope. " +
+                "Open Diagnostic steps and commands for workstation/DC checks.");
             return;
         }
 
@@ -4756,6 +4760,9 @@ public sealed partial class MainForm : DpiAwareForm
                 _startPurposeStatus,
                 "Local recovery cache is unavailable. Run an export first or switch to Live AD.",
                 UiStatusKind.Warning);
+            ShowBitLockerWarning(
+                "Local BitLocker recovery cache is missing or inaccessible. " +
+                "Check the configured cache path, or switch to Live AD. See diagnostic commands.");
             _startDiagnostics.ShowMessage(
                 "Local recovery cache is unavailable.",
                 "Expected cache path: " +
@@ -4984,6 +4991,19 @@ public sealed partial class MainForm : DpiAwareForm
                     ? "local cache"
                     : _startScope!.Name;
 
+            if (rows.Count == 0)
+            {
+                ShowBitLockerWarning(
+                    "0 BitLocker recovery records in " + scopeLabel +
+                    ". This does not prove there is no backup or that AD denied access. " +
+                    "Check the selected OU, client backup GPO, object visibility, permissions and DC replication. " +
+                    "Open Diagnostic steps and commands...");
+            }
+            else
+            {
+                ClearBitLockerWarning();
+            }
+
             UiStyle.SetStatus(
                 _startPurposeStatus,
                 rows.Count switch
@@ -5024,6 +5044,10 @@ public sealed partial class MainForm : DpiAwareForm
                 _startPurposeStatus,
                 "BitLocker search failed. Review diagnostics below.",
                 UiStatusKind.Error);
+            ShowBitLockerWarning(
+                "BitLocker metadata lookup failed. Check network/LDAP authentication, OU scope " +
+                "and recovery object permissions. The failure alone does not prove AccessDenied. " +
+                "See diagnostic commands...");
 
             _startDiagnostics.ShowError(
                 "BitLocker recovery search failed.",
@@ -5214,6 +5238,10 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
+            ShowBitLockerWarning(
+                "BitLocker recovery object metadata was found, but the selected recovery password " +
+                "could not be retrieved. Verify the exact recovery ID, confidential-attribute read rights " +
+                "and LDAP connectivity. Open Diagnostic steps and commands...");
             _startDiagnostics.ShowError(
                 "BitLocker recovery-key retrieval failed.",
                 "GetRecoveryKey",
