@@ -22,6 +22,9 @@ public sealed partial class MainForm
     private readonly RichTextBox _lapsDetails = new();
     private readonly Button _lapsDetailsToggle = new();
     private readonly UiStatusLabel _lapsStatus = new();
+    private readonly TableLayoutPanel _lapsZeroWarningPanel = new();
+    private readonly UiStatusLabel _lapsZeroWarning = new();
+    private readonly Button _lapsDiagnosticCommands = new();
     private readonly ProgressBar _lapsProgress = new();
     private readonly UiDiagnosticPanel _lapsDiagnostics = new();
     private LapsReadResult? _lapsResult;
@@ -50,7 +53,7 @@ public sealed partial class MainForm
                 Padding = new Padding(
                     UiStyle.PagePadding),
                 ColumnCount = 1,
-                RowCount = 10
+                RowCount = 11
             };
         root.ColumnStyles.Add(
             new ColumnStyle(
@@ -58,15 +61,15 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 10;
+             index < 11;
              index++)
         {
             root.RowStyles.Add(
                 new RowStyle(
-                    index == 4
+                    index == 5
                         ? SizeType.Percent
                         : SizeType.AutoSize,
-                    index == 4
+                    index == 5
                         ? 100F
                         : 0F));
         }
@@ -391,6 +394,63 @@ public sealed partial class MainForm
             0,
             3);
 
+        // Keep the empty-result explanation above the password grid, rather
+        // than burying it below the scrolling records/details workspace.
+        _lapsZeroWarningPanel.Name =
+            "LapsZeroRecordWarningPanel";
+        _lapsZeroWarningPanel.Dock =
+            DockStyle.Top;
+        _lapsZeroWarningPanel.AutoSize =
+            true;
+        _lapsZeroWarningPanel.AutoSizeMode =
+            AutoSizeMode.GrowAndShrink;
+        _lapsZeroWarningPanel.ColumnCount =
+            1;
+        _lapsZeroWarningPanel.RowCount =
+            2;
+        _lapsZeroWarningPanel.Margin =
+            new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap);
+        _lapsZeroWarningPanel.ColumnStyles.Add(
+            new ColumnStyle(SizeType.Percent, 100F));
+        _lapsZeroWarningPanel.RowStyles.Add(
+            new RowStyle(SizeType.AutoSize));
+        _lapsZeroWarningPanel.RowStyles.Add(
+            new RowStyle(SizeType.AutoSize));
+
+        _lapsZeroWarning.Name =
+            "LapsZeroRecordWarning";
+        _lapsZeroWarning.AccessibleName =
+            "LAPS password read warning";
+        _lapsZeroWarning.Dock =
+            DockStyle.Fill;
+        UiStyle.ConfigureStatusLabel(
+            _lapsZeroWarning);
+        UiStyle.SetStatus(
+            _lapsZeroWarning,
+            "No readable LAPS password records were returned.",
+            UiStatusKind.Warning);
+        _lapsZeroWarningPanel.Controls.Add(
+            _lapsZeroWarning, 0, 0);
+
+        _lapsDiagnosticCommands.Name =
+            "LapsDiagnosticCommandsButton";
+        _lapsDiagnosticCommands.Text =
+            "Diagnostic steps and commands...";
+        UiStyle.ConfigureActionButton(
+            _lapsDiagnosticCommands);
+        _lapsDiagnosticCommands.Anchor =
+            AnchorStyles.Left;
+        _lapsDiagnosticCommands.Margin =
+            new Padding(0, UiStyle.ControlGap, 0, 0);
+        _lapsDiagnosticCommands.Click +=
+            (_, _) => ShowLapsDiagnosticCommands();
+        _lapsZeroWarningPanel.Controls.Add(
+            _lapsDiagnosticCommands, 0, 1);
+        _lapsZeroWarningPanel.Visible =
+            false;
+        root.Controls.Add(
+            _lapsZeroWarningPanel, 0, 4);
+
         _lapsRows.Name =
             "LapsKeyResults";
         _lapsRows.AccessibleName =
@@ -446,7 +506,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             _lapsRows,
             0,
-            4);
+            5);
 
         var detailsPanel =
             new TableLayoutPanel
@@ -511,7 +571,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             detailsPanel,
             0,
-            5);
+            6);
 
         var secret =
             new TableLayoutPanel
@@ -614,7 +674,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             secret,
             0,
-            6);
+            7);
 
         _lapsStatus.Dock =
             DockStyle.Top;
@@ -625,7 +685,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             _lapsStatus,
             0,
-            7);
+            8);
 
         _lapsProgress.Name =
             "LapsProgress";
@@ -648,12 +708,12 @@ public sealed partial class MainForm
         root.Controls.Add(
             _lapsProgress,
             0,
-            8);
+            9);
 
         root.Controls.Add(
             _lapsDiagnostics,
             0,
-            9);
+            10);
 
         _lapsDetailsToggle.Click +=
             (_, _) =>
@@ -1350,6 +1410,16 @@ public sealed partial class MainForm
 
             if (available == 0)
             {
+                _lapsZeroWarningPanel.Visible = true;
+                UiStyle.SetStatus(
+                    _lapsZeroWarning,
+                    _lapsResult.Entries.Count == 0
+                        ? LapsReadDiagnostics.EmptyStatus(_lapsResult, cloud)
+                        : "LAPS records were returned, but no passwords are readable. " +
+                          "Check record status, AD read/decrypt authorization and the backup policy. " +
+                          "Open Diagnostic steps and commands.",
+                    UiStatusKind.Warning);
+
                 if (_lapsResult.Entries.Count == 0)
                 {
                     var diagnostics =
@@ -2205,6 +2275,17 @@ public sealed partial class MainForm
         }
     }
 
+    private void ShowLapsDiagnosticCommands()
+    {
+        if (_lapsResult is null)
+            return;
+
+        var cloud = _lapsSource.SelectedIndex == 1;
+        using var dialog = new LapsDiagnosticCommandsDialog(
+            LapsDiagnosticRunbook.Build(_lapsResult, cloud));
+        dialog.ShowDialog(this);
+    }
+
     private void ClearLapsResult()
     {
         _lapsGeneration++;
@@ -2217,6 +2298,7 @@ public sealed partial class MainForm
         _lapsPassword.Clear();
         _lapsPassword.UseSystemPasswordChar = true;
         _lapsRows.Rows.Clear();
+        _lapsZeroWarningPanel.Visible = false;
         _lapsDetails.Clear();
         _lapsDetails.Visible =
             false;
