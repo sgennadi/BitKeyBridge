@@ -11,6 +11,10 @@ public sealed partial class MainForm
     private readonly Button _disconnectAdButton = new();
     private readonly ProgressBar _adConnectionProgress = new();
     private readonly UiDiagnosticPanel _recoveryDiagnostics = new();
+    private readonly TableLayoutPanel _bitLockerZeroWarningPanel = new();
+    private readonly UiStatusLabel _bitLockerZeroWarning = new();
+    private readonly Button _bitLockerDiagnosticCommands = new();
+    private readonly Button _homeBitLockerDiagnosticButton = new();
     private readonly GroupBox _advancedConnectionGroup = new();
     private readonly GroupBox _recoveryCard = new();
     private readonly Label _recoveryCardComputer = new();
@@ -880,6 +884,13 @@ public sealed partial class MainForm
         _homeRotateBitLockerButton.Enabled =
             false;
 
+        _homeBitLockerDiagnosticButton.Name =
+            "HomeBitLockerDiagnosticButton";
+        _homeBitLockerDiagnosticButton.Text =
+            "BitLocker diagnostics...";
+        UiStyle.ConfigureActionButton(_homeBitLockerDiagnosticButton);
+        _homeBitLockerDiagnosticButton.Enabled = false;
+
         _homeDeviceDetailsButton.Name =
             "HomeDeviceDetailsButton";
         _homeDeviceDetailsButton.Text =
@@ -895,6 +906,7 @@ public sealed partial class MainForm
             _homeLapsButton,
             _homeRotateBitLockerButton,
             _homeDeviceDetailsButton,
+            _homeBitLockerDiagnosticButton,
             _homeBitLockerButton
         ]);
 
@@ -1102,6 +1114,10 @@ public sealed partial class MainForm
             (_, _) =>
                 OpenHomeDeviceDetails();
 
+        _homeBitLockerDiagnosticButton.Click +=
+            (_, _) =>
+                ShowHomeBitLockerDiagnosticCommands();
+
         _clearSecretNow.Click +=
             (_, _) =>
                 ClearVisibleSecretsNow();
@@ -1308,9 +1324,10 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 1,
-            RowCount = 7
+            RowCount = 8
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -1607,6 +1624,48 @@ public sealed partial class MainForm
 
         root.Controls.Add(searchGrid, 0, 4);
 
+        // Place the actionable zero-result/read-permission warning BEFORE the
+        // scrolling results grid so that it is not hidden below the fold.
+        _bitLockerZeroWarningPanel.Name =
+            "BitLockerZeroRecordWarningPanel";
+        _bitLockerZeroWarningPanel.Dock = DockStyle.Top;
+        _bitLockerZeroWarningPanel.AutoSize = true;
+        _bitLockerZeroWarningPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _bitLockerZeroWarningPanel.ColumnCount = 1;
+        _bitLockerZeroWarningPanel.RowCount = 2;
+        _bitLockerZeroWarningPanel.Margin =
+            new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap);
+        _bitLockerZeroWarningPanel.ColumnStyles.Add(
+            new ColumnStyle(SizeType.Percent, 100F));
+        _bitLockerZeroWarningPanel.RowStyles.Add(
+            new RowStyle(SizeType.AutoSize));
+        _bitLockerZeroWarningPanel.RowStyles.Add(
+            new RowStyle(SizeType.AutoSize));
+        _bitLockerZeroWarning.Name = "BitLockerZeroRecordWarning";
+        _bitLockerZeroWarning.AccessibleName =
+            "BitLocker recovery diagnostics warning";
+        UiStyle.ConfigureStatusLabel(_bitLockerZeroWarning);
+        UiStyle.SetStatus(
+            _bitLockerZeroWarning,
+            "No BitLocker recovery metadata was returned. The backup, search scope and permissions have not been independently verified.",
+            UiStatusKind.Warning);
+        _bitLockerZeroWarningPanel.Controls.Add(_bitLockerZeroWarning, 0, 0);
+
+        _bitLockerDiagnosticCommands.Name =
+            "BitLockerDiagnosticCommandsButton";
+        _bitLockerDiagnosticCommands.Text =
+            "Diagnostic steps and commands...";
+        UiStyle.ConfigureActionButton(_bitLockerDiagnosticCommands);
+        _bitLockerDiagnosticCommands.Anchor = AnchorStyles.Left;
+        _bitLockerDiagnosticCommands.Margin =
+            new Padding(0, UiStyle.ControlGap, 0, 0);
+        _bitLockerDiagnosticCommands.Click +=
+            (_, _) => ShowBitLockerDiagnosticCommands();
+        _bitLockerZeroWarningPanel.Controls.Add(
+            _bitLockerDiagnosticCommands, 0, 1);
+        _bitLockerZeroWarningPanel.Visible = false;
+        root.Controls.Add(_bitLockerZeroWarningPanel, 0, 5);
+
         _startResults.Name =
             "BitLockerSearchResults";
         _startResults.AccessibleName =
@@ -1645,10 +1704,10 @@ public sealed partial class MainForm
         root.Controls.Add(
             _startResults,
             0,
-            5);
+            6);
 
         ConfigureRecoveryCard();
-        root.Controls.Add(_recoveryCard, 0, 6);
+        root.Controls.Add(_recoveryCard, 0, 7);
 
         _connectAdButton.Click +=
             async (_, _) =>
