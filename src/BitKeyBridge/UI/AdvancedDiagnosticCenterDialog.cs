@@ -264,6 +264,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
         footer.Controls.Add(_copy);
         layout.Controls.Add(footer, 0, 5);
         Controls.Add(layout);
+        AcceptButton = _close;
         CancelButton = _close;
         FormClosing += (_, _) => _cancelToken?.Cancel();
     }
