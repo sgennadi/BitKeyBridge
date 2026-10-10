@@ -24,6 +24,7 @@ public sealed class EnvironmentDiagnosticReport
 
     public int Failures => Checks.Count(x => x.State == EnvironmentCheckState.Failed);
     public int Warnings => Checks.Count(x => x.State == EnvironmentCheckState.Warning);
+    public int NotVerified => Checks.Count(x => x.State == EnvironmentCheckState.NotVerified);
 
     public string SafeText()
     {
