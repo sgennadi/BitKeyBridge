@@ -10,6 +10,8 @@
     <Compile Include="../../src/BitKeyBridge/Core/LapsDiagnosticRunbook.cs" Link="LapsDiagnosticRunbook.cs" />
     <Compile Include="../../src/BitKeyBridge/Core/BitLockerDiagnosticRunbook.cs" Link="BitLockerDiagnosticRunbook.cs" />
     <Compile Include="../../src/BitKeyBridge/Core/EnvironmentDiagnosticModels.cs" Link="EnvironmentDiagnosticModels.cs" />
+    <Compile Include="../../src/BitKeyBridge/Core/AdvancedDiagnosticModels.cs" Link="AdvancedDiagnosticModels.cs" />
+    <Compile Include="../../src/BitKeyBridge/Services/AdvancedDiagnosticRulesSelfTest.cs" Link="AdvancedDiagnosticRulesSelfTest.cs" />
     <Compile Include="../../src/BitKeyBridge/Core/SearchModels.cs" Link="SearchModels.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsSecretCodec.cs" Link="LapsSecretCodec.cs" />
     <Compile Include="../../src/BitKeyBridge/Services/LapsCloudCodec.cs" Link="LapsCloudCodec.cs" />
