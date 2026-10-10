@@ -1348,6 +1348,53 @@ public sealed partial class MainForm
                         _lapsResult);
             }
 
+            if (available == 0)
+            {
+                if (_lapsResult.Entries.Count == 0)
+                {
+                    var diagnostics =
+                        LapsReadDiagnostics.EmptyDetails(
+                            _lapsResult,
+                            cloud);
+
+                    _lapsDetails.Text =
+                        diagnostics;
+                    _lapsDetails.Visible =
+                        true;
+                    _lapsDetailsToggle.Text =
+                        "Hide details";
+
+                    _lapsDiagnostics.ShowMessage(
+                        "No LAPS password attributes were returned.",
+                        diagnostics);
+
+                    UiStyle.SetStatus(
+                        _lapsStatus,
+                        LapsReadDiagnostics.EmptyStatus(
+                            _lapsResult,
+                            cloud),
+                        UiStatusKind.Warning);
+                }
+                else
+                {
+                    // Encrypted LAPS records can be visible without being
+                    // decryptable by this identity. Keep their rows and
+                    // per-record error details visible.
+                    UiStyle.SetStatus(
+                        _lapsStatus,
+                        $"{_lapsResult.Entries.Count} LAPS record(s) returned, " +
+                        "but no passwords could be read. Select a row to " +
+                        "inspect its status; encrypted LAPS may require " +
+                        "separate decryption authorization.",
+                        UiStatusKind.Warning);
+                }
+
+                // No passwords are present in memory. Preserve diagnostics
+                // rather than starting the secret-expiration timer that
+                // would erase the only useful explanation in two minutes.
+                return;
+            }
+
             var expiredCurrent =
                 _lapsResult.Entries.Any(
                     row =>
