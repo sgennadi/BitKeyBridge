@@ -37,7 +37,7 @@ public static class BitLockerDiagnosticRunbook
         if (context.LocalCache)
         {
             var cache = string.IsNullOrWhiteSpace(context.LocalCachePath)
-                ? "C:\ProgramData\BitKeyBridge\RecoveryExport\recovery.csv"
+                ? @"C:\ProgramData\BitKeyBridge\RecoveryExport\recovery.csv"
                 : context.LocalCachePath;
             lines.AddRange([
                 "WHERE: workstation running BitKeyBridge - PowerShell (no AD/DC connection required)",
