@@ -4045,7 +4045,7 @@ public sealed partial class MainForm : DpiAwareForm
             {
                 RefreshHomeConnectionUi();
                 _connectAdButton.Enabled =
-                    _recoverySource.SelectedIndex != 1;
+                    _recoverySource.SelectedIndex == 0;
                 _connectAdCancelButton.Enabled =
                     false;
                 _disconnectAdButton.Enabled =
