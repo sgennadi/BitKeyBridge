@@ -51,6 +51,8 @@ public sealed class PermissionInspectionReport
     public bool DescriptorRetrieved { get; set; }
     public string Status { get; set; } = "NotVerified";
     public List<string> DescriptorRules { get; } = [];
+    public List<string> ResolvedPrincipalSids { get; } = [];
+    public string GroupResolutionStatus { get; set; } = "NotVerified";
     public List<DiagnosticFinding> Findings { get; } = [];
 }
 
