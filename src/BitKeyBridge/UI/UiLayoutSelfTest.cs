@@ -205,7 +205,7 @@ public static class UiLayoutSelfTest
             (
                 "Environment prerequisites",
                 () => new EnvironmentDiagnosticDialog(
-                    NewConfig(), cloudConfigured: false, computer: "PC-TEST")),
+                    NewConfig(), cloudConfigured: false, computer: "PC-TEST", runOnOpen: false)),
             (
                 "BitLocker diagnostic commands",
                 () => new BitLockerDiagnosticCommandsDialog(
