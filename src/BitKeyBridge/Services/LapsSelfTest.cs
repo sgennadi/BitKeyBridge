@@ -313,6 +313,8 @@ public static class LapsSelfTest
             report.Checks.Add(new EnvironmentCheckRow("Permissions", "BitLocker", EnvironmentCheckState.NotVerified,
                 "Metadata-only: rights not tested."));
             var safeText = report.SafeText();
+            Assert(report.NotVerified == 1);
+            Assert(report.Failures == 0 && report.Warnings == 0);
             Assert(safeText.Contains("NotVerified", StringComparison.Ordinal));
             Assert(safeText.Contains("NOT independently verified", StringComparison.Ordinal));
             Assert(!safeText.Contains(secret, StringComparison.Ordinal));
