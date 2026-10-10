@@ -39,7 +39,8 @@ public sealed class EnvironmentDiagnosticService
         try
         {
             var localDomain = await Task.Run(
-                () => Domain.GetComputerDomain().Name, cancellationToken).WaitAsync(cancellationToken);
+                () => Domain.GetComputerDomain().Name, cancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(8), cancellationToken);
             Add("Client", "Domain membership", EnvironmentCheckState.Available,
                 "Joined to " + localDomain + ". Explicit credentials also support workgroup machines.");
         }
@@ -70,11 +71,22 @@ public sealed class EnvironmentDiagnosticService
         catch (Exception ex)
         {
             dc = config.AdServer?.Trim() ?? string.Empty;
+            var source = "configured";
+            if (string.IsNullOrWhiteSpace(dc))
+            {
+                var logonServer = Environment.GetEnvironmentVariable("LOGONSERVER")?.Trim();
+                if (!string.IsNullOrWhiteSpace(logonServer))
+                {
+                    dc = logonServer.TrimStart('\\');
+                    source = "Windows LOGONSERVER candidate";
+                }
+            }
             Add("AD", "Writable DC discovery", EnvironmentCheckState.Warning,
                 "Discovery/bind was not completed: " + ex.Message +
                 (string.IsNullOrWhiteSpace(dc)
                     ? " Set an explicit DC and domain under Start > Advanced when on a workgroup PC."
-                    : " Testing configured DC " + dc + " without assuming successful authentication."));
+                    : " Testing " + source + " DC " + dc +
+                      " for network reachability only; writable-DC discovery and authentication remain unverified."));
         }
 
         report.DomainController = dc;
