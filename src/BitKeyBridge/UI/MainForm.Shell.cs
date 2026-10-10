@@ -1750,6 +1750,7 @@ public sealed partial class MainForm
         _startQuery.TextChanged +=
             (_, _) =>
             {
+                ClearBitLockerWarning();
                 if (_layoutSelfTest)
                     return;
 
@@ -1805,6 +1806,7 @@ public sealed partial class MainForm
         _recoverySource.SelectedIndexChanged +=
             (_, _) =>
             {
+                ClearBitLockerWarning();
                 ResetRecoverySearchState();
                 UpdateRecoverySourceUi();
                 TrySaveRecoveryUiState();
