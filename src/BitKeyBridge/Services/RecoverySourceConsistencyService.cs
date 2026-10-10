@@ -89,13 +89,41 @@ public sealed class RecoverySourceConsistencyService
 
                 if (Guid.TryParse(deviceId, out _))
                 {
-                    output.EntraDeviceId = deviceId;
-                    var keys = await graph.GetRecoveryMetadataForDeviceAsync(
-                        graphToken, deviceId, exactComputer, ct);
-                    output.EntraRecoveryIds.AddRange(keys
-                        .Select(x => x.RecoveryId)
-                        .Distinct(StringComparer.OrdinalIgnoreCase));
-                    output.EntraQueried = true;
+                    var resolved = await graph.FindEntraDeviceByDeviceIdAsync(
+                        graphToken, deviceId, ct);
+                    if (resolved is null)
+                    {
+                        output.Findings.Add(new("ENTRA_DEVICE_ID_NOT_CONFIRMED",
+                            DiagnosticSeverity.Warning, EvidenceStrength.NotVerified,
+                            "Supplied GUID was not confirmed as an Entra deviceId",
+                            "Microsoft Graph did not return an Entra device whose deviceId matches. " +
+                            "The GUID may be an object id or correspond to a deleted/different device.",
+                            "Confirm the deviceId in Entra ID / Intune and Graph Device.Read.All permission.",
+                            "Entra / Intune administration"));
+                    }
+                    else if (!resolved.Value.DisplayName.Equals(
+                        exactComputer, StringComparison.OrdinalIgnoreCase))
+                    {
+                        output.Findings.Add(new("ENTRA_DEVICE_NAME_MISMATCH",
+                            DiagnosticSeverity.Warning, EvidenceStrength.NotVerified,
+                            "Entra deviceId points to a different display name",
+                            "AD computer " + exactComputer + " and Entra device " +
+                            resolved.Value.DisplayName +
+                            " do not have matching names. A rename might be legitimate, " +
+                            "but comparison needs explicit identity confirmation.",
+                            "Confirm AD/Entra physical device identity before comparing keys.",
+                            "Entra / Intune administration"));
+                    }
+                    else
+                    {
+                        output.EntraDeviceId = resolved.Value.DeviceId;
+                        var keys = await graph.GetRecoveryMetadataForDeviceAsync(
+                            graphToken, output.EntraDeviceId, exactComputer, ct);
+                        output.EntraRecoveryIds.AddRange(keys
+                            .Select(x => x.RecoveryId)
+                            .Distinct(StringComparer.OrdinalIgnoreCase));
+                        output.EntraQueried = true;
+                    }
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
