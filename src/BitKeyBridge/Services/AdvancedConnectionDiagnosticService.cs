@@ -121,7 +121,8 @@ public sealed class AdvancedConnectionDiagnosticService
             });
             try
             {
-                await tls.AuthenticateAsClientAsync(host, timeout.Token);
+                await tls.AuthenticateAsClientAsync(
+                    new SslClientAuthenticationOptions { TargetHost = host }, timeout.Token);
                 return new("LDAPS TLS identity", host, "OK",
                     "Certificate trusted for this hostname. " + details);
             }
