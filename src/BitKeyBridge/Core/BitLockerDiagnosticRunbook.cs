@@ -30,6 +30,7 @@ public static class BitLockerDiagnosticRunbook
             "Nothing is executed by BitKeyBridge. Default steps do not read recovery passwords.",
             "Do not share actual 48-digit recovery passwords, authorization tokens, or unredacted logs.",
             "Recovery ID: " + (string.IsNullOrWhiteSpace(context.RecoveryId) ? "(not selected)" : context.RecoveryId),
+            "Selected search scope: " + (string.IsNullOrWhiteSpace(context.ScopeDistinguishedName) ? "(none)" : context.ScopeDistinguishedName),
             "Returned recovery records: " + (context.RecordsReturned?.ToString() ?? "not tested"),
             ""
         };
@@ -97,6 +98,12 @@ public static class BitLockerDiagnosticRunbook
             "Import-Module ActiveDirectory",
             "$dc = " + Quote(dc)
         ]);
+        if (!string.IsNullOrWhiteSpace(context.ScopeDistinguishedName))
+        {
+            lines.Add("$selectedScopeDN = " + Quote(context.ScopeDistinguishedName));
+            lines.Add("Get-ADObject -Identity $selectedScopeDN -Server $dc | Select-Object Name, DistinguishedName");
+            lines.Add("Confirm the target computer is inside this selected search scope; otherwise broaden/adjust the scope before concluding no backup.");
+        }
 
         var computerDn = context.ComputerDistinguishedName;
         if (!string.IsNullOrWhiteSpace(computerDn))
