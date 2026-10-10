@@ -11,6 +11,7 @@ public sealed class BitLockerDiagnosticContext
     public string ScopeDistinguishedName { get; init; } = string.Empty;
     public string LocalCachePath { get; init; } = string.Empty;
     public bool LocalCache { get; init; }
+    public bool ProtectedCache { get; init; }
     public bool Entra { get; init; }
     public int? RecordsReturned { get; init; }
 }
@@ -40,6 +41,19 @@ public static class BitLockerDiagnosticRunbook
             var cache = string.IsNullOrWhiteSpace(context.LocalCachePath)
                 ? @"C:\ProgramData\BitKeyBridge\RecoveryExport\recovery.csv"
                 : context.LocalCachePath;
+            if (context.ProtectedCache)
+            {
+                lines.AddRange([
+                    "WHERE: workstation running BitKeyBridge",
+                    "Test-Path -LiteralPath " + Quote(cache),
+                    "Get-Item -LiteralPath " + Quote(cache) + " -ErrorAction SilentlyContinue | Select-Object FullName, Length, LastWriteTime",
+                    "This is a .bkb DPAPI CurrentUser-encrypted sidecar, not a readable CSV.",
+                    "Only the Windows user who created it can decrypt it. Do NOT use Import-Csv or Get-Content to try to expose it.",
+                    "Original plaintext export CSV was not removed by the migration; handle it separately."
+                ]);
+                return string.Join(Environment.NewLine, lines);
+            }
+
             lines.AddRange([
                 "WHERE: workstation running BitKeyBridge - PowerShell (no AD/DC connection required)",
                 "Test-Path -LiteralPath " + Quote(cache),
