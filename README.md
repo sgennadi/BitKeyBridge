@@ -664,7 +664,7 @@ See [Workstation prerequisites and diagnostics](docs/ENVIRONMENT-DIAGNOSTICS.md)
 
 **Start > Device Diagnostics...** adds per-computer multi-DC BitLocker/LAPS metadata consistency, evidence-graded Smart Diagnostic Engine, read-only AD ACE/DACL permission inspection, optional LDAP/SRV/site/strict LDAPS certificate validation and user-confirmed writable DC selection. Compare on-prem AD with Microsoft Entra BitLocker metadata by exact unique Entra device ID, without reading recovery passwords.
 
-Run **Collect endpoint ZIP** directly on the problem workstation (also `BitKeyBridge.exe --collect-endpoint --output C:\Temp\endpoint.zip`) and import the resulting ZIP on an admin PC. The report contains only whitelisted non-secret Windows policy metadata and event IDs; never event messages, keys, tokens or password data.
+Run **Collect endpoint ZIP** directly on the problem workstation (also `BitKeyBridge.exe --collect-endpoint --output C:\Temp\endpoint.zip`) and import the resulting ZIP on an admin PC. The report contains only whitelisted non-secret Windows policy metadata, WMI BitLocker volume/TPM status and event IDs; never event messages, keys, tokens or password data.
 
 **Protect recovery CSV** creates a DPAPI CurrentUser-protected .bkb sidecar from an existing export and enables **Recovery > Protected cache** for local metadata-first search and authorized selected-secret reads. The plaintext original CSV remains unchanged and requires separate administrative retirement. The encrypted cache is tied to its original Windows identity.
 
