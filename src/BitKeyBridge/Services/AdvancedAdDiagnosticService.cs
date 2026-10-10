@@ -278,11 +278,11 @@ public sealed class AdvancedAdDiagnosticService
         if (!_config.AdUseExplicitCredentials)
         {
             using var identity = WindowsIdentity.GetCurrent();
-            var sids = new List<string>();
-            if (identity.User is not null) sids.Add(identity.User.Value);
+            var localSids = new List<string>();
+            if (identity.User is not null) localSids.Add(identity.User.Value);
             if (identity.Groups is not null)
-                sids.AddRange(identity.Groups.OfType<SecurityIdentifier>().Select(x => x.Value));
-            return sids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                localSids.AddRange(identity.Groups.OfType<SecurityIdentifier>().Select(x => x.Value));
+            return localSids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         var original = _config.AdUsername.Trim();
