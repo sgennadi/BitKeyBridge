@@ -203,6 +203,15 @@ public static class UiLayoutSelfTest
                         NewConfig(),
                         layoutSelfTest: true)),
             (
+                "Environment prerequisites",
+                () => new EnvironmentDiagnosticDialog(
+                    NewConfig(), cloudConfigured: false, computer: "PC-TEST")),
+            (
+                "BitLocker diagnostic commands",
+                () => new BitLockerDiagnosticCommandsDialog(
+                    BitLockerDiagnosticRunbook.Build(
+                        new BitLockerDiagnosticContext { SearchQuery = "PC-TEST" }))),
+            (
                 "AD credential prompt",
                 () =>
                     new AdCredentialPromptDialog(
@@ -444,6 +453,8 @@ public static class UiLayoutSelfTest
                     "HomeConnectionStatus",
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
+                    "HomeEnvironmentCheckButton",
+                    "HomeBitLockerDiagnosticButton",
                     "HomeBitLockerButton",
                     "HomeRevealBitLockerButton",
                     "HomeCopyBitLockerButton",
@@ -634,6 +645,41 @@ public static class UiLayoutSelfTest
             {
                 failures.Add(
                     $"{formName}/{scenario.Name}: LAPS warning must be positioned above the key results grid.");
+            }
+        }
+
+        var bitLockerWarningPanel =
+            FindByName(form, "BitLockerZeroRecordWarningPanel") as TableLayoutPanel;
+        var bitLockerWarning =
+            FindByName(form, "BitLockerZeroRecordWarning") as UiStatusLabel;
+        var bitLockerCommands =
+            FindByName(form, "BitLockerDiagnosticCommandsButton") as Button;
+        var bitLockerResults =
+            FindByName(form, "BitLockerSearchResults") as DataGridView;
+
+        if (bitLockerWarningPanel is null ||
+            bitLockerWarning is null ||
+            bitLockerCommands is null ||
+            bitLockerResults is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: BitLocker warning/results/diagnostic controls missing.");
+        }
+        else
+        {
+            if (bitLockerWarningPanel.Visible)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: BitLocker warning must start hidden.");
+
+            if (bitLockerWarning.StatusKind != UiStatusKind.Warning)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: BitLocker warning bypasses shared warning palette.");
+
+            if (bitLockerWarningPanel.Parent is not TableLayoutPanel workspace ||
+                workspace.GetRow(bitLockerWarningPanel) >= workspace.GetRow(bitLockerResults))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: BitLocker warning must be above the results grid.");
             }
         }
 
