@@ -160,12 +160,93 @@ public sealed class AdvancedAdDiagnosticService
                 }
             }
 
+            try
+            {
+                var groups = ResolveBoundPrincipalSids(conn, dc);
+                output.ResolvedPrincipalSids.AddRange(groups);
+                output.GroupResolutionStatus = groups.Count > 0
+                    ? "Identity SID/group evidence observed; token and effective rights NotVerified"
+                    : "NotVerified (no tokenGroups or Windows SID evidence)";
+                var matchingAceCount = output.DescriptorRules.Count(rule =>
+                    groups.Any(sid => rule.Contains(" | " + sid + " | ",
+                        StringComparison.OrdinalIgnoreCase)));
+                output.Findings.Add(new("ACE_PRINCIPAL_MATCH", DiagnosticSeverity.Info,
+                    groups.Count > 0 ? EvidenceStrength.Confirmed : EvidenceStrength.NotVerified,
+                    "Bound identity SID/group evidence",
+                    groups.Count + " SID(s) observed; " + matchingAceCount +
+                    " computer DACL ACE(s) reference one of them. An ACE match does NOT prove effective access.",
+                    "Review nested group membership, explicit deny, inherited child ACLs and " +
+                    "the protected LAPS encryption principal.", "DC / RSAT workstation"));
+            }
+            catch (Exception ex)
+            {
+                output.GroupResolutionStatus = "NotVerified: " +
+                    DiagnosticRedaction.Sanitize(ex.Message);
+            }
+
+            // A recovery password lives on a CHILD recovery-information object,
+            // not necessarily on the computer itself. Read up to three child DACLs.
+            try
+            {
+                var children = _ad.GetRecoveryMetadataForComputer(dc, dn).Take(3).ToList();
+                foreach (var child in children)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var request = new SearchRequest(child.RecoveryDistinguishedName,
+                            "(objectClass=msFVE-RecoveryInformation)",
+                            SearchScope.Base, "nTSecurityDescriptor");
+                        request.Controls.Add(new SecurityDescriptorFlagControl(SecurityMasks.Dacl));
+                        var reply = (SearchResponse)conn.SendRequest(request, TimeSpan.FromSeconds(12));
+                        if (reply.Entries.Count == 1 &&
+                            reply.Entries[0].Attributes["nTSecurityDescriptor"] is { Count: > 0 } acl &&
+                            acl[0] is byte[] bytes)
+                        {
+                            var d = new RawSecurityDescriptor(bytes, 0);
+                            foreach (GenericAce raw in d.DiscretionaryAcl?.Cast<GenericAce>().Take(50)
+                                 ?? Enumerable.Empty<GenericAce>())
+                            {
+                                if (raw is not QualifiedAce ace) continue;
+                                if ((ace.AccessMask & 0x100) == 0 &&
+                                    (ace.AccessMask & 0x10) == 0 &&
+                                    ace.AceQualifier != AceQualifier.AccessDenied) continue;
+                                output.DescriptorRules.Add(
+                                    "Recovery child " + child.RecoveryId + " | " +
+                                    ace.AceQualifier + " | " +
+                                    ace.SecurityIdentifier.Value + " | mask=0x" +
+                                    ace.AccessMask.ToString("X8") + " | " +
+                                    ((raw.AceFlags & AceFlags.Inherited) != 0
+                                        ? "inherited" : "explicit"));
+                            }
+                        }
+                        else
+                        {
+                            output.DescriptorRules.Add("Recovery child " +
+                                child.RecoveryId + " | DACL NotVerified");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        output.DescriptorRules.Add("Recovery child " + child.RecoveryId +
+                            " | DACL NotVerified: " + DiagnosticRedaction.Sanitize(ex.Message));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                output.DescriptorRules.Add(
+                    "Recovery child DACL inspection NotVerified: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
             output.Status = "ACL observed; effective access NotVerified";
             output.Findings.Add(new("ACL_OBSERVED", DiagnosticSeverity.Info,
                 EvidenceStrength.Confirmed, "Computer-object DACL was read",
                 output.DescriptorRules.Count + " potentially relevant ACE(s) enumerated. " +
-                "No group expansion, object-attribute property set, inherited ACL evaluation, " +
-                "deny ordering or effective permission grant is asserted.",
+                "Identity SID/group candidates and up to three recovery-child DACLs are included where readable. " +
+                "No full effective token, attribute property-set grant, inherited-right/deny ordering " +
+                "or effective permission is asserted.",
                 "For BitLocker, also inspect the exact msFVE-RecoveryInformation child ACL. " +
                 "For LAPS, inspect read/decrypt group and encryption-principal membership separately.",
                 "ADUC Security > Advanced / DC"));
@@ -190,6 +271,49 @@ public sealed class AdvancedAdDiagnosticService
         }
 
         return output;
+    }
+
+    private List<string> ResolveBoundPrincipalSids(LdapConnection connection, string dc)
+    {
+        if (!_config.AdUseExplicitCredentials)
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var sids = new List<string>();
+            if (identity.User is not null) sids.Add(identity.User.Value);
+            if (identity.Groups is not null)
+                sids.AddRange(identity.Groups.OfType<SecurityIdentifier>().Select(x => x.Value));
+            return sids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        var original = _config.AdUsername.Trim();
+        if (string.IsNullOrWhiteSpace(original)) return [];
+        var sam = original.Contains('\\') ? original[(original.LastIndexOf('\\') + 1)..] :
+            original.Contains('@') ? original[..original.IndexOf('@')] : original;
+
+        var root = _ad.GetRootDse(dc);
+        var baseDn = root.GetValueOrDefault("defaultNamingContext", string.Empty);
+        if (string.IsNullOrWhiteSpace(baseDn)) return [];
+        var escapedSam = ActiveDirectoryService.EscapeLdapFilter(sam);
+        var escapedUpn = ActiveDirectoryService.EscapeLdapFilter(original);
+        var request = new SearchRequest(baseDn,
+            "(&(objectCategory=person)(objectClass=user)(|(sAMAccountName=" +
+            escapedSam + ")(userPrincipalName=" + escapedUpn + ")))",
+            SearchScope.Subtree, "objectSid", "tokenGroups")
+        { SizeLimit = 2 };
+
+        var response = (SearchResponse)connection.SendRequest(request, TimeSpan.FromSeconds(15));
+        if (response.Entries.Count != 1)
+            return []; // Ambiguous/missing account: never guess which identity was bound.
+        var attrs = response.Entries[0].Attributes;
+        var sids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (attrs["objectSid"] is { Count: > 0 } userSid && userSid[0] is byte[] u)
+            sids.Add(new SecurityIdentifier(u, 0).Value);
+        if (attrs["tokenGroups"] is { Count: > 0 } groups)
+        {
+            foreach (var sid in groups)
+                if (sid is byte[] data) sids.Add(new SecurityIdentifier(data, 0).Value);
+        }
+        return sids.ToList();
     }
 
     private (List<string> RecoveryIds, DateTimeOffset? WindowsExpiry,
