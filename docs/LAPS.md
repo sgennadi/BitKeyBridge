@@ -1,6 +1,6 @@
 # Native LAPS support
 
-BitKeyBridge 0.21.2 uses C#/.NET, signed/sealed LDAP (or certificate-validated LDAPS), native DPAPI-NG and Microsoft Graph. No PowerShell process, module, SDK or fallback is used by these features.
+BitKeyBridge 0.25.3 uses C#/.NET, signed/sealed LDAP (or certificate-validated LDAPS), native DPAPI-NG and Microsoft Graph. No PowerShell process, module, SDK or fallback is used by these features.
 
 | Source | Current password | History | Identity and permissions |
 | --- | --- | --- | --- |
@@ -47,3 +47,13 @@ Official references:
 - [NCryptUnprotectSecret](https://learn.microsoft.com/en-us/windows/win32/api/ncryptprotect/nf-ncryptprotect-ncryptunprotectsecret)
 - [LogonUserW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonuserw)
 - [Graph: get deviceLocalCredentialInfo](https://learn.microsoft.com/en-us/graph/api/devicelocalcredentialinfo-get?view=graph-rest-1.0)
+
+## No readable passwords: operator troubleshooting
+
+If LAPS metadata is visible but AD returned zero password attributes, BitKeyBridge shows a yellow banner above the results table. Missing LAPS read permission is a likely cause, NOT proof of denial: the computer may never have backed up a password, may back up to Entra instead of AD, or the current DC might not yet hold a replicated backup. Diagnostic steps and commands... opens a copyable, parameterized runbook.
+
+Instructions are grouped by execution location: affected computer (GPO and LAPS Operational log); DC or RSAT workstation (non-secret AD metadata, OU permissions and optional LAPS decrypt test); and operator workstation (Windows token and groups). Entra LAPS has its own Graph metadata, role and backup-policy checks. The selected AD computer DN, OU and DC are used when available.
+
+Default checks do not request password attributes, change ACLs, reset passwords or start password rotation. The optional Get-LapsADPassword test DOES retrieve a secret even though its displayed output excludes the Password field; only authorized staff should run it, and they should never share raw outputs. The application does not run these commands automatically. For encrypted Windows LAPS, AD read permission and encryption-principal authorization are separate checks. Find-LapsADExtendedRights shows configured delegations, not conclusive effective access for a user.
+
+Microsoft references: https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-event-log and https://learn.microsoft.com/en-us/powershell/module/laps/find-lapsadextendedrights.

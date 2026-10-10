@@ -1,3 +1,13 @@
+## 0.25.3
+
+- Added a prominent yellow LAPS zero-readable-password warning immediately above the password results grid. Visible backup metadata triggers a likely read-delegation explanation, without falsely asserting that an actual stored password or access denial was verified.
+- Added Diagnostic steps and commands... with a responsive copyable dialog identifying where to run checks: affected workstation, domain controller / RSAT workstation, and operator workstation.
+- Automatically uses selected AD computer DN, OU and DC; covers Windows LAPS, Legacy LAPS and Entra LAPS separately.
+- Includes GPO, LAPS Operational log, non-secret AD expiration metadata, Find-LapsADExtendedRights, whoami groups and Entra metadata checks. A separate password-read/decrypt probe is explicitly marked optional and sensitive.
+- If encrypted LAPS rows were returned but none could be decrypted, the warning links to separate AD read and decryption guidance without losing per-row errors.
+- Leaves diagnostic details visible until a new lookup or explicit clear. No PowerShell commands are executed by the app; no ACL changes, password resets, mandatory tickets, RBAC/JIT, two-person approval or SIEM defaults are changed.
+- Adds regression tests for safe command generation, escaped-comma OU extraction, AD versus Entra instructions, and a UI layout check that keeps the warning above the results grid.
+
 # Changelog
 
 ## 0.25.2

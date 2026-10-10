@@ -50,6 +50,7 @@ public sealed class LapsReadResult : IDisposable
     public string ComputerName { get; set; } = string.Empty;
     public string ComputerId { get; set; } = string.Empty;
     public string DirectoryServer { get; set; } = string.Empty;
+    public string ComputerDistinguishedName { get; set; } = string.Empty;
     public string PasswordVersion { get; set; } = string.Empty;
     public bool LegacyBackupIndicatorPresent { get; set; }
     public bool WindowsBackupIndicatorPresent { get; set; }
@@ -122,9 +123,9 @@ public static class LapsReadDiagnostics
 
         if (result.HasAdBackupIndicators)
         {
-            return "0 records: LAPS backup metadata is visible, " +
-                "but AD returned no password attributes. " +
-                "Check OU read delegation or backup policy; use AD access help...";
+            return "0 records: LAPS metadata detected, but AD did not return any password attribute. " +
+                "Most likely missing LAPS read permission; also check the backup policy. " +
+                "Read access has not been independently verified.";
         }
 
         return "0 records: AD returned no LAPS password or backup metadata. " +
@@ -150,6 +151,7 @@ public static class LapsReadDiagnostics
             "Source: " + (cloud ? "Entra" : "Active Directory"),
             "Computer: " + result.ComputerName,
             "Directory: " + result.DirectoryServer,
+            "Computer DN: " + result.ComputerDistinguishedName,
             "Records returned: 0"
         };
 
