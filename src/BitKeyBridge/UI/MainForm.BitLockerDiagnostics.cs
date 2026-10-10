@@ -30,7 +30,8 @@ public sealed partial class MainForm
                 selected?.RecoveryDistinguishedName ?? string.Empty,
             RecoveryId = selected?.RecoveryId ??
                 (Guid.TryParse(query, out var recoveryId) ? recoveryId.ToString("D") : string.Empty),
-            DirectoryServer = dc,
+            DirectoryServer = !string.IsNullOrWhiteSpace(selected?.DirectoryServer)
+                ? selected.DirectoryServer : dc,
             Domain = _config.AdDomain,
             ScopeDistinguishedName = _startScope?.SearchBase ?? string.Empty,
             LocalCachePath = _config.OutputCsv,
