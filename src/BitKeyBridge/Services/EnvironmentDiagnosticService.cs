@@ -145,7 +145,8 @@ public sealed class EnvironmentDiagnosticService
                 EnvironmentDiagnosticPolicy.KdsVerificationDetail);
             Add("DC", "Server-side services", EnvironmentCheckState.NotVerified,
                 "TCP probes cannot prove NTDS, Kdc, Netlogon, RpcSs, RpcEptMapper or KdsSvc health. " +
-                "Run Get-Service on the DC and inspect domain logs when necessary.");
+                "ON DC (PowerShell): Get-Service NTDS,Kdc,Netlogon,RpcSs,RpcEptMapper,KdsSvc,W32Time. " +
+                "KdsSvc may be trigger-started; Stopped alone is not proof of failure.");
 
             if (!string.IsNullOrWhiteSpace(report.ComputerName))
             {
