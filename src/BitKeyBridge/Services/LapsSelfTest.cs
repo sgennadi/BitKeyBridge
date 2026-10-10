@@ -328,10 +328,12 @@ public static class LapsSelfTest
                 RecoveryDistinguishedName = "CN=2026-10-10T01:01:01+00:00{12345678-1111-2222-3333-444444444444},CN=PC-TEST,OU=Win11,DC=yosh,DC=ac,DC=il",
                 RecoveryId = "12345678-1111-2222-3333-444444444444",
                 DirectoryServer = "yosh-dc01.yosh.ac.il",
+                ScopeDistinguishedName = "OU=Win11,DC=yosh,DC=ac,DC=il",
                 RecordsReturned = 1
             };
             var guide = BitLockerDiagnosticRunbook.Build(context);
             Assert(guide.Contains("SearchScope OneLevel", StringComparison.Ordinal));
+            Assert(guide.Contains("$selectedScopeDN = 'OU=Win11,DC=yosh,DC=ac,DC=il'", StringComparison.Ordinal));
             Assert(guide.Contains("msFVE-RecoveryInformation", StringComparison.Ordinal));
             Assert(guide.Contains("dc01.yosh.ac.il", StringComparison.Ordinal));
             Assert(guide.Contains("OPTIONAL: authorized read-right verification", StringComparison.Ordinal));

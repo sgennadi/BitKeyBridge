@@ -1,3 +1,9 @@
+## 0.25.5
+
+- Fixed the BitLocker diagnostic runbook to include the selected Active Directory OU/search scope when inspecting zero recovery records or permissions.
+- Added an explicit read-only AD OU verification command scoped to the chosen DC and a regression assertion checking correct OU substitution.
+- Retains the 0.25.4 Environment Check, yellow BitLocker warnings, workstation/AD/Entra diagnostics and read-only behavior. No service, AD ACL, GPO, recovery password or policy changes.
+
 ## 0.25.4
 
 - Added Start > Environment Check... for normal helpdesk operators, including on non-domain-joined workstations with explicit AD credentials. Probe is native C#/.NET, read-only and does not require PowerShell or RSAT.
