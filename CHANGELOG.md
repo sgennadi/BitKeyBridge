@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.25.2
+
+- Fixed **LAPS → Read LAPS** when AD or Entra returns zero password records: the screen now explains the probable causes instead of displaying only `0 records, 0 readable passwords`.
+- Distinguishes non-secret **Legacy LAPS / Windows LAPS backup indicators** from actual returned password attributes. Visible expiration/version metadata is not proof that a password was backed up or that permissions are correct.
+- For zero-record results, automatically expands **Details** and shows copyable, sanitized diagnostics: directory/DC, source, which LAPS backup indicators were visible, and targeted OU delegation / client policy / encrypted-password decrypt guidance.
+- Entra empty responses get their own Graph/Entra permission and backup guidance instead of AD instructions.
+- If LDAP returns encrypted LAPS records but none can be decrypted, the existing records and per-row error statuses remain visible with separate authorization guidance.
+- No password-expiration timer starts when **zero readable passwords** were returned. Diagnostics remain available until the user clears the result or starts a new search.
+- Extended LAPS regression tests for all combinations of AD metadata indicators, the Entra empty case, and secret-free diagnostic text.
+- This release does **not** change Active Directory ACLs, enable ticket prompts, or enable any RBAC/JIT/two-person/SIEM enterprise policy by default.
+
+
 ## 0.25.1
 
 - Fixed the **Start** layout regression visible in 0.25.0 where the large **LAPS Passwords** / **BitLocker Recovery** action buttons could be painted over the unified search-results grid at some window sizes or DPI/scaling combinations.
