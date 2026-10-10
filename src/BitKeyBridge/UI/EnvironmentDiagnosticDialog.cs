@@ -203,9 +203,11 @@ public sealed class EnvironmentDiagnosticDialog : DpiAwareForm
             _copy.Enabled = true;
             UiStyle.SetStatus(_status,
                 "Checks finished: " + report.Failures + " failed, " + report.Warnings +
-                " warnings. 'NotVerified' never means a permission was granted.",
+                " warnings, " + report.NotVerified + " not verified. " +
+                "Connectivity OK does not establish recovery/decryption permissions.",
                 report.Failures > 0 ? UiStatusKind.Error :
-                report.Warnings > 0 ? UiStatusKind.Warning : UiStatusKind.Success);
+                report.Warnings > 0 ? UiStatusKind.Warning :
+                report.NotVerified > 0 ? UiStatusKind.Neutral : UiStatusKind.Success);
         }
         catch (OperationCanceledException)
         {
