@@ -18,7 +18,7 @@ public sealed class EnvironmentDiagnosticDialog : DpiAwareForm
     private CancellationTokenSource? _cancellation;
     private EnvironmentDiagnosticReport? _report;
 
-    public EnvironmentDiagnosticDialog(AppConfig config, bool cloudConfigured, string computer)
+    public EnvironmentDiagnosticDialog(AppConfig config, bool cloudConfigured, string computer, bool runOnOpen = true)
     {
         _config = config;
         _cloudConfigured = cloudConfigured;
@@ -154,7 +154,8 @@ public sealed class EnvironmentDiagnosticDialog : DpiAwareForm
         };
         _close.Click += (_, _) => Close();
         FormClosing += (_, _) => _cancellation?.Cancel();
-        Shown += async (_, _) => await RunChecksAsync();
+        if (runOnOpen)
+            Shown += async (_, _) => await RunChecksAsync();
         AcceptButton = _run;
         CancelButton = _close;
     }
