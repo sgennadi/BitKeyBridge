@@ -651,10 +651,12 @@ public sealed class ConfigurationMaintenanceService
             }
         }
 
-        if (config.RecoverySearchSource is not "LiveAD" and not "LocalCache")
+        if (config.RecoverySearchSource is not "LiveAD"
+            and not "LocalCache"
+            and not "ProtectedCache")
         {
             throw new InvalidOperationException(
-                "RecoverySearchSource must be LiveAD or LocalCache.");
+                "RecoverySearchSource must be LiveAD, LocalCache or ProtectedCache.");
         }
 
         if (string.IsNullOrWhiteSpace(config.LastRecoveryScopeSearchBase) !=
