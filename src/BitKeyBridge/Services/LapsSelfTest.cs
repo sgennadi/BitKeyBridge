@@ -197,6 +197,60 @@ public static class LapsSelfTest
             Assert(!sanitized.Contains("AnotherSecretValue", StringComparison.Ordinal));
             Assert(sanitized.Contains("[REDACTED]", StringComparison.Ordinal));
         });
+        Check("AD LAPS empty results distinguish visible backup metadata", () =>
+        {
+            foreach (var (legacy, windows) in new[]
+            {
+                (false, false),
+                (true, false),
+                (false, true),
+                (true, true)
+            })
+            {
+                using var result = new LapsReadResult
+                {
+                    ComputerName = "PC-TEST",
+                    DirectoryServer = "dc-test.example",
+                    LegacyBackupIndicatorPresent = legacy,
+                    WindowsBackupIndicatorPresent = windows
+                };
+
+                result.Note = LapsReadDiagnostics.EmptyAdNote(
+                    legacy,
+                    windows);
+
+                var status = LapsReadDiagnostics.EmptyStatus(
+                    result,
+                    cloud: false);
+                var details = LapsReadDiagnostics.EmptyDetails(
+                    result,
+                    cloud: false);
+
+                Assert(result.HasAdBackupIndicators == (legacy || windows));
+                Assert(result.Entries.Count == 0);
+                Assert(status.Contains("0 records", StringComparison.Ordinal));
+                Assert(details.Contains("Records returned: 0", StringComparison.Ordinal));
+                Assert(details.Contains("not independently verified", StringComparison.Ordinal));
+                Assert(details.Contains(result.Note, StringComparison.Ordinal));
+                Assert(!details.Contains(secret, StringComparison.Ordinal));
+                Assert(!details.Contains("permission denied", StringComparison.OrdinalIgnoreCase));
+            }
+        });
+        Check("Entra LAPS empty responses get a distinct secret-free hint", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "CLOUD-PC",
+                DirectoryServer = "Entra"
+            };
+
+            var status = LapsReadDiagnostics.EmptyStatus(result, cloud: true);
+            var details = LapsReadDiagnostics.EmptyDetails(result, cloud: true);
+
+            Assert(status.Contains("Entra", StringComparison.Ordinal));
+            Assert(details.Contains("Graph permissions", StringComparison.Ordinal));
+            Assert(!details.Contains(secret, StringComparison.Ordinal));
+        });
         Check("schema diagnostics do not invent NotDetected when inspection did not complete", () =>
         {
             Assert(
