@@ -342,6 +342,7 @@ public sealed class LapsDirectoryService
             ComputerName = Text(entry, "name") ?? query,
             ComputerId = BinaryGuid(entry, "objectGUID"),
             DirectoryServer = server,
+            ComputerDistinguishedName = entry.DistinguishedName,
             PasswordVersion = BinaryGuid(entry, "msLAPS-CurrentPasswordVersion"),
             Note = string.Empty
         };
