@@ -17,7 +17,8 @@ public sealed partial class MainForm
     {
         var selected = GetSelectedStartRecoveryRow();
         var query = selected?.ComputerName ?? _startQuery.Text.Trim();
-        var sourceIsCache = _recoverySource.SelectedIndex == 1;
+        var sourceIsCache = _recoverySource.SelectedIndex != 0;
+        var protectedCache = _recoverySource.SelectedIndex == 2;
         var dc = _config.AdConnectionMode.Equals("Explicit", StringComparison.OrdinalIgnoreCase)
             ? _config.AdServer : string.Empty;
 
@@ -34,8 +35,9 @@ public sealed partial class MainForm
                 ? selected.DirectoryServer : dc,
             Domain = _config.AdDomain,
             ScopeDistinguishedName = _startScope?.SearchBase ?? string.Empty,
-            LocalCachePath = _config.OutputCsv,
+            LocalCachePath = protectedCache ? ProtectedRecoveryCacheService.DefaultFile : _config.OutputCsv,
             LocalCache = sourceIsCache,
+            ProtectedCache = protectedCache,
             RecordsReturned = _startResults.Rows.Count
         };
 
