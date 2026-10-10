@@ -1,17 +1,37 @@
-# Code signing
+# BitKeyBridge Authenticode code signing
 
-Release builds are designed so signing can be inserted after `dotnet publish` and before packaging.
+v0.26.0 supports an **optional** certificate-backed signing step in the
+Windows GitHub Actions build matrix. The repository does not contain an
+organization code-signing certificate or its private key.
 
-The repository does not contain certificates, private keys, client secrets, or signing credentials.
+The step is skipped unless repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT
+is configured. The corresponding trusted Code Signing certificate and private
+key must also be available to the Windows runner from an authorized signing
+provider or protected certificate store. EV hardware tokens, HSM/cloud signing
+or restricted self-hosted runners may be required. Never commit a PFX,
+certificate private key or signing password.
 
-Current baseline CI verifies each published executable with the built-in `--self-test` and publishes SHA-256 checksums for the release ZIPs. Add your organization's signing provider (for example Azure Trusted Signing or SignPath) only through GitHub environment/secrets/OIDC configuration; never commit signing credentials.
+The workflow signs **after publish and before executable self-tests, packaging,
+SHA-256 and provenance attestation**:
 
-When signing is enabled, the recommended order is:
+1. Locate Microsoft's Windows SDK signtool.exe.
+2. Sign the published EXE using configured thumbprint, SHA256 digest and
+   RFC3161 timestamp (SignTool flags /sha1 /fd SHA256 /tr /td SHA256).
+3. Run signtool verify /pa /all /v; any failure blocks packaging.
+4. Run executable/UI/update self-tests on the signed artifact.
+5. Package signed ZIPs and produce release checksums and attestations.
 
-1. Build and publish `win-x64`, `win-x86`, and `win-arm64`.
-2. Run `--self-test`.
-3. Sign `BitKeyBridge.exe`.
-4. Verify the Authenticode signature.
-5. Package architecture ZIPs.
-6. Generate `SHA256SUMS.txt` from the signed packages.
-7. Create the GitHub Release.
+When signing is not configured, packages remain unsigned and the existing
+update checksum/attestation validation continues. RequireTrustedUpdateSignature
+and TrustedUpdatePublisher remain opt-in to avoid locking out old deployments.
+Only enable publisher pinning after the organization has validated a trusted
+signed release in staging.
+
+Use Start > Device Diagnostics... > Verify EXE signature to check the running
+EXE with Windows WinVerifyTrust. This is verification, NOT self-signing.
+
+Security cautions:
+- A Domain Controller LDAPS certificate is not necessarily a Code Signing cert.
+- The Entra App Registration authentication certificate is NOT the signing cert.
+- Do not export keys into repository variables or disable chain validation.
+- Use restricted signing identities, audit trails and a trustworthy runner.
