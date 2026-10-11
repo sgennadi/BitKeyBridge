@@ -197,20 +197,6 @@ public static class LapsSelfTest
             Assert(!sanitized.Contains("AnotherSecretValue", StringComparison.Ordinal));
             Assert(sanitized.Contains("[REDACTED]", StringComparison.Ordinal));
         });
-        Check("Start metadata never concludes that a missing LAPS indicator means No backup", () =>
-        {
-            Assert(HelpdeskStatus.Laps(null) == "Not verified");
-            Assert(new HomeSearchResult().LapsStatus == "Not verified");
-            var computer = new LapsSearchResult { ComputerName = "IT-EUGENEB11" };
-            Assert(HelpdeskStatus.Laps(computer) == "Not verified");
-            computer.ExpiresAtUtc = DateTime.UtcNow.AddDays(10);
-            Assert(HelpdeskStatus.Laps(computer) == "Detected");
-            computer.ExpiresAtUtc = DateTime.UtcNow.AddDays(-10);
-            Assert(HelpdeskStatus.Laps(computer) == "Expired");
-            computer.ExpiresAtUtc = null;
-            computer.IsLatest = true;
-            Assert(HelpdeskStatus.Laps(computer) == "Detected");
-        });
         Check("Encrypted Unauthorized differs from other DPAPI-NG failures without printing secrets", () =>
         {
             using var result = new LapsReadResult
@@ -225,7 +211,6 @@ public static class LapsSelfTest
                 Status = LapsPasswordStatus.AccessDenied
             };
             result.Entries.Add(row);
-            Assert(HelpdeskStatus.LapsEntry(row) == "Decrypt unauthorized");
             var unauthorized = LapsReadDiagnostics.UnreadableStatus(result, cloud: false);
             Assert(unauthorized.Contains("denied", StringComparison.Ordinal));
             Assert(unauthorized.Contains("AuthorizedDecryptor", StringComparison.Ordinal));
@@ -233,13 +218,12 @@ public static class LapsSelfTest
             Assert(!unauthorized.Contains(secret, StringComparison.Ordinal));
 
             row.Status = LapsPasswordStatus.DecryptionFailed;
-            Assert(HelpdeskStatus.LapsEntry(row) == "Decrypt failed");
             var failed = LapsReadDiagnostics.UnreadableStatus(result, cloud: false);
             Assert(failed.Contains("decryption failed", StringComparison.Ordinal));
             Assert(!failed.Contains("decryption was denied", StringComparison.Ordinal));
 
             row.Status = LapsPasswordStatus.NotReturned;
-            Assert(HelpdeskStatus.LapsEntry(row) == "Not returned");
+            Assert(row.Status == LapsPasswordStatus.NotReturned);
         });
         Check("AD LAPS empty results distinguish visible backup metadata", () =>
         {

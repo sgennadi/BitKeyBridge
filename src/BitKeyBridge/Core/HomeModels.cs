@@ -49,6 +49,11 @@ public sealed class RecentComputerEntry
 
 public static class HelpdeskStatus
 {
+    // UI navigation only: the actual secret-read permission is enforced by
+    // AuthorizeLapsAccess before any LAPS password attribute is requested.
+    public static bool CanAttemptLapsRead(bool connected, HomeSearchResult? selected) =>
+        connected && selected is not null;
+
     public static string BitLocker(
         IReadOnlyCollection<RecoverySearchResult> rows,
         int oldKeyDays)

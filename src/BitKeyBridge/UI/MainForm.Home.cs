@@ -465,8 +465,7 @@ public sealed partial class MainForm
 
         // Missing metadata must not block an explicit, authorized LAPS read.
         _homeLapsButton.Enabled =
-            connected &&
-            selected is not null;
+            HelpdeskStatus.CanAttemptLapsRead(connected, selected);
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
