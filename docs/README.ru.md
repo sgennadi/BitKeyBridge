@@ -1,6 +1,6 @@
 # BitKeyBridge — кратко
 
-**Актуальная ветка релиза: 0.24.x.** Start стал основным helpdesk-dashboard: один metadata-поиск для BitLocker + LAPS, контекстные действия, Recent без секретов, упрощённый выбор AD account, Advanced-настройки подключения на Start, постоянная connection bar и компактные LAPS details. Расширенные Recovery/LAPS/Devices/Administration workflows сохранены.
+**Актуальная ветка релиза: 0.26.x.** Start стал основным helpdesk-dashboard: один metadata-поиск для BitLocker + LAPS, контекстные действия, Recent без секретов, упрощённый выбор AD account, Advanced-настройки подключения на Start, постоянная connection bar и компактные LAPS details. Расширенные Recovery/LAPS/Devices/Administration workflows сохранены.
 
 BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
@@ -71,8 +71,8 @@ Release pipeline после публикации запускает живой x
 - DC/FQDN, domain, port, LDAPS, Credential Manager / machine-DPAPI storage и vault-actions находятся в сворачиваемом **Advanced** на Start. Из Recovery эти detailed connection settings убраны.
 - После подключения одно поле ищет одновременно BitLocker и LAPS metadata по части имени компьютера, Recovery ID и device/object ID. Ввод от двух символов использует debounce 450 мс, **Enter** запускает поиск сразу.
 - Результат показывает компьютер, BitLocker status/date и LAPS status/metadata date в одной sortable DataGridView.
-- Для BitLocker используются понятные состояния **Available**, **Multiple keys**, **Old key**, **No backup**. Для LAPS metadata — **Detected**, **Expired**, **No backup**. После реального LAPS read дополнительно возможны **Access denied**, **Decrypt denied**, **Invalid data**.
-- Если для выбранного компьютера нет BitLocker backup, кнопка BitLocker блокируется; если нет LAPS indicator — блокируется LAPS. Не надо переходить в пустой workflow.
+- Для BitLocker используются понятные состояния **Available**, **Multiple keys**, **Old key**, **No backup**. Для LAPS metadata — **Detected**, **Expired**, **Not verified**: отсутствие expiration/version не доказывает, что нет зашифрованного пароля. При чтении возможны **Decrypt unauthorized** и **Decrypt failed**; они различаются по результату расшифровки.
+- Если для выбранного компьютера нет BitLocker backup, кнопка BitLocker блокируется; даже без LAPS metadata кнопка LAPS Passwords остаётся доступной для выбранного компьютера, чтобы по явному запросу проверить пароль и права. Поиск не читает секреты.
 - Search на Start остаётся metadata-only: BitLocker recovery password и LAPS password во время поиска не читаются.
 - **Recent computers** хранит только имя/ID компьютера, последнее действие и время в профиле текущего пользователя. Ключи и пароли туда не записываются.
 - Нижняя connection/status bar видна во всех разделах и показывает текущую AD session и версию BitKeyBridge. Нажатие возвращает на Start и раскрывает Advanced.

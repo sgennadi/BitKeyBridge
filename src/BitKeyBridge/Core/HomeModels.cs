@@ -15,7 +15,8 @@ public sealed class HomeSearchResult
     public string LatestRecoveryId { get; set; } =
         string.Empty;
 
-    public bool LapsDetected { get; set; }
+    // A matching AD computer is not proof that LAPS was backed up.
+    public bool LapsCandidateFound { get; set; }
 
     public DateTime? LapsKeyDateUtc { get; set; }
 
@@ -25,7 +26,7 @@ public sealed class HomeSearchResult
         "No backup";
 
     public string LapsStatus { get; set; } =
-        "No backup";
+        "Not verified";
 
     public string SourceSummary { get; set; } =
         "AD";
@@ -90,8 +91,9 @@ public static class HelpdeskStatus
     public static string Laps(
         LapsSearchResult? row)
     {
+        // An LDAP metadata-only lookup cannot prove a missing LAPS backup.
         if (row is null)
-            return "No backup";
+            return "Not verified";
 
         if (row.ExpiresAtUtc is { } expires &&
             expires.ToUniversalTime() <
@@ -104,7 +106,7 @@ public static class HelpdeskStatus
             !row.ExpiresAtUtc.HasValue &&
             !row.KeyDateUtc.HasValue)
         {
-            return "No backup";
+            return "Not verified";
         }
 
         return "Detected";
@@ -128,13 +130,15 @@ public static class HelpdeskStatus
             LapsPasswordStatus.Available =>
                 "Available",
             LapsPasswordStatus.AccessDenied =>
-                "Access denied",
+                row.Attribute.StartsWith("msLAPS-Encrypted", StringComparison.OrdinalIgnoreCase)
+                    ? "Decrypt unauthorized"
+                    : "Access denied",
             LapsPasswordStatus.DecryptionFailed =>
-                "Decrypt denied",
+                "Decrypt failed",
             LapsPasswordStatus.InvalidData =>
                 "Invalid data",
             LapsPasswordStatus.NotReturned =>
-                "No backup",
+                "Not returned",
             _ =>
                 row.Status.ToString()
         };

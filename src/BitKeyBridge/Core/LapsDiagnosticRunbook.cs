@@ -114,8 +114,14 @@ public static class LapsDiagnosticRunbook
                 "AuthorizedDecryptor, PasswordUpdateTime, ExpirationTimestamp",
             "CAUTION: The command DOES request passwords, although the displayed output " +
                 "excludes the Password property and does not use -AsPlainText.",
-            "If encrypted attributes are returned but decryption is unauthorized, " +
-                "check BOTH AD read delegation and the configured ADPasswordEncryptionPrincipal.",
+            "If Source is EncryptedPassword and DecryptionStatus is Unauthorized, the encrypted " +
+                "backup exists but the querying identity cannot decrypt it. This is NOT No backup.",
+            "Compare the exact BitKeyBridge Connected as identity with AuthorizedDecryptor. " +
+                "LDAP attribute read rights and DPAPI-NG decrypt authorization are separate.",
+            "The AuthorizedDecryptor for an existing password may differ from today's " +
+                "ADPasswordEncryptionPrincipal policy: changing a policy does not re-encrypt old data.",
+            "After an approved group membership change, refresh the user's Windows sign-in token. " +
+                "If BitKeyBridge uses explicit credentials, verify those separately from whoami.",
             "For legacy LAPS, use the legacy AdmPwd.PS tools only if your environment requires them.",
             "Do NOT run permission-grant, password-reset or password-rotation commands during diagnosis."
         ]);

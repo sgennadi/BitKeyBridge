@@ -672,6 +672,9 @@ public sealed class LapsDirectoryService
                 AccountName = source.Contains("DSRM", StringComparison.Ordinal) ? "DSRM" : "Encrypted account"
             };
             result.Entries.Add(row);
+            // A returned encrypted attribute is positive evidence of backup
+            // even when expiration/version metadata was not readable.
+            result.WindowsBackupIndicatorPresent = true;
             byte[]? payload = null;
             try
             {
@@ -686,7 +689,11 @@ public sealed class LapsDirectoryService
             catch (LapsDecryptionException ex)
             {
                 row.Status = ex.IsAccessDenied ? LapsPasswordStatus.AccessDenied : LapsPasswordStatus.DecryptionFailed;
-                row.StatusDetail = ex.Message;
+                row.StatusDetail = ex.IsAccessDenied
+                    ? $"Windows LAPS encrypted value was returned, but decryption was denied " +
+                      $"(0x{unchecked((uint)ex.NativeStatus):X8}). Verify the selected AD identity's " +
+                      "authorization under the password encryption principal; LDAP read permission is separate."
+                    : ex.Message;
             }
             catch (FormatException) { InvalidRow(row); }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or PlatformNotSupportedException or DllNotFoundException or EntryPointNotFoundException)

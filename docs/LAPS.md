@@ -54,6 +54,9 @@ If LAPS metadata is visible but AD returned zero password attributes, BitKeyBrid
 
 Instructions are grouped by execution location: affected computer (GPO and LAPS Operational log); DC or RSAT workstation (non-secret AD metadata, OU permissions and optional LAPS decrypt test); and operator workstation (Windows token and groups). Entra LAPS has its own Graph metadata, role and backup-policy checks. The selected AD computer DN, OU and DC are used when available.
 
+
+If an encrypted Windows LAPS record is returned but cannot be decrypted, the app distinguishes known native permission-denied responses ("Decrypt unauthorized") from other native errors ("Decrypt failed"). A returned encrypted attribute is positive evidence of backup, even if the expiration attribute is not visible. Check the **Connected as** identity and the backup's **AuthorizedDecryptor** principal. A successful read as Domain Administrator does not establish permission for another user. Never auto-grant access or rotate passwords just to dismiss this warning.
+
 Default checks do not request password attributes, change ACLs, reset passwords or start password rotation. The optional Get-LapsADPassword test DOES retrieve a secret even though its displayed output excludes the Password field; only authorized staff should run it, and they should never share raw outputs. The application does not run these commands automatically. For encrypted Windows LAPS, AD read permission and encryption-principal authorization are separate checks. Find-LapsADExtendedRights shows configured delegations, not conclusive effective access for a user.
 
 Microsoft references: https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-event-log and https://learn.microsoft.com/en-us/powershell/module/laps/find-lapsadextendedrights.
