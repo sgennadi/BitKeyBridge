@@ -3852,7 +3852,7 @@ public sealed partial class MainForm : DpiAwareForm
                                 ? System.Security.Principal.WindowsIdentity.GetCurrent().Name
                                 : string.IsNullOrWhiteSpace(credential.Domain)
                                     ? credential.UserName
-                                    : credential.Domain + "\" + credential.UserName;
+                                    : credential.Domain + @"\" + credential.UserName;
                         var authentication =
                             credential is null
                                 ? "Windows integrated"
