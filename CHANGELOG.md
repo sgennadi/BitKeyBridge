@@ -1,3 +1,10 @@
+## 0.26.4
+
+- Fixed long LAPS status messages becoming invisible or cut off: shared UiStyle now configures width-constrained, auto-height multiline status labels, and UiStatusLabel preferred-size measurement honors MaximumSize.Width even for an unconstrained WinForms TableLayoutPanel sizing pass.
+- LAPS operation status, selected-record summary and no-readable-password warnings now wrap instead of running off-screen. Result summaries separate history/expiration/cleanup notices into readable lines.
+- Moved the busy marquee progress bar out of the scrollable LAPS records workspace and into a full-width row of the pinned password/status footer. The narrow ghost progress strip beside the results grid no longer has a place to render.
+- Added regression checks for multiline preferred-size measurement, compact/150%/200% DPI footer structure and location of the busy indicator. The password field and buttons remain pinned; no changes to LAPS decryption or AD permissions.
+
 ## 0.26.3
 
 - Fixed LAPS compact-window layout: a dedicated pinned lower footer keeps Password, Reveal, Copy password, Copy account, selected record status and operation messages visible while metadata/results/details scroll above. The shared UiStyle layer now prevents important LAPS DataGridView columns and date/status text from being squeezed below readable widths; narrow grids scroll horizontally.

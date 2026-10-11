@@ -32,13 +32,26 @@ public sealed class UiStatusLabel : Label
             Padding.Vertical +
             border;
 
-        var availableTextWidth =
+        // TableLayoutPanel often asks for an unconstrained preferred
+        // size (0 width). Use MaximumSize when present, so an AutoSize
+        // status grows vertically instead of overflowing horizontally.
+        var availableWidth =
             proposedSize.Width > 0
-                ? Math.Max(
-                    1,
-                    proposedSize.Width -
-                    horizontalChrome)
+                ? proposedSize.Width
                 : 4096;
+
+        if (MaximumSize.Width > 0)
+        {
+            availableWidth = Math.Min(
+                availableWidth,
+                MaximumSize.Width);
+        }
+
+        var availableTextWidth =
+            Math.Max(
+                1,
+                availableWidth -
+                horizontalChrome);
 
         var measured =
             TextRenderer.MeasureText(
@@ -56,13 +69,9 @@ public sealed class UiStatusLabel : Label
             horizontalChrome +
             measured.Width;
 
-        if (proposedSize.Width > 0)
-        {
-            preferredWidth =
-                Math.Min(
-                    preferredWidth,
-                    proposedSize.Width);
-        }
+        preferredWidth = Math.Min(
+            preferredWidth,
+            availableWidth);
 
         var preferredHeight =
             verticalChrome +

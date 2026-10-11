@@ -71,7 +71,7 @@ public sealed partial class MainForm
                 Padding = new Padding(
                     UiStyle.PagePadding),
                 ColumnCount = 1,
-                RowCount = 9
+                RowCount = 8
             };
         root.ColumnStyles.Add(
             new ColumnStyle(
@@ -79,7 +79,7 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 9;
+             index < 8;
              index++)
         {
             root.RowStyles.Add(
@@ -450,7 +450,7 @@ public sealed partial class MainForm
             "LAPS password read warning";
         _lapsZeroWarning.Dock =
             DockStyle.Fill;
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _lapsZeroWarning);
         UiStyle.SetStatus(
             _lapsZeroWarning,
@@ -621,7 +621,7 @@ public sealed partial class MainForm
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 2,
-                RowCount = 4,
+                RowCount = 5,
                 Margin = Padding.Empty,
                 Padding = new Padding(
                     UiStyle.PagePadding,
@@ -636,23 +636,39 @@ public sealed partial class MainForm
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
-        for (var index = 0; index < 4; index++)
+        for (var index = 0; index < 5; index++)
             secret.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // Progress belongs to the pinned footer, not the scrolling
+        // records area. The old position could leave a tiny bar
+        // peeking through the left edge of the results grid.
+        _lapsProgress.Name = "LapsProgress";
+        _lapsProgress.AccessibleName = "LAPS operation progress";
+        _lapsProgress.Dock = DockStyle.Fill;
+        _lapsProgress.Style = ProgressBarStyle.Marquee;
+        _lapsProgress.MarqueeAnimationSpeed = 25;
+        _lapsProgress.Visible = false;
+        _lapsProgress.Margin =
+            new Padding(0, 0, 0, UiStyle.ControlGap);
+        secret.Controls.Add(_lapsProgress, 0, 0);
+        secret.SetColumnSpan(_lapsProgress, 2);
 
         _lapsStatus.Name = "LapsOperationStatus";
         _lapsStatus.AccessibleName = "LAPS operation status";
-        UiStyle.ConfigureStatusLabel(_lapsStatus);
+        UiStyle.ConfigureWrappingStatusLabel(_lapsStatus);
         _lapsStatus.Margin = new Padding(0, 0, 0, UiStyle.ControlGap);
         UiStyle.SetStatus(
             _lapsStatus,
             "Select a computer, then use Read LAPS. Search never reads passwords.",
             UiStatusKind.Neutral);
-        secret.Controls.Add(_lapsStatus, 0, 0);
+        secret.Controls.Add(_lapsStatus, 0, 1);
         secret.SetColumnSpan(_lapsStatus, 2);
 
         _lapsSelectedRecordSummary.Name = "LapsSelectedRecordSummary";
         _lapsSelectedRecordSummary.AccessibleName = "Selected LAPS record summary";
-        UiStyle.ConfigureInlineStatusLabel(_lapsSelectedRecordSummary);
+        UiStyle.ConfigureWrappingStatusLabel(
+            _lapsSelectedRecordSummary,
+            bordered: false);
         _lapsSelectedRecordSummary.Dock = DockStyle.Fill;
         _lapsSelectedRecordSummary.Margin =
             new Padding(0, 0, 0, UiStyle.ControlGap);
@@ -660,7 +676,7 @@ public sealed partial class MainForm
             _lapsSelectedRecordSummary,
             "No LAPS record selected",
             UiStatusKind.Neutral);
-        secret.Controls.Add(_lapsSelectedRecordSummary, 0, 1);
+        secret.Controls.Add(_lapsSelectedRecordSummary, 0, 2);
         secret.SetColumnSpan(_lapsSelectedRecordSummary, 2);
 
         secret.Controls.Add(
@@ -674,7 +690,7 @@ public sealed partial class MainForm
                     AnchorStyles.Left
             },
             0,
-            2);
+            3);
 
         _lapsPassword.Name =
             "LapsPasswordValue";
@@ -692,7 +708,7 @@ public sealed partial class MainForm
         secret.Controls.Add(
             _lapsPassword,
             1,
-            2);
+            3);
 
         var secretActions =
             new FlowLayoutPanel
@@ -735,39 +751,16 @@ public sealed partial class MainForm
         secret.Controls.Add(
             secretActions,
             1,
-            3);
+            4);
         layout.Controls.Add(
             secret,
             0,
             1);
 
-        _lapsProgress.Name =
-            "LapsProgress";
-        _lapsProgress.AccessibleName =
-            "LAPS operation progress";
-        _lapsProgress.Dock =
-            DockStyle.Top;
-        _lapsProgress.Style =
-            ProgressBarStyle.Marquee;
-        _lapsProgress.MarqueeAnimationSpeed =
-            25;
-        _lapsProgress.Visible =
-            false;
-        _lapsProgress.Margin =
-            new Padding(
-                0,
-                UiStyle.ControlGap,
-                0,
-                0);
-        root.Controls.Add(
-            _lapsProgress,
-            0,
-            7);
-
         root.Controls.Add(
             _lapsDiagnostics,
             0,
-            8);
+            7);
 
         _lapsDetailsToggle.Click +=
             (_, _) =>
@@ -1556,7 +1549,7 @@ public sealed partial class MainForm
             UiStyle.SetStatus(
                 _lapsStatus,
                 string.Join(
-                    " ",
+                    Environment.NewLine,
                     readMessages),
                 expiredCurrent ||
                 available == 0 ||
@@ -1674,7 +1667,8 @@ public sealed partial class MainForm
                 ? "No LAPS record selected"
                 : "Selected: " + row.Source + " | " +
                   HelpdeskStatus.LapsEntry(row) +
-                  " | Expires: " + FormatLapsExpiry(row),
+                  Environment.NewLine +
+                  "Expires: " + FormatLapsExpiry(row),
             row is null
                 ? UiStatusKind.Neutral
                 : row.Status == LapsPasswordStatus.Available &&

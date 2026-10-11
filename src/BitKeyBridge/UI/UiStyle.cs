@@ -136,6 +136,27 @@ public static class UiStyle
             label);
     }
 
+    /// <summary>
+    /// Allow long, diagnostic status messages to grow in height rather
+    /// than being measured as a single 4096-pixel-wide line.
+    /// DpiAwareForm constrains MaximumSize to the available parent width.
+    /// </summary>
+    public static void ConfigureWrappingStatusLabel(
+        UiStatusLabel label,
+        bool bordered = true)
+    {
+        if (bordered)
+            ConfigureStatusLabel(label);
+        else
+            ConfigureInlineStatusLabel(label);
+
+        label.AutoSize = true;
+        label.AutoEllipsis = false;
+        label.UseMnemonic = false;
+        label.Dock = DockStyle.Fill;
+        label.MaximumSize = new Size(2400, 0);
+    }
+
     public static void SetStatus(
         UiStatusLabel label,
         string text,

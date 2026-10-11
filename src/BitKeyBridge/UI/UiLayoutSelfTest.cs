@@ -58,6 +58,9 @@ public static class UiLayoutSelfTest
         VerifyStatusGlyphScaling(
             failures);
 
+        VerifyWrappingStatusMeasurement(
+            failures);
+
         VerifyHighContrastStatusPalette(
             failures);
 
@@ -944,10 +947,15 @@ public static class UiLayoutSelfTest
             FindByName(page, "LapsOperationStatus") as UiStatusLabel;
         var grid =
             FindByName(page, "LapsKeyResults") as DataGridView;
+        var progress =
+            FindByName(page, "LapsProgress") as ProgressBar;
+        var zeroWarning =
+            FindByName(page, "LapsZeroRecordWarning") as UiStatusLabel;
 
         if (layout is null || scroll is null || footer is null ||
             password is null || reveal is null || copy is null ||
-            summary is null || status is null || grid is null)
+            summary is null || status is null || grid is null ||
+            progress is null || zeroWarning is null)
         {
             failures.Add(
                 $"{path}/{scenario.Name}: LAPS compact password footer or record grid is missing.");
@@ -971,10 +979,36 @@ public static class UiLayoutSelfTest
             !ReferenceEquals(summary.Parent, footer) ||
             !ReferenceEquals(reveal.Parent, copy.Parent) ||
             !ReferenceEquals(reveal.Parent?.Parent, footer) ||
-            footer.GetRow(password) != 2)
+            footer.GetRow(password) != 3 ||
+            footer.GetRow(status) != 1 ||
+            footer.GetRow(summary) != 2)
         {
             failures.Add(
                 $"{path}/{scenario.Name}: selected password, record summary and buttons must be inside the fixed footer.");
+        }
+
+        if (!ReferenceEquals(progress.Parent, footer) ||
+            footer.GetRow(progress) != 0 ||
+            footer.GetColumnSpan(progress) != 2 ||
+            progress.Dock != DockStyle.Fill ||
+            progress.Style != ProgressBarStyle.Marquee)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: LAPS progress must be a full-width bar in the pinned footer, never a clipped fragment inside the scrollable results grid.");
+        }
+
+        if (!status.AutoSize ||
+            !summary.AutoSize ||
+            !zeroWarning.AutoSize ||
+            status.AutoEllipsis ||
+            summary.AutoEllipsis ||
+            zeroWarning.AutoEllipsis ||
+            status.MaximumSize.Width <= 0 ||
+            summary.MaximumSize.Width <= 0 ||
+            zeroWarning.MaximumSize.Width <= 0)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: LAPS operation, record summary and zero-record warnings must use width-constrained multiline status labels.");
         }
 
         if (!password.UseSystemPasswordChar ||
@@ -1152,6 +1186,30 @@ public static class UiLayoutSelfTest
                 formName,
                 scenario,
                 failures);
+        }
+    }
+
+    private static void VerifyWrappingStatusMeasurement(
+        List<string> failures)
+    {
+        using var label = new UiStatusLabel();
+        UiStyle.ConfigureWrappingStatusLabel(label);
+        label.Text = string.Concat(
+            Enumerable.Repeat(
+                "The current LAPS expiration may be overdue; check the password history and authorization. ",
+                7));
+
+        label.MaximumSize = new Size(280, 0);
+        var wrapped = label.GetPreferredSize(Size.Empty);
+
+        label.MaximumSize = new Size(2200, 0);
+        var wide = label.GetPreferredSize(Size.Empty);
+
+        if (wrapped.Width > 280 ||
+            wrapped.Height <= wide.Height)
+        {
+            failures.Add(
+                "UiStatusLabel must honor MaximumSize.Width when the parent requests an unconstrained preferred size, so long LAPS warnings wrap and grow vertically.");
         }
     }
 
