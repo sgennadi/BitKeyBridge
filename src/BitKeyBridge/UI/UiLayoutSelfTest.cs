@@ -991,7 +991,7 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{path}/{scenario.Name}: pinned LAPS footer is outside the visible tab viewport " +
-                $"(Footer: Top={footer.Top}, Height={footer.Height}, Bottom={footer.Bottom}; " +
+                $"(Footer: Y:{footer.Top}, Height:{footer.Height}, Bottom:{footer.Bottom}; " +
                 $"Layout: Height={layout.ClientSize.Height}, Scroll: Height={scroll.Height}).");
         }
 
