@@ -60,3 +60,7 @@ If an encrypted Windows LAPS record is returned but cannot be decrypted, the app
 Default checks do not request password attributes, change ACLs, reset passwords or start password rotation. The optional Get-LapsADPassword test DOES retrieve a secret even though its displayed output excludes the Password field; only authorized staff should run it, and they should never share raw outputs. The application does not run these commands automatically. For encrypted Windows LAPS, AD read permission and encryption-principal authorization are separate checks. Find-LapsADExtendedRights shows configured delegations, not conclusive effective access for a user.
 
 Microsoft references: https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-event-log and https://learn.microsoft.com/en-us/powershell/module/laps/find-lapsadextendedrights.
+
+### Compact windows and DPI scaling
+
+The LAPS password field, Reveal/Copy/Copy account actions, record summary, and operation status remain pinned at the bottom of the LAPS tab. The metadata results/history/diagnostics above scroll independently if the window is narrow or DPI/text scaling is 150–200%. Long account or status values have tooltips, and the grid scrolls horizontally instead of clipping important information. Legacy LAPS does not back up the managed account name; the placeholder is not a real account and cannot be copied as one.

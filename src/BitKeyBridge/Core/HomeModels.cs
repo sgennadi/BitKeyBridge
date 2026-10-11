@@ -47,8 +47,40 @@ public sealed class RecentComputerEntry
         DateTime.UtcNow;
 }
 
+public enum HomeDefaultAction
+{
+    None,
+    BitLocker,
+    ChooseRecoveryType
+}
+
 public static class HelpdeskStatus
 {
+    // An LDAP metadata miss cannot prove that no recovery key exists.
+    public static HomeDefaultAction ResolveHomeDefaultAction(
+        HomeSearchResult? selected) =>
+        selected is null
+            ? HomeDefaultAction.None
+            : selected.BitLockerKeyCount > 0
+                ? HomeDefaultAction.BitLocker
+                : HomeDefaultAction.ChooseRecoveryType;
+
+    public static bool CanAttemptBitLockerSearch(
+        bool connected,
+        HomeSearchResult? selected) =>
+        connected && selected is not null;
+
+    public static bool ShouldRetryBitLockerInDomain(
+        int scopedRecoveryCount,
+        string selectedSearchBase,
+        string domainNamingContext) =>
+        scopedRecoveryCount == 0 &&
+        !string.IsNullOrWhiteSpace(domainNamingContext) &&
+        !string.Equals(
+            selectedSearchBase,
+            domainNamingContext,
+            StringComparison.OrdinalIgnoreCase);
+
     // UI navigation only: the actual secret-read permission is enforced by
     // AuthorizeLapsAccess before any LAPS password attribute is requested.
     public static bool CanAttemptLapsRead(bool connected, HomeSearchResult? selected) =>

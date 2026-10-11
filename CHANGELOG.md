@@ -1,3 +1,12 @@
+## 0.26.3
+
+- Fixed LAPS compact-window layout: a dedicated pinned lower footer keeps Password, Reveal, Copy password, Copy account, selected record status and operation messages visible while metadata/results/details scroll above. The shared UiStyle layer now prevents important LAPS DataGridView columns and date/status text from being squeezed below readable widths; narrow grids scroll horizontally.
+- Improved LAPS account presentation: Legacy LAPS entries without a backed-up account name show a short "Name not stored in AD" label, preserve the full explanation in the cell tooltip, and disable misleading Copy account; other actual accounts remain copyable.
+- Fixed Start unified search navigation: when BitLocker and LAPS metadata are both present, double-click/Enter opens BitLocker Recovery; an unverified BitLocker result asks the operator to choose instead of silently opening LAPS. BitLocker Recovery navigation stays available for a selected computer even without visible recovery metadata; reading a key still requires the normal permissions.
+- Fixed missing BitLocker metadata in the unified search when a remembered OU excludes the computer: exact-computer searches now retry the domain naming context, read-only and without changing the selected OU. Missing BitLocker metadata is displayed as "Not verified" rather than asserting "No backup".
+- Fixed Updater's stale saved-result behavior: Update Now always refreshes GitHub Releases before asking to install (preventing an old v0.26.0 selection), sends explicit no-cache headers, and labels previously saved release information as potentially stale with the repository/tag shown.
+- Expanded Windows HiDPI UI self-tests for pinned LAPS password controls at compact/150%/200% scales, readable result columns, BitLocker-versus-LAPS routing and scoped-to-domain metadata retry. No automatic AD permissions or secret changes.
+
 ## 0.26.2
 
 - Fixed unified Start LAPS status: when LDAP computer lookup succeeds but expiration/version metadata is missing, the result is "Not verified", not "No backup". "Detected" and "Expired" still require positive non-secret metadata.

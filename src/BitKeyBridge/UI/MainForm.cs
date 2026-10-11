@@ -2484,7 +2484,7 @@ public sealed partial class MainForm : DpiAwareForm
             if (_lastUpdateInfo is not null)
             {
                 DisplayUpdateInfo(
-                    _lastUpdateInfo);
+                    _lastUpdateInfo, cached: true);
             }
             else
             {
@@ -2802,7 +2802,7 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private void DisplayUpdateInfo(UpdateInfo info)
+    private void DisplayUpdateInfo(UpdateInfo info, bool cached = false)
     {
         if (!string.IsNullOrWhiteSpace(info.Error))
         {
@@ -2816,6 +2816,10 @@ public sealed partial class MainForm : DpiAwareForm
 
         UiStyle.SetStatus(
             _updateStatus,
+            (cached
+                ? "Previously saved update result (not verified today). Use Check for Updates or Update Now to refresh." + Environment.NewLine
+                : string.Empty) +
+            $"Repository: {_config.UpdateRepository}    Release: {info.ReleaseTag}{Environment.NewLine}" +
             $"Current: {info.CurrentVersion}    Latest: {info.LatestVersion}    Architecture: {info.Architecture}{Environment.NewLine}" +
             (info.UpdateAvailable
                 ? $"UPDATE AVAILABLE: {info.LatestVersion}    Asset: {info.AssetName}"
@@ -2834,19 +2838,17 @@ public sealed partial class MainForm : DpiAwareForm
             (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)
                 ? string.Empty
                 : $" • Publisher: {_config.TrustedUpdatePublisher}"),
-            info.UpdateAvailable
+            cached || info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);
     }
 
     private async Task InstallLatestUpdateGuiAsync()
     {
-        if (_lastUpdateInfo is null ||
-            !string.IsNullOrWhiteSpace(_lastUpdateInfo.Error) ||
-            !_lastUpdateInfo.UpdateAvailable)
-        {
-            await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
-        }
+        // Never install the release recorded by an earlier run. It might
+        // point to v0.26.0 even after a newer release was published.
+        _lastUpdateInfo = null;
+        await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
 
         var info = _lastUpdateInfo;
         if (info is null ||

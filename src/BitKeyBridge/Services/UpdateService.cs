@@ -47,7 +47,19 @@ public sealed class UpdateService : IDisposable
                 ? $"https://api.github.com/repos/{repository}/releases?per_page=20"
                 : $"https://api.github.com/repos/{repository}/releases/latest";
 
-            using var response = await _http.GetAsync(uri, ct);
+            // A cached /releases/latest response can lag behind GitHub's
+            // published release. Always request revalidation, including
+            // when Update Now is pressed after a previous startup check.
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.CacheControl =
+                new CacheControlHeaderValue
+                {
+                    NoCache = true,
+                    NoStore = true,
+                    MaxAge = TimeSpan.Zero
+                };
+            request.Headers.Pragma.ParseAdd("no-cache");
+            using var response = await _http.SendAsync(request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException(

@@ -19,7 +19,7 @@ public sealed partial class MainForm
     private readonly DataGridView _lapsSearchRows = new();
     private readonly DataGridView _lapsRows = new();
     private readonly TextBox _lapsPassword = new();
-    private readonly Label _lapsSelectedRecordSummary = new();
+    private readonly UiStatusLabel _lapsSelectedRecordSummary = new();
     private readonly RichTextBox _lapsDetails = new();
     private readonly Button _lapsDetailsToggle = new();
     private readonly UiStatusLabel _lapsStatus = new();
@@ -287,6 +287,7 @@ public sealed partial class MainForm
                 120);
         UiStyle.ConfigureDataGridView(
             _lapsSearchRows);
+        _lapsSearchRows.ScrollBars = ScrollBars.Both;
         _lapsSearchRows.Columns.AddRange([
             UiStyle.CreateSortableTextColumn(
                 "Computer",
@@ -309,6 +310,14 @@ public sealed partial class MainForm
                 "Source",
                 90)
         ]);
+        UiStyle.ConfigureReadableDataGridColumns(
+            _lapsSearchRows,
+            ("Computer", "IT-EUGENEB12", 130),
+            ("ComputerId", "008558d6-85bd-4f91-b467-db6703f2da36", 265),
+            ("KeyDate", "2026-10-23 12:10:39", 150),
+            ("Latest", "Latest", 70),
+            ("Source", "Active Directory", 130));
+
         _lapsSearchRows.Columns["KeyDate"]!
             .DefaultCellStyle.Format =
             "yyyy-MM-dd HH:mm:ss";
@@ -643,11 +652,14 @@ public sealed partial class MainForm
 
         _lapsSelectedRecordSummary.Name = "LapsSelectedRecordSummary";
         _lapsSelectedRecordSummary.AccessibleName = "Selected LAPS record summary";
-        _lapsSelectedRecordSummary.AutoSize = true;
-        _lapsSelectedRecordSummary.Text = "No LAPS record selected";
-        _lapsSelectedRecordSummary.UseMnemonic = false;
+        UiStyle.ConfigureInlineStatusLabel(_lapsSelectedRecordSummary);
+        _lapsSelectedRecordSummary.Dock = DockStyle.Fill;
         _lapsSelectedRecordSummary.Margin =
             new Padding(0, 0, 0, UiStyle.ControlGap);
+        UiStyle.SetStatus(
+            _lapsSelectedRecordSummary,
+            "No LAPS record selected",
+            UiStatusKind.Neutral);
         secret.Controls.Add(_lapsSelectedRecordSummary, 0, 1);
         secret.SetColumnSpan(_lapsSelectedRecordSummary, 2);
 
@@ -1656,12 +1668,19 @@ public sealed partial class MainForm
             !string.IsNullOrWhiteSpace(row.AccountName) &&
             !IsUnknownLegacyAccount(row);
 
-        _lapsSelectedRecordSummary.Text =
+        UiStyle.SetStatus(
+            _lapsSelectedRecordSummary,
             row is null
                 ? "No LAPS record selected"
                 : "Selected: " + row.Source + " | " +
                   HelpdeskStatus.LapsEntry(row) +
-                  " | Expires: " + FormatLapsExpiry(row);
+                  " | Expires: " + FormatLapsExpiry(row),
+            row is null
+                ? UiStatusKind.Neutral
+                : row.Status == LapsPasswordStatus.Available &&
+                  !IsLapsExpired(row)
+                    ? UiStatusKind.Success
+                    : UiStatusKind.Warning);
 
         if (row is null ||
             _lapsResult is null)
@@ -2008,7 +2027,8 @@ public sealed partial class MainForm
         if (GetSelectedLapsEntry() is not
                 LapsPasswordEntry row ||
             string.IsNullOrWhiteSpace(
-                row.AccountName))
+                row.AccountName) ||
+            IsUnknownLegacyAccount(row))
         {
             return;
         }
@@ -2361,7 +2381,10 @@ public sealed partial class MainForm
             ClearTrackedRecoveryClipboard();
         _lapsPassword.Clear();
         _lapsPassword.UseSystemPasswordChar = true;
-        _lapsSelectedRecordSummary.Text = "No LAPS record selected";
+        UiStyle.SetStatus(
+            _lapsSelectedRecordSummary,
+            "No LAPS record selected",
+            UiStatusKind.Neutral);
         _lapsRows.Rows.Clear();
         _lapsZeroWarningPanel.Visible = false;
         _lapsDetails.Clear();
