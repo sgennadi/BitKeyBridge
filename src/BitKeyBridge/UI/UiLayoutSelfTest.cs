@@ -604,6 +604,17 @@ public static class UiLayoutSelfTest
                 }
             }
 
+            if (FindByName(startPage, "HomeConnectionStatus") is UiStatusLabel connectionStatus &&
+                FindByName(startPage, "HomeAdAccountStatus") is UiStatusLabel accountStatus &&
+                (connectionStatus.Parent is not TableLayoutPanel connectionLayout ||
+                 !ReferenceEquals(accountStatus.Parent, connectionLayout) ||
+                 connectionLayout.GetRow(accountStatus) != connectionLayout.GetRow(connectionStatus) + 1 ||
+                 accountStatus.Margin.Top < UiStyle.SectionGap))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Start must have a full DPI-scaled section gap between Connected and Connected as.");
+            }
+
             if (tabs.SelectedIndex != 0)
             {
                 failures.Add(

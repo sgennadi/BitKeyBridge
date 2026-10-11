@@ -137,6 +137,11 @@ public static class LapsReadDiagnostics
             "Review record status and the selected identity's access; an unreadable record is not No backup.";
     }
 
+    // The detailed warning is displayed once above the LAPS result grid.
+    // The pinned footer only needs a short completion summary.
+    public static string NoReadableFooterStatus(LapsReadResult result) =>
+        $"Read complete: {result.Entries.Count} record(s), 0 readable passwords.";
+
     public static string EmptyStatus(
         LapsReadResult result,
         bool cloud)

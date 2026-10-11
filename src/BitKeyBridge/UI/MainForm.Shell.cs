@@ -427,6 +427,10 @@ public sealed partial class MainForm
             "Connected Active Directory account";
         UiStyle.ConfigureInlineStatusLabel(
             _homeAdAccountStatus);
+        // Space the account identity away from the main connection status.
+        // Logical UiStyle spacing scales with Windows DPI.
+        _homeAdAccountStatus.Margin =
+            new Padding(0, UiStyle.SectionGap, 0, UiStyle.ControlGap);
         _homeAdAccountStatus.MaximumSize =
             new Size(1100, 0);
         UiStyle.SetStatus(

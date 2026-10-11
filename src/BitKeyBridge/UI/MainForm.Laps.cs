@@ -1483,24 +1483,15 @@ public sealed partial class MainForm
                         "No LAPS password attributes were returned.",
                         diagnostics);
 
-                    UiStyle.SetStatus(
-                        _lapsStatus,
-                        LapsReadDiagnostics.EmptyStatus(
-                            _lapsResult,
-                            cloud),
-                        UiStatusKind.Warning);
                 }
-                else
-                {
-                    // Encrypted LAPS records can be visible without being
-                    // decryptable by this identity. Keep their rows and
-                    // per-record error details visible.
-                    UiStyle.SetStatus(
-                        _lapsStatus,
-                        LapsReadDiagnostics.UnreadableStatus(_lapsResult, cloud) +
-                        " Select a record for error details or use Diagnostic steps and commands.",
-                        UiStatusKind.Warning);
-                }
+
+                // Keep detailed warnings only in the top banner. The
+                // pinned footer shows a neutral read-count summary while
+                // per-record errors remain available in selected details.
+                UiStyle.SetStatus(
+                    _lapsStatus,
+                    LapsReadDiagnostics.NoReadableFooterStatus(_lapsResult),
+                    UiStatusKind.Neutral);
 
                 // No passwords are present in memory. Preserve diagnostics
                 // rather than starting the secret-expiration timer that

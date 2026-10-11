@@ -225,6 +225,29 @@ public static class LapsSelfTest
             row.Status = LapsPasswordStatus.NotReturned;
             Assert(row.Status == LapsPasswordStatus.NotReturned);
         });
+        Check("unreadable LAPS footer reports counts without repeating the yellow warning", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "PC-TEST",
+                DirectoryServer = "dc-test.example"
+            };
+            var empty = LapsReadDiagnostics.NoReadableFooterStatus(result);
+            Assert(empty == "Read complete: 0 record(s), 0 readable passwords.");
+
+            result.Entries.Add(new LapsPasswordEntry
+            {
+                Attribute = "msLAPS-EncryptedPassword",
+                Source = "Windows LAPS (encrypted)",
+                Status = LapsPasswordStatus.DecryptionFailed
+            });
+            var unreadable = LapsReadDiagnostics.NoReadableFooterStatus(result);
+            var warning = LapsReadDiagnostics.UnreadableStatus(result, cloud: false);
+            Assert(unreadable == "Read complete: 1 record(s), 0 readable passwords.");
+            Assert(!unreadable.Contains("decryption failed", StringComparison.OrdinalIgnoreCase));
+            Assert(!unreadable.Contains(secret, StringComparison.Ordinal));
+            Assert(!string.Equals(unreadable, warning, StringComparison.Ordinal));
+        });
         Check("AD LAPS empty results distinguish visible backup metadata", () =>
         {
             foreach (var (legacy, windows) in new[]

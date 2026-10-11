@@ -1,3 +1,10 @@
+## 0.26.6
+
+- Added a DPI-aware UiStyle.SectionGap (12 logical pixels) between the Start page Active Directory "Connected" status and "Connected as" account indicator; preserved auto-sized rows for compact/150%/200% scaling.
+- Removed duplicated yellow LAPS read/decryption warnings: one detailed warning remains above the results grid, while the pinned footer displays only a neutral summary with record and readable-password counts.
+- Preserved the selected LAPS record's separate error details, the diagnostic commands button, and read-only/no-secret diagnostic behavior.
+- Added HiDPI UI layout and cross-platform LAPS regression assertions for the gap and nonduplicated warning/footer text.
+
 ## 0.26.5
 
 - Clarified PowerShell 7 and Windows PowerShell 5.1 prerequisites for optional Active Directory and LAPS diagnostic commands, including module checks, optional Windows client/server RSAT installation and compatibility guidance.
