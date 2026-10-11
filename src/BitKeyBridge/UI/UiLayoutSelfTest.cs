@@ -340,9 +340,14 @@ public static class UiLayoutSelfTest
         foreach (Control child in
                  root.Controls)
         {
+            // TableLayoutPanel calculates Dock=Fill bounds per cell.
+            // Overwriting them with its entire DisplayRectangle makes
+            // pinned footers incorrectly fill the whole tab in headless
+            // layout tests, producing false clipping errors.
             if (child.Dock ==
                     DockStyle.Fill &&
-                child.Parent is not null)
+                child.Parent is not null &&
+                child.Parent is not TableLayoutPanel)
             {
                 var target =
                     child.Parent.DisplayRectangle.Size;
@@ -985,7 +990,9 @@ public static class UiLayoutSelfTest
             footer.Bottom > layout.ClientSize.Height + 3)
         {
             failures.Add(
-                $"{path}/{scenario.Name}: pinned LAPS footer is outside the visible tab viewport.");
+                $"{path}/{scenario.Name}: pinned LAPS footer is outside the visible tab viewport " +
+                $"(Footer: Top={footer.Top}, Height={footer.Height}, Bottom={footer.Bottom}; " +
+                $"Layout: Height={layout.ClientSize.Height}, Scroll: Height={scroll.Height}).");
         }
 
         foreach (var name in new[] { "Account", "Expires", "Status" })
