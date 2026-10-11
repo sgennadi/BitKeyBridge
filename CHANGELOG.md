@@ -1,3 +1,10 @@
+## 0.26.7
+
+- Updated Start results navigation: BitLocker metadata takes priority; confirmed LAPS-only metadata automatically opens the LAPS page on Enter/double-click. Unknown backup status continues to require an explicit choice.
+- Preserved the computer search target across Start, BitLocker Recovery and LAPS tabs, including both directions, manual input, selected Start rows, selected BitLocker records and LAPS candidates.
+- Reused a non-secret computer context; switching tabs does not automatically read keys or passwords. Switching target cancels stale searches and clears the destination workspace's old sensitive results.
+- Expanded WinForms UI regression coverage for routing, search target persistence, and layout at compact, 150% and 200% scaling.
+
 ## 0.26.6
 
 - Added a DPI-aware UiStyle.SectionGap (12 logical pixels) between the Start page Active Directory "Connected" status and "Connected as" account indicator; preserved auto-sized rows for compact/150%/200% scaling.

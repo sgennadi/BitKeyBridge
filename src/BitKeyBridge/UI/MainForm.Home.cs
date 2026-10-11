@@ -215,6 +215,8 @@ public sealed partial class MainForm
                     .Take(100)
                     .ToList();
 
+            _updatingHomeSearchResults = true;
+
             foreach (var computer in names)
             {
                 var bitLocker =
@@ -320,6 +322,7 @@ public sealed partial class MainForm
                     _homeSearchResults.Rows[0].Cells[0];
             }
 
+            _updatingHomeSearchResults = false;
             UpdateHomeSearchSelection();
 
             UiStyle.SetStatus(
@@ -367,6 +370,8 @@ public sealed partial class MainForm
         }
         finally
         {
+            _updatingHomeSearchResults = false;
+
             if (ReferenceEquals(
                     _homeSearchCancellation,
                     cancellation))
@@ -449,6 +454,12 @@ public sealed partial class MainForm
         var selected =
             GetSelectedHomeSearchResult();
 
+        if (!_updatingHomeSearchResults &&
+            selected is not null)
+        {
+            RememberComputerQuery(selected.ComputerName);
+        }
+
         _homeBitLockerButton.Text =
             selected is null
                 ? "BitLocker Recovery"
@@ -513,9 +524,12 @@ public sealed partial class MainForm
             case HomeDefaultAction.None:
                 return;
             case HomeDefaultAction.BitLocker:
-                // When both are present, BitLocker is the default action.
-                // LAPS is opened only through its explicit button.
+                // BitLocker takes priority when both backups are detected.
                 await OpenSelectedHomeBitLockerAsync();
+                return;
+            case HomeDefaultAction.Laps:
+                // A LAPS-only computer opens LAPS when metadata confirms it.
+                await OpenSelectedHomeLapsAsync();
                 return;
             case HomeDefaultAction.ChooseRecoveryType:
                 // Missing metadata is not proof that BitLocker is absent.
@@ -540,6 +554,8 @@ public sealed partial class MainForm
             return;
         }
 
+        RememberComputerQuery(selected.ComputerName);
+
         RecordRecentComputer(
             selected,
             "BitLocker");
@@ -557,8 +573,7 @@ public sealed partial class MainForm
         }
 
         NavigateToRecoveryWorkspace(fromStart: true);
-        _startQuery.Text =
-            selected.ComputerName;
+        _startSearchDebounceTimer?.Stop();
 
         await SearchStartRecoveryAsync();
     }
@@ -581,24 +596,14 @@ public sealed partial class MainForm
             return;
         }
 
+        RememberComputerQuery(selected.ComputerName);
+
         RecordRecentComputer(
             selected,
             "LAPS");
 
         NavigateToLapsWorkspace(fromStart: true);
-
-        _suppressLapsSearchQueue =
-            true;
-        try
-        {
-            _lapsQuery.Text =
-                selected.ComputerName;
-        }
-        finally
-        {
-            _suppressLapsSearchQueue =
-                false;
-        }
+        _lapsSearchDebounceTimer?.Stop();
 
         await ReadLapsAsync();
     }

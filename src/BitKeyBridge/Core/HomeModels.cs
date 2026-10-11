@@ -55,6 +55,7 @@ public enum HomeDefaultAction
 {
     None,
     BitLocker,
+    Laps,
     ChooseRecoveryType
 }
 
@@ -62,12 +63,24 @@ public static class HelpdeskStatus
 {
     // An LDAP metadata miss cannot prove that no recovery key exists.
     public static HomeDefaultAction ResolveHomeDefaultAction(
-        HomeSearchResult? selected) =>
-        selected is null
-            ? HomeDefaultAction.None
-            : selected.BitLockerKeyCount > 0
-                ? HomeDefaultAction.BitLocker
-                : HomeDefaultAction.ChooseRecoveryType;
+        HomeSearchResult? selected)
+    {
+        if (selected is null)
+            return HomeDefaultAction.None;
+
+        if (selected.BitLockerKeyCount > 0)
+            return HomeDefaultAction.BitLocker;
+
+        // An AD computer match by itself is not proof of a LAPS backup.
+        // Only positive non-secret metadata may route directly to LAPS.
+        if (selected.LapsCandidateFound &&
+            selected.LapsStatus is ("Detected" or "Expired"))
+        {
+            return HomeDefaultAction.Laps;
+        }
+
+        return HomeDefaultAction.ChooseRecoveryType;
+    }
 
     public static bool CanAttemptBitLockerSearch(
         bool connected,
