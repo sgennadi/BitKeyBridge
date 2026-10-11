@@ -5213,6 +5213,8 @@ public sealed partial class MainForm : DpiAwareForm
         _startShow.Text =
             "Reveal Recovery Key";
 
+        RememberComputerQuery(row.ComputerName);
+
         _recoveryCardComputer.Text =
             row.ComputerName;
         _recoveryCardOu.Text =

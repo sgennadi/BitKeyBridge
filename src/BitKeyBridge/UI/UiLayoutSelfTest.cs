@@ -404,7 +404,29 @@ public static class UiLayoutSelfTest
             HelpdeskStatus.CanAttemptBitLockerSearch(false, selected) ||
             !HelpdeskStatus.CanAttemptBitLockerSearch(true, selected))
         {
-            failures.Add("Missing BitLocker metadata must require an explicit choice, never silent LAPS routing.");
+            failures.Add("Unverified metadata must require an explicit operator choice.");
+        }
+
+        selected.LapsCandidateFound = true;
+        selected.LapsStatus = "Detected";
+        if (HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+            HomeDefaultAction.Laps)
+        {
+            failures.Add("LAPS-only detected metadata must open LAPS.");
+        }
+
+        selected.LapsStatus = "Expired";
+        if (HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+            HomeDefaultAction.Laps)
+        {
+            failures.Add("Expired LAPS metadata must still open LAPS.");
+        }
+
+        selected.LapsStatus = "Not verified";
+        if (HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+            HomeDefaultAction.ChooseRecoveryType)
+        {
+            failures.Add("Unverified LAPS metadata must not route automatically.");
         }
 
         selected.BitLockerKeyCount = 1;
@@ -825,6 +847,96 @@ public static class UiLayoutSelfTest
             failures,
             form,
             checkRecoveryConnection: true);
+
+        VerifyComputerQueryNavigation(
+            tabs,
+            formName,
+            scenario,
+            failures);
+    }
+
+    private static void VerifyComputerQueryNavigation(
+        TabControl tabs,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        var start = tabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "StartWorkspace");
+        var recovery = tabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "RecoveryWorkspace");
+        var laps = tabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "LapsWorkspace");
+
+        var homeQuery = start is null
+            ? null : FindByName(start, "HomeUnifiedQuery") as TextBox;
+        var recoveryQuery = recovery is null
+            ? null : FindByName(recovery, "BitLockerSearchQuery") as TextBox;
+        var lapsQuery = laps is null
+            ? null : FindByName(laps, "LapsLiveSearchQuery") as TextBox;
+
+        if (start is null || recovery is null || laps is null ||
+            homeQuery is null || recoveryQuery is null || lapsQuery is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: computer query navigation controls are missing.");
+            return;
+        }
+
+        var initialTab = tabs.SelectedTab;
+        try
+        {
+            tabs.SelectedTab = start;
+            homeQuery.Text = "PC-NAV-001";
+            tabs.SelectedTab = recovery;
+            if (recoveryQuery.Text != "PC-NAV-001")
+                failures.Add($"{formName}/{scenario.Name}: Start to BitLocker computer was lost.");
+
+            tabs.SelectedTab = laps;
+            if (lapsQuery.Text != "PC-NAV-001")
+                failures.Add($"{formName}/{scenario.Name}: BitLocker to LAPS computer was lost.");
+
+            lapsQuery.Text = "PC-NAV-002";
+            tabs.SelectedTab = recovery;
+            if (recoveryQuery.Text != "PC-NAV-002")
+                failures.Add($"{formName}/{scenario.Name}: LAPS to BitLocker computer was lost.");
+
+            tabs.SelectedTab = start;
+            if (homeQuery.Text != "PC-NAV-002")
+                failures.Add($"{formName}/{scenario.Name}: LAPS to Start computer was lost.");
+
+            homeQuery.Clear();
+            tabs.SelectedTab = laps;
+            if (lapsQuery.Text.Length != 0)
+                failures.Add($"{formName}/{scenario.Name}: clearing computer must clear stale tab queries.");
+
+            tabs.SelectedTab = start;
+            homeQuery.Text = "PC";
+            var results =
+                FindByName(start, "HomeUnifiedSearchResults") as DataGridView;
+            if (results is not null)
+            {
+                var index = results.Rows.Add(
+                    "PC-SELECTED", "AD", "Available", null, "Detected", null);
+                results.Rows[index].Tag = new HomeSearchResult
+                {
+                    ComputerName = "PC-SELECTED",
+                    BitLockerKeyCount = 1,
+                    LapsCandidateFound = true,
+                    LapsStatus = "Detected"
+                };
+                results.ClearSelection();
+                results.Rows[index].Selected = true;
+                results.CurrentCell = results.Rows[index].Cells[0];
+                tabs.SelectedTab = recovery;
+                if (recoveryQuery.Text != "PC-SELECTED")
+                    failures.Add($"{formName}/{scenario.Name}: selected Start computer was not retained.");
+            }
+        }
+        finally
+        {
+            tabs.SelectedTab = initialTab;
+        }
     }
 
     private static void VerifyTabControlPages(

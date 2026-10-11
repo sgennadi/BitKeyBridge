@@ -134,6 +134,8 @@ public sealed partial class MainForm
         _mainTabs.SelectedIndexChanged +=
             (_, _) =>
             {
+                ApplyComputerQueryToSelectedWorkspace();
+
                 if (ReferenceEquals(
                         _mainTabs.SelectedTab,
                         _recoveryWorkspaceTab))
@@ -1238,7 +1240,13 @@ public sealed partial class MainForm
 
         _homeQuery.TextChanged +=
             (_, _) =>
+            {
+                if (_applyingComputerQuery)
+                    return;
+
+                RememberComputerQuery(_homeQuery.Text);
                 QueueHomeSearch();
+            };
 
         _homeSearchDebounceTimer ??=
             new System.Windows.Forms.Timer
@@ -1357,7 +1365,10 @@ public sealed partial class MainForm
 
     private TabPage BuildRecoveryWorkspaceTab()
     {
-        var tab = new TabPage("Recovery");
+        var tab = new TabPage("Recovery")
+        {
+            Name = "RecoveryWorkspace"
+        };
 
         var root = new TableLayoutPanel
         {
@@ -1605,6 +1616,7 @@ public sealed partial class MainForm
             Margin = new Padding(0, 7, 10, 0)
         }, 0, 0);
 
+        _startQuery.Name = "BitLockerSearchQuery";
         _startQuery.Dock = DockStyle.Fill;
         _startQuery.Font = UiStyle.CreateBodyFont(11F);
         _startQuery.PlaceholderText = "PC-12345 or Recovery ID";
@@ -1793,6 +1805,10 @@ public sealed partial class MainForm
             (_, _) =>
             {
                 ClearBitLockerWarning();
+                if (_applyingComputerQuery)
+                    return;
+
+                RememberComputerQuery(_startQuery.Text);
                 if (_layoutSelfTest)
                     return;
 

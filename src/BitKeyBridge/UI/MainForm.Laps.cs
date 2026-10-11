@@ -44,7 +44,7 @@ public sealed partial class MainForm
     private TabPage BuildLapsWorkspaceTab()
     {
         var tab =
-            new TabPage("LAPS");
+            new TabPage("LAPS") { Name = "LapsWorkspace" };
 
         // A separate, pinned footer keeps password controls within view.
         // Only metadata, records and diagnostics scroll when space is tight.
@@ -822,7 +822,12 @@ public sealed partial class MainForm
             {
                 ClearLapsResult();
 
-                if (!_suppressLapsSearchQueue)
+                if (_applyingComputerQuery)
+                    return;
+
+                RememberComputerQuery(_lapsQuery.Text);
+                if (!_layoutSelfTest &&
+                    !_suppressLapsSearchQueue)
                 {
                     QueueLapsLiveSearch();
                 }
@@ -1024,6 +1029,7 @@ public sealed partial class MainForm
         }
 
         ClearLapsResult();
+        RememberComputerQuery(selected.ComputerName);
 
         UiStyle.SetStatus(
             _lapsStatus,
@@ -1427,6 +1433,7 @@ public sealed partial class MainForm
             if (IsDisposed || cancellation.IsCancellationRequested || generation != _lapsGeneration) return;
             _lapsResult = pending;
             pending = null;
+            RememberComputerQuery(_lapsResult.ComputerName);
             _lapsResourceId = resourceId;
             _lapsAuditSource = source;
             RenderLapsRows();
