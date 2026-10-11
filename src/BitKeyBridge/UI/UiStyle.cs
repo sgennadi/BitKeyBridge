@@ -380,6 +380,64 @@ public static class UiStyle
         };
     }
 
+    /// <summary>
+    /// Reserve enough width for important grid text at every DPI. If the
+    /// columns cannot fit, the grid scrolls horizontally instead of
+    /// truncating status labels or changing the full-screen layout.
+    /// </summary>
+    public static void ConfigureReadableDataGridColumns(
+        DataGridView grid,
+        params (string Name, string SampleText, int LogicalMinWidth)[] columns)
+    {
+        void UpdateMinimumWidths()
+        {
+            if (grid.IsDisposed)
+                return;
+
+            var flags =
+                TextFormatFlags.SingleLine |
+                TextFormatFlags.NoPadding |
+                TextFormatFlags.NoPrefix;
+
+            var dataFont =
+                grid.DefaultCellStyle.Font ??
+                grid.Font;
+            var headerFont =
+                grid.ColumnHeadersDefaultCellStyle.Font ??
+                grid.Font;
+            var extra =
+                ScaleLogicalPixels(26, grid.DeviceDpi);
+
+            foreach (var (name, sample, logicalWidth) in columns)
+            {
+                if (grid.Columns[name] is not DataGridViewColumn column)
+                    continue;
+
+                var headerWidth =
+                    TextRenderer.MeasureText(
+                        column.HeaderText,
+                        headerFont,
+                        new Size(4096, 1024),
+                        flags).Width;
+                var exampleWidth =
+                    TextRenderer.MeasureText(
+                        sample,
+                        dataFont,
+                        new Size(4096, 1024),
+                        flags).Width;
+                column.MinimumWidth =
+                    Math.Max(
+                        ScaleLogicalPixels(logicalWidth, grid.DeviceDpi),
+                        Math.Max(headerWidth, exampleWidth) + extra);
+            }
+        }
+
+        UpdateMinimumWidths();
+        grid.FontChanged += (_, _) => UpdateMinimumWidths();
+        grid.DpiChangedAfterParent += (_, _) => UpdateMinimumWidths();
+        grid.HandleCreated += (_, _) => UpdateMinimumWidths();
+    }
+
     public static void ConfigureListViewColumns(
         ListView view,
         params (string Name, int Width)[] columns)

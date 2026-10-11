@@ -19,6 +19,7 @@ public sealed partial class MainForm
     private readonly DataGridView _lapsSearchRows = new();
     private readonly DataGridView _lapsRows = new();
     private readonly TextBox _lapsPassword = new();
+    private readonly Label _lapsSelectedRecordSummary = new();
     private readonly RichTextBox _lapsDetails = new();
     private readonly Button _lapsDetailsToggle = new();
     private readonly UiStatusLabel _lapsStatus = new();
@@ -45,15 +46,32 @@ public sealed partial class MainForm
         var tab =
             new TabPage("LAPS");
 
+        // A separate, pinned footer keeps password controls within view.
+        // Only metadata, records and diagnostics scroll when space is tight.
+        var layout = new TableLayoutPanel
+        {
+            Name = "LapsWorkspaceLayout",
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        tab.Controls.Add(layout);
+
         var root =
             new TableLayoutPanel
             {
+                Name = "LapsScrollableContent",
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
                 Padding = new Padding(
                     UiStyle.PagePadding),
                 ColumnCount = 1,
-                RowCount = 11
+                RowCount = 9
             };
         root.ColumnStyles.Add(
             new ColumnStyle(
@@ -61,7 +79,7 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 11;
+             index < 9;
              index++)
         {
             root.RowStyles.Add(
@@ -74,8 +92,8 @@ public sealed partial class MainForm
                         : 0F));
         }
 
-        tab.Controls.Add(
-            root);
+        layout.Controls.Add(
+            root, 0, 0);
 
         var titlePanel =
             new TableLayoutPanel
@@ -460,7 +478,9 @@ public sealed partial class MainForm
         _lapsRows.MinimumSize =
             new Size(
                 0,
-                180);
+                160);
+        _lapsRows.ScrollBars =
+            ScrollBars.Both;
         UiStyle.ConfigureDataGridView(
             _lapsRows);
         _lapsRows.Columns.AddRange([
@@ -497,6 +517,17 @@ public sealed partial class MainForm
                 "Status",
                 100)
         ]);
+        UiStyle.ConfigureReadableDataGridColumns(
+            _lapsRows,
+            ("Source", "Windows LAPS (encrypted)", 150),
+            ("RecordType", "Current / history", 110),
+            ("Account", "Name not stored in AD", 195),
+            ("KeyDate", "2026-10-23 12:10:39", 145),
+            ("Latest", "Latest", 70),
+            ("Age", "Unknown", 85),
+            ("Expires", "2026-10-23 12:10:39", 150),
+            ("Status", "Decrypt unauthorized", 170));
+
         _lapsRows.Columns["KeyDate"]!
             .DefaultCellStyle.Format =
             "yyyy-MM-dd HH:mm:ss";
@@ -576,20 +607,18 @@ public sealed partial class MainForm
         var secret =
             new TableLayoutPanel
             {
-                Dock =
-                    DockStyle.Top,
-                AutoSize =
-                    true,
-                ColumnCount =
-                    2,
-                RowCount =
-                    2,
-                Margin =
-                    new Padding(
-                        0,
-                        UiStyle.ControlGap,
-                        0,
-                        UiStyle.ControlGap)
+                Name = "LapsPasswordPanel",
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 2,
+                RowCount = 4,
+                Margin = Padding.Empty,
+                Padding = new Padding(
+                    UiStyle.PagePadding,
+                    UiStyle.ControlGap,
+                    UiStyle.PagePadding,
+                    UiStyle.PagePadding)
             };
         secret.ColumnStyles.Add(
             new ColumnStyle(
@@ -598,12 +627,29 @@ public sealed partial class MainForm
             new ColumnStyle(
                 SizeType.Percent,
                 100F));
-        secret.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-        secret.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
+        for (var index = 0; index < 4; index++)
+            secret.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _lapsStatus.Name = "LapsOperationStatus";
+        _lapsStatus.AccessibleName = "LAPS operation status";
+        UiStyle.ConfigureStatusLabel(_lapsStatus);
+        _lapsStatus.Margin = new Padding(0, 0, 0, UiStyle.ControlGap);
+        UiStyle.SetStatus(
+            _lapsStatus,
+            "Select a computer, then use Read LAPS. Search never reads passwords.",
+            UiStatusKind.Neutral);
+        secret.Controls.Add(_lapsStatus, 0, 0);
+        secret.SetColumnSpan(_lapsStatus, 2);
+
+        _lapsSelectedRecordSummary.Name = "LapsSelectedRecordSummary";
+        _lapsSelectedRecordSummary.AccessibleName = "Selected LAPS record summary";
+        _lapsSelectedRecordSummary.AutoSize = true;
+        _lapsSelectedRecordSummary.Text = "No LAPS record selected";
+        _lapsSelectedRecordSummary.UseMnemonic = false;
+        _lapsSelectedRecordSummary.Margin =
+            new Padding(0, 0, 0, UiStyle.ControlGap);
+        secret.Controls.Add(_lapsSelectedRecordSummary, 0, 1);
+        secret.SetColumnSpan(_lapsSelectedRecordSummary, 2);
 
         secret.Controls.Add(
             new Label
@@ -616,8 +662,12 @@ public sealed partial class MainForm
                     AnchorStyles.Left
             },
             0,
-            0);
+            2);
 
+        _lapsPassword.Name =
+            "LapsPasswordValue";
+        _lapsPassword.AccessibleName =
+            "Selected LAPS password";
         _lapsPassword.Dock =
             DockStyle.Fill;
         _lapsPassword.ReadOnly =
@@ -630,7 +680,7 @@ public sealed partial class MainForm
         secret.Controls.Add(
             _lapsPassword,
             1,
-            0);
+            2);
 
         var secretActions =
             new FlowLayoutPanel
@@ -643,6 +693,9 @@ public sealed partial class MainForm
                     true
             };
 
+        _lapsReveal.Name = "LapsRevealPasswordButton";
+        _lapsCopy.Name = "LapsCopyPasswordButton";
+        _lapsCopyAccount.Name = "LapsCopyAccountButton";
         _lapsReveal.Text =
             "Reveal password";
         _lapsCopy.Text =
@@ -670,22 +723,11 @@ public sealed partial class MainForm
         secret.Controls.Add(
             secretActions,
             1,
-            1);
-        root.Controls.Add(
+            3);
+        layout.Controls.Add(
             secret,
             0,
-            7);
-
-        _lapsStatus.Dock =
-            DockStyle.Top;
-        UiStyle.SetStatus(
-            _lapsStatus,
-            "Type at least two characters for live metadata search. Select a device and press Enter or double-click to read LAPS. Search never reads passwords.",
-            UiStatusKind.Neutral);
-        root.Controls.Add(
-            _lapsStatus,
-            0,
-            8);
+            1);
 
         _lapsProgress.Name =
             "LapsProgress";
@@ -708,12 +750,12 @@ public sealed partial class MainForm
         root.Controls.Add(
             _lapsProgress,
             0,
-            9);
+            7);
 
         root.Controls.Add(
             _lapsDiagnostics,
             0,
-            10);
+            8);
 
         _lapsDetailsToggle.Click +=
             (_, _) =>
@@ -1611,8 +1653,15 @@ public sealed partial class MainForm
                 readable;
         _lapsCopyAccount.Enabled =
             row is not null &&
-            !string.IsNullOrWhiteSpace(
-                row.AccountName);
+            !string.IsNullOrWhiteSpace(row.AccountName) &&
+            !IsUnknownLegacyAccount(row);
+
+        _lapsSelectedRecordSummary.Text =
+            row is null
+                ? "No LAPS record selected"
+                : "Selected: " + row.Source + " | " +
+                  HelpdeskStatus.LapsEntry(row) +
+                  " | Expires: " + FormatLapsExpiry(row);
 
         if (row is null ||
             _lapsResult is null)
@@ -1818,7 +1867,7 @@ public sealed partial class MainForm
                     row.IsHistory
                         ? "History"
                         : "Current",
-                    row.AccountName,
+                    DisplayLapsAccount(row),
                     row.UpdatedAtUtc,
                     row.IsHistory
                         ? "No"
@@ -1831,6 +1880,12 @@ public sealed partial class MainForm
 
             _lapsRows.Rows[rowIndex].Tag =
                 row;
+            _lapsRows.Rows[rowIndex].Cells["Account"].ToolTipText =
+                row.AccountName;
+            _lapsRows.Rows[rowIndex].Cells["Status"].ToolTipText =
+                HelpdeskStatus.LapsEntry(row);
+            _lapsRows.Rows[rowIndex].Cells["Expires"].ToolTipText =
+                FormatLapsExpiry(row);
         }
 
         _lapsRows.ClearSelection();
@@ -1844,6 +1899,19 @@ public sealed partial class MainForm
             SelectLapsEntry();
         }
     }
+
+    private static bool IsUnknownLegacyAccount(
+        LapsPasswordEntry row) =>
+        row.Source.Equals("Legacy LAPS", StringComparison.OrdinalIgnoreCase) &&
+        row.AccountName.Equals(
+            "Legacy managed account (name not stored in AD)",
+            StringComparison.Ordinal);
+
+    private static string DisplayLapsAccount(
+        LapsPasswordEntry row) =>
+        IsUnknownLegacyAccount(row)
+            ? "Name not stored in AD"
+            : row.AccountName;
 
     private static bool IsLapsExpired(
         LapsPasswordEntry row)
@@ -2293,6 +2361,7 @@ public sealed partial class MainForm
             ClearTrackedRecoveryClipboard();
         _lapsPassword.Clear();
         _lapsPassword.UseSystemPasswordChar = true;
+        _lapsSelectedRecordSummary.Text = "No LAPS record selected";
         _lapsRows.Rows.Clear();
         _lapsZeroWarningPanel.Visible = false;
         _lapsDetails.Clear();
