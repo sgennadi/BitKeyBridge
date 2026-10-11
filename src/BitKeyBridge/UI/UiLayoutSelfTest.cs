@@ -985,8 +985,10 @@ public static class UiLayoutSelfTest
                 $"{path}/{scenario.Name}: password field must start masked and accessible.");
         }
 
-        if (!footer.Visible ||
-            footer.Height <= 0 ||
+        // WinForms Visible includes ancestor visibility. A headless test
+        // form is not shown, so even correctly laid out children can have
+        // Visible=false. Test the actual geometry and parent structure.
+        if (footer.Height <= 0 ||
             footer.Bottom > layout.ClientSize.Height + 3)
         {
             failures.Add(
