@@ -417,6 +417,23 @@ public static class UiLayoutSelfTest
             failures.Add("BitLocker exact-computer domain retry must occur only after a scoped metadata miss.");
         }
 
+        selected.BitLockerOutsideSelectedScope = true;
+        if (!HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, "OU=Windows11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il") ||
+            HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, "DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il"))
+        {
+            failures.Add("Recovery navigation must reuse full domain scope when the key was found outside the selected OU.");
+        }
+
+        selected.BitLockerOutsideSelectedScope = false;
+        selected.BitLockerKeyCount = 0;
+        if (!HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, "OU=Windows11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il"))
+        {
+            failures.Add("Unverified BitLocker navigation must retry the domain scope.");
+        }
+
         candidate.ExpiresAtUtc = DateTime.UtcNow.AddDays(10);
         if (HelpdeskStatus.Laps(candidate) != "Detected")
             failures.Add("Start LAPS future expiration must be Detected.");

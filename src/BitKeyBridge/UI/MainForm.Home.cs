@@ -148,6 +148,8 @@ public sealed partial class MainForm
                     computer, StringComparison.OrdinalIgnoreCase)));
             }
 
+            var domainRecoveryNames =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var lapsNames = lapsRows
                 .Select(row => row.ComputerName)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -173,6 +175,11 @@ public sealed partial class MainForm
                         "Entire domain", _startDomainDn);
                     extra = await SearchLiveAdRecoveryMetadataAsync(
                         computer, domainScope, cancellation.Token);
+                    if (extra.Any(row => row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        domainRecoveryNames.Add(computer);
+                    }
                 }
 
                 recoveryRows.AddRange(extra.Where(row => row.ComputerName.Equals(
@@ -258,6 +265,8 @@ public sealed partial class MainForm
                             string.Empty,
                         BitLockerKeyCount =
                             bitLocker.Count,
+                        BitLockerOutsideSelectedScope =
+                            domainRecoveryNames.Contains(computer),
                         LatestBitLockerKeyUtc =
                             latestBitLocker?.KeyDate,
                         LatestRecoveryId =
@@ -279,7 +288,9 @@ public sealed partial class MainForm
                             HelpdeskStatus.Laps(
                                 laps),
                         SourceSummary =
-                            "AD"
+                            domainRecoveryNames.Contains(computer)
+                                ? "AD (domain retry)"
+                                : "AD"
                     };
 
                 var rowIndex =
@@ -532,6 +543,18 @@ public sealed partial class MainForm
         RecordRecentComputer(
             selected,
             "BitLocker");
+
+        if (HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, _startScope?.SearchBase, _startDomainDn))
+        {
+            // The Recovery view must use the same scope that found
+            // the BitLocker metadata on Start, otherwise it vanishes.
+            SetRecoveryScope(
+                new BitLockerScope("Entire domain", _startDomainDn),
+                $"Searching BitLocker across the domain for {selected.ComputerName} " +
+                "(outside the previously selected OU or missing metadata).",
+                UiStatusKind.Warning);
+        }
 
         NavigateToRecoveryWorkspace(fromStart: true);
         _startQuery.Text =

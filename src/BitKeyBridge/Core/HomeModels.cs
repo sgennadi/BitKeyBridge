@@ -10,6 +10,10 @@ public sealed class HomeSearchResult
 
     public int BitLockerKeyCount { get; set; }
 
+    // The exact-computer BitLocker metadata was only found after
+    // retrying outside the operator's currently selected OU.
+    public bool BitLockerOutsideSelectedScope { get; set; }
+
     public DateTime? LatestBitLockerKeyUtc { get; set; }
 
     public string LatestRecoveryId { get; set; } =
@@ -75,6 +79,19 @@ public static class HelpdeskStatus
         string selectedSearchBase,
         string domainNamingContext) =>
         scopedRecoveryCount == 0 &&
+        !string.IsNullOrWhiteSpace(domainNamingContext) &&
+        !string.Equals(
+            selectedSearchBase,
+            domainNamingContext,
+            StringComparison.OrdinalIgnoreCase);
+
+    public static bool ShouldSelectDomainForRecovery(
+        HomeSearchResult? selected,
+        string? selectedSearchBase,
+        string? domainNamingContext) =>
+        selected is not null &&
+        (selected.BitLockerOutsideSelectedScope ||
+         selected.BitLockerKeyCount == 0) &&
         !string.IsNullOrWhiteSpace(domainNamingContext) &&
         !string.Equals(
             selectedSearchBase,
