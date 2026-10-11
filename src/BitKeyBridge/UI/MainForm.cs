@@ -97,6 +97,8 @@ public sealed partial class MainForm : DpiAwareForm
     private int _directoryConnectionGeneration;
     private bool _directoryConnecting;
     private bool _directoryConnected;
+    private string _connectedAdAccount = string.Empty;
+    private string _connectedAdAuthentication = string.Empty;
 
     private readonly UiStatusLabel _startPurposeStatus = new();
     private readonly UiStatusLabel _startOuStatus = new();
@@ -3817,6 +3819,8 @@ public sealed partial class MainForm : DpiAwareForm
         _directoryConnectionCancellation = cancellation;
         _directoryConnecting = true;
         _directoryConnected = false;
+        _connectedAdAccount = string.Empty;
+        _connectedAdAuthentication = string.Empty;
         RefreshHomeConnectionUi();
         _connectAdButton.Enabled = false;
         _disconnectAdButton.Enabled = false;
@@ -3838,17 +3842,40 @@ public sealed partial class MainForm : DpiAwareForm
                 Task.Run(
                     () =>
                     {
+                        // Capture the actual credential once and use it both for
+                        // DC discovery and for the successful LDAP bind.
+                        // The configured account can differ from a stored vault entry.
+                        var credential =
+                            AdSessionCredentials.CreateNetworkCredential(_config);
+                        var account =
+                            credential is null
+                                ? System.Security.Principal.WindowsIdentity.GetCurrent().Name
+                                : string.IsNullOrWhiteSpace(credential.Domain)
+                                    ? credential.UserName
+                                    : credential.Domain + "\" + credential.UserName;
+                        var authentication =
+                            credential is null
+                                ? "Windows integrated"
+                                : _config.AdCredentialStorageMode switch
+                                {
+                                    "CurrentUser" => "Current User vault",
+                                    "LocalMachine" => "Machine / Service vault",
+                                    _ => "Session credentials"
+                                };
                         var service =
                             new ActiveDirectoryService(
-                                _config);
+                                _config,
+                                credential,
+                                useCredentialOverride: true);
                         var server =
                             service.GetPreferredWritableDc();
                         var root =
-                            service.TestConnection(
-                                server);
+                            service.TestConnection(server);
                         return (
                             Server: server,
-                            Root: root);
+                            Root: root,
+                            Account: account,
+                            Authentication: authentication);
                     });
 
             var cancelSignal =
@@ -3903,6 +3930,8 @@ public sealed partial class MainForm : DpiAwareForm
                     "defaultNamingContext",
                     string.Empty);
 
+            _connectedAdAccount = result.Account;
+            _connectedAdAuthentication = result.Authentication;
             _directoryConnected = true;
             _disconnectAdButton.Enabled = true;
             RefreshHomeConnectionUi();
@@ -3992,6 +4021,8 @@ public sealed partial class MainForm : DpiAwareForm
             }
 
             _directoryConnected = false;
+            _connectedAdAccount = string.Empty;
+            _connectedAdAuthentication = string.Empty;
             _disconnectAdButton.Enabled = false;
             RefreshHomeConnectionUi();
             _startDomainDn =
@@ -4086,6 +4117,8 @@ public sealed partial class MainForm : DpiAwareForm
 
         _directoryConnected =
             false;
+        _connectedAdAccount = string.Empty;
+        _connectedAdAuthentication = string.Empty;
         _disconnectAdButton.Enabled =
             false;
         RefreshHomeConnectionUi();
@@ -4147,15 +4180,6 @@ public sealed partial class MainForm : DpiAwareForm
                 ? "LDAPS"
                 : "LDAP sign/seal";
 
-        var user =
-            _config.AdUseExplicitCredentials &&
-            !string.IsNullOrWhiteSpace(
-                _config.AdUsername)
-                ? _config.AdUsername.Trim()
-                : System.Security.Principal.WindowsIdentity
-                    .GetCurrent()
-                    .Name;
-
         var domain =
             !string.IsNullOrWhiteSpace(
                 _config.AdDomain)
@@ -4166,7 +4190,7 @@ public sealed partial class MainForm : DpiAwareForm
         return
             $"Connected: {server} | " +
             $"{(string.IsNullOrWhiteSpace(domain) ? "domain unknown" : domain)} | " +
-            $"{user} | {protocol} {_config.AdPort}";
+            $"{protocol} {_config.AdPort}";
     }
 
     private static string GetDnsDomainFromNamingContext(
@@ -4312,10 +4336,45 @@ public sealed partial class MainForm : DpiAwareForm
         RefreshHomeConnectionUi();
     }
 
+    private void RefreshConnectedAdAccountUi()
+    {
+        var connected =
+            _directoryConnected &&
+            !string.IsNullOrWhiteSpace(_connectedAdAccount);
+        var message =
+            connected
+                ? $"Connected as: {_connectedAdAccount} ({_connectedAdAuthentication})"
+                : _directoryConnecting
+                    ? "Connected as: connecting..."
+                    : "Connected as: not connected";
+
+        UiStyle.SetStatus(
+            _homeAdAccountStatus,
+            message,
+            connected
+                ? UiStatusKind.Success
+                : _directoryConnecting
+                    ? UiStatusKind.Busy
+                    : UiStatusKind.Neutral);
+
+        _globalAdAccountStatus.Text =
+            connected
+                ? "AD user: " + _connectedAdAccount
+                : _directoryConnecting
+                    ? "AD user: connecting..."
+                    : "AD user: not connected";
+        _globalAdAccountStatus.ToolTipText =
+            connected
+                ? $"Account used for the successful LDAP bind: {_connectedAdAccount} ({_connectedAdAuthentication})."
+                : "No validated Active Directory account is connected.";
+    }
+
     private void RefreshHomeConnectionUi()
     {
         if (_homeConnectAdButton.IsDisposed)
             return;
+
+        RefreshConnectedAdAccountUi();
 
         _homeConnectionProgress.Visible =
             _directoryConnecting;
@@ -4394,11 +4453,12 @@ public sealed partial class MainForm : DpiAwareForm
             string.Empty;
 
         var principal =
-            !string.IsNullOrWhiteSpace(
-                _config.AdUsername)
-                ? _config.AdUsername
-                : AuthorizationService
-                    .CurrentIdentityName();
+            !string.IsNullOrWhiteSpace(_connectedAdAccount)
+                ? _connectedAdAccount
+                : _config.AdUseExplicitCredentials &&
+                  !string.IsNullOrWhiteSpace(_config.AdUsername)
+                    ? _config.AdUsername
+                    : AuthorizationService.CurrentIdentityName();
 
         using var dialog =
             new AdAccessTroubleshootingDialog(
@@ -6480,6 +6540,8 @@ public sealed partial class MainForm : DpiAwareForm
         _deviceRecoveryKey.Clear();
         _cloudToken = null;
         _cloudTokenContext = string.Empty;
+        _connectedAdAccount = string.Empty;
+        _connectedAdAuthentication = string.Empty;
         AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
         _cloudPassword.Clear();

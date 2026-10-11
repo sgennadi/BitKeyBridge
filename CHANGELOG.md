@@ -1,3 +1,10 @@
+## 0.26.1
+
+- Added a dedicated "Connected as" Active Directory account indicator on Start and an always-visible "AD user" field in the global status bar (also visible on BitLocker and LAPS tabs).
+- Reports the actual credential selected for a successful LDAP bind: current Windows identity, session credentials, Current User vault or Machine / Service vault. The connection test reuses that credential for DC discovery and bind instead of assuming the configured username matches a stored credential.
+- Clears the connected identity when reconnecting, canceling, disconnecting or failing authentication, and uses the validated account in AD access troubleshooting.
+- Adds UI self-test coverage for dedicated Start and global account indicators at compact and high-DPI window sizes. Only account names are shown; no passwords or tokens.
+
 ## 0.26.0
 
 - Device Diagnostics Center: added Start > Device Diagnostics... with responsive, shared UiStyle WinForms controls and compact/200% DPI checks.

@@ -459,6 +459,7 @@ public static class UiLayoutSelfTest
                 new[]
                 {
                     "HomeConnectionStatus",
+                    "HomeAdAccountStatus",
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
                     "HomeEnvironmentCheckButton",
@@ -596,10 +597,15 @@ public static class UiLayoutSelfTest
 
         if (FindByName(
                 form,
-                "GlobalStatusBar") is null)
+                "GlobalStatusBar") is not StatusStrip globalStatusBar)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: global connection status bar was not found.");
+        }
+        else if (globalStatusBar.Items["GlobalAdAccountStatus"] is not ToolStripStatusLabel)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: global Active Directory account indicator was not found.");
         }
 
         if (FindByName(

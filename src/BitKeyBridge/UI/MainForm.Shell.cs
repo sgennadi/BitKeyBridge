@@ -27,6 +27,7 @@ public sealed partial class MainForm
     private readonly Button _lapsBackToStart = new();
 
     private readonly UiStatusLabel _homeConnectionStatus = new();
+    private readonly UiStatusLabel _homeAdAccountStatus = new();
     private readonly Button _homeConnectAdButton = new();
     private readonly Button _homeDisconnectAdButton = new();
     private readonly Button _homeEnvironmentCheckButton = new();
@@ -45,6 +46,7 @@ public sealed partial class MainForm
     private readonly RadioButton _homeUseOtherAccount = new();
     private readonly Button _homeAdvancedButton = new();
     private readonly ToolStripStatusLabel _globalConnectionStatus = new();
+    private readonly ToolStripStatusLabel _globalAdAccountStatus = new();
     private readonly ToolStripStatusLabel _globalVersionStatus = new();
     private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
     private CancellationTokenSource? _homeSearchCancellation;
@@ -184,6 +186,13 @@ public sealed partial class MainForm
         _globalConnectionStatus.ToolTipText =
             "Open Start / connection settings";
 
+        _globalAdAccountStatus.Name =
+            "GlobalAdAccountStatus";
+        _globalAdAccountStatus.Text =
+            "AD user: not connected";
+        _globalAdAccountStatus.ToolTipText =
+            "No validated Active Directory account is connected.";
+
         _globalVersionStatus.Name =
             "GlobalVersionStatus";
         _globalVersionStatus.Text =
@@ -193,6 +202,8 @@ public sealed partial class MainForm
 
         status.Items.Add(
             _globalConnectionStatus);
+        status.Items.Add(
+            _globalAdAccountStatus);
         status.Items.Add(
             _globalVersionStatus);
 
@@ -374,7 +385,7 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    7
+                    8
             };
 
         connection.ColumnStyles.Add(
@@ -383,7 +394,7 @@ public sealed partial class MainForm
                 100F));
 
         for (var index = 0;
-             index < 7;
+             index < 8;
              index++)
         {
             connection.RowStyles.Add(
@@ -409,6 +420,23 @@ public sealed partial class MainForm
             _homeConnectionStatus,
             0,
             0);
+
+        _homeAdAccountStatus.Name =
+            "HomeAdAccountStatus";
+        _homeAdAccountStatus.AccessibleName =
+            "Connected Active Directory account";
+        UiStyle.ConfigureInlineStatusLabel(
+            _homeAdAccountStatus);
+        _homeAdAccountStatus.MaximumSize =
+            new Size(1100, 0);
+        UiStyle.SetStatus(
+            _homeAdAccountStatus,
+            "Connected as: not connected",
+            UiStatusKind.Neutral);
+        connection.Controls.Add(
+            _homeAdAccountStatus,
+            0,
+            1);
 
         var identity =
             new FlowLayoutPanel
@@ -450,7 +478,7 @@ public sealed partial class MainForm
         connection.Controls.Add(
             identity,
             0,
-            1);
+            2);
 
         _homeConnectionProgress.Name =
             "HomeConnectionProgress";
@@ -473,7 +501,7 @@ public sealed partial class MainForm
         connection.Controls.Add(
             _homeConnectionProgress,
             0,
-            2);
+            3);
 
         var connectionActions =
             new FlowLayoutPanel
@@ -533,7 +561,7 @@ public sealed partial class MainForm
         connection.Controls.Add(
             connectionActions,
             0,
-            3);
+            4);
 
         connection.Controls.Add(
             new Label
@@ -554,7 +582,7 @@ public sealed partial class MainForm
                         0)
             },
             0,
-            4);
+            5);
 
         UiStyle.ConfigureStatusLabel(
             _startSetupStatus);
@@ -573,12 +601,12 @@ public sealed partial class MainForm
         connection.Controls.Add(
             _startSetupStatus,
             0,
-            5);
+            6);
 
         connection.Controls.Add(
             _recoveryDiagnostics,
             0,
-            6);
+            7);
 
         connectionGroup.Controls.Add(
             connection);
