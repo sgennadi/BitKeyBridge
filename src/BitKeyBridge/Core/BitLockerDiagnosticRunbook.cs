@@ -108,8 +108,17 @@ public static class BitLockerDiagnosticRunbook
             "Inspect the BitLocker-API/Management events and BitLocker GPO backup settings for AD DS backup/escrow failures.",
             "A locally encrypted drive does not establish that its recovery key was successfully backed up.",
             "",
-            "WHERE: DC or domain management workstation WITH RSAT ActiveDirectory module - PowerShell",
-            "Import-Module ActiveDirectory",
+            "WHERE: DC or domain management workstation - OPTIONAL RSAT ActiveDirectory module",
+            "BitKeyBridge does NOT require RSAT or PowerShell to perform native AD searches.",
+            "$PSVersionTable.PSVersion",
+            "Get-Module -ListAvailable ActiveDirectory | Select-Object Name, Version, Path",
+            "Get-Command Get-ADObject,Get-ADComputer -ErrorAction SilentlyContinue",
+            "If an AD cmdlet is missing, use Windows PowerShell 5.1 (powershell.exe) with RSAT, or install optional RSAT on the administrator workstation.",
+            "Windows 10/11 optional elevated installation: Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0",
+            "Windows Server optional elevated installation: Install-WindowsFeature RSAT-AD-PowerShell",
+            "Import-Module ActiveDirectory -ErrorAction Stop",
+            "PowerShell 7 compatibility fallback: Import-Module ActiveDirectory -UseWindowsPowerShell -ErrorAction Stop",
+            "Stop here if Get-Command Get-ADObject fails. Use Start > Environment Check... for module-free LDAP verification.",
             "$dc = " + Quote(dc)
         ]);
         if (!string.IsNullOrWhiteSpace(context.ScopeDistinguishedName))

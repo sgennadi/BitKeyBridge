@@ -1,3 +1,10 @@
+## 0.26.5
+
+- Clarified PowerShell 7 and Windows PowerShell 5.1 prerequisites for optional Active Directory and LAPS diagnostic commands, including module checks, optional Windows client/server RSAT installation and compatibility guidance.
+- Added a guarded, read-only AD group SID check in the LAPS diagnostic runbook: predefined DC, explicitly replaced group identity, handled unavailable Get-ADGroup, and a nonempty-SID check before whoami /groups and Select-String.
+- Explained that Windows sign-in token membership is different from an explicit BitKeyBridge AD connection and does not prove LAPS confidential-attribute read rights or DPAPI-NG decrypt authorization.
+- Extended BitLocker guidance and diagnostic regression tests. BitKeyBridge itself remains native .NET, requires no PowerShell/RSAT, and does not install modules or alter AD permissions.
+
 ## 0.26.4
 
 - Fixed long LAPS status messages becoming invisible or cut off: shared UiStyle now configures width-constrained, auto-height multiline status labels, and UiStatusLabel preferred-size measurement honors MaximumSize.Width even for an unconstrained WinForms TableLayoutPanel sizing pass.

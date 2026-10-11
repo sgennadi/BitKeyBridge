@@ -27,6 +27,42 @@ dsacls "OU=Workstations,DC=example,DC=com" /I:S /G "EXAMPLE\BitKeyBridge-Recover
 
 Do **not** grant Full Control or All Extended Rights just to solve recovery-password read access.
 
+## Optional PowerShell/RSAT diagnostics
+
+BitKeyBridge connects to Active Directory using native .NET and LDAP. **RSAT, PowerShell
+and a domain-joined workstation are not required** for its AD/LAPS functionality if a
+reachable DC and valid AD credentials are configured. The manual commands under
+**LAPS > Diagnostic steps and commands...** and the BitLocker troubleshooting
+guide have additional module requirements.
+
+On an administrator workstation, check the module and cmdlets:
+
+    $PSVersionTable.PSVersion
+    Get-Module -ListAvailable ActiveDirectory,LAPS
+    Get-Command Get-ADGroup,Get-ADComputer -ErrorAction SilentlyContinue
+
+If PowerShell 7 does not recognize `Get-ADGroup`, try **Windows PowerShell 5.1**
+(`powershell.exe`) after installing the RSAT ActiveDirectory module, or use
+`Import-Module ActiveDirectory -UseWindowsPowerShell -ErrorAction Stop`
+from PowerShell 7 with the Windows PowerShell compatibility feature.
+
+Optional elevated installation for Windows 10/11:
+
+    Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
+
+Optional elevated installation for Windows Server:
+
+    Install-WindowsFeature RSAT-AD-PowerShell
+
+When comparing a group SID, first set an actual domain controller and the group's
+real sAMAccountName or distinguished name. Require `Get-ADGroup` to succeed,
+then test that `$sid` is not empty **before** using `Select-String -Pattern $sid`.
+Otherwise the null-`Pattern` error is secondary to the missing AD module or
+failed group lookup. `whoami /groups` shows the **current Windows sign-in token**,
+not membership of separate explicit AD credentials supplied to BitKeyBridge.
+Membership alone is not proof of permission to read or decrypt a LAPS password.
+Use **Start > Environment Check...** for native RSAT-free AD diagnostics.
+
 ## Windows LAPS in Active Directory
 
 Microsoft's supported delegation cmdlet is:

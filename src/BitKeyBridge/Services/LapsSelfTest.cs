@@ -296,6 +296,14 @@ public static class LapsSelfTest
             Assert(guide.Contains("-DomainController 'yosh-dc02.yosh.ac.il'", StringComparison.Ordinal));
             Assert(guide.Contains("Get-WinEvent -LogName 'Microsoft-Windows-LAPS/Operational'", StringComparison.Ordinal));
             Assert(guide.Contains("Get-LapsADPassword", StringComparison.Ordinal));
+            Assert(guide.Contains("Get-Module -ListAvailable ActiveDirectory,LAPS", StringComparison.Ordinal));
+            Assert(guide.Contains("Import-Module ActiveDirectory -UseWindowsPowerShell", StringComparison.Ordinal));
+            Assert(guide.Contains("Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0", StringComparison.Ordinal));
+            Assert(guide.Contains("$dc = 'yosh-dc02.yosh.ac.il'", StringComparison.Ordinal));
+            Assert(guide.Contains("$group = 'REPLACE-WITH-EXACT-AD-GROUP'", StringComparison.Ordinal));
+            Assert(guide.Contains("Get-ADGroup -Identity $group -Server $dc -ErrorAction Stop", StringComparison.Ordinal));
+            Assert(guide.Contains("if (-not [string]::IsNullOrWhiteSpace($sid))", StringComparison.Ordinal));
+            Assert(guide.Contains("the group list will NOT represent those LDAP credentials", StringComparison.Ordinal));
             Assert(guide.Contains("DecryptionStatus is Unauthorized", StringComparison.Ordinal));
             Assert(guide.Contains("AuthorizedDecryptor", StringComparison.Ordinal));
             Assert(guide.Contains("DOES request passwords", StringComparison.Ordinal));
@@ -378,6 +386,9 @@ public static class LapsSelfTest
             Assert(guide.Contains("0 visible objects can mean", StringComparison.Ordinal));
             Assert(guide.Contains("does not", StringComparison.OrdinalIgnoreCase));
             Assert(guide.Contains("Get-ADComputer -Identity 'PC-TEST'", StringComparison.Ordinal));
+            Assert(guide.Contains("Get-Module -ListAvailable ActiveDirectory", StringComparison.Ordinal));
+            Assert(guide.Contains("Import-Module ActiveDirectory -UseWindowsPowerShell", StringComparison.Ordinal));
+            Assert(guide.Contains("Start > Environment Check...", StringComparison.Ordinal));
         });
         Check("BitLocker cache and Entra runbooks do not suggest AD secret reads", () =>
         {
