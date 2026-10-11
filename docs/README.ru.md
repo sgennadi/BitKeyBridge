@@ -613,3 +613,9 @@ Repair:
 Housekeeping и ACL status доступны в `/health/security`, `/metrics`, sanitized diagnostics и Windows Event Log без публикации recovery secrets, incident metadata, SID или service-account names.
 
 Application config теперь имеет **SchemaVersion 2**.
+
+### Исправления 0.26.3
+
+- В LAPS поле Password, Reveal/Copy и текущий статус закреплены внизу и остаются видны при небольшом окне, в то время как таблицы прокручиваются. На 150–200% масштабировании важные столбцы не сжимаются до обрезанного текста.
+- На Start двойной щелчок открывает BitLocker, если найдены ключи. Отсутствие метаданных не означает отсутствие BitLocker: приложение предлагает выбрать раздел, а при поиске проверяет весь домен, если выбранная OU не содержит компьютер.
+- Updater не устанавливает сохранённую старую версию без повторной проверки GitHub Releases; Update Now всегда получает актуальный релиз.

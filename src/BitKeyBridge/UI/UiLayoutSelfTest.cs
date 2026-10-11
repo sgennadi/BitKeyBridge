@@ -340,9 +340,14 @@ public static class UiLayoutSelfTest
         foreach (Control child in
                  root.Controls)
         {
+            // TableLayoutPanel calculates Dock=Fill bounds per cell.
+            // Overwriting them with its entire DisplayRectangle makes
+            // pinned footers incorrectly fill the whole tab in headless
+            // layout tests, producing false clipping errors.
             if (child.Dock ==
                     DockStyle.Fill &&
-                child.Parent is not null)
+                child.Parent is not null &&
+                child.Parent is not TableLayoutPanel)
             {
                 var target =
                     child.Parent.DisplayRectangle.Size;
@@ -387,6 +392,51 @@ public static class UiLayoutSelfTest
             HelpdeskStatus.CanAttemptLapsRead(true, null))
         {
             failures.Add("Start LAPS action must permit explicit reads of selected AD computers without metadata.");
+        }
+
+        if (HelpdeskStatus.ResolveHomeDefaultAction(null) !=
+                HomeDefaultAction.None ||
+            HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+                HomeDefaultAction.ChooseRecoveryType ||
+            HelpdeskStatus.CanAttemptBitLockerSearch(false, selected) ||
+            !HelpdeskStatus.CanAttemptBitLockerSearch(true, selected))
+        {
+            failures.Add("Missing BitLocker metadata must require an explicit choice, never silent LAPS routing.");
+        }
+
+        selected.BitLockerKeyCount = 1;
+        selected.LapsCandidateFound = true;
+        if (HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+            HomeDefaultAction.BitLocker)
+        {
+            failures.Add("When BitLocker and LAPS coexist, the default action must be BitLocker.");
+        }
+
+        if (!HelpdeskStatus.ShouldRetryBitLockerInDomain(
+                0, "OU=Win11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il") ||
+            HelpdeskStatus.ShouldRetryBitLockerInDomain(
+                1, "OU=Win11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il") ||
+            HelpdeskStatus.ShouldRetryBitLockerInDomain(
+                0, "DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il"))
+        {
+            failures.Add("BitLocker exact-computer domain retry must occur only after a scoped metadata miss.");
+        }
+
+        selected.BitLockerOutsideSelectedScope = true;
+        if (!HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, "OU=Windows11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il") ||
+            HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, "DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il"))
+        {
+            failures.Add("Recovery navigation must reuse full domain scope when the key was found outside the selected OU.");
+        }
+
+        selected.BitLockerOutsideSelectedScope = false;
+        selected.BitLockerKeyCount = 0;
+        if (!HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, "OU=Windows11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il"))
+        {
+            failures.Add("Unverified BitLocker navigation must retry the domain scope.");
         }
 
         candidate.ExpiresAtUtc = DateTime.UtcNow.AddDays(10);
@@ -835,6 +885,16 @@ public static class UiLayoutSelfTest
                     failures);
 
                 if (checkRecoveryConnection &&
+                    string.Equals(page.Text, "LAPS", StringComparison.OrdinalIgnoreCase))
+                {
+                    VerifyLapsCompactFooter(
+                        page,
+                        pagePath,
+                        scenario,
+                        failures);
+                }
+
+                if (checkRecoveryConnection &&
                     string.Equals(
                         page.Text,
                         "Recovery",
@@ -857,6 +917,100 @@ public static class UiLayoutSelfTest
                 tabs.SelectedIndex =
                     originalIndex;
             }
+        }
+    }
+
+    private static void VerifyLapsCompactFooter(
+        TabPage page,
+        string path,
+        Scenario scenario,
+        List<string> failures)
+    {
+        var layout =
+            FindByName(page, "LapsWorkspaceLayout") as TableLayoutPanel;
+        var scroll =
+            FindByName(page, "LapsScrollableContent") as TableLayoutPanel;
+        var footer =
+            FindByName(page, "LapsPasswordPanel") as TableLayoutPanel;
+        var password =
+            FindByName(page, "LapsPasswordValue") as TextBox;
+        var reveal =
+            FindByName(page, "LapsRevealPasswordButton") as Button;
+        var copy =
+            FindByName(page, "LapsCopyPasswordButton") as Button;
+        var summary =
+            FindByName(page, "LapsSelectedRecordSummary") as UiStatusLabel;
+        var status =
+            FindByName(page, "LapsOperationStatus") as UiStatusLabel;
+        var grid =
+            FindByName(page, "LapsKeyResults") as DataGridView;
+
+        if (layout is null || scroll is null || footer is null ||
+            password is null || reveal is null || copy is null ||
+            summary is null || status is null || grid is null)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: LAPS compact password footer or record grid is missing.");
+            return;
+        }
+
+        if (!ReferenceEquals(scroll.Parent, layout) ||
+            !ReferenceEquals(footer.Parent, layout) ||
+            layout.GetRow(scroll) != 0 ||
+            layout.GetRow(footer) != 1 ||
+            layout.RowStyles[0].SizeType != SizeType.Percent ||
+            layout.RowStyles[1].SizeType != SizeType.AutoSize ||
+            !scroll.AutoScroll)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: LAPS content must scroll above a pinned AutoSize password footer.");
+        }
+
+        if (!ReferenceEquals(password.Parent, footer) ||
+            !ReferenceEquals(status.Parent, footer) ||
+            !ReferenceEquals(summary.Parent, footer) ||
+            !ReferenceEquals(reveal.Parent, copy.Parent) ||
+            !ReferenceEquals(reveal.Parent?.Parent, footer) ||
+            footer.GetRow(password) != 2)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: selected password, record summary and buttons must be inside the fixed footer.");
+        }
+
+        if (!password.UseSystemPasswordChar ||
+            !password.ReadOnly ||
+            password.AccessibleName != "Selected LAPS password")
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: password field must start masked and accessible.");
+        }
+
+        // WinForms Visible includes ancestor visibility. A headless test
+        // form is not shown, so even correctly laid out children can have
+        // Visible=false. Test the actual geometry and parent structure.
+        if (footer.Height <= 0 ||
+            footer.Bottom > layout.ClientSize.Height + 3)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: pinned LAPS footer is outside the visible tab viewport " +
+                $"(Footer: Y:{footer.Top}, Height:{footer.Height}, Bottom:{footer.Bottom}; " +
+                $"Layout: Height={layout.ClientSize.Height}, Scroll: Height={scroll.Height}).");
+        }
+
+        foreach (var name in new[] { "Account", "Expires", "Status" })
+        {
+            if (grid.Columns[name] is not DataGridViewColumn column ||
+                column.MinimumWidth < 130)
+            {
+                failures.Add(
+                    $"{path}/{scenario.Name}: LAPS column '{name}' has insufficient readable width.");
+            }
+        }
+
+        if (grid.ScrollBars != ScrollBars.Both)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: narrow LAPS result grids must allow horizontal scrolling.");
         }
     }
 

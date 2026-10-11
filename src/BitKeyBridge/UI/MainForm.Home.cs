@@ -127,64 +127,63 @@ public sealed partial class MainForm
             cancellation.Token
                 .ThrowIfCancellationRequested();
 
-            if (recoveryRows.Count > 0 &&
-                lapsRows.Count == 0)
-            {
-                foreach (var computer in
-                         recoveryRows
-                             .Select(
-                                 row =>
-                                     row.ComputerName)
-                             .Where(
-                                 name =>
-                                     !string.IsNullOrWhiteSpace(
-                                         name))
-                             .Distinct(
-                                 StringComparer.OrdinalIgnoreCase)
-                             .Take(10))
-                {
-                    var extra =
-                        await SearchHomeLapsMetadataAsync(
-                            computer,
-                            cancellation.Token);
+            // Reconcile each computer separately. A remembered OU may
+            // exclude BitLocker objects while domain-wide LAPS still sees it.
+            var recoveryNames = recoveryRows
+                .Select(row => row.ComputerName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .ToList();
 
-                    lapsRows.AddRange(
-                        extra.Where(
-                            row =>
-                                row.ComputerName.Equals(
-                                    computer,
-                                    StringComparison.OrdinalIgnoreCase)));
-                }
+            foreach (var computer in recoveryNames)
+            {
+                if (lapsRows.Any(row => row.ComputerName.Equals(
+                        computer, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var extra = await SearchHomeLapsMetadataAsync(
+                    computer, cancellation.Token);
+                lapsRows.AddRange(extra.Where(row => row.ComputerName.Equals(
+                    computer, StringComparison.OrdinalIgnoreCase)));
             }
-            else if (lapsRows.Count > 0 &&
-                     recoveryRows.Count == 0)
-            {
-                foreach (var computer in
-                         lapsRows
-                             .Select(
-                                 row =>
-                                     row.ComputerName)
-                             .Where(
-                                 name =>
-                                     !string.IsNullOrWhiteSpace(
-                                         name))
-                             .Distinct(
-                                 StringComparer.OrdinalIgnoreCase)
-                             .Take(10))
-                {
-                    var extra =
-                        await SearchLiveAdRecoveryMetadataAsync(
-                            computer,
-                            scope,
-                            cancellation.Token);
 
-                    recoveryRows.AddRange(
-                        extra.Where(
-                            row =>
-                                row.ComputerName.Equals(
-                                    computer,
-                                    StringComparison.OrdinalIgnoreCase)));
+            var domainRecoveryNames =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var lapsNames = lapsRows
+                .Select(row => row.ComputerName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .ToList();
+
+            foreach (var computer in lapsNames)
+            {
+                if (recoveryRows.Any(row => row.ComputerName.Equals(
+                        computer, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var extra = await SearchLiveAdRecoveryMetadataAsync(
+                    computer, scope, cancellation.Token);
+
+                if (HelpdeskStatus.ShouldRetryBitLockerInDomain(
+                    extra.Count, scope.SearchBase, _startDomainDn))
+                {
+                    // Retry the exact computer across the domain without
+                    // modifying the operator's selected OU/search scope.
+                    var domainScope = new BitLockerScope(
+                        "Entire domain", _startDomainDn);
+                    extra = await SearchLiveAdRecoveryMetadataAsync(
+                        computer, domainScope, cancellation.Token);
+                    if (extra.Any(row => row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        domainRecoveryNames.Add(computer);
+                    }
                 }
+
+                recoveryRows.AddRange(extra.Where(row => row.ComputerName.Equals(
+                    computer, StringComparison.OrdinalIgnoreCase)));
             }
 
             if (generation !=
@@ -266,6 +265,8 @@ public sealed partial class MainForm
                             string.Empty,
                         BitLockerKeyCount =
                             bitLocker.Count,
+                        BitLockerOutsideSelectedScope =
+                            domainRecoveryNames.Contains(computer),
                         LatestBitLockerKeyUtc =
                             latestBitLocker?.KeyDate,
                         LatestRecoveryId =
@@ -278,14 +279,18 @@ public sealed partial class MainForm
                         LapsExpiresAtUtc =
                             laps?.ExpiresAtUtc,
                         BitLockerStatus =
-                            HelpdeskStatus.BitLocker(
-                                bitLocker,
-                                _config.CoverageOldCloudKeyDays),
+                            bitLocker.Count == 0
+                                ? "Not verified"
+                                : HelpdeskStatus.BitLocker(
+                                    bitLocker,
+                                    _config.CoverageOldCloudKeyDays),
                         LapsStatus =
                             HelpdeskStatus.Laps(
                                 laps),
                         SourceSummary =
-                            "AD"
+                            domainRecoveryNames.Contains(computer)
+                                ? "AD (domain retry)"
+                                : "AD"
                     };
 
                 var rowIndex =
@@ -458,10 +463,10 @@ public sealed partial class MainForm
             _directoryConnected &&
             !_directoryConnecting;
 
+        // This button opens a search, not a secret read. Keep it available
+        // even when the selected OU or permissions hide recovery metadata.
         _homeBitLockerButton.Enabled =
-            connected &&
-            selected is not null &&
-            selected.BitLockerKeyCount > 0;
+            HelpdeskStatus.CanAttemptBitLockerSearch(connected, selected);
 
         // Missing metadata must not block an explicit, authorized LAPS read.
         _homeLapsButton.Enabled =
@@ -502,51 +507,25 @@ public sealed partial class MainForm
     private async void
         OpenSelectedHomeDefaultAction()
     {
-        var selected =
-            GetSelectedHomeSearchResult();
-
-        if (selected is null)
-            return;
-
-        var query =
-            _homeQuery.Text.Trim();
-
-        if (SearchText.LooksLikeIdentifierFragment(
-                query) &&
-            selected.BitLockerKeyCount > 0)
+        var selected = GetSelectedHomeSearchResult();
+        switch (HelpdeskStatus.ResolveHomeDefaultAction(selected))
         {
-            await OpenSelectedHomeBitLockerAsync();
-            return;
+            case HomeDefaultAction.None:
+                return;
+            case HomeDefaultAction.BitLocker:
+                // When both are present, BitLocker is the default action.
+                // LAPS is opened only through its explicit button.
+                await OpenSelectedHomeBitLockerAsync();
+                return;
+            case HomeDefaultAction.ChooseRecoveryType:
+                // Missing metadata is not proof that BitLocker is absent.
+                UiStyle.SetStatus(
+                    _homeSearchStatus,
+                    $"BitLocker for {selected!.ComputerName} is not verified. " +
+                    "Choose BitLocker Recovery to retry, or LAPS Passwords for LAPS.",
+                    UiStatusKind.Warning);
+                return;
         }
-
-        if (selected.BitLockerKeyCount > 0 &&
-            !selected.LapsCandidateFound)
-        {
-            await OpenSelectedHomeBitLockerAsync();
-            return;
-        }
-
-        if (selected.LapsCandidateFound &&
-            selected.BitLockerKeyCount == 0)
-        {
-            await OpenSelectedHomeLapsAsync();
-            return;
-        }
-
-        if (selected.BitLockerKeyCount == 0 &&
-            !selected.LapsCandidateFound)
-        {
-            UiStyle.SetStatus(
-                _homeSearchStatus,
-                $"LAPS backup is not verified for {selected.ComputerName}. Choose LAPS Passwords for an authorized, on-demand read.",
-                UiStatusKind.Warning);
-            return;
-        }
-
-        UiStyle.SetStatus(
-            _homeSearchStatus,
-            $"BitLocker metadata is present. LAPS: {selected.LapsStatus}. Choose the required action.",
-            UiStatusKind.Neutral);
     }
 
     private async Task
@@ -564,6 +543,18 @@ public sealed partial class MainForm
         RecordRecentComputer(
             selected,
             "BitLocker");
+
+        if (HelpdeskStatus.ShouldSelectDomainForRecovery(
+                selected, _startScope?.SearchBase, _startDomainDn))
+        {
+            // The Recovery view must use the same scope that found
+            // the BitLocker metadata on Start, otherwise it vanishes.
+            SetRecoveryScope(
+                new BitLockerScope("Entire domain", _startDomainDn),
+                $"Searching BitLocker across the domain for {selected.ComputerName} " +
+                "(outside the previously selected OU or missing metadata).",
+                UiStatusKind.Warning);
+        }
 
         NavigateToRecoveryWorkspace(fromStart: true);
         _startQuery.Text =
