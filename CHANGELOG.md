@@ -1,3 +1,11 @@
+## 0.26.2
+
+- Fixed unified Start LAPS status: when LDAP computer lookup succeeds but expiration/version metadata is missing, the result is "Not verified", not "No backup". "Detected" and "Expired" still require positive non-secret metadata.
+- The LAPS Passwords action remains enabled for any selected AD computer so an authorized, explicit LAPS read is possible even if metadata visibility is limited. Search itself remains metadata-only and never requests secret values.
+- The LAPS results distinguish native DPAPI-NG AccessDenied ("Decrypt unauthorized") from other decryption errors ("Decrypt failed"), rather than incorrectly treating both as an absent password. Returned encrypted attributes count as backup evidence.
+- Yellow warning banners and record details now explain whether the AD encrypted password was returned but decryption was unauthorized or failed for another reason; compare the Connected as account to AuthorizedDecryptor without automatic AD changes.
+- Added non-secret troubleshooting guidance and offline regression tests for missing metadata, expired/detected states, unauthorized encryption principal, and generic DPAPI-NG failure. No permissions, GPOs, schema, or password backups are modified.
+
 ## 0.26.1
 
 - Added a dedicated "Connected as" Active Directory account indicator on Start and an always-visible "AD user" field in the global status bar (also visible on BitLocker and LAPS tabs).

@@ -271,10 +271,8 @@ public sealed partial class MainForm
                         LatestRecoveryId =
                             latestBitLocker?.RecoveryId ??
                             string.Empty,
-                        LapsDetected =
-                            HelpdeskStatus.Laps(
-                                laps) !=
-                            "No backup",
+                        LapsCandidateFound =
+                            laps is not null,
                         LapsKeyDateUtc =
                             laps?.KeyDateUtc,
                         LapsExpiresAtUtc =
@@ -465,10 +463,9 @@ public sealed partial class MainForm
             selected is not null &&
             selected.BitLockerKeyCount > 0;
 
+        // Missing metadata must not block an explicit, authorized LAPS read.
         _homeLapsButton.Enabled =
-            connected &&
-            selected is not null &&
-            selected.LapsDetected;
+            HelpdeskStatus.CanAttemptLapsRead(connected, selected);
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
@@ -523,13 +520,13 @@ public sealed partial class MainForm
         }
 
         if (selected.BitLockerKeyCount > 0 &&
-            !selected.LapsDetected)
+            !selected.LapsCandidateFound)
         {
             await OpenSelectedHomeBitLockerAsync();
             return;
         }
 
-        if (selected.LapsDetected &&
+        if (selected.LapsCandidateFound &&
             selected.BitLockerKeyCount == 0)
         {
             await OpenSelectedHomeLapsAsync();
@@ -537,19 +534,19 @@ public sealed partial class MainForm
         }
 
         if (selected.BitLockerKeyCount == 0 &&
-            !selected.LapsDetected)
+            !selected.LapsCandidateFound)
         {
             UiStyle.SetStatus(
                 _homeSearchStatus,
-                $"No BitLocker or LAPS backup metadata is available for {selected.ComputerName}.",
+                $"LAPS backup is not verified for {selected.ComputerName}. Choose LAPS Passwords for an authorized, on-demand read.",
                 UiStatusKind.Warning);
             return;
         }
 
         UiStyle.SetStatus(
             _homeSearchStatus,
-            $"Both BitLocker and LAPS are available for {selected.ComputerName}. Choose the required action.",
-            UiStatusKind.Success);
+            $"BitLocker metadata is present. LAPS: {selected.LapsStatus}. Choose the required action.",
+            UiStatusKind.Neutral);
     }
 
     private async Task

@@ -197,6 +197,34 @@ public static class LapsSelfTest
             Assert(!sanitized.Contains("AnotherSecretValue", StringComparison.Ordinal));
             Assert(sanitized.Contains("[REDACTED]", StringComparison.Ordinal));
         });
+        Check("Encrypted Unauthorized differs from other DPAPI-NG failures without printing secrets", () =>
+        {
+            using var result = new LapsReadResult
+            {
+                ComputerName = "IT-EUGENEB11",
+                DirectoryServer = "yosh-dc00.yosh.ac.il"
+            };
+            var row = new LapsPasswordEntry
+            {
+                Source = "Windows LAPS (encrypted)",
+                Attribute = "msLAPS-EncryptedPassword",
+                Status = LapsPasswordStatus.AccessDenied
+            };
+            result.Entries.Add(row);
+            var unauthorized = LapsReadDiagnostics.UnreadableStatus(result, cloud: false);
+            Assert(unauthorized.Contains("denied", StringComparison.Ordinal));
+            Assert(unauthorized.Contains("AuthorizedDecryptor", StringComparison.Ordinal));
+            Assert(unauthorized.Contains("backup exists", StringComparison.Ordinal));
+            Assert(!unauthorized.Contains(secret, StringComparison.Ordinal));
+
+            row.Status = LapsPasswordStatus.DecryptionFailed;
+            var failed = LapsReadDiagnostics.UnreadableStatus(result, cloud: false);
+            Assert(failed.Contains("decryption failed", StringComparison.Ordinal));
+            Assert(!failed.Contains("decryption was denied", StringComparison.Ordinal));
+
+            row.Status = LapsPasswordStatus.NotReturned;
+            Assert(row.Status == LapsPasswordStatus.NotReturned);
+        });
         Check("AD LAPS empty results distinguish visible backup metadata", () =>
         {
             foreach (var (legacy, windows) in new[]
@@ -268,6 +296,8 @@ public static class LapsSelfTest
             Assert(guide.Contains("-DomainController 'yosh-dc02.yosh.ac.il'", StringComparison.Ordinal));
             Assert(guide.Contains("Get-WinEvent -LogName 'Microsoft-Windows-LAPS/Operational'", StringComparison.Ordinal));
             Assert(guide.Contains("Get-LapsADPassword", StringComparison.Ordinal));
+            Assert(guide.Contains("DecryptionStatus is Unauthorized", StringComparison.Ordinal));
+            Assert(guide.Contains("AuthorizedDecryptor", StringComparison.Ordinal));
             Assert(guide.Contains("DOES request passwords", StringComparison.Ordinal));
             Assert(guide.Contains(@"HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\LAPS", StringComparison.Ordinal));
             Assert(!guide.Contains(secret, StringComparison.Ordinal));

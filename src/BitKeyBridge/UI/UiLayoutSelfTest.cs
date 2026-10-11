@@ -64,6 +64,9 @@ public static class UiLayoutSelfTest
         VerifyListViewColumnScaling(
             failures);
 
+        VerifyLapsHelpdeskStates(
+            failures);
+
         var factories =
             CreateFormFactories();
 
@@ -356,6 +359,59 @@ public static class UiLayoutSelfTest
             NormalizeDockFillSizes(
                 child);
         }
+    }
+
+    private static void VerifyLapsHelpdeskStates(
+        List<string> failures)
+    {
+        var candidate = new LapsSearchResult
+        {
+            ComputerName = "IT-EUGENEB11"
+        };
+
+        if (HelpdeskStatus.Laps(null) != "Not verified" ||
+            HelpdeskStatus.Laps(candidate) != "Not verified" ||
+            new HomeSearchResult().LapsStatus != "Not verified")
+        {
+            failures.Add("Start LAPS missing metadata must be Not verified.");
+        }
+
+        var selected = new HomeSearchResult
+        {
+            ComputerName = candidate.ComputerName,
+            LapsCandidateFound = false,
+            LapsStatus = "Not verified"
+        };
+        if (!HelpdeskStatus.CanAttemptLapsRead(true, selected) ||
+            HelpdeskStatus.CanAttemptLapsRead(false, selected) ||
+            HelpdeskStatus.CanAttemptLapsRead(true, null))
+        {
+            failures.Add("Start LAPS action must permit explicit reads of selected AD computers without metadata.");
+        }
+
+        candidate.ExpiresAtUtc = DateTime.UtcNow.AddDays(10);
+        if (HelpdeskStatus.Laps(candidate) != "Detected")
+            failures.Add("Start LAPS future expiration must be Detected.");
+
+        candidate.ExpiresAtUtc = DateTime.UtcNow.AddDays(-10);
+        if (HelpdeskStatus.Laps(candidate) != "Expired")
+            failures.Add("Start LAPS past expiration must be Expired.");
+
+        using var row = new LapsPasswordEntry
+        {
+            Attribute = "msLAPS-EncryptedPassword",
+            Status = LapsPasswordStatus.AccessDenied
+        };
+        if (HelpdeskStatus.LapsEntry(row) != "Decrypt unauthorized")
+            failures.Add("Encrypted LAPS AccessDenied must be Decrypt unauthorized.");
+
+        row.Status = LapsPasswordStatus.DecryptionFailed;
+        if (HelpdeskStatus.LapsEntry(row) != "Decrypt failed")
+            failures.Add("Other encrypted LAPS decryption failures must not be called Unauthorized.");
+
+        row.Status = LapsPasswordStatus.NotReturned;
+        if (HelpdeskStatus.LapsEntry(row) != "Not returned")
+            failures.Add("Unreturned LAPS record must not imply no backup.");
     }
 
     private static void VerifyForm(

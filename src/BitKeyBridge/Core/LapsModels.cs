@@ -111,6 +111,32 @@ public static class LapsReadDiagnostics
             "cannot distinguish a missing backup from filtered attributes.";
     }
 
+    public static string UnreadableStatus(
+        LapsReadResult result,
+        bool cloud)
+    {
+        if (!cloud && result.Entries.Any(
+                row => row.Status == LapsPasswordStatus.AccessDenied &&
+                       row.Attribute.StartsWith("msLAPS-Encrypted", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Encrypted LAPS password found in AD, but decryption was denied for the selected identity. " +
+                "Compare Connected as with the password's AuthorizedDecryptor group and check DPAPI-NG permissions. " +
+                "The backup exists; this is not No backup.";
+        }
+
+        if (!cloud && result.Entries.Any(
+                row => row.Status == LapsPasswordStatus.DecryptionFailed &&
+                       row.Attribute.StartsWith("msLAPS-Encrypted", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Encrypted LAPS password found in AD, but decryption failed. " +
+                "Check the selected record's error, account authorization, and KDS/DPAPI-NG availability. " +
+                "This does not prove the account is unauthorized or the backup is missing.";
+        }
+
+        return "LAPS records were returned, but no passwords are readable. " +
+            "Review record status and the selected identity's access; an unreadable record is not No backup.";
+    }
+
     public static string EmptyStatus(
         LapsReadResult result,
         bool cloud)

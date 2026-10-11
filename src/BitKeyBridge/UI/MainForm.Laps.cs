@@ -1415,9 +1415,7 @@ public sealed partial class MainForm
                     _lapsZeroWarning,
                     _lapsResult.Entries.Count == 0
                         ? LapsReadDiagnostics.EmptyStatus(_lapsResult, cloud)
-                        : "LAPS records were returned, but no passwords are readable. " +
-                          "Check record status, AD read/decrypt authorization and the backup policy. " +
-                          "Open Diagnostic steps and commands.",
+                        : LapsReadDiagnostics.UnreadableStatus(_lapsResult, cloud),
                     UiStatusKind.Warning);
 
                 if (_lapsResult.Entries.Count == 0)
@@ -1452,10 +1450,8 @@ public sealed partial class MainForm
                     // per-record error details visible.
                     UiStyle.SetStatus(
                         _lapsStatus,
-                        $"{_lapsResult.Entries.Count} LAPS record(s) returned, " +
-                        "but no passwords could be read. Select a row to " +
-                        "inspect its status; encrypted LAPS may require " +
-                        "separate decryption authorization.",
+                        LapsReadDiagnostics.UnreadableStatus(_lapsResult, cloud) +
+                        " Select a record for error details or use Diagnostic steps and commands.",
                         UiStatusKind.Warning);
                 }
 
@@ -1625,13 +1621,15 @@ public sealed partial class MainForm
         }
 
         var accessHint =
-            row.Status is
-                LapsPasswordStatus.AccessDenied or
-                LapsPasswordStatus.DecryptionFailed
-                ? Environment.NewLine +
-                  "Access help: use AD access help... to generate scoped BitLocker/LAPS delegation guidance. " +
-                  "For encrypted Windows LAPS, read ACL and DPAPI-NG decrypt authorization are separate."
-                : string.Empty;
+            row.Status == LapsPasswordStatus.AccessDenied
+                ? "The encrypted password was returned by AD, but DPAPI-NG denied its decryption. " +
+                  "Check the identity shown in Connected as and its authorization under " +
+                  "the password's AuthorizedDecryptor principal. AD read rights are separate."
+                : row.Status == LapsPasswordStatus.DecryptionFailed
+                    ? "Encrypted data was returned, but decryption failed. Check the native error, " +
+                      "current Windows account/explicit AD credentials and KDS availability. " +
+                      "A generic failure does not establish unauthorized membership."
+                    : string.Empty;
 
         var details =
             new List<string>
@@ -1670,13 +1668,11 @@ public sealed partial class MainForm
             $"Expires: {FormatLapsExpiry(row)}");
 
         var statusText =
-            row.Status.ToString();
+            HelpdeskStatus.LapsEntry(row);
 
-        if (IsLapsExpired(
-                row))
+        if (IsLapsExpired(row) && row.Status != LapsPasswordStatus.Available)
         {
-            statusText +=
-                " / Expired";
+            statusText += " / Expired";
         }
 
         if (!string.IsNullOrWhiteSpace(

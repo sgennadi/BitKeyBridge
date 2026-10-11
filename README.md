@@ -23,9 +23,9 @@ Administration → **Helpdesk** contains the normal recovery settings: setup sta
 
 The GUI opens on **Start**. BitKeyBridge first shows the shared Active Directory session state and automatically connects when possible. Normal credential selection is reduced to **Use current Windows account** or **Use another AD account**; DC/FQDN, domain, LDAP port, LDAPS, protected credential storage and vault actions are kept under **Advanced** on the same Start page.
 
-After connection, one field accepts a partial computer name, Recovery ID, AD object/device ID, or other identifier. Typing two or more characters starts the existing 450 ms debounced metadata search; **Enter** searches immediately. The unified result grid combines BitLocker and LAPS metadata for each computer and shows compact states such as **Available**, **Multiple keys**, **Old key**, **No backup**, **Detected** and **Expired**, plus the source used for the result.
+After connection, one field accepts a partial computer name, Recovery ID, AD object/device ID, or other identifier. Typing two or more characters starts the existing 450 ms debounced metadata search; **Enter** searches immediately. The unified result grid combines BitLocker and LAPS metadata for each computer and shows compact states such as **Available**, **Multiple keys**, **Old key**, **Detected**, **Expired** and **Not verified**, plus the source used for the result. Missing LAPS expiration/version attributes are never taken as proof that no backup exists.
 
-Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. When Cloud is configured, **Rotate via Intune** is available as a separate post-recovery action. The selected result shows a compact helpdesk summary and enables only actions that have matching backup metadata. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
+Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. When Cloud is configured, **Rotate via Intune** is available as a separate post-recovery action. The selected result shows a compact helpdesk summary. BitLocker secret actions require matching recovery metadata; the LAPS Passwords button remains available for a selected AD computer, because actual password-read authorization is checked only after an explicit request. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
 
 **Recent computers** stores only computer/device identifiers, the last helpdesk action and timestamp in the current user's LocalAppData. Recovery keys and LAPS passwords are never written to Recent.
 
@@ -137,7 +137,7 @@ For on-premises BitLocker or LAPS work:
 1. Enter part of a computer name, Recovery ID or device/object ID.
 2. Wait for live search or press **Enter** immediately.
 3. Select the computer. BitKeyBridge shows BitLocker and LAPS availability in the same row.
-4. Choose **BitLocker Recovery** or **LAPS Passwords**. An unavailable action is disabled instead of sending you to an empty workflow.
+4. Choose **BitLocker Recovery** or **LAPS Passwords**. BitLocker requires matching recovery metadata; LAPS Passwords remains available for the selected computer even if backup metadata is unavailable.
 5. Double-click/Enter on a Start result follows the unambiguous action automatically; when both BitLocker and LAPS are available, BitKeyBridge asks you to choose.
 
 The Start search reads metadata only and does not retrieve a BitLocker recovery password or LAPS password.

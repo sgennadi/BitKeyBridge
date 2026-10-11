@@ -1936,7 +1936,7 @@ public sealed partial class MainForm
             _homeSelectionSummary,
             $"{selected.ComputerName} • Source: {source} • BitLocker: {selected.BitLockerStatus} • LAPS: {selected.LapsStatus}",
             selected.BitLockerKeyCount > 0 ||
-            selected.LapsDetected
+            selected.LapsStatus == "Detected"
                 ? UiStatusKind.Success
                 : UiStatusKind.Warning);
     }
