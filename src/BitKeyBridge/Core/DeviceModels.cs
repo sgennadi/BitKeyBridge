@@ -5,6 +5,7 @@ public sealed class AdComputerInfo
     public string ComputerName { get; set; } = string.Empty;
     public string DistinguishedName { get; set; } = string.Empty;
     public string DnsHostName { get; set; } = string.Empty;
+    public string ObjectGuid { get; set; } = string.Empty;
     public string OperatingSystem { get; set; } = string.Empty;
     public string OperatingSystemVersion { get; set; } = string.Empty;
     public DateTime? LastLogonTimestamp { get; set; }
@@ -47,6 +48,12 @@ public sealed class ManagedDeviceInfo
 public sealed class UnifiedDeviceInfo
 {
     public string ComputerName { get; set; } = string.Empty;
+    // Source-qualified immutable identity; a hostname alone never proves a match.
+    public string IdentityKey { get; set; } = string.Empty;
+    public string IdentityStatus { get; set; } = "Unverified";
+    public string IdentityWarning { get; set; } = string.Empty;
+    public string AdObjectGuid { get; set; } = string.Empty;
+    public string AdDnsHostName { get; set; } = string.Empty;
     public bool FoundInAd { get; set; }
     public bool FoundInEntra { get; set; }
     public bool FoundInIntune { get; set; }

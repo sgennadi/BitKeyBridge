@@ -66,6 +66,8 @@ public sealed class LapsSearchResult
     public string ComputerId { get; set; } =
         string.Empty;
 
+    public string ComputerDistinguishedName { get; set; } = string.Empty;
+
     public DateTime? KeyDateUtc { get; set; }
 
     public DateTime? ExpiresAtUtc { get; set; }
