@@ -437,6 +437,19 @@ public static class UiLayoutSelfTest
             failures.Add("When BitLocker and LAPS coexist, the default action must be BitLocker.");
         }
 
+        var cloud = new HomeSearchResult
+        {
+            ComputerName = "PC-CLOUD",
+            IsCloudRecord = true,
+            SourceIdentity = "INTUNE:MANAGED:managed-01",
+            BitLockerKeyCount = 1
+        };
+        if (HelpdeskStatus.ResolveHomeDefaultAction(cloud) !=
+            HomeDefaultAction.Devices)
+        {
+            failures.Add("Cloud metadata must route to Devices and not AD Recovery.");
+        }
+
         selected.BitLockerKeyCount = 0;
         selected.BitLockerLookupFailed = true;
         selected.LapsCandidateFound = true;

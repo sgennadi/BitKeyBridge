@@ -546,6 +546,29 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "Device 360 summary excludes recovery passwords",
+            () =>
+            {
+                var row = new UnifiedDeviceInfo
+                {
+                    ComputerName = "PC-360",
+                    IdentityKey = "INTUNE:MANAGED:abc",
+                    IdentityStatus = "Name collision",
+                    FoundInIntune = true,
+                    ManagedDeviceId = "abc",
+                    EntraDeviceId = "entra-abc",
+                    RecoveryMetadataIncomplete = true
+                };
+                row.RecoveryIds.Add("recovery-guid-metadata-only");
+                var summary = Device360Formatter.Format(row);
+                Assert(summary.Contains("PC-360", StringComparison.Ordinal) &&
+                       summary.Contains("abc", StringComparison.Ordinal) &&
+                       summary.Contains("unverified", StringComparison.OrdinalIgnoreCase) &&
+                       !summary.Contains("recovery-guid-metadata-only", StringComparison.Ordinal),
+                    "Device 360 must not leak key IDs into copied summary.");
+            });
+
+        Check(
             "Graph 403 remains an explicit failure",
             () =>
             {

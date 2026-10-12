@@ -13,6 +13,8 @@ public sealed class HomeSearchResult
     public bool BitLockerLookupFailed { get; set; }
     public bool LapsLookupFailed { get; set; }
     public bool IdentityAmbiguous { get; set; }
+    public bool IsCloudRecord { get; set; }
+    public string SourceIdentity { get; set; } = string.Empty;
 
     // The exact-computer BitLocker metadata was only found after
     // retrying outside the operator's currently selected OU.
@@ -60,6 +62,7 @@ public enum HomeDefaultAction
     None,
     BitLocker,
     Laps,
+    Devices,
     ChooseRecoveryType
 }
 
@@ -74,6 +77,10 @@ public static class HelpdeskStatus
 
         if (selected.IdentityAmbiguous)
             return HomeDefaultAction.ChooseRecoveryType;
+
+        // A cloud result must not be routed into AD-only recovery.
+        if (selected.IsCloudRecord)
+            return HomeDefaultAction.Devices;
 
         if (selected.BitLockerKeyCount > 0)
             return HomeDefaultAction.BitLocker;

@@ -2439,6 +2439,10 @@ public sealed partial class MainForm
             UiStyle.CreateActionButton(
                 "Rotate BitLocker Key in Intune");
         actions.Controls.Add(rotate);
+        var copySummary = UiStyle.CreateActionButton(
+            "Copy Device 360 Summary");
+        copySummary.Name = "CopyDevice360Summary";
+        actions.Controls.Add(copySummary);
         root.Controls.Add(actions, 0, 7);
 
         _unifiedSearch.Click +=
@@ -2478,6 +2482,8 @@ public sealed partial class MainForm
 
         rotate.Click +=
             async (_, _) => await RotateSelectedUnifiedDeviceAsync();
+        copySummary.Click +=
+            (_, _) => CopyUnifiedDeviceSummary();
 
         return page;
     }
