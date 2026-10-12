@@ -2208,21 +2208,18 @@ public sealed partial class MainForm : DpiAwareForm
             return;
         }
 
-        if (row.IdentityStatus is "Name collision" or "Ambiguous device ID")
+        if (!row.CanRotateExplicitIntuneDevice)
         {
             ShowAppMessage(
                 "Rotate BitLocker Key",
-                "The device identity is ambiguous. Verify its exact Entra and Intune device IDs before requesting rotation.");
+                "Select an Intune record with a unique managedDeviceId. " +
+                "Conflicting Entra device IDs cannot be used for rotation.");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(row.ManagedDeviceId))
-        {
-            ShowAppMessage(
-                "Rotate BitLocker Key",
-                "The selected device is not linked to an Intune managedDevice object.");
-            return;
-        }
+        // This button is invoked for an explicitly selected Devices row,
+        // not by matching Start computer names. A hostname collision with
+        // an unrelated AD object does not change the exact Intune target.
 
         await RotateManagedDeviceAsync(
             row.ManagedDeviceId,
