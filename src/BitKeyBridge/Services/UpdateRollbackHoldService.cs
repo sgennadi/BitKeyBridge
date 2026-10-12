@@ -12,6 +12,11 @@ public sealed class RollbackAutoUpdateHold
 
 public static class UpdateRollbackHoldService
 {
+    // A marker from an older restored version can outlive a later manual
+    // update performed by that older binary. Keep Resume available for it.
+    public static bool HasRecordedHold() =>
+        File.Exists(AppPaths.UpdateRollbackHoldFile);
+
     public static bool IsActiveForCurrentBuild() =>
         IsActiveForVersion(
             typeof(UpdateService).Assembly.GetName().Version?.ToString(3) ??
