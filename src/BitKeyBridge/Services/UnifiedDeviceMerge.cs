@@ -47,7 +47,25 @@ public static class UnifiedDeviceMerge
 
             var key = "INTUNE:" + stableId;
             var row = GetOrCreate(result, key, device.DeviceName);
-            row.IdentityStatus = "Intune object";
+
+            // Two contradictory records with the same managedDeviceId cannot
+            // be silently overwritten. Fail closed and keep their key metadata
+            // unlinked until the source inconsistency is resolved.
+            if (row.FoundInIntune &&
+                !string.IsNullOrWhiteSpace(row.EntraDeviceId) &&
+                !string.IsNullOrWhiteSpace(device.EntraDeviceId) &&
+                !string.Equals(row.EntraDeviceId, device.EntraDeviceId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                row.IdentityStatus = "Ambiguous device ID";
+                row.IdentityWarning =
+                    "This Intune managedDeviceId was returned with conflicting Entra device IDs. " +
+                    "Recovery and rotation are disabled.";
+                continue;
+            }
+
+            if (row.IdentityStatus != "Ambiguous device ID")
+                row.IdentityStatus = "Intune object";
             row.IdentityKey = key;
             row.FoundInIntune = true;
             row.FoundInEntra = !string.IsNullOrWhiteSpace(device.EntraDeviceId);
@@ -90,6 +108,7 @@ public static class UnifiedDeviceMerge
                 ? []
                 : result.Values
                     .Where(x => x.FoundInIntune &&
+                                x.IdentityStatus != "Ambiguous device ID" &&
                                 string.Equals(x.EntraDeviceId, deviceId,
                                     StringComparison.OrdinalIgnoreCase))
                     .ToList();

@@ -331,6 +331,67 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "conflicting Entra IDs for a single Intune managedDeviceId fail closed",
+            () =>
+            {
+                var merged = UnifiedDeviceMerge.Merge(
+                    [],
+                    [
+                        new ManagedDeviceInfo
+                        {
+                            DeviceName = "BAD-INTUNE",
+                            ManagedDeviceId = "same-managed-id",
+                            EntraDeviceId = "11111111-1111-1111-1111-111111111111"
+                        },
+                        new ManagedDeviceInfo
+                        {
+                            DeviceName = "BAD-INTUNE",
+                            ManagedDeviceId = "same-managed-id",
+                            EntraDeviceId = "22222222-2222-2222-2222-222222222222"
+                        }
+                    ],
+                    [
+                        new CloudRecoveryMetadata
+                        {
+                            ComputerName = "BAD-INTUNE",
+                            DeviceId = "11111111-1111-1111-1111-111111111111",
+                            RecoveryId = "separate-key"
+                        }
+                    ]);
+                var managed = merged.Values.Single(x => x.FoundInIntune);
+                Assert(managed.IdentityStatus == "Ambiguous device ID" &&
+                       !managed.CanRotateExplicitIntuneDevice &&
+                       managed.RecoveryIds.Count == 0 &&
+                       merged.Values.Single(x => x.RecoveryIds.Count > 0).FoundInIntune == false,
+                    "Conflicting Entra identities must never inherit key IDs or enable rotation.");
+            });
+
+        Check(
+            "manually selected Intune target can rotate despite a hostname collision",
+            () =>
+            {
+                var row = new UnifiedDeviceInfo
+                {
+                    ComputerName = "LAB-DEVICE",
+                    FoundInIntune = true,
+                    ManagedDeviceId = "exact-managed-object",
+                    EntraDeviceId = "10101010-1010-1010-1010-101010101010",
+                    IdentityStatus = "Name collision"
+                };
+                Assert(row.CanRotateExplicitIntuneDevice,
+                    "A manually selected unique managedDeviceId was incorrectly blocked by an unrelated same-name AD device.");
+
+                row.IdentityStatus = "Ambiguous device ID";
+                Assert(!row.CanRotateExplicitIntuneDevice,
+                    "Conflicting Entra device IDs must block explicit Intune rotation.");
+
+                row.IdentityStatus = "Intune object";
+                row.ManagedDeviceId = string.Empty;
+                Assert(!row.CanRotateExplicitIntuneDevice,
+                    "Missing managedDeviceId must not be treated as a valid rotation target.");
+            });
+
+        Check(
             "independent metadata sources retain success and error",
             () =>
             {
@@ -366,6 +427,109 @@ public static class HelpdeskIntegrationSelfTest
 
                 Assert(canceled,
                     "Canceled metadata search was incorrectly treated as an empty result.");
+            });
+
+        Check(
+            "Devices AD source survives failed Intune and Entra",
+            () =>
+            {
+                var report = UnifiedDeviceSearchReport.Combine(
+                    new MetadataLookupResult<AdComputerInfo>(
+                        [new AdComputerInfo
+                        {
+                            ComputerName = "LAB-REPORT-01",
+                            ObjectGuid = "19191919-1919-1919-1919-191919191919",
+                            DistinguishedName = "CN=LAB-REPORT-01,DC=example,DC=test"
+                        }], null),
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [], "Graph returned 403 for Intune"),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [], "Graph returned 429 for Entra"));
+
+                Assert(report.IsPartial && report.Rows.Count == 1 &&
+                       report.Rows[0].FoundInAd &&
+                       report.Rows[0].RecoveryMetadataIncomplete &&
+                       !report.IntuneSucceeded && !report.EntraSucceeded &&
+                       report.DiagnosticSummary.Contains("403", StringComparison.Ordinal) &&
+                       report.DiagnosticSummary.Contains("429", StringComparison.Ordinal),
+                    "Partial Graph failure should preserve AD and mark recovery keys unverified.");
+            });
+
+        Check(
+            "Devices Intune source survives failed Entra metadata",
+            () =>
+            {
+                var report = UnifiedDeviceSearchReport.Combine(
+                    null,
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [new ManagedDeviceInfo
+                        {
+                            DeviceName = "LAB-CLOUD-02",
+                            ManagedDeviceId = "managed-two",
+                            EntraDeviceId = "20202020-2020-2020-2020-202020202020"
+                        }], null),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [], "403 insufficient Graph permissions"));
+
+                Assert(report.IsPartial && report.Rows.Count == 1 &&
+                       report.Rows[0].FoundInIntune &&
+                       report.Rows[0].RecoveryIds.Count == 0 &&
+                       report.Rows[0].RecoveryMetadataIncomplete &&
+                       report.SourceSummary.Contains("Entra BitLocker: failed",
+                           StringComparison.Ordinal),
+                    "Entra permission denial should not hide Intune device information.");
+            });
+
+        Check(
+            "Devices cloud source survives failed AD lookup",
+            () =>
+            {
+                var report = UnifiedDeviceSearchReport.Combine(
+                    new MetadataLookupResult<AdComputerInfo>(
+                        [], "LDAP server unavailable"),
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [new ManagedDeviceInfo
+                        {
+                            DeviceName = "LAB-CLOUD-03",
+                            ManagedDeviceId = "managed-three",
+                            EntraDeviceId = "30303030-3030-3030-3030-303030303030"
+                        }], null),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [new CloudRecoveryMetadata
+                        {
+                            ComputerName = "LAB-CLOUD-03",
+                            DeviceId = "30303030-3030-3030-3030-303030303030",
+                            RecoveryId = "cloud-key-three"
+                        }], null));
+
+                Assert(report.IsPartial && !report.AdSucceeded &&
+                       report.Rows.Count == 1 &&
+                       report.Rows[0].RecoveryIds.SequenceEqual(["cloud-key-three"]) &&
+                       report.Rows[0].FoundInIntune,
+                    "Failed AD must not discard independently retrieved cloud key metadata.");
+            });
+
+        Check(
+            "Devices all attempted source failures are explicit",
+            () =>
+            {
+                var failed = false;
+                try
+                {
+                    _ = UnifiedDeviceSearchReport.Combine(
+                        null,
+                        new MetadataLookupResult<ManagedDeviceInfo>(
+                            [], "Intune unavailable"),
+                        new MetadataLookupResult<CloudRecoveryMetadata>(
+                            [], "Entra unavailable"));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    failed = ex.Message.Contains("All device inventory sources failed",
+                        StringComparison.Ordinal);
+                }
+
+                Assert(failed, "All failed sources must not become a successful empty result.");
             });
 
         Check(
