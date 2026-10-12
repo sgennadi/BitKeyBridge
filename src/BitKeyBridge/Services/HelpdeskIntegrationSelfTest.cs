@@ -546,6 +546,29 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "Start cloud identity mapping remains metadata-only",
+            () =>
+            {
+                var cloud = new UnifiedDeviceInfo
+                {
+                    ComputerName = "CLOUD-01",
+                    IdentityKey = "INTUNE:MANAGED:01",
+                    EntraDeviceId = "entra-01",
+                    FoundInIntune = true,
+                    RecoveryMetadataIncomplete = true
+                };
+                cloud.RecoveryIds.Add("guid-only");
+                var startRows = HomeCloudSearchMapper.Map([cloud]);
+                Assert(startRows.Count == 1 &&
+                       startRows[0].IsCloudRecord &&
+                       startRows[0].SourceIdentity == cloud.IdentityKey &&
+                       startRows[0].BitLockerLookupFailed &&
+                       HelpdeskStatus.ResolveHomeDefaultAction(startRows[0]) ==
+                           HomeDefaultAction.Devices,
+                    "Start treated Cloud recovery metadata as AD Recovery.");
+            });
+
+        Check(
             "Device 360 summary excludes recovery passwords",
             () =>
             {
