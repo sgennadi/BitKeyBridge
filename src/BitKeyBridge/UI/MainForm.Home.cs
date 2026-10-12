@@ -104,25 +104,26 @@ public sealed partial class MainForm
             var scope =
                 _startScope!;
 
+            // Keep successful results when one metadata source fails.
             var recoveryTask =
-                SearchLiveAdRecoveryMetadataAsync(
-                    query,
-                    scope,
+                MetadataSourceIsolation.ExecuteAsync<RecoverySearchResult>(
+                    () => SearchLiveAdRecoveryMetadataAsync(
+                        query, scope, cancellation.Token),
                     cancellation.Token);
-
             var lapsTask =
-                SearchHomeLapsMetadataAsync(
-                    query,
+                MetadataSourceIsolation.ExecuteAsync<LapsSearchResult>(
+                    () => SearchHomeLapsMetadataAsync(
+                        query, cancellation.Token),
                     cancellation.Token);
 
-            await Task.WhenAll(
-                recoveryTask,
-                lapsTask);
+            await Task.WhenAll(recoveryTask, lapsTask);
 
-            var recoveryRows =
-                await recoveryTask;
-            var lapsRows =
-                await lapsTask;
+            var recoveryOutcome = await recoveryTask;
+            var lapsOutcome = await lapsTask;
+            var recoveryRows = recoveryOutcome.Rows;
+            var lapsRows = lapsOutcome.Rows;
+            string? recoveryFailure = recoveryOutcome.Error;
+            string? lapsFailure = lapsOutcome.Error;
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -136,16 +137,28 @@ public sealed partial class MainForm
                 .Take(10)
                 .ToList();
 
-            foreach (var computer in recoveryNames)
+            if (lapsFailure is null)
             {
-                if (lapsRows.Any(row => row.ComputerName.Equals(
-                        computer, StringComparison.OrdinalIgnoreCase)))
-                    continue;
+                foreach (var computer in recoveryNames)
+                {
+                    if (lapsRows.Any(row => row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)))
+                        continue;
 
-                var extra = await SearchHomeLapsMetadataAsync(
-                    computer, cancellation.Token);
-                lapsRows.AddRange(extra.Where(row => row.ComputerName.Equals(
-                    computer, StringComparison.OrdinalIgnoreCase)));
+                    var extra = await MetadataSourceIsolation.ExecuteAsync<LapsSearchResult>(
+                        () => SearchHomeLapsMetadataAsync(
+                            computer, cancellation.Token),
+                        cancellation.Token);
+                    if (!extra.Succeeded)
+                    {
+                        lapsFailure = extra.Error;
+                        break;
+                    }
+
+                    lapsRows.AddRange(extra.Rows.Where(row =>
+                        row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)));
+                }
             }
 
             var domainRecoveryNames =
@@ -157,33 +170,53 @@ public sealed partial class MainForm
                 .Take(10)
                 .ToList();
 
-            foreach (var computer in lapsNames)
+            if (recoveryFailure is null)
             {
-                if (recoveryRows.Any(row => row.ComputerName.Equals(
-                        computer, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
-                var extra = await SearchLiveAdRecoveryMetadataAsync(
-                    computer, scope, cancellation.Token);
-
-                if (HelpdeskStatus.ShouldRetryBitLockerInDomain(
-                    extra.Count, scope.SearchBase, _startDomainDn))
+                foreach (var computer in lapsNames)
                 {
-                    // Retry the exact computer across the domain without
-                    // modifying the operator's selected OU/search scope.
-                    var domainScope = new BitLockerScope(
-                        "Entire domain", _startDomainDn);
-                    extra = await SearchLiveAdRecoveryMetadataAsync(
-                        computer, domainScope, cancellation.Token);
-                    if (extra.Any(row => row.ComputerName.Equals(
+                    if (recoveryRows.Any(row => row.ComputerName.Equals(
                             computer, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        domainRecoveryNames.Add(computer);
-                    }
-                }
+                        continue;
 
-                recoveryRows.AddRange(extra.Where(row => row.ComputerName.Equals(
-                    computer, StringComparison.OrdinalIgnoreCase)));
+                    var extra = await MetadataSourceIsolation.ExecuteAsync<RecoverySearchResult>(
+                        () => SearchLiveAdRecoveryMetadataAsync(
+                            computer, scope, cancellation.Token),
+                        cancellation.Token);
+                    if (!extra.Succeeded)
+                    {
+                        recoveryFailure = extra.Error;
+                        break;
+                    }
+
+                    var extraRows = extra.Rows;
+                    if (HelpdeskStatus.ShouldRetryBitLockerInDomain(
+                        extraRows.Count, scope.SearchBase, _startDomainDn))
+                    {
+                        // Retry without changing the operator's current scope.
+                        var domainScope = new BitLockerScope(
+                            "Entire domain", _startDomainDn);
+                        var retried = await MetadataSourceIsolation.ExecuteAsync<RecoverySearchResult>(
+                            () => SearchLiveAdRecoveryMetadataAsync(
+                                computer, domainScope, cancellation.Token),
+                            cancellation.Token);
+                        if (!retried.Succeeded)
+                        {
+                            recoveryFailure = retried.Error;
+                            break;
+                        }
+
+                        extraRows = retried.Rows;
+                        if (extraRows.Any(row => row.ComputerName.Equals(
+                                computer, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            domainRecoveryNames.Add(computer);
+                        }
+                    }
+
+                    recoveryRows.AddRange(extraRows.Where(row =>
+                        row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)));
+                }
             }
 
             if (generation !=
