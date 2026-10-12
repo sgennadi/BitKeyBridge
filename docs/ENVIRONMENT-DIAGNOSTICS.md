@@ -10,7 +10,10 @@ has **zero** recovery keys.
 All checks run locally in the portable .NET/WinForms EXE and are read-only.
 No PowerShell, RSAT, WinRM, WMI remote service control, firewall changes,
 ACL changes, password reads, password rotations or Key Distribution Service
-RPC calls are made by the automated readiness probe.
+secret/decryption operations are made by the automated readiness probe.
+The app performs a read-only native RPC Endpoint Mapper inquiry to determine
+which TCP port the DC currently advertises for MS-GKDI v1.0, then attempts
+a TCP handshake against that advertised port. It does not scan the RPC range.
 
 ## Readiness checks from any Windows workstation
 
@@ -18,9 +21,21 @@ RPC calls are made by the automated readiness probe.
   Workgroup PCs can use a configured DC with separate explicit AD credentials.
 - Discovers/selects a writable DC, checks its DNS A/AAAA resolution, checks the
   configured LDAP or LDAPS TCP port, and checks TCP 88, 135 and 445 as secondary
-  network indicators. These are **connection-only** probes. TCP 88 does not
-  validate Kerberos authentication; TCP 135 does not validate KDS or dynamic RPC;
-  TCP 636 does not validate the TLS certificate.
+  network indicators. Also checks **TCP 1344**, which was observed to be needed
+  for encrypted Windows LAPS decryption in one deployment. TCP 1344 is **not**
+  the documented fixed/default GKDI port and may be unused on another DC.
+- When TCP 135 is reachable, asks Windows RPC Endpoint Mapper for interface
+  **MS-GKDI v1.0**, UUID `b9785960-524f-11df-8b6d-83dcded72085`.
+  Reports exactly which `ncacn_ip_tcp` port(s) are advertised, then probes
+  those specific ports. No dynamic port-range scan is performed. TCP 135 success
+  is **not** proof of access to the returned endpoint.
+- Probes distinguish **Connected**, **Connection refused** (no listener or
+  explicit rejection), **Timed out** (possible dropped/filtered traffic, no
+  definitive firewall verdict), and **Unreachable/DNS failure**. A closed
+  historical 1344 port is informational unless the mapper currently
+  advertises it for GKDI; an unreachable currently advertised GKDI
+  port is a warning. Successful TCP connect is still not a GKDI bind,
+  permission check or password-decryption test.
 - Performs a separate authenticated LDAPv3 **Negotiate** bind using the
   application's connection settings. Standard LDAP uses signing/sealing;
   selected LDAPS uses TLS with the normal certificate/identity validation.
@@ -46,14 +61,24 @@ RPC calls are made by the automated readiness probe.
 | Client -> DC LDAP | TCP 389 | Default signed/sealed LDAP bind |
 | Client -> DC LDAPS | TCP 636 | Optional TLS LDAP, requires valid trusted DC certificate |
 | Client -> DC KDC | TCP/UDP 88 | Needed in ordinary Kerberos scenarios; readiness probes TCP only |
-| Client -> DC RPC mapper | TCP 135 | Necessary for some DPAPI-NG/KDS flows, never sufficient by itself |
-| Client -> DC dynamic RPC | TCP 49152-65535 by default | Only when needed for native KDS/DPAPI-NG decrypt; **not** scanned by the application |
+| Client -> DC RPC mapper | TCP 135 | Endpoint-mapper inquiry for GKDI; a successful TCP handshake is insufficient |
+| Client -> DC observed GKDI candidate | TCP 1344 | Previously observed working in this environment; informational if not advertised for GKDI |
+| Client -> DC discovered GKDI RPC endpoint | TCP returned by Endpoint Mapper | Probe only port(s) advertised for MS-GKDI; refused/timeout shown separately |
+| Client -> DC dynamic RPC | TCP 49152-65535 by default, potentially different | General Windows RPC range; **not** scanned by the application |
 | Client -> DC SMB/SYSVOL | TCP 445 | Normal domain functions and policy, not required for plain LDAP recovery reads |
 | Client -> cloud (optional) | TCP 443 | Entra/Intune sign-in/Graph, not required for on-prem recovery |
 
 KDS service status on the DC may be trigger-started, not permanently Running.
 To diagnose KDS, check the client/DC event logs, Get-Service KdsSvc
 on the DC, and a separately authorized decrypt of a real encrypted LAPS blob.
+To inspect port ownership on the DC (PowerShell as administrator), use
+`Get-NetTCPConnection -State Listen -LocalPort 1344 -ErrorAction SilentlyContinue`.
+For an operator workstation, `Test-NetConnection -ComputerName <DC> -Port 1344`
+tests only the TCP handshake. A successful test cannot identify the remote
+service. On the DC, check the RPC registrations and the endpoint returned
+for UUID `b9785960-524f-11df-8b6d-83dcded72085` before creating narrowly
+scoped firewall rules. The IANA service-name assignment for TCP 1344 (ICAP)
+does not identify which actual RPC/service listener owns that port.
 Do not widen domain-controller RPC firewall rules to every workstation;
 restrict RPC allowances to approved helpdesk/administrative networks.
 
