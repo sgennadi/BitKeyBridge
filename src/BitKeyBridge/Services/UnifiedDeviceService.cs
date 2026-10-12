@@ -35,12 +35,18 @@ public sealed class UnifiedDeviceService
 
         // The same source-qualified identity rules also apply when
         // Microsoft Graph is disabled or not authenticated.
-        return UnifiedDeviceMerge.Merge(rows, [], [])
+        var devices = UnifiedDeviceMerge.Merge(rows, [], [])
             .Values
             .OrderBy(x => x.ComputerName,
                 StringComparer.OrdinalIgnoreCase)
             .Take(Math.Clamp(maximumItems, 1, 1000))
             .ToList();
+
+        // This inventory search does not inspect AD BitLocker key objects.
+        // Zero cloud RecoveryIds cannot mean the computer has no key.
+        foreach (var device in devices)
+            device.RecoveryMetadataIncomplete = true;
+        return devices;
     }
 
     public async Task<List<UnifiedDeviceInfo>> SearchAsync(
@@ -238,9 +244,11 @@ public sealed class UnifiedDeviceSearchReport
             .Take(Math.Clamp(maximumItems, 1, 1000))
             .ToList();
 
-        if (!entra.Succeeded)
+        foreach (var row in rows)
         {
-            foreach (var row in rows.Where(row => row.FoundInIntune))
+            // AD-only rows have no Entra identity and were not queried for
+            // recovery IDs; an empty collection is not a key-absence proof.
+            if (!entra.Succeeded || (row.FoundInAd && !row.FoundInEntra))
                 row.RecoveryMetadataIncomplete = true;
         }
 
