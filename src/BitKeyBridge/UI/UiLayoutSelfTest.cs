@@ -667,6 +667,14 @@ public static class UiLayoutSelfTest
                     "AdvancedConnectionGroup"
                 };
 
+            if (FindByName(startPage, "HomeRotateBitLockerButton") is Button rotate &&
+                !rotate.Text.Contains("Select Intune device",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Start must require choosing an Intune device, not perform name-based rotation.");
+            }
+
             foreach (var controlName in
                      requiredStartControls)
             {
