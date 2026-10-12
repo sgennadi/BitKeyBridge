@@ -306,7 +306,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
         page.Controls.Add(
             CreateBody(
-                "Required capabilities"));
+                "Core read access and optional capabilities"));
 
         ConfigureRequiredCapability(
             _bitLocker,
@@ -314,9 +314,13 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         ConfigureRequiredCapability(
             _devices,
             "Microsoft Entra device lookup (Device.Read.All)");
-        ConfigureRequiredCapability(
-            _intuneRotation,
-            "Microsoft Intune managed-device access and BitLocker key rotation (DeviceManagementManagedDevices.ReadWrite.All)");
+        _intuneRotation.Name = "WizardEnableIntuneRotation";
+        _intuneRotation.Text =
+            "Optional: enable Intune key rotation (DeviceManagementManagedDevices.ReadWrite.All)";
+        _intuneRotation.AutoSize = true;
+        _intuneRotation.Checked =
+            _existingConfig.EnableIntuneRotationPermissions;
+        _intuneRotation.Margin = new Padding(0, 2, 0, 2);
         ConfigureRequiredCapability(
             _certificate,
             "Certificate authentication for unattended/service operation");
@@ -549,7 +553,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             Environment.NewLine +
             "  • Device.Read.All" +
             Environment.NewLine +
-            "  • DeviceManagementManagedDevices.ReadWrite.All" +
+            "  • " + ManagedPermissionPolicy.Permission(_intuneRotation.Checked) +
             (_laps.Checked
                 ? Environment.NewLine +
                   "  • DeviceLocalCredential.Read.All"
@@ -571,7 +575,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             "  • Test BitLocker metadata and Intune managed-device read access" +
             Environment.NewLine +
             Environment.NewLine +
-            "The wizard does not rotate a BitLocker key and does not retrieve a LAPS password.";
+            "The wizard does not rotate a BitLocker key or retrieve a LAPS password. " +
+            "Existing tenant write grants are not revoked automatically; review Enterprise Applications permissions.";
     }
 
     private async Task MoveNextAsync()
@@ -791,7 +796,9 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                     ct:
                         cancellation.Token,
                     includeLapsPermissions:
-                        _laps.Checked);
+                        _laps.Checked,
+                    includeIntuneRotationPermissions:
+                        _intuneRotation.Checked);
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -823,7 +830,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 "Device.Read.All");
             RequireRole(
                 grantedRoles,
-                "DeviceManagementManagedDevices.ReadWrite.All");
+                ManagedPermissionPolicy.Permission(_intuneRotation.Checked));
 
             if (_laps.Checked)
             {

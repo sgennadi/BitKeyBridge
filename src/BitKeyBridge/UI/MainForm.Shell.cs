@@ -2439,6 +2439,10 @@ public sealed partial class MainForm
             UiStyle.CreateActionButton(
                 "Rotate BitLocker Key in Intune");
         actions.Controls.Add(rotate);
+        var copySummary = UiStyle.CreateActionButton(
+            "Copy Device 360 Summary");
+        copySummary.Name = "CopyDevice360Summary";
+        actions.Controls.Add(copySummary);
         root.Controls.Add(actions, 0, 7);
 
         _unifiedSearch.Click +=
@@ -2478,6 +2482,8 @@ public sealed partial class MainForm
 
         rotate.Click +=
             async (_, _) => await RotateSelectedUnifiedDeviceAsync();
+        copySummary.Click +=
+            (_, _) => CopyUnifiedDeviceSummary();
 
         return page;
     }
@@ -2526,7 +2532,7 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 2,
-            RowCount = 12
+            RowCount = 13
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -2559,6 +2565,11 @@ public sealed partial class MainForm
         _cloudLapsPermissions.Text = "Include LAPS read permissions in setup";
         _cloudLapsPermissions.AutoSize = true;
         root.Controls.Add(_cloudLapsPermissions, 1, 7);
+
+        _cloudRotationPermissions.Name = "CloudEnableRotationPermission";
+        _cloudRotationPermissions.Text = "Allow Intune BitLocker rotation (write permission, optional)";
+        _cloudRotationPermissions.AutoSize = true;
+        root.Controls.Add(_cloudRotationPermissions, 1, 8);
 
         var buttons = new FlowLayoutPanel
         {
@@ -2606,7 +2617,7 @@ public sealed partial class MainForm
             _cloudRolloverButton
         ]);
 
-        root.Controls.Add(buttons, 1, 8);
+        root.Controls.Add(buttons, 1, 9);
 
         UiStyle.ConfigureStatusLabel(
             _cloudStatus);
@@ -2614,7 +2625,7 @@ public sealed partial class MainForm
             "Microsoft Graph status";
         _cloudStatus.MaximumSize =
             new Size(900, 0);
-        root.Controls.Add(_cloudStatus, 1, 9);
+        root.Controls.Add(_cloudStatus, 1, 10);
 
         _cloudProgress.Name =
             "CloudConnectionProgress";
@@ -2637,12 +2648,12 @@ public sealed partial class MainForm
         root.Controls.Add(
             _cloudProgress,
             1,
-            10);
+            11);
 
         root.Controls.Add(
             _cloudDiagnostics,
             1,
-            11);
+            12);
 
         _cloudWizardButton.Click += async (_, _) => await OpenIntuneSetupWizardAsync();
         _cloudSaveButton.Click += (_, _) => SaveCloudFields();

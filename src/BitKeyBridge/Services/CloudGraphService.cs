@@ -56,7 +56,8 @@ public sealed partial class CloudGraphService : IDisposable
         string username,
         string password,
         CancellationToken ct = default,
-        bool lapsOnly = false)
+        bool lapsOnly = false,
+        bool allowIntuneRotation = false)
     {
         Require(tenantId, nameof(tenantId));
         Require(clientId, nameof(clientId));
@@ -70,7 +71,8 @@ public sealed partial class CloudGraphService : IDisposable
             ["username"] = username.Trim(),
             ["password"] = password,
             ["scope"] = lapsOnly ? LapsDelegatedScopes :
-                "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All"
+                "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All " +
+                ManagedPermissionPolicy.DelegatedScope(allowIntuneRotation)
         };
         return await AcquireTokenAsync(tenantId, body, "Password", username.Trim(), ct);
     }
@@ -80,7 +82,8 @@ public sealed partial class CloudGraphService : IDisposable
         string clientId,
         Func<DeviceCodeInfo, Task> showDeviceCode,
         CancellationToken ct = default,
-        bool lapsOnly = false)
+        bool lapsOnly = false,
+        bool allowIntuneRotation = false)
     {
         Require(tenantId, nameof(tenantId));
         Require(clientId, nameof(clientId));
@@ -90,7 +93,7 @@ public sealed partial class CloudGraphService : IDisposable
         var scopes = lapsOnly ? LapsDelegatedScopes + " offline_access" :
             "https://graph.microsoft.com/BitlockerKey.Read.All " +
             "https://graph.microsoft.com/Device.Read.All " +
-            "https://graph.microsoft.com/DeviceManagementManagedDevices.ReadWrite.All offline_access";
+            ManagedPermissionPolicy.DelegatedScope(allowIntuneRotation) + " offline_access";
 
         using var deviceResponse = await _http.PostAsync(
             deviceUri,

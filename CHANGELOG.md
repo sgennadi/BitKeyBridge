@@ -1,3 +1,14 @@
+## 0.27.0
+
+**Unified Helpdesk**
+
+- Added authenticated Entra/Intune discovery to Start alongside AD BitLocker/LAPS. Search/Enter includes Cloud when the active Graph session is valid; live typing stays AD-only to avoid excessive Graph requests. Cloud-only searching works without an AD session.
+- Source-qualified cloud results never open AD Recovery/LAPS automatically. Selecting a Cloud row opens the Devices workspace, where the operator must explicitly identify the managed object before recovery/rotation.
+- Device 360 displays immutable source IDs, AD GUID/DN, Entra and Intune device IDs, hardware, OS, compliance, encryption, last sync and unverified recovery status. Copy Device 360 Summary omits secret values and recovery ID lists.
+- Microsoft Graph delegated Intune access now defaults to DeviceManagementManagedDevices.Read.All. The administrator can explicitly enable ReadWrite.All for Intune rotation in Administration > Cloud or the Setup Wizard. Rotation additionally requires source ID verification, access checks and confirmation.
+- Pre-existing Entra application grants are not silently revoked when read-only is selected. Administrators upgrading from an older release must separately review and revoke any unneeded tenant write role assignments.
+- Regression checks added for metadata-only Cloud mappings, least-privilege permission selection, cloud routing and non-secret Device 360 summaries. Maintains native .NET 10 WinForms and x64/x86/ARM64 packages.
+
 ## 0.26.9
 
 - Removed the unsafe Start > Rotate via Intune name-match/first-result fallback. Start now opens Devices and performs read-only discovery; the operator must select an exact Intune managed-device object and confirm its identifiers before using the existing privileged Rotate action. No rotation occurs when entering Devices.

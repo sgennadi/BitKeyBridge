@@ -48,6 +48,7 @@ public sealed partial class MainForm : DpiAwareForm
     private CancellationTokenSource? _cloudConnectCancellation;
     private bool _cloudConnecting;
     private readonly CheckBox _cloudLapsPermissions = new();
+    private readonly CheckBox _cloudRotationPermissions = new();
     private CancellationTokenSource? _cloudMaintenanceCancellation;
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
@@ -613,6 +614,7 @@ public sealed partial class MainForm : DpiAwareForm
 
         _cloudConfig = ConfigService.LoadCloudConfig();
         _cloudLapsPermissions.Checked = _cloudConfig.EnableLapsPermissions;
+        _cloudRotationPermissions.Checked = _cloudConfig.EnableIntuneRotationPermissions;
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
         _cloudUsername.Text = _cloudConfig.Username;
@@ -638,6 +640,7 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudConfig.ClientId = _cloudClient.Text.Trim();
         _cloudConfig.Username = _cloudUsername.Text.Trim();
         _cloudConfig.EnableLapsPermissions = _cloudLapsPermissions.Checked;
+        _cloudConfig.EnableIntuneRotationPermissions = _cloudRotationPermissions.Checked;
         _cloudConfig.CertificateThumbprint = _cloudThumbprint.Text.Trim();
         _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex switch
         {
@@ -709,7 +712,8 @@ public sealed partial class MainForm : DpiAwareForm
                                 _cloudUsername.Text,
                                 _cloudPassword.Text,
                                 ct,
-                                lapsOnly: forLaps),
+                                lapsOnly: forLaps,
+                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions),
                     _ =>
                         await graph
                             .AcquireDeviceCodeTokenAsync(
@@ -717,7 +721,8 @@ public sealed partial class MainForm : DpiAwareForm
                                 _cloudClient.Text,
                                 ShowDeviceCodeAsync,
                                 ct,
-                                lapsOnly: forLaps)
+                                lapsOnly: forLaps,
+                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions)
                 };
 
             var count = forLaps ? 0 :
@@ -728,6 +733,8 @@ public sealed partial class MainForm : DpiAwareForm
 
             _cloudTokenContext =
                 BuildCloudTokenContext();
+
+            RefreshHomeConnectionUi();
 
             UiStyle.SetStatus(
                 _cloudStatus,
@@ -951,7 +958,8 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudClient.Text.Trim()
                 .ToUpperInvariant(),
             mode,
-            identity.ToUpperInvariant());
+            identity.ToUpperInvariant(),
+            _cloudRotationPermissions.Checked ? "ROTATION" : "READ-ONLY");
     }
 
     private async Task RunNativeAutoSetupAsync()
@@ -1036,7 +1044,9 @@ public sealed partial class MainForm : DpiAwareForm
                     ct:
                         cancellation.Token,
                     includeLapsPermissions:
-                        _cloudLapsPermissions.Checked);
+                        _cloudLapsPermissions.Checked,
+                    includeIntuneRotationPermissions:
+                        _cloudRotationPermissions.Checked);
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -2169,32 +2179,19 @@ public sealed partial class MainForm : DpiAwareForm
     {
         _unifiedDetails.Clear();
         if (_unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row) return;
+            _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row)
+            return;
 
-        _unifiedDetails.AppendText($"Computer:          {row.ComputerName}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Identity status:   {row.IdentityStatus}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Source object ID:  {row.IdentityKey}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"AD object GUID:    {row.AdObjectGuid}{Environment.NewLine}");
-        if (!string.IsNullOrWhiteSpace(row.IdentityWarning))
-            _unifiedDetails.AppendText($"WARNING:           {row.IdentityWarning}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"AD:                {row.FoundInAd}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Entra:             {row.FoundInEntra}  Device ID: {row.EntraDeviceId}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Intune:            {row.FoundInIntune}  Managed Device ID: {row.ManagedDeviceId}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Serial:            {row.SerialNumber}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"User:              {row.UserDisplayName}  {row.UserPrincipalName}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Hardware:          {(row.Manufacturer + " " + row.Model).Trim()}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"OS:                {(row.OperatingSystem + " " + row.OsVersion).Trim()}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Compliance:        {row.ComplianceState}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Encrypted:         {(row.IsEncrypted is null ? "-" : row.IsEncrypted.Value ? "Yes" : "No")}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Intune last sync:  {row.LastSyncDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"AD last logon:     {row.AdLastLogonTimestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"AD DN:             {row.AdDistinguishedName}{Environment.NewLine}");
-        _unifiedDetails.AppendText(
-            $"Recovery IDs:      {row.RecoveryKeyCount}" +
-            (row.RecoveryMetadataIncomplete ? " (metadata incomplete / unverified)" : string.Empty) +
-            Environment.NewLine);
-        foreach (var recoveryId in row.RecoveryIds)
-            _unifiedDetails.AppendText($"  {recoveryId}{Environment.NewLine}");
+        _unifiedDetails.Text = Device360Formatter.Format(row);
+        // IDs are non-secret metadata. Recovery passwords are retrieved only
+        // after the operator explicitly selects an ID and passes access gates.
+        if (row.RecoveryIds.Count > 0)
+        {
+            _unifiedDetails.AppendText(Environment.NewLine + "Recovery IDs:" +
+                Environment.NewLine);
+            foreach (var id in row.RecoveryIds)
+                _unifiedDetails.AppendText("  " + id + Environment.NewLine);
+        }
     }
 
     private async Task RotateSelectedUnifiedDeviceAsync()
@@ -2233,6 +2230,14 @@ public sealed partial class MainForm : DpiAwareForm
         string? recoveryId,
         RecoveryAccessContext? existingContext = null)
     {
+        if (!_cloudConfig.EnableIntuneRotationPermissions)
+        {
+            ShowAppMessage("Intune rotation disabled",
+                "Enable optional Intune rotation under Administration > Cloud, " +
+                "consent to the write scope, then reconnect. Read-only is the default.");
+            return;
+        }
+
         if (!AuthorizeAction(
                 BitKeyBridgePermission.Rotate,
                 "RotateBitLockerKey",
@@ -4435,10 +4440,12 @@ public sealed partial class MainForm : DpiAwareForm
             !_directoryConnecting &&
             _directoryConnected;
 
+        var searchReady =
+            ready || HasCloudSearchSession();
         _homeQuery.Enabled =
-            ready;
+            searchReady;
         _homeSearchButton.Enabled =
-            ready;
+            searchReady;
         _homeUseWindowsIdentity.Enabled =
             !_directoryConnecting &&
             !_directoryConnected;
@@ -4451,7 +4458,7 @@ public sealed partial class MainForm : DpiAwareForm
         _homeLapsButton.Enabled =
             ready;
 
-        if (!ready)
+        if (!searchReady)
         {
             _homeSearchCancelButton.Enabled =
                 false;

@@ -50,9 +50,16 @@ public sealed partial class MainForm
 
         if (!_directoryConnected)
         {
+            if (HasCloudSearchSession())
+            {
+                await SearchHomeCloudOnlyAsync(query);
+                return;
+            }
+
             UiStyle.SetStatus(
                 _homeSearchStatus,
-                "Connect to Active Directory before using the unified search.",
+                "Connect to AD or authenticate Cloud under Administration > Cloud. " +
+                "An active cloud session can search Entra/Intune without AD.",
                 UiStatusKind.Warning);
             return;
         }
@@ -375,6 +382,19 @@ public sealed partial class MainForm
             }
 
             _updatingHomeSearchResults = false;
+
+            HomeCloudLookupStatus? cloudOutcome = null;
+            // Live keystrokes stay AD-only to avoid unbounded Graph requests.
+            // Search/Enter queries all authenticated sources.
+            if (immediate && HasCloudSearchSession())
+            {
+                cloudOutcome = await AppendHomeCloudRowsAsync(
+                    query, generation, cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (generation != _homeSearchGeneration || IsDisposed)
+                    return;
+            }
+
             UpdateHomeSearchSelection();
 
             var failedSources = new List<string>();
@@ -388,6 +408,17 @@ public sealed partial class MainForm
             {
                 failedSources.Add("LAPS");
                 diagnosticDetails.Add("LAPS metadata: " + lapsFailure);
+            }
+
+            if (cloudOutcome is { Failure: not null })
+            {
+                failedSources.Add("Cloud");
+                diagnosticDetails.Add("Graph metadata: " + cloudOutcome.Failure);
+            }
+            else if (cloudOutcome is { IsPartial: true })
+            {
+                failedSources.Add("Cloud (partial)");
+                diagnosticDetails.Add(cloudOutcome.SourceDiagnostics);
             }
 
             if (failedSources.Count > 0)
@@ -411,10 +442,17 @@ public sealed partial class MainForm
                             ? "One computer found. Choose BitLocker or LAPS."
                             : $"Found {names.Count} computers. Select one, then choose BitLocker or LAPS.";
 
+            if (cloudOutcome is not null)
+            {
+                statusText += $" | Entra/Intune: {cloudOutcome.RecordsAdded} record(s). " +
+                    "Select a cloud record to open Device 360.";
+            }
+
             UiStyle.SetStatus(
                 _homeSearchStatus,
                 statusText,
-                failedSources.Count > 0 || ambiguousNames.Count > 0 || names.Count == 0
+                failedSources.Count > 0 || ambiguousNames.Count > 0 ||
+                    _homeSearchResults.Rows.Count == 0
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
         }
@@ -467,7 +505,7 @@ public sealed partial class MainForm
                     _homeSearchGeneration)
             {
                 _homeSearchButton.Enabled =
-                    _directoryConnected;
+                    _directoryConnected || HasCloudSearchSession();
                 _homeSearchCancelButton.Enabled =
                     false;
                 _homeSearchProgress.Visible =
@@ -559,23 +597,27 @@ public sealed partial class MainForm
         // This button opens a search, not a secret read. Keep it available
         // even when the selected OU or permissions hide recovery metadata.
         _homeBitLockerButton.Enabled =
+            selected?.IsCloudRecord != true &&
             HelpdeskStatus.CanAttemptBitLockerSearch(connected, selected);
 
         // Missing metadata must not block an explicit, authorized LAPS read.
         _homeLapsButton.Enabled =
+            selected?.IsCloudRecord != true &&
             HelpdeskStatus.CanAttemptLapsRead(connected, selected);
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
             selected is not null &&
             selected.BitLockerKeyCount > 0 &&
-            !selected.IdentityAmbiguous;
+            !selected.IdentityAmbiguous &&
+            !selected.IsCloudRecord;
 
         _homeCopyBitLockerButton.Enabled =
             connected &&
             selected is not null &&
             selected.BitLockerKeyCount > 0 &&
-            !selected.IdentityAmbiguous;
+            !selected.IdentityAmbiguous &&
+            !selected.IsCloudRecord;
 
         _homeDeviceDetailsButton.Enabled =
             selected is not null;
@@ -586,6 +628,7 @@ public sealed partial class MainForm
 
         _homeRotateBitLockerButton.Enabled =
             selected is not null &&
+            !selected.IsCloudRecord &&
             !selected.IdentityAmbiguous &&
             !string.IsNullOrWhiteSpace(
                 _cloudConfig.TenantId) &&
@@ -624,6 +667,11 @@ public sealed partial class MainForm
             case HomeDefaultAction.Laps:
                 // A LAPS-only computer opens LAPS when metadata confirms it.
                 await OpenSelectedHomeLapsAsync();
+                return;
+            case HomeDefaultAction.Devices:
+                // Requires exact source-qualified selection before cloud operations.
+                OpenHomeDeviceDetails();
+                await SearchUnifiedDevicesAsync();
                 return;
             case HomeDefaultAction.ChooseRecoveryType:
                 // Missing metadata is not proof that BitLocker is absent.
