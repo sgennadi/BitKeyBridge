@@ -765,6 +765,24 @@ public static class UiLayoutSelfTest
 
         }
 
+        // Administrator-only LAPS Coverage remains discoverable with the
+        // same central UiStyle across compact, 150% and 200% scaling.
+        if (FindByName(form, "LapsCoverageScanButton") is not Button ||
+            FindByName(form, "LapsCoverageDevices") is not DataGridView ||
+            FindByName(form, "LapsCoverageChanges") is not DataGridView ||
+            FindByName(form, "LapsCoverageCompareSnapshotsButton") is not Button ||
+            FindByName(form, "LapsCoverageRequestRotation") is not Button lapsRotate ||
+            FindByName(form, "LapsRotationOptIn") is not CheckBox lapsOptIn)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: LAPS Coverage and optional rotation controls are missing.");
+        }
+        else if (lapsRotate.Enabled || lapsOptIn.Checked)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: LAPS expiry writes must remain disabled by default.");
+        }
+
         if (FindByName(
                 form,
                 "AutomaticUpdateInstall") is null)

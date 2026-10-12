@@ -2186,7 +2186,10 @@ public sealed partial class MainForm
         nested.TabPages.Add(BuildDeviceSearchPage());
 
         if (AdministrationAllowed)
+        {
             nested.TabPages.Add(BuildCoverageResponsiveTab());
+            nested.TabPages.Add(BuildLapsCoverageTab());
+        }
 
         tab.Controls.Add(nested);
         return tab;

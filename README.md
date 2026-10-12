@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.27.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Current release line: 0.28.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -65,7 +65,7 @@ The GUI is intentionally simplified around the real helpdesk workflow.
 
 - **Start** — default helpdesk dashboard with AD BitLocker/LAPS search and optional authenticated Entra/Intune records. Cloud records navigate to Devices/Device 360 rather than opening AD Recovery; live typing remains AD-only.
 - **Recovery** — advanced BitLocker workspace with Live AD/Local cache, OU scope, debounced partial-name/Recovery-ID search, latest-record selection and on-demand Reveal/Copy.
-- **Devices / Device 360** — source-qualified AD/Entra/Intune search, non-secret Device 360 summaries and explicit cloud key/rotation operations. Intune write access is separate and optional.
+- **Devices / Device 360** — source-qualified AD/Entra/Intune search and non-secret Device 360 summaries; authorized Intune rotation is optional. Administrator-only **LAPS Coverage** scans AD LAPS expiration metadata, compares non-secret snapshots, exports CSV and optionally requests future-client-cycle password rotation with an explicit AD expiration write.
 - **LAPS** — debounced device discovery, direct Enter/double-click reading, compact status/results and optional technical Details.
 - **Administration** — **Helpdesk** basics/profiles/support bundle, Cloud, Updates, **Advanced** enterprise policies, export, and automation. Visible only to authorized BitKeyBridge administrators.
 - **Health & Audit** — **Access Health** metadata-only permission checks, service/health, domain-controller comparison, and searchable recovery audit history. Visible to the same administrator role.
@@ -97,6 +97,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - Responsive WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, text scaling, and smaller displays.
 - Native Windows Service for scheduled export / coverage.
 - Metadata-only AD + Entra + Intune BitLocker Coverage reporting.
+- Metadata-only AD LAPS Coverage with stable GUID-based snapshot comparisons and optional, explicitly authorized expiration requests.
 - Tamper-evident JSONL recovery audit with optional signed checkpoints and GUI filters by computer/ticket/user/action/Recovery ID/date.
 - Optional RBAC, mandatory ticket/reference, JIT recovery, two-person approval, SIEM forwarding, audit signing and Remote API — all disabled by default.
 - Optional TLS Remote API with scoped bearer tokens.
@@ -443,6 +444,22 @@ For unattended runs, certificate authentication is recommended:
 ```text
 BitKeyBridge.exe --coverage --cloud-auth Certificate --tenant-id <tenant-guid> --client-id <app-guid> --cert-thumbprint <thumbprint>
 ```
+
+## LAPS Coverage (v0.28.0)
+
+Under **Devices → LAPS Coverage**, administrators can scan the entire connected AD domain (leave OU/DN blank) or a particular OU by distinguished name. Only AD computer identity, last-logon and Windows/Legacy LAPS expiration/version metadata are requested. The tool never retrieves `msLAPS-Password`, `ms-Mcs-AdmPwd`, encrypted passwords, LAPS history or local plaintext passwords during coverage inventory.
+
+**Not verified** means the LDAP view returned no usable indicators; this is not proof that a backup is missing. A timestamp in the past is classified **Expired**, while an expiration within seven days is **Expiring soon**. Results are read-only by default.
+
+Complete snapshots are saved under the current user's LocalAppData `BitKeyBridge/LapsCoverageHistory` with at most 30 retained. Comparisons use `objectGUID`/DN and the same OU search base, not short names. They show visibility changes as unverified rather than asserting that a password has been deleted. The CSV export contains no secret values and escapes spreadsheet formulas.
+
+The optional **Request LAPS rotation...** checkbox is off at every startup and requires a fresh complete scan, exactly one LAPS policy, a unique AD GUID/DN, the existing Rotate RBAC check, operator confirmation and audit. This *expires an AD timestamp* on a writable DC. Password rotation occurs only when the device next runs its LAPS policy, so a successful request is **not** proof that the password changed.
+
+For recurring inventory with a Windows Scheduled Task, use:
+```text
+BitKeyBridge.exe --laps-coverage --laps-coverage-dn "OU=Workstations,DC=example,DC=org" --laps-coverage-output "C:\\Reports\\Laps"
+```
+Add `--laps-coverage-fail-expired` for exit code 24 when visible expirations are overdue. This mode is metadata-only and does not change AD. Package templates for Intune/GPO are in [deployment](deployment/README.md).
 
 ## Windows Service and health
 

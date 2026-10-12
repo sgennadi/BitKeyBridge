@@ -83,6 +83,7 @@ internal static class Program
             x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--laps-coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-save", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-delete", StringComparison.OrdinalIgnoreCase) ||
@@ -274,6 +275,7 @@ internal static class Program
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--laps-coverage", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cloud-machine-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--cert-key-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
@@ -962,6 +964,9 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--coverage", StringComparison.OrdinalIgnoreCase)))
             return CoverageCliService.RunAsync(config, args).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--laps-coverage", StringComparison.OrdinalIgnoreCase)))
+            return LapsCoverageCliService.RunAsync(config, args).GetAwaiter().GetResult();
 
         if (isCli)
             return RunExport(config, args).GetAwaiter().GetResult();
@@ -3471,6 +3476,11 @@ internal static class Program
         Console.WriteLine("  --dc-test             Discover and compare domain controllers");
         Console.WriteLine("  --ad-test             Test the effective Active Directory connection");
         Console.WriteLine("  --coverage            Generate AD + Entra + Intune metadata coverage CSV/JSON");
+        Console.WriteLine("  --laps-coverage       Scan AD Windows/Legacy LAPS expiration metadata (no Graph)");
+        Console.WriteLine("  --laps-coverage-dn <DN>     Optional OU/domain search base");
+        Console.WriteLine("  --laps-coverage-max <n>    Limit scan (1-50000; default 25000)");
+        Console.WriteLine("  --laps-coverage-output <dir> CSV/JSON destination under current user by default");
+        Console.WriteLine("  --laps-coverage-fail-expired  Exit 24 when visible LAPS expirations are overdue");
         Console.WriteLine("  --coverage-output <dir>  Default directory for coverage files");
         Console.WriteLine("  --coverage-csv <path>   Coverage CSV path (metadata only)");
         Console.WriteLine("  --coverage-json <path>  Coverage JSON path (metadata only)");
