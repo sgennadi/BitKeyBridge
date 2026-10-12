@@ -115,6 +115,8 @@ public sealed partial class MainForm
         _lapsWorkspaceTab.Text = "LAPS";
         _computerServiceTabs.Name = "ComputerServiceTabs";
         _computerServiceTabs.Dock = DockStyle.Fill;
+        _computerServiceTabs.SelectedIndexChanged += (_, _) =>
+            ApplyComputerQueryToSelectedWorkspace();
         _computerServiceTabs.TabPages.Add(_recoveryWorkspaceTab);
         _computerServiceTabs.TabPages.Add(_lapsWorkspaceTab);
         _computerWorkspaceTab = new TabPage("Computer") { Name = "ComputerWorkspace" };
@@ -149,12 +151,7 @@ public sealed partial class MainForm
                     _recoveryBackToStart.Visible =
                         false;
                 }
-                else if (ReferenceEquals(
-                             _mainTabs.SelectedTab,
-                             _lapsWorkspaceTab))
-                {
-                    _lapsBackToStart.Visible =
-                        false;
+                    _lapsBackToStart.Visible = false;
                 }
             };
 
