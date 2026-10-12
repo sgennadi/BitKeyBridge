@@ -226,10 +226,16 @@ public sealed partial class MainForm
             {
                 try
                 {
+                    _config.CheckForUpdatesOnStart = true;
+                    _config.AutoInstallUpdatesOnStart = true;
+                    ConfigService.SaveAppConfig(_config);
+                    _checkUpdatesOnStart.Checked = true;
+                    _autoInstallUpdatesOnStart.Checked = true;
                     UpdateRollbackHoldService.Clear();
                     UiStyle.SetStatus(
                         _updateStatus,
-                        "Rollback hold removed. Automatic updates can install newer releases on the next startup.",
+                        "Rollback hold removed and automatic updates re-enabled. " +
+                        "Newer releases may install on the next startup.",
                         UiStatusKind.Success);
                     _audit.Write(
                         "ResumeAutomaticUpdatesAfterRollback",
