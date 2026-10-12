@@ -918,7 +918,7 @@ public sealed partial class MainForm
         _homeRotateBitLockerButton.Name =
             "HomeRotateBitLockerButton";
         _homeRotateBitLockerButton.Text =
-            "Rotate via Intune";
+            "Select Intune device to rotate...";
         UiStyle.ConfigureActionButton(
             _homeRotateBitLockerButton);
         _homeRotateBitLockerButton.Enabled =
