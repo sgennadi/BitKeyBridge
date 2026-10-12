@@ -331,6 +331,31 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "manually selected Intune target can rotate despite a hostname collision",
+            () =>
+            {
+                var row = new UnifiedDeviceInfo
+                {
+                    ComputerName = "LAB-DEVICE",
+                    FoundInIntune = true,
+                    ManagedDeviceId = "exact-managed-object",
+                    EntraDeviceId = "10101010-1010-1010-1010-101010101010",
+                    IdentityStatus = "Name collision"
+                };
+                Assert(row.CanRotateExplicitIntuneDevice,
+                    "A manually selected unique managedDeviceId was incorrectly blocked by an unrelated same-name AD device.");
+
+                row.IdentityStatus = "Ambiguous device ID";
+                Assert(!row.CanRotateExplicitIntuneDevice,
+                    "Conflicting Entra device IDs must block explicit Intune rotation.");
+
+                row.IdentityStatus = "Intune object";
+                row.ManagedDeviceId = string.Empty;
+                Assert(!row.CanRotateExplicitIntuneDevice,
+                    "Missing managedDeviceId must not be treated as a valid rotation target.");
+            });
+
+        Check(
             "independent metadata sources retain success and error",
             () =>
             {
