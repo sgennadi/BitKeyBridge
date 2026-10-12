@@ -1810,18 +1810,26 @@ public sealed partial class MainForm
             UiStatusKind.Success);
     }
 
+    // A Start AD computer name is NOT an authoritative Intune managedDeviceId.
+    // Never rotate the first / closest Graph name match. The operator must
+    // select the exact Intune object under Devices before any rotation request.
     private async Task RotateHomeBitLockerAsync()
     {
-        var selected =
-            GetSelectedHomeSearchResult();
-
+        var selected = GetSelectedHomeSearchResult();
         if (selected is null)
             return;
 
-        if (string.IsNullOrWhiteSpace(
-                _cloudConfig.TenantId) ||
-            string.IsNullOrWhiteSpace(
-                _cloudConfig.ClientId))
+        if (selected.IdentityAmbiguous)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "This AD computer name is ambiguous. Verify an exact object ID before proceeding.",
+                UiStatusKind.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_cloudConfig.TenantId) ||
+            string.IsNullOrWhiteSpace(_cloudConfig.ClientId))
         {
             UiStyle.SetStatus(
                 _homeSearchStatus,
@@ -1830,61 +1838,17 @@ public sealed partial class MainForm
             return;
         }
 
-        if (!await EnsureCloudTokenAsync())
-            return;
+        OpenHomeDeviceDetails();
+        UiStyle.SetStatus(
+            _unifiedStatus,
+            $"Select the EXACT Intune managed device for {selected.ComputerName} " +
+            "and verify its Entra deviceId and managedDeviceId before pressing Rotate.",
+            UiStatusKind.Warning);
+        await SearchUnifiedDevicesAsync();
 
-        try
-        {
-            using var graph =
-                new CloudGraphService();
-
-            var devices =
-                await graph.SearchManagedDevicesAsync(
-                    _cloudToken!.AccessToken,
-                    selected.ComputerName,
-                    20);
-
-            var device =
-                devices.FirstOrDefault(
-                    x =>
-                        x.DeviceName.Equals(
-                            selected.ComputerName,
-                            StringComparison.OrdinalIgnoreCase)) ??
-                devices.FirstOrDefault();
-
-            if (device is null ||
-                string.IsNullOrWhiteSpace(
-                    device.ManagedDeviceId))
-            {
-                UiStyle.SetStatus(
-                    _homeSearchStatus,
-                    $"No Intune managed device was found for {selected.ComputerName}.",
-                    UiStatusKind.Warning);
-                return;
-            }
-
-            await RotateManagedDeviceAsync(
-                device.ManagedDeviceId,
-                selected.ComputerName,
-                selected.LatestRecoveryId);
-
-            RecordRecentComputer(
-                selected,
-                "Intune rotate");
-        }
-        catch (Exception ex)
-        {
-            UiStyle.SetStatus(
-                _homeSearchStatus,
-                "Intune key rotation failed. Review diagnostics.",
-                UiStatusKind.Error);
-
-            _appDiagnostics.ShowError(
-                "Intune key rotation failed.",
-                "RotateHomeBitLocker",
-                ex,
-                ("Computer", selected.ComputerName));
-        }
+        // Deliberately no RotateManagedDeviceAsync here. Search/selection
+        // is read-only; the Devices action applies existing access checks,
+        // operator confirmation, and audit logging to the selected device.
     }
 
     private void OpenHomeDeviceDetails()
