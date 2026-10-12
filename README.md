@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.28.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Current release line: 0.29.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,14 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+## Local and online rollback (0.29.0)
+
+**Administration → Updates → Rollback Previous Build** restores the retained local `.bak` if available. If the previous EXE is missing, the same button offers the previous compatible **published GitHub Release**, using the active repository. **Online Rollback...** is also available when a local backup exists and a published version is preferred.
+
+Online rollback selects the closest version strictly below the running version, excluding drafts and prereleases unless prereleases are explicitly allowed. The package must be available for the running Windows architecture (x64/x86/ARM64). It passes size and SHA-256 verification from the GitHub Release, the configured Authenticode policy, version validation and the existing native `--self-test`. The local fallback runs signature-policy checks and self-test before replacement as well. The elevated updater restores backed-up executables on apply failures and records Local/Online provenance. A failed startup after a successful file swap is not a guaranteed automatic restoration, so test service/GUI compatibility before deliberately downgrading.
+
+**Important:** A rollback disables the existing automatic-install setting (also honored by older releases) and writes a version-bound hold, preventing an immediate reinstall of the latest release at the next startup. Startup/manual checks and **Update Now** remain available; choose **Resume Auto-Install** or manually enable automatic installation again when ready. Update settings and any newer configuration schema may not be understood by very old releases.
 
 ## Guided setup wizards (0.21.0)
 
