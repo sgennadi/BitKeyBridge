@@ -215,8 +215,7 @@ public static class HelpdeskIntegrationSelfTest
                             }
                         ]);
 
-                var row =
-                    merged["PC-CLOUD"];
+                var row = merged.Values.Single();
 
                 Assert(
                     !row.FoundInAd &&
@@ -228,6 +227,145 @@ public static class HelpdeskIntegrationSelfTest
                     row.RecoveryIds.Count ==
                     2,
                     "Multiple recovery IDs were not retained.");
+            });
+
+        Check(
+            "AD and Entra same-name records remain distinct",
+            () =>
+            {
+                var merged = UnifiedDeviceMerge.Merge(
+                    [new AdComputerInfo
+                    {
+                        ComputerName = "LAB-01",
+                        ObjectGuid = "11111111-1111-1111-1111-111111111111",
+                        DistinguishedName = "CN=LAB-01,OU=Lab,DC=example,DC=test"
+                    }],
+                    [new ManagedDeviceInfo
+                    {
+                        DeviceName = "LAB-01",
+                        ManagedDeviceId = "intune-lab-01",
+                        EntraDeviceId = "22222222-2222-2222-2222-222222222222"
+                    }],
+                    [new CloudRecoveryMetadata
+                    {
+                        ComputerName = "LAB-01",
+                        DeviceId = "22222222-2222-2222-2222-222222222222",
+                        RecoveryId = "recovery-lab-01"
+                    }]);
+
+                Assert(merged.Count == 2,
+                    "Same-named AD and cloud records were incorrectly merged.");
+                var ad = merged.Values.Single(x => x.FoundInAd);
+                var cloud = merged.Values.Single(x => x.FoundInIntune);
+                Assert(!ad.FoundInIntune &&
+                       ad.RecoveryIds.Count == 0 &&
+                       cloud.RecoveryIds.SequenceEqual(["recovery-lab-01"]) &&
+                       ad.IdentityStatus == "Name collision" &&
+                       cloud.IdentityStatus == "Name collision",
+                    "Name collision was not marked or cloud recovery key was assigned to AD.");
+            });
+
+        Check(
+            "same computer name with different AD GUIDs remains separate",
+            () =>
+            {
+                var merged = UnifiedDeviceMerge.Merge(
+                    [
+                        new AdComputerInfo
+                        {
+                            ComputerName = "LAB-02",
+                            ObjectGuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                            DistinguishedName = "CN=LAB-02,OU=Old,DC=example,DC=test"
+                        },
+                        new AdComputerInfo
+                        {
+                            ComputerName = "LAB-02",
+                            ObjectGuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                            DistinguishedName = "CN=LAB-02,OU=New,DC=example,DC=test"
+                        }
+                    ],
+                    [], []);
+
+                Assert(merged.Count == 2 &&
+                       merged.Values.All(row => row.IdentityStatus == "Name collision") &&
+                       merged.Keys.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 2,
+                    "Distinct AD computer objectGUIDs collapsed into one device.");
+            });
+
+        Check(
+            "conflicting Entra IDs do not attach recovery keys to managed devices",
+            () =>
+            {
+                const string sameId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+                var merged = UnifiedDeviceMerge.Merge(
+                    [],
+                    [
+                        new ManagedDeviceInfo
+                        {
+                            DeviceName = "DUPLICATE-PC",
+                            ManagedDeviceId = "intune-one",
+                            EntraDeviceId = sameId
+                        },
+                        new ManagedDeviceInfo
+                        {
+                            DeviceName = "DUPLICATE-PC",
+                            ManagedDeviceId = "intune-two",
+                            EntraDeviceId = sameId
+                        }
+                    ],
+                    [new CloudRecoveryMetadata
+                    {
+                        ComputerName = "DUPLICATE-PC",
+                        DeviceId = sameId,
+                        RecoveryId = "must-remain-isolated"
+                    }]);
+
+                Assert(merged.Count == 3 &&
+                       merged.Values.Where(x => x.FoundInIntune)
+                           .All(x => x.RecoveryIds.Count == 0 &&
+                                     x.IdentityStatus == "Ambiguous device ID") &&
+                       merged.Values.Count(x => x.RecoveryIds.Count > 0) == 1 &&
+                       merged.Values.Any(x => !x.FoundInIntune &&
+                           x.RecoveryIds.Contains("must-remain-isolated")),
+                    "An ambiguous Entra ID caused incorrect recovery-key attachment.");
+            });
+
+        Check(
+            "independent metadata sources retain success and error",
+            () =>
+            {
+                using var cts = new CancellationTokenSource();
+                var good = MetadataSourceIsolation.ExecuteAsync<int>(
+                    () => Task.FromResult(new List<int> { 1, 2 }),
+                    cts.Token);
+                var bad = MetadataSourceIsolation.ExecuteAsync<int>(
+                    () => Task.FromException<List<int>>(
+                        new InvalidOperationException("LDAP unavailable")),
+                    cts.Token);
+
+                Task.WhenAll(good, bad).GetAwaiter().GetResult();
+                Assert(good.Result.Succeeded && good.Result.Rows.Count == 2 &&
+                       !bad.Result.Succeeded &&
+                       bad.Result.Rows.Count == 0 &&
+                       bad.Result.Error!.Contains("LDAP unavailable",
+                           StringComparison.Ordinal),
+                    "A failure of one metadata source discarded the other source.");
+
+                cts.Cancel();
+                var canceled = false;
+                try
+                {
+                    MetadataSourceIsolation.ExecuteAsync<int>(
+                        () => Task.FromResult(new List<int> { 99 }),
+                        cts.Token).GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException)
+                {
+                    canceled = true;
+                }
+
+                Assert(canceled,
+                    "Canceled metadata search was incorrectly treated as an empty result.");
             });
 
         Check(
