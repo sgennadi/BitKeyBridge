@@ -331,6 +331,42 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "conflicting Entra IDs for a single Intune managedDeviceId fail closed",
+            () =>
+            {
+                var merged = UnifiedDeviceMerge.Merge(
+                    [],
+                    [
+                        new ManagedDeviceInfo
+                        {
+                            DeviceName = "BAD-INTUNE",
+                            ManagedDeviceId = "same-managed-id",
+                            EntraDeviceId = "11111111-1111-1111-1111-111111111111"
+                        },
+                        new ManagedDeviceInfo
+                        {
+                            DeviceName = "BAD-INTUNE",
+                            ManagedDeviceId = "same-managed-id",
+                            EntraDeviceId = "22222222-2222-2222-2222-222222222222"
+                        }
+                    ],
+                    [
+                        new CloudRecoveryMetadata
+                        {
+                            ComputerName = "BAD-INTUNE",
+                            DeviceId = "11111111-1111-1111-1111-111111111111",
+                            RecoveryId = "separate-key"
+                        }
+                    ]);
+                var managed = merged.Values.Single(x => x.FoundInIntune);
+                Assert(managed.IdentityStatus == "Ambiguous device ID" &&
+                       !managed.CanRotateExplicitIntuneDevice &&
+                       managed.RecoveryIds.Count == 0 &&
+                       merged.Values.Single(x => x.RecoveryIds.Count > 0).FoundInIntune == false,
+                    "Conflicting Entra identities must never inherit key IDs or enable rotation.");
+            });
+
+        Check(
             "manually selected Intune target can rotate despite a hostname collision",
             () =>
             {
