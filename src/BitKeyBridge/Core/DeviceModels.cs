@@ -75,6 +75,15 @@ public sealed class UnifiedDeviceInfo
     public bool RecoveryMetadataIncomplete { get; set; }
     public List<string> RecoveryIds { get; set; } = [];
     public int RecoveryKeyCount => RecoveryIds.Count;
+
+    // A hostname collision alone cannot prohibit an EXPLICIT, confirmed
+    // Intune operation on a source-qualified managedDeviceId. A duplicate
+    // Entra device ID is a true identity conflict and must fail closed.
+    public bool CanRotateExplicitIntuneDevice =>
+        FoundInIntune &&
+        !string.IsNullOrWhiteSpace(ManagedDeviceId) &&
+        !string.Equals(IdentityStatus, "Ambiguous device ID",
+            StringComparison.Ordinal);
 }
 
 public sealed class RecoveryAccessContext
