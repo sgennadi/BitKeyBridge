@@ -2602,6 +2602,12 @@ public sealed partial class MainForm : DpiAwareForm
             ConfigService.SaveAppConfig(
                 _config);
 
+            if (_config.AutoInstallUpdatesOnStart &&
+                UpdateRollbackHoldService.IsActiveForCurrentBuild())
+            {
+                UpdateRollbackHoldService.Clear();
+            }
+
             _audit.Write(
                 "SaveUpdateSettings",
                 source: "Local",
