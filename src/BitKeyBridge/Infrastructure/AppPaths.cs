@@ -38,6 +38,7 @@ public static class AppPaths
     public static string UpdateStatusFile => Path.Combine(MachineConfigDirectory, "update_status.json");
     public static string UpdatesDirectory => Path.Combine(MachineConfigDirectory, "Updates");
     public static string UpdateHistoryFile => Path.Combine(UpdatesDirectory, "update-history.json");
+    public static string UpdateRollbackHoldFile => Path.Combine(UpdatesDirectory, "rollback-auto-update-hold.json");
     public static string SecretsDirectory => Path.Combine(MachineConfigDirectory, "Secrets");
     public static string MachineAdCredentialFile => Path.Combine(SecretsDirectory, "ad-machine.cred");
     public static string AppSettingsFile => Path.Combine(MachineConfigDirectory, "appsettings.json");
