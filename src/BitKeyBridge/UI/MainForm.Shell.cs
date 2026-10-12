@@ -54,6 +54,8 @@ public sealed partial class MainForm
     private TabPage? _homeWorkspaceTab;
     private TabPage? _recoveryWorkspaceTab;
     private TabPage? _lapsWorkspaceTab;
+    private TabPage? _computerWorkspaceTab;
+    private readonly TabControl _computerServiceTabs = new();
 
     private readonly ComboBox _deviceRecoveryIds = new();
     private readonly TextBox _deviceRecoveryKey = new();
@@ -109,12 +111,16 @@ public sealed partial class MainForm
 
         _mainTabs.TabPages.Add(
             _homeWorkspaceTab);
-        _mainTabs.TabPages.Add(
-            _recoveryWorkspaceTab);
-        _mainTabs.TabPages.Add(
-            BuildDevicesWorkspaceTab());
-        _mainTabs.TabPages.Add(
-            _lapsWorkspaceTab);
+        _recoveryWorkspaceTab.Text = "BitLocker";
+        _lapsWorkspaceTab.Text = "LAPS";
+        _computerServiceTabs.Name = "ComputerServiceTabs";
+        _computerServiceTabs.Dock = DockStyle.Fill;
+        _computerServiceTabs.TabPages.Add(_recoveryWorkspaceTab);
+        _computerServiceTabs.TabPages.Add(_lapsWorkspaceTab);
+        _computerWorkspaceTab = new TabPage("Computer") { Name = "ComputerWorkspace" };
+        _computerWorkspaceTab.Controls.Add(_computerServiceTabs);
+        _mainTabs.TabPages.Add(_computerWorkspaceTab);
+        _mainTabs.TabPages.Add(BuildDevicesWorkspaceTab());
 
         if (AdministrationAllowed)
         {
@@ -138,7 +144,7 @@ public sealed partial class MainForm
 
                 if (ReferenceEquals(
                         _mainTabs.SelectedTab,
-                        _recoveryWorkspaceTab))
+                        _computerWorkspaceTab))
                 {
                     _recoveryBackToStart.Visible =
                         false;
@@ -1337,8 +1343,9 @@ public sealed partial class MainForm
                 0;
         }
 
-        _mainTabs.SelectedTab =
-            _recoveryWorkspaceTab;
+        EnsureComputerServiceTab(_recoveryWorkspaceTab);
+        _mainTabs.SelectedTab = _computerWorkspaceTab;
+        _computerServiceTabs.SelectedTab = _recoveryWorkspaceTab;
         _recoveryBackToStart.Visible =
             fromStart;
         _startQuery.Focus();
@@ -1356,11 +1363,35 @@ public sealed partial class MainForm
                 0;
         }
 
-        _mainTabs.SelectedTab =
-            _lapsWorkspaceTab;
+        EnsureComputerServiceTab(_lapsWorkspaceTab);
+        _mainTabs.SelectedTab = _computerWorkspaceTab;
+        _computerServiceTabs.SelectedTab = _lapsWorkspaceTab;
         _lapsBackToStart.Visible =
             fromStart;
         _lapsQuery.Focus();
+    }
+
+    private void EnsureComputerServiceTab(TabPage page)
+    {
+        if (!_computerServiceTabs.TabPages.Contains(page))
+            _computerServiceTabs.TabPages.Add(page);
+        if (_computerServiceTabs.TabPages.Contains(_recoveryWorkspaceTab!) &&
+            _computerServiceTabs.TabPages.Contains(_lapsWorkspaceTab!))
+        {
+            _computerServiceTabs.TabPages.Remove(_lapsWorkspaceTab!);
+            _computerServiceTabs.TabPages.Add(_lapsWorkspaceTab!);
+        }
+    }
+
+    private void ConfigureComputerServiceTabs(HomeSearchResult selected)
+    {
+        if (_recoveryWorkspaceTab is null || _lapsWorkspaceTab is null) return;
+        bool bit = selected.BitLockerKeyCount > 0 || selected.BitLockerLookupFailed;
+        bool laps = selected.LapsCandidateFound || selected.LapsLookupFailed;
+        if (!bit && !laps) bit = laps = true; // Unknown is not absent.
+        _computerServiceTabs.TabPages.Clear();
+        if (bit) _computerServiceTabs.TabPages.Add(_recoveryWorkspaceTab);
+        if (laps) _computerServiceTabs.TabPages.Add(_lapsWorkspaceTab);
     }
 
     private TabPage BuildRecoveryWorkspaceTab()
