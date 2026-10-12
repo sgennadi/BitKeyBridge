@@ -57,6 +57,18 @@ public static class EnvironmentDiagnosticPolicy
     // TCP 135 can advertise another endpoint, potentially on another DC.
     public const int ObservedKdsRpcPort = 1344;
 
+    internal static EnvironmentCheckState ClassifyPort(
+        TcpProbeState state,
+        bool essential,
+        bool observedCandidate = false) =>
+        state == TcpProbeState.Connected
+            ? EnvironmentCheckState.Available
+            : essential
+                ? EnvironmentCheckState.Failed
+                : observedCandidate
+                    ? EnvironmentCheckState.NotVerified
+                    : EnvironmentCheckState.Warning;
+
     public static IReadOnlyList<EnvironmentPortCheck> DomainPorts(bool ldaps) =>
     [
         new(ldaps ? "LDAPS / TLS" : "LDAP signing and sealing", ldaps ? 636 : 389, true,
