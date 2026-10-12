@@ -160,7 +160,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             CreateSectionTitle(
                 "Update History / Rollback",
-                "The immediately previous executable is retained as .bak after a successful update. Publisher information is shown when the staged executable contains Authenticode metadata."));
+                "Local rollback uses the retained .bak. Online rollback selects the closest older published GitHub release for this architecture; both paths verify the executable and run --self-test. A missing .bak automatically falls back to online rollback."));
 
         var historyActions =
             CreateActionFlow();
@@ -169,11 +169,20 @@ public sealed partial class MainForm
                 "Refresh History");
         _rollbackUpdateButton.Text =
             "Rollback Previous Build";
+        _rollbackUpdateButton.Name =
+            "RollbackPreviousBuildButton";
         UiStyle.ConfigureActionButton(
             _rollbackUpdateButton);
+        _onlineRollbackButton.Text =
+            "Online Rollback...";
+        _onlineRollbackButton.Name =
+            "OnlineRollbackButton";
+        UiStyle.ConfigureActionButton(
+            _onlineRollbackButton);
         historyActions.Controls.AddRange([
             refreshHistory,
-            _rollbackUpdateButton
+            _rollbackUpdateButton,
+            _onlineRollbackButton
         ]);
         root.Controls.Add(
             historyActions);
@@ -207,8 +216,11 @@ public sealed partial class MainForm
             (_, _) =>
                 RefreshUpdateHistory();
         _rollbackUpdateButton.Click +=
-            (_, _) =>
-                RollbackPreviousUpdateGui();
+            async (_, _) =>
+                await RollbackPreviousUpdateGuiAsync();
+        _onlineRollbackButton.Click +=
+            async (_, _) =>
+                await RollbackPreviousUpdateGuiAsync(forceOnline: true);
 
         if (!_layoutSelfTest)
             RefreshUpdateHistory();
