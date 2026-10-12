@@ -65,10 +65,28 @@ public static class UnifiedDeviceMerge
             row.LastSyncDateTime = device.LastSyncDateTime;
         }
 
+        // Duplicate Entra IDs on distinct Intune objects are never safe
+        // recovery targets, even if no key metadata was returned.
+        foreach (var group in result.Values
+                     .Where(x => x.FoundInIntune &&
+                                 !string.IsNullOrWhiteSpace(x.EntraDeviceId))
+                     .GroupBy(x => x.EntraDeviceId,
+                         StringComparer.OrdinalIgnoreCase)
+                     .Where(group => group.Count() > 1))
+        {
+            foreach (var row in group)
+            {
+                row.IdentityStatus = "Ambiguous device ID";
+                row.IdentityWarning =
+                    "More than one Intune object has this Entra device ID. " +
+                    "Recovery actions require identity verification.";
+            }
+        }
+
         foreach (var recovery in recoveryRows ?? [])
         {
             var deviceId = recovery.DeviceId.Trim();
-            var matched = string.IsNullOrWhiteSpace(deviceId)
+            List<UnifiedDeviceInfo> matched = string.IsNullOrWhiteSpace(deviceId)
                 ? []
                 : result.Values
                     .Where(x => x.FoundInIntune &&
