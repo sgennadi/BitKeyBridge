@@ -25,7 +25,7 @@ The GUI opens on **Start**. BitKeyBridge first shows the shared Active Directory
 
 After connection, one field accepts a partial computer name, Recovery ID, AD object/device ID, or other identifier. Typing two or more characters starts the existing 450 ms debounced metadata search; **Enter** searches immediately. The unified result grid combines BitLocker and LAPS metadata for each computer and shows compact states such as **Available**, **Multiple keys**, **Old key**, **Detected**, **Expired** and **Not verified**, plus the source used for the result. Missing LAPS expiration/version attributes are never taken as proof that no backup exists.
 
-Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. When Cloud is configured, **Rotate via Intune** is available as a separate post-recovery action. The selected result shows a compact helpdesk summary. BitLocker and LAPS workspaces remain accessible for a selected AD computer even when backup metadata is not visible, but secret actions still require the usual metadata, permissions and explicit authorization. If both types are present, double-click or Enter opens BitLocker by default; if the BitLocker lookup is unverified, choose BitLocker Recovery or LAPS Passwords explicitly. The Start search retries BitLocker lookup across the domain if a remembered OU scope omits a computer found by LAPS. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
+Search remains secret-free. BitLocker recovery passwords are still fetched only after an explicit **Reveal BitLocker Key** / **Copy BitLocker Key** action, and LAPS passwords are fetched only after the explicit **LAPS Passwords** action. When Cloud is configured, **Rotate via Intune** is available as a separate post-recovery action. The selected result shows a compact helpdesk summary. BitLocker and LAPS workspaces remain accessible for a selected AD computer even when backup metadata is not visible, but secret actions still require the usual metadata, permissions and explicit authorization. If both types are present, double-click or Enter opens BitLocker by default; confirmed LAPS-only metadata opens LAPS. If BitLocker lookup fails, choose a source explicitly. Ambiguous AD computer names are blocked from one-click recovery until the operator identifies the exact object. The Start search retries BitLocker lookup across the domain if a remembered OU scope omits a computer found by LAPS. Loaded secrets have a visible lifetime indicator and a **Clear secrets now** action.
 
 **Recent computers** stores only computer/device identifiers, the last helpdesk action and timestamp in the current user's LocalAppData. Recovery keys and LAPS passwords are never written to Recent.
 
@@ -88,6 +88,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - Single-result recovery card with computer, scope, Recovery ID, timestamp, source, and explicit Reveal/Copy actions.
 - Automatic AD connection on GUI startup, enabled by default.
 - AD-only Devices search works even when Microsoft Graph is not configured or temporarily unavailable.
+- Device identity is source-qualified: AD objectGUID/DN, Entra deviceId and Intune managedDeviceId. Same-name AD/Cloud records are displayed separately until authoritative linkage is verified; ambiguous recovery/rotation actions are disabled.
 - Optional Entra/Intune enrichment and recovery-key rotation.
 - Device Code and app-registration + certificate Graph authentication. Password/ROPC remains available only as a **deprecated compatibility mode** and is not recommended.
 - Zero-registration first-run Entra setup with native Graph calls.
@@ -138,9 +139,9 @@ For on-premises BitLocker or LAPS work:
 2. Wait for live search or press **Enter** immediately.
 3. Select the computer. BitKeyBridge shows BitLocker and LAPS availability in the same row.
 4. Choose **BitLocker Recovery** or **LAPS Passwords**. BitLocker requires matching recovery metadata; LAPS Passwords remains available for the selected computer even if backup metadata is unavailable.
-5. Double-click/Enter on a Start result follows the unambiguous action automatically; when both BitLocker and LAPS are available, BitKeyBridge asks you to choose.
+5. Double-click/Enter opens BitLocker when BitLocker key metadata exists or LAPS when only confirmed LAPS metadata exists. If metadata is incomplete, choose the source explicitly; an ambiguous AD computer name requires exact-object selection.
 
-The Start search reads metadata only and does not retrieve a BitLocker recovery password or LAPS password.
+The Start search reads metadata only and does not retrieve a BitLocker recovery password or LAPS password. Since v0.26.8, BitLocker and LAPS searches fail independently: one unavailable LDAP source cannot hide valid results from the other. A lookup failure is shown explicitly, never as a confirmed missing backup.
 
 ### BitLocker recovery
 
