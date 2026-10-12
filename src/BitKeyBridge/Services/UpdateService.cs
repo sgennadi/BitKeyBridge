@@ -31,7 +31,18 @@ public sealed class UpdateService : IDisposable
         _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     }
 
-    public async Task<UpdateInfo> CheckAsync(CancellationToken ct = default)
+    public Task<UpdateInfo> CheckAsync(CancellationToken ct = default) =>
+        CheckReleaseAsync(null, previous: false, ct);
+
+    public Task<UpdateInfo> CheckPreviousReleaseAsync(CancellationToken ct = default) =>
+        CheckReleaseAsync(null, previous: true, ct);
+
+    private Task<UpdateInfo> CheckTaggedReleaseAsync(
+        string tag, CancellationToken ct) =>
+        CheckReleaseAsync(tag, previous: false, ct);
+
+    private async Task<UpdateInfo> CheckReleaseAsync(
+        string? requestedTag, bool previous, CancellationToken ct)
     {
         var info = new UpdateInfo
         {
@@ -43,9 +54,21 @@ public sealed class UpdateService : IDisposable
         try
         {
             var repository = NormalizeRepository(_config.UpdateRepository);
-            var uri = _config.AllowPrereleaseUpdates
-                ? $"https://api.github.com/repos/{repository}/releases?per_page=20"
-                : $"https://api.github.com/repos/{repository}/releases/latest";
+            if (requestedTag is not null &&
+                (requestedTag.Length > 64 ||
+                 !System.Text.RegularExpressions.Regex.IsMatch(
+                     requestedTag, @"^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$")))
+            {
+                throw new InvalidOperationException("Invalid rollback release tag.");
+            }
+
+            var uri = requestedTag is not null
+                ? $"https://api.github.com/repos/{repository}/releases/tags/{Uri.EscapeDataString(requestedTag)}"
+                : previous
+                    ? $"https://api.github.com/repos/{repository}/releases?per_page=100"
+                    : _config.AllowPrereleaseUpdates
+                        ? $"https://api.github.com/repos/{repository}/releases?per_page=20"
+                        : $"https://api.github.com/repos/{repository}/releases/latest";
 
             // A cached /releases/latest response can lag behind GitHub's
             // published release. Always request revalidation, including
@@ -67,10 +90,31 @@ public sealed class UpdateService : IDisposable
 
             using var json = JsonDocument.Parse(body);
             JsonElement release;
-            if (_config.AllowPrereleaseUpdates)
+            if (previous)
             {
                 if (json.RootElement.ValueKind != JsonValueKind.Array)
-                    throw new InvalidOperationException("GitHub returned an unexpected release-list response.");
+                    throw new InvalidOperationException(
+                        "GitHub returned an unexpected release-list response.");
+
+                var tag = SelectPreviousReleaseTag(
+                    json.RootElement.EnumerateArray()
+                        .Select(x => (
+                            Tag: GetString(x, "tag_name"),
+                            Draft: GetBool(x, "draft"),
+                            Prerelease: GetBool(x, "prerelease"))),
+                    GetCurrentVersion().ToString(),
+                    _config.AllowPrereleaseUpdates);
+
+                release = json.RootElement.EnumerateArray()
+                    .First(x => string.Equals(
+                        GetString(x, "tag_name"),
+                        tag, StringComparison.Ordinal));
+            }
+            else if (requestedTag is null && _config.AllowPrereleaseUpdates)
+            {
+                if (json.RootElement.ValueKind != JsonValueKind.Array)
+                    throw new InvalidOperationException(
+                        "GitHub returned an unexpected release-list response.");
                 var found = json.RootElement.EnumerateArray()
                     .FirstOrDefault(x => !GetBool(x, "draft"));
                 if (found.ValueKind == JsonValueKind.Undefined)
@@ -79,6 +123,9 @@ public sealed class UpdateService : IDisposable
             }
             else
             {
+                if (json.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException(
+                        "GitHub returned unexpected release metadata.");
                 release = json.RootElement;
             }
 
@@ -273,9 +320,10 @@ public sealed class UpdateService : IDisposable
 
             try
             {
-                JsonStore.WriteAtomic(
-                    AppPaths.UpdateStatusFile,
-                    info);
+                if (!previous && requestedTag is null)
+                    JsonStore.WriteAtomic(
+                        AppPaths.UpdateStatusFile,
+                        info);
             }
             catch (Exception statusException)
             {
@@ -292,12 +340,13 @@ public sealed class UpdateService : IDisposable
         }
         catch (Exception ex)
         {
-            info.Error = ex.Message;
+            info.Error = DiagnosticRedaction.Sanitize(ex.Message);
             try
             {
-                JsonStore.WriteAtomic(
-                    AppPaths.UpdateStatusFile,
-                    info);
+                if (!previous && requestedTag is null)
+                    JsonStore.WriteAtomic(
+                        AppPaths.UpdateStatusFile,
+                        info);
             }
             catch (Exception statusException)
             {
@@ -310,10 +359,28 @@ public sealed class UpdateService : IDisposable
         }
     }
 
-    public async Task<PreparedUpdate> PrepareAsync(UpdateInfo info, CancellationToken ct = default)
+    public Task<PreparedUpdate> PrepareAsync(
+        UpdateInfo info, CancellationToken ct = default) =>
+        PrepareReleaseAsync(info, rollback: false, ct);
+
+    public Task<PreparedUpdate> PrepareOnlineRollbackAsync(
+        UpdateInfo info, CancellationToken ct = default) =>
+        PrepareReleaseAsync(info, rollback: true, ct);
+
+    private async Task<PreparedUpdate> PrepareReleaseAsync(
+        UpdateInfo info, bool rollback, CancellationToken ct)
     {
-        if (!info.UpdateAvailable)
-            throw new InvalidOperationException("No newer BitKeyBridge release is available.");
+        if (rollback)
+        {
+            if (ParseVersion(info.LatestVersion) >= GetCurrentVersion())
+                throw new InvalidOperationException(
+                    "Online rollback requires a verified older release.");
+        }
+        else if (!info.UpdateAvailable)
+        {
+            throw new InvalidOperationException(
+                "No newer BitKeyBridge release is available.");
+        }
         if (string.IsNullOrWhiteSpace(info.DownloadUrl) ||
             string.IsNullOrWhiteSpace(info.ExpectedSha256) ||
             string.IsNullOrWhiteSpace(info.ReleaseTag) ||
@@ -322,7 +389,8 @@ public sealed class UpdateService : IDisposable
 
         await RevalidateUpdateInfoAsync(
             info,
-            ct);
+            ct,
+            rollback);
 
         Directory.CreateDirectory(AppPaths.UpdatesDirectory);
         var versionDir = Path.Combine(AppPaths.UpdatesDirectory, "v" + info.LatestVersion);
@@ -461,7 +529,8 @@ public sealed class UpdateService : IDisposable
     public string LaunchApplyHelper(
         PreparedUpdate prepared,
         bool restartGui,
-        bool automatic = false)
+        bool automatic = false,
+        bool onlineRollback = false)
     {
         var current = Environment.ProcessPath
             ?? throw new InvalidOperationException("Current executable path is unavailable.");
@@ -499,6 +568,7 @@ public sealed class UpdateService : IDisposable
             Automatic =
                 automatic,
             Rollback =
+                onlineRollback ||
                 prepared.Info.ReleaseTag.Equals(
                     "rollback",
                     StringComparison.OrdinalIgnoreCase),
@@ -1024,11 +1094,12 @@ public sealed class UpdateService : IDisposable
 
     private async Task RevalidateUpdateInfoAsync(
         UpdateInfo expected,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool rollback)
     {
-        var fresh =
-            await CheckAsync(
-                ct);
+        var fresh = rollback
+            ? await CheckTaggedReleaseAsync(expected.ReleaseTag, ct)
+            : await CheckAsync(ct);
 
         if (!string.IsNullOrWhiteSpace(
                 fresh.Error))
@@ -1038,7 +1109,13 @@ public sealed class UpdateService : IDisposable
                 fresh.Error);
         }
 
-        if (!fresh.UpdateAvailable)
+        if (rollback)
+        {
+            if (ParseVersion(fresh.LatestVersion) >= GetCurrentVersion())
+                throw new InvalidOperationException(
+                    "Selected rollback is no longer an older release.");
+        }
+        else if (!fresh.UpdateAvailable)
         {
             throw new InvalidOperationException(
                 "The selected update is no longer reported as available.");
@@ -1473,6 +1550,45 @@ public sealed class UpdateService : IDisposable
     {
         if (!list.Contains(value, StringComparer.OrdinalIgnoreCase))
             list.Add(value);
+    }
+
+    // Rank actual published versions, not upload order. Ignore drafts and
+    // prereleases unless the operator enabled prerelease updates.
+    internal static string SelectPreviousReleaseTag(
+        IEnumerable<(string Tag, bool Draft, bool Prerelease)> releases,
+        string installedVersion,
+        bool allowPrerelease = false)
+    {
+        var current = ParseVersion(installedVersion);
+        var matches = new List<(string Tag, Version Version)>();
+
+        foreach (var candidate in releases)
+        {
+            if (candidate.Draft ||
+                (candidate.Prerelease && !allowPrerelease) ||
+                string.IsNullOrWhiteSpace(candidate.Tag))
+                continue;
+
+            try
+            {
+                var version = ParseVersion(candidate.Tag);
+                if (version < current)
+                    matches.Add((candidate.Tag, version));
+            }
+            catch (InvalidOperationException)
+            {
+                // Other release names are not BitKeyBridge versions.
+            }
+        }
+
+        if (matches.Count == 0)
+            throw new InvalidOperationException(
+                "No published release older than the installed BitKeyBridge version was found.");
+
+        return matches
+            .OrderByDescending(x => x.Version)
+            .ThenBy(x => x.Tag, StringComparer.Ordinal)
+            .First().Tag;
     }
 
     private static Version GetCurrentVersion()
