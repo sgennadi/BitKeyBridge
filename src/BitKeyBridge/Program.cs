@@ -1070,6 +1070,9 @@ internal static class Program
             ConfigService.SaveAppConfig(
                 config);
 
+            if (enabled)
+                UpdateRollbackHoldService.Clear();
+
             Console.WriteLine(
                 enabled
                     ? "Automatic verified updates enabled. Startup checks were also enabled."
