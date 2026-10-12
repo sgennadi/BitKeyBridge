@@ -2883,14 +2883,19 @@ public sealed partial class MainForm
             return;
         }
 
-        if (row.IdentityStatus is "Name collision" or "Ambiguous device ID")
+        if (row.IdentityStatus == "Ambiguous device ID")
             return;
 
         foreach (var id in row.RecoveryIds)
             _deviceRecoveryIds.Items.Add(id);
 
-        if (_deviceRecoveryIds.Items.Count > 0)
+        // When names collide, force the operator to pick the exact Entra
+        // Recovery ID before requesting a secret. Do not auto-select it.
+        if (_deviceRecoveryIds.Items.Count > 0 &&
+            row.IdentityStatus != "Name collision")
+        {
             _deviceRecoveryIds.SelectedIndex = 0;
+        }
     }
 
     private bool TryGetSelectedDeviceRecovery(
@@ -2905,6 +2910,13 @@ public sealed partial class MainForm
                 UnifiedDeviceInfo selected ||
             _deviceRecoveryIds.SelectedItem is not
                 string selectedRecoveryId)
+        {
+            return false;
+        }
+
+        if (selected.IdentityStatus == "Ambiguous device ID" ||
+            !selected.RecoveryIds.Contains(selectedRecoveryId,
+                StringComparer.OrdinalIgnoreCase))
         {
             return false;
         }
