@@ -2060,6 +2060,17 @@ public sealed partial class MainForm : DpiAwareForm
                     ? UiStatusKind.Success
                     : UiStatusKind.Warning);
 
+            var ambiguousDevices = rows.Count(
+                row => row.IdentityStatus is "Name collision" or "Ambiguous device ID");
+            if (ambiguousDevices > 0)
+            {
+                UiStyle.SetStatus(
+                    _unifiedStatus,
+                    $"Found {rows.Count} records; {ambiguousDevices} ambiguous identities. " +
+                    "Records remain separate. Verify exact object IDs before recovery or rotation.",
+                    UiStatusKind.Warning);
+            }
+
             _audit.Write(
                 "UnifiedDeviceSearch",
                 computerName:
