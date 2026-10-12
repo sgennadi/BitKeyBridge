@@ -823,6 +823,19 @@ public sealed class UpdateService : IDisposable
                 File.Move(replacement, fullTarget, true);
             }
 
+            // Persist the intentional downgrade before restarting the GUI.
+            // Otherwise the default automatic updater would immediately undo it.
+            if (plan.Rollback)
+            {
+                UpdateRollbackHoldService.Activate(
+                    plan.ExpectedVersion,
+                    plan.RollbackSource);
+            }
+            else
+            {
+                UpdateRollbackHoldService.Clear();
+            }
+
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge update installed successfully.",
                 EventLogSeverity.Information,
@@ -861,9 +874,12 @@ public sealed class UpdateService : IDisposable
                         Publisher =
                             plan.AuthenticodePublisher,
                         Details =
-                            backups.Count > 0
+                            (backups.Count > 0
                                 ? "Previous executable retained as .bak for rollback."
-                                : "Installed without an existing target backup."
+                                : "Installed without an existing target backup.") +
+                            (plan.Rollback
+                                ? $" Source={plan.RollbackSource}; automatic installation held until manually resumed."
+                                : string.Empty)
                     });
 
             TryScheduleHelperCleanup(plan.CleanupDirectory);
@@ -910,8 +926,8 @@ public sealed class UpdateService : IDisposable
                         Publisher =
                             plan.AuthenticodePublisher,
                         Details =
-                            DiagnosticRedaction.Sanitize(
-                                ex.Message)
+                            $"Source={(plan.Rollback ? plan.RollbackSource : "Update")}; " +
+                            DiagnosticRedaction.Sanitize(ex.Message)
                     });
 
             WindowsEventLogService.TryWrite(
