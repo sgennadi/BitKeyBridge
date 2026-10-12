@@ -592,6 +592,142 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "LAPS Coverage expiry classification never implies missing backup",
+            () =>
+            {
+                var now = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+                var devices = new[]
+                {
+                    new LapsCoverageDevice
+                    {
+                        ComputerName = "LAB-WINDOWS",
+                        IdentityKey = "AD:GUID:one",
+                        WindowsMetadataVisible = true,
+                        WindowsExpirationUtc = now.AddHours(-1)
+                    },
+                    new LapsCoverageDevice
+                    {
+                        ComputerName = "LAB-LEGACY",
+                        IdentityKey = "AD:GUID:two",
+                        LegacyMetadataVisible = true,
+                        LegacyExpirationUtc = now.AddDays(2)
+                    },
+                    new LapsCoverageDevice
+                    {
+                        ComputerName = "LAB-HIDDEN",
+                        IdentityKey = "AD:GUID:three"
+                    }
+                };
+                var summary = LapsCoverageService.Summarize(devices, now);
+                Assert(summary.Scanned == 3 &&
+                       summary.WindowsMetadata == 1 &&
+                       summary.LegacyMetadata == 1 &&
+                       summary.Unverified == 1 &&
+                       summary.Expired == 1 &&
+                       summary.ExpiringSoon == 1 &&
+                       devices[2].BackupEvidence == "Not verified",
+                    "LAPS expiry/no-metadata classification is incorrect.");
+            });
+
+        Check(
+            "LAPS snapshot comparison uses stable AD IDs, not computer names",
+            () =>
+            {
+                var first = new LapsCoverageSnapshot
+                {
+                    SearchBaseDn = "DC=example,DC=test",
+                    GeneratedAtUtc = DateTime.UtcNow.AddDays(-1),
+                    Devices =
+                    [
+                        new LapsCoverageDevice
+                        {
+                            ComputerName = "PC-ORIGINAL",
+                            IdentityKey = "AD:GUID:abc"
+                        }
+                    ]
+                };
+                var next = new LapsCoverageSnapshot
+                {
+                    SearchBaseDn = first.SearchBaseDn,
+                    GeneratedAtUtc = DateTime.UtcNow,
+                    Devices =
+                    [
+                        new LapsCoverageDevice
+                        {
+                            ComputerName = "PC-RENAMED",
+                            IdentityKey = "AD:GUID:abc",
+                            WindowsMetadataVisible = true,
+                            WindowsExpirationUtc = DateTime.UtcNow.AddDays(14)
+                        }
+                    ]
+                };
+                var delta = LapsCoverageSnapshotService.Compare(first, next);
+                Assert(delta.Changes.Any(x =>
+                           x.ChangeType == "Backup metadata became visible") &&
+                       !delta.Changes.Any(x => x.ChangeType == "New AD object") &&
+                       !delta.Changes.Any(x => x.ChangeType == "No longer visible in scan"),
+                    "Renamed AD computer generated a false object removal/addition.");
+                next.Truncated = true;
+                var refused = false;
+                try
+                {
+                    LapsCoverageSnapshotService.Compare(first, next);
+                }
+                catch (InvalidOperationException)
+                {
+                    refused = true;
+                }
+                Assert(refused, "Truncated scan must not be compared.");
+            });
+
+        Check(
+            "LAPS expiration request requires a single verified AD policy",
+            () =>
+            {
+                var windows = new LapsCoverageDevice
+                {
+                    ComputerName = "PC-001",
+                    ObjectGuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    DistinguishedName = "CN=PC-001,DC=example,DC=test",
+                    WindowsMetadataVisible = true
+                };
+                Assert(windows.CanRequestAdExpiration &&
+                       AdLapsExpirationService.AttributeFor(windows) ==
+                           "msLAPS-PasswordExpirationTime",
+                    "Windows LAPS expiration target did not resolve.");
+                var legacy = new LapsCoverageDevice
+                {
+                    LegacyMetadataVisible = true
+                };
+                Assert(AdLapsExpirationService.AttributeFor(legacy) ==
+                           "ms-Mcs-AdmPwdExpirationTime",
+                    "Legacy LAPS expiration target did not resolve.");
+                windows.LegacyMetadataVisible = true;
+                var blocked = false;
+                try
+                {
+                    AdLapsExpirationService.AttributeFor(windows);
+                }
+                catch (InvalidOperationException)
+                {
+                    blocked = true;
+                }
+                Assert(blocked && !windows.CanRequestAdExpiration,
+                    "Mixed LAPS metadata must never be auto-expired.");
+            });
+
+        Check(
+            "LAPS Coverage CSV escapes spreadsheet formulas",
+            () =>
+            {
+                var csv = LapsCoverageCsvService.Quote("=1+2");
+                Assert(csv.StartsWith("\"'=", StringComparison.Ordinal) &&
+                       LapsCoverageCsvService.Quote("x\"y") ==
+                           "\"x\"\"y\"",
+                    "CSV formula and quote escaping failed.");
+            });
+
+        Check(
             "Graph 403 remains an explicit failure",
             () =>
             {

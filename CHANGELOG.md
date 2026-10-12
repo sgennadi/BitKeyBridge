@@ -1,3 +1,13 @@
+## 0.28.0
+
+- Added administrator-only Devices > LAPS Coverage for metadata-only Windows/Legacy LAPS inventory by AD OU/domain. Native paged LDAP reads objectGUID, distinguished name, expiration indicators and AD lastLogonTimestamp without requesting any password/history attribute.
+- Classifies evidence as Windows, Legacy, Both or Not verified. Expired and expiring-soon indicators are based only on visible expiration metadata; hidden/unavailable metadata is never asserted to mean missing backups. A truncated scan cannot replace the previous full snapshot.
+- Added stable identity-based baseline comparison (AD objectGUID/DN, never name), reporting newly visible/hidden backup indicators, changes of expiration, new AD objects and objects no longer visible. Stores a rolling last 30 non-secret snapshots under the current user's LocalAppData.
+- Added native --laps-coverage CLI mode for scheduled tasks, producing metadata-only CSV/JSON and a comparison JSON without Graph, PowerShell or RSAT. Optional --laps-coverage-fail-expired returns exit code 24 when any visible expiration is overdue.
+- Added optional manual AD LAPS expiration requests: disabled by default for every application session, requires a recent complete scan, unambiguous objectGUID+DN, exactly one Windows or Legacy LAPS policy, BitKeyBridge Rotate authorization, ticket/reason where configured, explicit confirmation and auditable result. The app only sets the past expiration timestamp; the password is NOT rotated until the target computer next processes LAPS policy.
+- CSV exports guard spreadsheet formula injection. Integration and HiDPI regression tests cover expiry classification, stable-ID comparison, mixed-policy refusal, CSV safety and default-disabled rotation controls.
+- Added deployment templates for Microsoft Intune Win32 packaging and Group Policy computer startup without forcing installation of a Windows service. Uninstall preserves administrator-owned ProgramData and user-owned recovery/audit configuration.
+
 ## 0.27.0
 
 **Unified Helpdesk**
