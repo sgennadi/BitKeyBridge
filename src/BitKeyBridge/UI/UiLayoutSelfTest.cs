@@ -1146,6 +1146,8 @@ public static class UiLayoutSelfTest
     {
         var layout =
             FindByName(page, "LapsWorkspaceLayout") as TableLayoutPanel;
+        var viewport =
+            FindByName(page, "LapsScrollViewport") as Panel;
         var scroll =
             FindByName(page, "LapsScrollableContent") as TableLayoutPanel;
         var footer =
@@ -1166,27 +1168,71 @@ public static class UiLayoutSelfTest
             FindByName(page, "LapsProgress") as ProgressBar;
         var zeroWarning =
             FindByName(page, "LapsZeroRecordWarning") as UiStatusLabel;
+        var zeroWarningPanel =
+            FindByName(page, "LapsZeroRecordWarningPanel") as TableLayoutPanel;
+        var searchGrid =
+            FindByName(page, "LapsSearchResults") as DataGridView;
+        var actions =
+            FindByName(page, "LapsReadActions") as FlowLayoutPanel;
+        var detailsPanel =
+            FindByName(page, "LapsDetailsPanel") as TableLayoutPanel;
+        var details =
+            FindByName(page, "LapsRecordDetails") as RichTextBox;
 
-        if (layout is null || scroll is null || footer is null ||
+        if (layout is null || viewport is null || scroll is null || footer is null ||
             password is null || reveal is null || copy is null ||
             summary is null || status is null || grid is null ||
-            progress is null || zeroWarning is null)
+            progress is null || zeroWarning is null || zeroWarningPanel is null ||
+            searchGrid is null || actions is null || detailsPanel is null ||
+            details is null)
         {
             failures.Add(
                 $"{path}/{scenario.Name}: LAPS compact password footer or record grid is missing.");
             return;
         }
 
-        if (!ReferenceEquals(scroll.Parent, layout) ||
+        if (!ReferenceEquals(viewport.Parent, layout) ||
+            !ReferenceEquals(scroll.Parent, viewport) ||
             !ReferenceEquals(footer.Parent, layout) ||
-            layout.GetRow(scroll) != 0 ||
+            layout.GetRow(viewport) != 0 ||
             layout.GetRow(footer) != 1 ||
             layout.RowStyles[0].SizeType != SizeType.Percent ||
             layout.RowStyles[1].SizeType != SizeType.AutoSize ||
-            !scroll.AutoScroll)
+            !viewport.AutoScroll ||
+            scroll.AutoScroll ||
+            !scroll.AutoSize ||
+            scroll.AutoSizeMode != AutoSizeMode.GrowAndShrink ||
+            scroll.Dock != DockStyle.Top)
         {
             failures.Add(
-                $"{path}/{scenario.Name}: LAPS content must scroll above a pinned AutoSize password footer.");
+                $"{path}/{scenario.Name}: LAPS content must use an outer scroll viewport, an AutoSize content table and a separately pinned password footer.");
+        }
+
+        // Regression for the actual LAPS decryption screenshot: a percentage
+        // row inside an AutoScroll TableLayoutPanel allowed selected-record
+        // details to overprint the warning and action row. Every child now
+        // consumes its own measured AutoSize row, while both grids scroll
+        // internally within an explicit, non-collapsing height.
+        if (scroll.RowStyles.Count != 8 ||
+            scroll.RowStyles.Cast<RowStyle>().Any(
+                row => row.SizeType != SizeType.AutoSize) ||
+            !ReferenceEquals(actions.Parent, scroll) ||
+            !ReferenceEquals(zeroWarningPanel.Parent, scroll) ||
+            !ReferenceEquals(grid.Parent, scroll) ||
+            !ReferenceEquals(detailsPanel.Parent, scroll) ||
+            scroll.GetRow(actions) != 3 ||
+            scroll.GetRow(zeroWarningPanel) != 4 ||
+            scroll.GetRow(grid) != 5 ||
+            scroll.GetRow(detailsPanel) != 6 ||
+            grid.Dock != DockStyle.Top ||
+            grid.Height < grid.MinimumSize.Height ||
+            searchGrid.Dock != DockStyle.Top ||
+            searchGrid.Height < searchGrid.MinimumSize.Height ||
+            details.Height < details.MinimumSize.Height ||
+            !actions.WrapContents)
+        {
+            failures.Add(
+                $"{path}/{scenario.Name}: LAPS warning, grids, actions and details must occupy non-overlapping AutoSize rows, with wrapping actions and bounded grid heights.");
         }
 
         if (!ReferenceEquals(password.Parent, footer) ||
@@ -1238,7 +1284,8 @@ public static class UiLayoutSelfTest
         // form is not shown, so even correctly laid out children can have
         // Visible=false. Test the actual geometry and parent structure.
         if (footer.Height <= 0 ||
-            footer.Bottom > layout.ClientSize.Height + 3)
+            footer.Bottom > layout.ClientSize.Height + 3 ||
+            viewport.Bottom > footer.Top + 3)
         {
             failures.Add(
                 $"{path}/{scenario.Name}: pinned LAPS footer is outside the visible tab viewport " +

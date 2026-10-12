@@ -22,6 +22,14 @@ public static class UiStyle
     public const int ControlGap = 8;
     public const int MinimumButtonHeight = 32;
     public const int MinimumButtonWidth = 88;
+    // Height of the LAPS scrollable grids/details at the 96-DPI baseline.
+    // Keep these values in the shared style instead of individual forms.
+    public const int LapsSearchGridHeight = 170;
+    public const int LapsSearchGridMinimumHeight = 120;
+    public const int LapsKeyGridHeight = 200;
+    public const int LapsKeyGridMinimumHeight = 160;
+    public const int LapsDetailsHeight = 130;
+    public const int LapsDetailsMinimumHeight = 90;
 
     private sealed class ListViewColumnState
     {
