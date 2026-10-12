@@ -46,9 +46,10 @@ public sealed class EnvironmentDiagnosticDialog : DpiAwareForm
 
         var intro = new Label
         {
-            Text = "Checks the workstation, DC DNS, TCP ports, authenticated LDAP bind, BitLocker recovery metadata " +
-                   "and LAPS backup indicators. Does not read secrets, open RPC dynamic ports, modify ACLs or start services. " +
-                   "Remote DC services and password/decryption rights remain NotVerified unless independently tested.",
+            Text = "Checks workstation/DC DNS, LDAP, TCP 135, observed TCP 1344 and the GKDI/KDS RPC endpoint " +
+                   "advertised by the selected DC. Reports connection refused vs timed out. " +
+                   "Does not scan port ranges, read secrets or modify services/ACLs. " +
+                   "Actual decryption rights remain NotVerified until an authorized live decrypt.",
             Dock = DockStyle.Fill,
             AutoSize = true,
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
