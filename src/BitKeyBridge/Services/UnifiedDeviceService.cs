@@ -33,43 +33,13 @@ public sealed class UnifiedDeviceService
                         maximumItems),
                 ct);
 
-        return rows
-            .Select(
-                ad =>
-                    new UnifiedDeviceInfo
-                    {
-                        ComputerName =
-                            ad.ComputerName,
-                        IdentityKey =
-                            !string.IsNullOrWhiteSpace(ad.ObjectGuid)
-                                ? "AD:GUID:" + ad.ObjectGuid
-                                : "AD:DN:" + ad.DistinguishedName,
-                        IdentityStatus =
-                            "AD object",
-                        AdObjectGuid =
-                            ad.ObjectGuid,
-                        AdDnsHostName =
-                            ad.DnsHostName,
-                        FoundInAd =
-                            true,
-                        AdDistinguishedName =
-                            ad.DistinguishedName,
-                        OperatingSystem =
-                            ad.OperatingSystem,
-                        OsVersion =
-                            ad.OperatingSystemVersion,
-                        AdLastLogonTimestamp =
-                            ad.LastLogonTimestamp
-                    })
-            .OrderBy(
-                x =>
-                    x.ComputerName,
+        // The same source-qualified identity rules also apply when
+        // Microsoft Graph is disabled or not authenticated.
+        return UnifiedDeviceMerge.Merge(rows, [], [])
+            .Values
+            .OrderBy(x => x.ComputerName,
                 StringComparer.OrdinalIgnoreCase)
-            .Take(
-                Math.Clamp(
-                    maximumItems,
-                    1,
-                    1000))
+            .Take(Math.Clamp(maximumItems, 1, 1000))
             .ToList();
     }
 
