@@ -62,14 +62,32 @@ public sealed partial class MainForm
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         tab.Controls.Add(layout);
 
+        // AutoScroll on a TableLayoutPanel with a percentage row can paint
+        // later rows over earlier rows when a warning/detail grows or the
+        // desktop uses 150-200% display scaling. Give scrolling to an outer
+        // viewport and let the inner table size itself from AutoSize rows.
+        // This also keeps the password footer outside the scroll region.
+        var scrollViewport =
+            new Panel
+            {
+                Name = "LapsScrollViewport",
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+        layout.Controls.Add(scrollViewport, 0, 0);
+
         var root =
             new TableLayoutPanel
             {
                 Name = "LapsScrollableContent",
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-                Padding = new Padding(
-                    UiStyle.PagePadding),
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                GrowStyle = TableLayoutPanelGrowStyle.FixedSize,
+                Padding = new Padding(UiStyle.PagePadding),
+                Margin = Padding.Empty,
                 ColumnCount = 1,
                 RowCount = 8
             };
@@ -78,22 +96,10 @@ public sealed partial class MainForm
                 SizeType.Percent,
                 100F));
 
-        for (var index = 0;
-             index < 8;
-             index++)
-        {
-            root.RowStyles.Add(
-                new RowStyle(
-                    index == 5
-                        ? SizeType.Percent
-                        : SizeType.AutoSize,
-                    index == 5
-                        ? 100F
-                        : 0F));
-        }
+        for (var index = 0; index < 8; index++)
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        layout.Controls.Add(
-            root, 0, 0);
+        scrollViewport.Controls.Add(root);
 
         var titlePanel =
             new TableLayoutPanel
@@ -281,6 +287,7 @@ public sealed partial class MainForm
             "LAPS device search results";
         _lapsSearchRows.Dock =
             DockStyle.Top;
+        _lapsSearchRows.Height = 170;
         _lapsSearchRows.MinimumSize =
             new Size(
                 0,
@@ -482,8 +489,12 @@ public sealed partial class MainForm
             "LapsKeyResults";
         _lapsRows.AccessibleName =
             "LAPS key results";
+        // Give the results grid its own non-collapsing scrollable viewport.
+        // Never use Dock=Fill in a percent-height row of an AutoScroll table:
+        // the details and warning rows were drawn on top of each other.
         _lapsRows.Dock =
-            DockStyle.Fill;
+            DockStyle.Top;
+        _lapsRows.Height = 200;
         _lapsRows.MinimumSize =
             new Size(
                 0,
@@ -594,6 +605,7 @@ public sealed partial class MainForm
             DockStyle.Top;
         _lapsDetails.ReadOnly =
             true;
+        _lapsDetails.Height = 130;
         _lapsDetails.MinimumSize =
             new Size(
                 0,
