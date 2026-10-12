@@ -296,7 +296,7 @@ internal static class GkdiRpcEndpointDiscovery
     [DllImport("Rpcrt4.dll", EntryPoint = "RpcBindingFromStringBindingW",
         CharSet = CharSet.Unicode, ExactSpelling = true)]
     private static extern int RpcBindingFromStringBindingW(
-        string stringBinding, out IntPtr binding);
+        IntPtr stringBinding, out IntPtr binding);
 
     [DllImport("Rpcrt4.dll", ExactSpelling = true)]
     private static extern int RpcBindingSetOption(
