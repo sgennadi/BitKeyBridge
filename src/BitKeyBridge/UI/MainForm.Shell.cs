@@ -2310,7 +2310,7 @@ public sealed partial class MainForm
             ("Compliance", 90),
             ("Encrypted", 70),
             ("Last Sync", 140),
-            ("Keys", 45));
+            ("Cloud Keys", 80));
         root.Controls.Add(_unifiedResults, 0, 4);
 
         _unifiedDetails.ReadOnly = true;
