@@ -1,3 +1,11 @@
+## 0.26.9
+
+- Removed the unsafe Start > Rotate via Intune name-match/first-result fallback. Start now opens Devices and performs read-only discovery; the operator must select an exact Intune managed-device object and confirm its identifiers before using the existing privileged Rotate action. No rotation occurs when entering Devices.
+- Unified Devices now queries on-prem AD, Intune inventory and Entra BitLocker metadata independently. Failed Graph/LDAP sources no longer hide successful results from other sources; the status and sanitized diagnostics state exactly which source failed.
+- Failed or unqueried Entra metadata is marked unverified rather than presenting a false zero recovery-key claim. Cloud recovery IDs are labelled separately from AD recovery coverage, and partial per-device enrichment errors are surfaced.
+- Extended deterministic regression tests to cover partial AD/Intune/Entra source responses, 403/429-style failures and complete source failure, plus the HiDPI Start rotation selection label. Builds remain native self-contained Windows x64/x86/ARM64 with no PowerShell dependency.
+- The existing v0.26.8 source-qualified identity and ambiguous-device protections remain enforced. Authenticode signing is not enabled without an organization-approved signing certificate.
+
 ## 0.26.8
 
 - Hardened unified Devices identity correlation: AD computer objectGUID/DN, Intune managedDeviceId, and Entra deviceId are retained as source-qualified identifiers. An identical short hostname/UPN/serial does not prove cross-source identity, so such entries are kept separate and visibly marked as name collisions.
