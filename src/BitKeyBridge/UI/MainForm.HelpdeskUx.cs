@@ -39,6 +39,7 @@ public sealed partial class MainForm
     private readonly DateTimePicker _auditTo = new();
     private readonly ListView _updateHistoryResults = new();
     private readonly Button _rollbackUpdateButton = new();
+    private readonly Button _onlineRollbackButton = new();
     private readonly CheckBox _requireTrustedUpdateSignature = new();
     private readonly TextBox _trustedUpdatePublisher = new();
 
@@ -86,69 +87,145 @@ public sealed partial class MainForm
             _updateHistoryResults.EndUpdate();
         }
 
-        var current =
-            Environment.ProcessPath;
-        _rollbackUpdateButton.Enabled =
-            !string.IsNullOrWhiteSpace(
-                current) &&
-            File.Exists(
-                current + ".bak");
+        // Online rollback remains useful after a clean install without a .bak.
+        var current = Environment.ProcessPath;
+        var available =
+            !string.IsNullOrWhiteSpace(current) &&
+            File.Exists(current);
+        _rollbackUpdateButton.Enabled = available;
+        _onlineRollbackButton.Enabled = available;
     }
 
-    private void RollbackPreviousUpdateGui()
+    private async Task RollbackPreviousUpdateGuiAsync(bool forceOnline = false)
     {
-        var current =
-            Environment.ProcessPath;
+        // Match Update Now: persist any in-progress repository/signature
+        // settings edits before choosing and verifying a rollback package.
+        if (!SaveUpdateSettings(showConfirmation: false))
+            return;
 
-        if (string.IsNullOrWhiteSpace(
-                current) ||
-            !File.Exists(
-                current + ".bak"))
+        var current = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(current) || !File.Exists(current))
         {
             UiStyle.SetStatus(
                 _updateStatus,
-                "No retained previous executable is available for rollback.",
-                UiStatusKind.Warning);
-            RefreshUpdateHistory();
+                "Rollback is unavailable because the running executable path is not accessible.",
+                UiStatusKind.Error);
             return;
         }
 
-        var previousVersion =
-            System.Diagnostics.FileVersionInfo
-                .GetVersionInfo(
-                    current + ".bak")
-                .FileVersion ??
-            "unknown";
+        var hasLocalBackup = File.Exists(current + ".bak");
+        var online = forceOnline || !hasLocalBackup;
+        var targetVersion = "unknown";
+        var fromVersion =
+            GetType().Assembly.GetName().Version?.ToString(3) ??
+            string.Empty;
 
-        var answer =
-            MessageBox.Show(
+        if (!online)
+        {
+            targetVersion =
+                System.Diagnostics.FileVersionInfo.GetVersionInfo(
+                    current + ".bak").FileVersion ?? "unknown";
+
+            var answer = MessageBox.Show(
                 this,
-                $"Rollback BitKeyBridge to {previousVersion}?{Environment.NewLine}{Environment.NewLine}" +
-                "The current executable will become the next rollback backup and BitKeyBridge will restart.",
-                "Rollback BitKeyBridge",
+                $"Local rollback: restore BitKeyBridge {targetVersion} from .bak?{Environment.NewLine}{Environment.NewLine}" +
+                "The current executable will become the next rollback backup. " +
+                "The restored EXE must pass the configured Authenticode policy and --self-test. " +
+                "BitKeyBridge will restart after replacement.",
+                "Local Rollback",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2);
 
-        if (answer != DialogResult.Yes)
-            return;
+            if (answer != DialogResult.Yes)
+                return;
+        }
+
+        _rollbackUpdateButton.Enabled = false;
+        _onlineRollbackButton.Enabled = false;
 
         try
         {
-            using var updater =
-                new UpdateService(
-                    _config);
+            using var updater = new UpdateService(_config);
 
-            updater.LaunchRollbackHelper(
-                restartGui:
-                    true);
+            if (online)
+            {
+                UiStyle.SetStatus(
+                    _updateStatus,
+                    "Searching GitHub Releases for the previous compatible build...",
+                    UiStatusKind.Busy);
 
-            _audit.Write(
-                "LaunchUpdateRollback",
-                source:
-                    "Local",
-                details:
-                    $"TargetVersion={previousVersion}");
+                var info = await updater.FindOnlineRollbackAsync();
+                if (!string.IsNullOrWhiteSpace(info.Error))
+                    throw new InvalidOperationException(info.Error);
+                if (!info.IsRollbackTarget)
+                    throw new InvalidOperationException(
+                        "GitHub did not return a valid previous release.");
+
+                targetVersion = info.LatestVersion;
+
+                var answer = MessageBox.Show(
+                    this,
+                    $"Online rollback BitKeyBridge {fromVersion} to {targetVersion}?{Environment.NewLine}{Environment.NewLine}" +
+                    $"Release: {info.ReleaseTag}    Architecture: {info.Architecture}{Environment.NewLine}" +
+                    $"Archive: {info.AssetName}{Environment.NewLine}{Environment.NewLine}" +
+                    "The archive SHA-256, optional trusted signature, version and --self-test " +
+                    "will be verified before replacement. The current build will be saved as .bak. " +
+                    "BitKeyBridge will restart after installation.",
+                    "Online Rollback",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+
+                if (answer != DialogResult.Yes)
+                    return;
+
+                UiStyle.SetStatus(
+                    _updateStatus,
+                    $"Downloading and verifying rollback release {info.ReleaseTag}...",
+                    UiStatusKind.Busy);
+
+                var prepared = await updater.PrepareAsync(info);
+
+                new UpdateHistoryService().Append(new UpdateHistoryEntry
+                {
+                    Action = "RollbackRequested",
+                    FromVersion = fromVersion,
+                    ToVersion = info.LatestVersion,
+                    Result = "Prepared",
+                    Publisher = prepared.AuthenticodePublisher,
+                    Details =
+                        $"Source=Online; Release={info.ReleaseTag}; Architecture={info.Architecture}; " +
+                        $"ArchiveSHA256={info.ExpectedSha256}"
+                });
+
+                updater.LaunchApplyHelper(
+                    prepared,
+                    restartGui: true,
+                    automatic: false);
+
+                _audit.Write(
+                    "LaunchUpdateRollback",
+                    source: "GitHub",
+                    details:
+                        $"Source=Online; From={fromVersion}; To={targetVersion}; " +
+                        $"Tag={info.ReleaseTag}; Architecture={info.Architecture}");
+            }
+            else
+            {
+                UiStyle.SetStatus(
+                    _updateStatus,
+                    $"Verifying local rollback to {targetVersion}...",
+                    UiStatusKind.Busy);
+
+                await updater.LaunchRollbackHelperAsync(restartGui: true);
+
+                _audit.Write(
+                    "LaunchUpdateRollback",
+                    source: "Local",
+                    details:
+                        $"Source=Local; From={fromVersion}; To={targetVersion}");
+            }
 
             Close();
         }
@@ -156,27 +233,31 @@ public sealed partial class MainForm
         {
             UiStyle.SetStatus(
                 _updateStatus,
-                "Rollback could not be started: " +
-                ex.Message,
+                "Rollback could not be started: " + ex.Message,
                 UiStatusKind.Error);
 
-            new UpdateHistoryService()
-                .Append(
-                    new UpdateHistoryEntry
-                    {
-                        Action =
-                            "Rollback",
-                        FromVersion =
-                            GetType().Assembly.GetName().Version?.ToString(3) ??
-                            string.Empty,
-                        ToVersion =
-                            previousVersion,
-                        Result =
-                            "FailedToStart",
-                        Details =
-                            DiagnosticRedaction.Sanitize(
-                                ex.Message)
-                    });
+            new UpdateHistoryService().Append(new UpdateHistoryEntry
+            {
+                Action = "Rollback",
+                FromVersion = fromVersion,
+                ToVersion = targetVersion,
+                Result = "FailedToStart",
+                Details =
+                    $"Source={(online ? "Online" : "Local")}; " +
+                    DiagnosticRedaction.Sanitize(ex.Message)
+            });
+
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge rollback preparation failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message),
+                EventLogSeverity.Warning,
+                4106,
+                "Update");
+        }
+        finally
+        {
+            if (!IsDisposed && !Disposing)
+                RefreshUpdateHistory();
         }
     }
 

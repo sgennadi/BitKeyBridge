@@ -6,6 +6,8 @@ public sealed class UpdateInfo
     public string LatestVersion { get; set; } = string.Empty;
     public string ReleaseTag { get; set; } = string.Empty;
     public bool UpdateAvailable { get; set; }
+    // Explicit downgrade target; never treated as an automatic update.
+    public bool IsRollbackTarget { get; set; }
     public string Architecture { get; set; } = string.Empty;
     public string AssetName { get; set; } = string.Empty;
     public long AssetSizeBytes { get; set; }
@@ -36,6 +38,7 @@ public sealed class UpdateApplyPlan
     public string PreviousVersion { get; set; } = string.Empty;
     public bool Automatic { get; set; }
     public bool Rollback { get; set; }
+    public string RollbackSource { get; set; } = string.Empty;
     public string AuthenticodePublisher { get; set; } = string.Empty;
     public List<string> TargetExecutables { get; set; } = [];
     public int WaitForProcessId { get; set; }

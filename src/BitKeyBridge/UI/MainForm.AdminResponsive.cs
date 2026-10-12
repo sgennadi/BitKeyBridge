@@ -120,6 +120,11 @@ public sealed partial class MainForm
         var openRelease =
             NewActionButton(
                 "Open Release Page");
+        var resumeAutoInstall =
+            NewActionButton(
+                "Resume Auto-Install");
+        resumeAutoInstall.Name =
+            "ResumeAutoInstallAfterRollbackButton";
         openRelease.Name =
             "OpenUpdateReleaseButton";
 
@@ -129,7 +134,8 @@ public sealed partial class MainForm
             install,
             retry,
             toggleAutomatic,
-            openRelease
+            openRelease,
+            resumeAutoInstall
         ]);
         updateGrid.Controls.Add(
             updateActions,
@@ -160,7 +166,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             CreateSectionTitle(
                 "Update History / Rollback",
-                "The immediately previous executable is retained as .bak after a successful update. Publisher information is shown when the staged executable contains Authenticode metadata."));
+                "Local rollback uses the retained .bak. Online rollback selects the closest older published GitHub release for this architecture; both paths verify the executable and run --self-test. A missing .bak automatically falls back to online rollback."));
 
         var historyActions =
             CreateActionFlow();
@@ -169,11 +175,20 @@ public sealed partial class MainForm
                 "Refresh History");
         _rollbackUpdateButton.Text =
             "Rollback Previous Build";
+        _rollbackUpdateButton.Name =
+            "RollbackPreviousBuildButton";
         UiStyle.ConfigureActionButton(
             _rollbackUpdateButton);
+        _onlineRollbackButton.Text =
+            "Online Rollback...";
+        _onlineRollbackButton.Name =
+            "OnlineRollbackButton";
+        UiStyle.ConfigureActionButton(
+            _onlineRollbackButton);
         historyActions.Controls.AddRange([
             refreshHistory,
-            _rollbackUpdateButton
+            _rollbackUpdateButton,
+            _onlineRollbackButton
         ]);
         root.Controls.Add(
             historyActions);
@@ -206,9 +221,41 @@ public sealed partial class MainForm
         refreshHistory.Click +=
             (_, _) =>
                 RefreshUpdateHistory();
-        _rollbackUpdateButton.Click +=
+        resumeAutoInstall.Click +=
             (_, _) =>
-                RollbackPreviousUpdateGui();
+            {
+                try
+                {
+                    _config.CheckForUpdatesOnStart = true;
+                    _config.AutoInstallUpdatesOnStart = true;
+                    ConfigService.SaveAppConfig(_config);
+                    _checkUpdatesOnStart.Checked = true;
+                    _autoInstallUpdatesOnStart.Checked = true;
+                    UpdateRollbackHoldService.Clear();
+                    UiStyle.SetStatus(
+                        _updateStatus,
+                        "Rollback hold removed and automatic updates re-enabled. " +
+                        "Newer releases may install on the next startup.",
+                        UiStatusKind.Success);
+                    _audit.Write(
+                        "ResumeAutomaticUpdatesAfterRollback",
+                        source: "Local");
+                    RefreshAutomaticControls();
+                }
+                catch (Exception ex)
+                {
+                    UiStyle.SetStatus(
+                        _updateStatus,
+                        "Could not resume automatic updates: " + ex.Message,
+                        UiStatusKind.Error);
+                }
+            };
+        _rollbackUpdateButton.Click +=
+            async (_, _) =>
+                await RollbackPreviousUpdateGuiAsync();
+        _onlineRollbackButton.Click +=
+            async (_, _) =>
+                await RollbackPreviousUpdateGuiAsync(forceOnline: true);
 
         if (!_layoutSelfTest)
             RefreshUpdateHistory();
@@ -227,6 +274,9 @@ public sealed partial class MainForm
                 _requireTrustedUpdateSignature.Checked ||
                 !string.IsNullOrWhiteSpace(
                     _trustedUpdatePublisher.Text);
+
+            resumeAutoInstall.Enabled =
+                UpdateRollbackHoldService.HasRecordedHold();
         }
 
         _checkUpdatesOnStart.CheckedChanged +=

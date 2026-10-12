@@ -1,3 +1,14 @@
+## 0.29.0
+
+**Verified Local and Online Rollback**
+
+- Retained **Rollback Previous Build** after clean installations: a missing local `.bak` now falls back to selecting the nearest strictly older published GitHub Release for the running x64/x86/ARM64 architecture. An explicit **Online Rollback...** action also works when a local backup exists.
+- Reused the existing GitHub asset download/verification pipeline for downgrades, including restricted release URLs, declared package sizes, `SHA256SUMS.txt` and GitHub asset SHA-256 digest checks, executable version validation, configurable Authenticode policy, and `--self-test`.
+- Added the same Authenticode-policy and staged self-test checks to local `.bak` rollback, before launching the privileged replacement helper. Rollback actions remain manual; startup update checks never automatically downgrade.
+- Preserved the current executable as the next `.bak` and recorded Local/Online rollback provenance in update history and audit events. Failed apply attempts restore backed-up executables.
+- Prevented an immediate re-upgrade after a deliberate rollback: the updater writes a version-bound rollback hold and also disables the existing automatic-install configuration flag so **older restored releases** that do not understand the hold cannot silently reinstall the latest version.
+- Manual **Update Now** remains available. A new **Resume Auto-Install** action re-enables automatic checks/install and clears the rollback hold. Added offline self-test coverage for architecture/prerelease/version-aware release selection and persistence of the hold.
+
 ## 0.28.0
 
 - Added administrator-only Devices > LAPS Coverage for metadata-only Windows/Legacy LAPS inventory by AD OU/domain. Native paged LDAP reads objectGUID, distinguished name, expiration indicators and AD lastLogonTimestamp without requesting any password/history attribute.

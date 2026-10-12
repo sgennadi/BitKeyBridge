@@ -2602,6 +2602,12 @@ public sealed partial class MainForm : DpiAwareForm
             ConfigService.SaveAppConfig(
                 _config);
 
+            if (_config.AutoInstallUpdatesOnStart &&
+                UpdateRollbackHoldService.IsActiveForCurrentBuild())
+            {
+                UpdateRollbackHoldService.Clear();
+            }
+
             _audit.Write(
                 "SaveUpdateSettings",
                 source: "Local",
@@ -2770,7 +2776,27 @@ public sealed partial class MainForm : DpiAwareForm
                 "Update");
 
             if (!_config.AutoInstallUpdatesOnStart)
+            {
+                if (UpdateRollbackHoldService.IsActiveForCurrentBuild())
+                {
+                    UiStyle.SetStatus(
+                        _updateStatus,
+                        "Automatic installation was paused after a deliberate rollback. " +
+                        "Use Update Now or Resume Auto-Install to return to newer releases.",
+                        UiStatusKind.Warning);
+                }
                 return false;
+            }
+
+            if (UpdateRollbackHoldService.IsActiveForCurrentBuild())
+            {
+                UiStyle.SetStatus(
+                    _updateStatus,
+                    $"Update { _lastUpdateInfo.LatestVersion } is available, but automatic installation is paused after a manual rollback. " +
+                    "Use Update Now or Resume Auto-Install to return to newer releases.",
+                    UiStatusKind.Warning);
+                return false;
+            }
 
             return await InstallVerifiedUpdateGuiAsync(
                 _lastUpdateInfo,
@@ -2879,7 +2905,7 @@ public sealed partial class MainForm : DpiAwareForm
             Environment.NewLine +
             $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}" +
             Environment.NewLine +
-            $"Automatic install: {(_config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}" +
+            $"Automatic install: {(UpdateRollbackHoldService.IsActiveForCurrentBuild() ? "Paused after rollback" : _config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}" +
             Environment.NewLine +
             $"Authenticode trust required: {(_config.RequireTrustedUpdateSignature ? "Yes" : "No")}" +
             (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)

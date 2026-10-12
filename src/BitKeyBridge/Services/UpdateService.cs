@@ -31,7 +31,15 @@ public sealed class UpdateService : IDisposable
         _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     }
 
-    public async Task<UpdateInfo> CheckAsync(CancellationToken ct = default)
+    public Task<UpdateInfo> CheckAsync(CancellationToken ct = default)
+        => CheckReleaseAsync(false, ct);
+
+    // Rollback is an explicitly selected action. It never runs during the
+    // normal startup update check.
+    public Task<UpdateInfo> FindOnlineRollbackAsync(CancellationToken ct = default)
+        => CheckReleaseAsync(true, ct);
+
+    private async Task<UpdateInfo> CheckReleaseAsync(bool forRollback, CancellationToken ct)
     {
         var info = new UpdateInfo
         {
@@ -43,43 +51,73 @@ public sealed class UpdateService : IDisposable
         try
         {
             var repository = NormalizeRepository(_config.UpdateRepository);
-            var uri = _config.AllowPrereleaseUpdates
-                ? $"https://api.github.com/repos/{repository}/releases?per_page=20"
-                : $"https://api.github.com/repos/{repository}/releases/latest";
+            var current = GetCurrentVersion();
+            JsonElement release = default;
+            var maximumPages = forRollback ? 5 : 1;
 
-            // A cached /releases/latest response can lag behind GitHub's
-            // published release. Always request revalidation, including
-            // when Update Now is pressed after a previous startup check.
-            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.CacheControl =
-                new CacheControlHeaderValue
+            for (var page = 1; page <= maximumPages; page++)
+            {
+                var uri = forRollback
+                    ? $"https://api.github.com/repos/{repository}/releases?per_page=100&page={page}"
+                    : _config.AllowPrereleaseUpdates
+                        ? $"https://api.github.com/repos/{repository}/releases?per_page=20"
+                        : $"https://api.github.com/repos/{repository}/releases/latest";
+
+                // GitHub release metadata can be cached after publication.
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                request.Headers.CacheControl = new CacheControlHeaderValue
                 {
                     NoCache = true,
                     NoStore = true,
                     MaxAge = TimeSpan.Zero
                 };
-            request.Headers.Pragma.ParseAdd("no-cache");
-            using var response = await _http.SendAsync(request, ct);
-            var body = await response.Content.ReadAsStringAsync(ct);
-            if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException(
-                    $"GitHub release check failed ({(int)response.StatusCode}): {body}");
+                request.Headers.Pragma.ParseAdd("no-cache");
+                using var response = await _http.SendAsync(request, ct);
+                var body = await response.Content.ReadAsStringAsync(ct);
+                if (!response.IsSuccessStatusCode)
+                    throw new InvalidOperationException(
+                        $"GitHub release check failed ({(int)response.StatusCode}): {body}");
 
-            using var json = JsonDocument.Parse(body);
-            JsonElement release;
-            if (_config.AllowPrereleaseUpdates)
-            {
-                if (json.RootElement.ValueKind != JsonValueKind.Array)
-                    throw new InvalidOperationException("GitHub returned an unexpected release-list response.");
-                var found = json.RootElement.EnumerateArray()
-                    .FirstOrDefault(x => !GetBool(x, "draft"));
-                if (found.ValueKind == JsonValueKind.Undefined)
-                    throw new InvalidOperationException("No GitHub release was found.");
-                release = found;
+                using var json = JsonDocument.Parse(body);
+                if (forRollback)
+                {
+                    if (json.RootElement.ValueKind != JsonValueKind.Array)
+                        throw new InvalidOperationException("GitHub returned an unexpected rollback release list.");
+
+                    release = SelectPreviousRelease(
+                        json.RootElement,
+                        current,
+                        info.Architecture,
+                        _config.AllowPrereleaseUpdates);
+
+                    if (release.ValueKind != JsonValueKind.Undefined ||
+                        json.RootElement.GetArrayLength() < 100)
+                        break;
+                }
+                else if (_config.AllowPrereleaseUpdates)
+                {
+                    if (json.RootElement.ValueKind != JsonValueKind.Array)
+                        throw new InvalidOperationException("GitHub returned an unexpected release-list response.");
+
+                    var found = json.RootElement.EnumerateArray()
+                        .FirstOrDefault(x => !GetBool(x, "draft"));
+                    release = found.ValueKind == JsonValueKind.Undefined
+                        ? default
+                        : found.Clone();
+                    break;
+                }
+                else
+                {
+                    release = json.RootElement.Clone();
+                    break;
+                }
             }
-            else
+
+            if (release.ValueKind == JsonValueKind.Undefined)
             {
-                release = json.RootElement;
+                throw new InvalidOperationException(forRollback
+                    ? $"No older published BitKeyBridge release with a {info.Architecture} package was found."
+                    : "No GitHub release was found.");
             }
 
             var tag = GetString(release, "tag_name");
@@ -88,10 +126,10 @@ public sealed class UpdateService : IDisposable
                     "GitHub release metadata does not contain a release tag.");
 
             var latest = ParseVersion(tag);
-            var current = GetCurrentVersion();
             info.LatestVersion = latest.ToString();
             info.ReleaseTag = tag;
-            info.UpdateAvailable = latest > current;
+            info.IsRollbackTarget = forRollback;
+            info.UpdateAvailable = !forRollback && latest > current;
             info.ReleaseUrl = GetString(release, "html_url");
             ValidateReleasePageUrl(
                 info.ReleaseUrl,
@@ -271,21 +309,19 @@ public sealed class UpdateService : IDisposable
                     $"Release {tag} checksum sources disagree for {assetName}.");
             }
 
-            try
+            if (!forRollback)
             {
-                JsonStore.WriteAtomic(
-                    AppPaths.UpdateStatusFile,
-                    info);
-            }
-            catch (Exception statusException)
-            {
-                // Update availability must not be turned into a false failure
-                // only because the optional machine-wide status file is not
-                // writable in the current session.
-                Debug.WriteLine(
-                    "Update status persistence failed: " +
-                    DiagnosticRedaction.Sanitize(
-                        statusException.Message));
+                try
+                {
+                    JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info);
+                }
+                catch (Exception statusException)
+                {
+                    // A read-only status cache must not invalidate an update check.
+                    Debug.WriteLine(
+                        "Update status persistence failed: " +
+                        DiagnosticRedaction.Sanitize(statusException.Message));
+                }
             }
 
             return info;
@@ -293,18 +329,18 @@ public sealed class UpdateService : IDisposable
         catch (Exception ex)
         {
             info.Error = ex.Message;
-            try
+            if (!forRollback)
             {
-                JsonStore.WriteAtomic(
-                    AppPaths.UpdateStatusFile,
-                    info);
-            }
-            catch (Exception statusException)
-            {
-                Debug.WriteLine(
-                    "Update status persistence failed: " +
-                    DiagnosticRedaction.Sanitize(
-                        statusException.Message));
+                try
+                {
+                    JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info);
+                }
+                catch (Exception statusException)
+                {
+                    Debug.WriteLine(
+                        "Update status persistence failed: " +
+                        DiagnosticRedaction.Sanitize(statusException.Message));
+                }
             }
             return info;
         }
@@ -312,8 +348,11 @@ public sealed class UpdateService : IDisposable
 
     public async Task<PreparedUpdate> PrepareAsync(UpdateInfo info, CancellationToken ct = default)
     {
-        if (!info.UpdateAvailable)
-            throw new InvalidOperationException("No newer BitKeyBridge release is available.");
+        if (!info.UpdateAvailable && !info.IsRollbackTarget)
+            throw new InvalidOperationException("No verified install or rollback target is available.");
+        if (info.IsRollbackTarget &&
+            ParseVersion(info.LatestVersion) >= GetCurrentVersion())
+            throw new InvalidOperationException("Online rollback must target an older BitKeyBridge version.");
         if (string.IsNullOrWhiteSpace(info.DownloadUrl) ||
             string.IsNullOrWhiteSpace(info.ExpectedSha256) ||
             string.IsNullOrWhiteSpace(info.ReleaseTag) ||
@@ -423,6 +462,11 @@ public sealed class UpdateService : IDisposable
                 executable,
                 ct);
 
+        // Apply the configured trust policy before executing any staged code.
+        AuthenticodeVerificationService.EnforcePolicy(
+            _config,
+            executable);
+
         await RunStagedSelfTestAsync(
             executable,
             ct);
@@ -440,10 +484,6 @@ public sealed class UpdateService : IDisposable
             throw new InvalidOperationException(
                 "The staged BitKeyBridge executable changed while it was being verified.");
         }
-
-        AuthenticodeVerificationService.EnforcePolicy(
-            _config,
-            executable);
 
         return new PreparedUpdate
         {
@@ -499,9 +539,16 @@ public sealed class UpdateService : IDisposable
             Automatic =
                 automatic,
             Rollback =
+                prepared.Info.IsRollbackTarget ||
                 prepared.Info.ReleaseTag.Equals(
                     "rollback",
                     StringComparison.OrdinalIgnoreCase),
+            RollbackSource =
+                prepared.Info.IsRollbackTarget
+                    ? "Online"
+                    : prepared.Info.ReleaseTag.Equals("rollback", StringComparison.OrdinalIgnoreCase)
+                        ? "Local"
+                        : string.Empty,
             AuthenticodePublisher =
                 prepared.AuthenticodePublisher,
             TargetExecutables = targets,
@@ -544,8 +591,9 @@ public sealed class UpdateService : IDisposable
         return planPath;
     }
 
-    public string LaunchRollbackHelper(
-        bool restartGui)
+    public async Task<string> LaunchRollbackHelperAsync(
+        bool restartGui,
+        CancellationToken ct = default)
     {
         var current =
             Environment.ProcessPath
@@ -602,6 +650,21 @@ public sealed class UpdateService : IDisposable
             _config,
             staged);
 
+        var stagedHashBeforeSelfTest =
+            await ComputeSha256Async(staged, ct);
+
+        await RunStagedSelfTestAsync(staged, ct);
+
+        var stagedHashAfterSelfTest =
+            await ComputeSha256Async(staged, ct);
+        if (!string.Equals(stagedHashBeforeSelfTest,
+                stagedHashAfterSelfTest,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "Local rollback executable changed during self-test.");
+        }
+
         var prepared =
             new PreparedUpdate
             {
@@ -620,8 +683,7 @@ public sealed class UpdateService : IDisposable
                 StagedExecutable =
                     staged,
                 StagedExecutableSha256 =
-                    ComputeSha256File(
-                        staged),
+                    stagedHashAfterSelfTest,
                 AuthenticodePublisher =
                     UpdateHistoryService.GetAuthenticodePublisher(
                         staged)
@@ -761,6 +823,29 @@ public sealed class UpdateService : IDisposable
                 File.Move(replacement, fullTarget, true);
             }
 
+            // Persist the intentional downgrade before restarting the GUI.
+            // Otherwise the default automatic updater would immediately undo it.
+            if (plan.Rollback)
+            {
+                UpdateRollbackHoldService.Activate(
+                    plan.ExpectedVersion,
+                    plan.RollbackSource);
+
+                // Crucial for backwards compatibility: the restored binary
+                // predates rollback holds and would otherwise auto-install
+                // the latest GitHub release at its next startup.
+                var config = ConfigService.LoadAppConfig();
+                if (config.AutoInstallUpdatesOnStart)
+                {
+                    config.AutoInstallUpdatesOnStart = false;
+                    ConfigService.SaveAppConfig(config);
+                }
+            }
+            else
+            {
+                UpdateRollbackHoldService.Clear();
+            }
+
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge update installed successfully.",
                 EventLogSeverity.Information,
@@ -799,9 +884,12 @@ public sealed class UpdateService : IDisposable
                         Publisher =
                             plan.AuthenticodePublisher,
                         Details =
-                            backups.Count > 0
+                            (backups.Count > 0
                                 ? "Previous executable retained as .bak for rollback."
-                                : "Installed without an existing target backup."
+                                : "Installed without an existing target backup.") +
+                            (plan.Rollback
+                                ? $" Source={plan.RollbackSource}; automatic installation held until manually resumed."
+                                : string.Empty)
                     });
 
             TryScheduleHelperCleanup(plan.CleanupDirectory);
@@ -848,8 +936,8 @@ public sealed class UpdateService : IDisposable
                         Publisher =
                             plan.AuthenticodePublisher,
                         Details =
-                            DiagnosticRedaction.Sanitize(
-                                ex.Message)
+                            $"Source={(plan.Rollback ? plan.RollbackSource : "Update")}; " +
+                            DiagnosticRedaction.Sanitize(ex.Message)
                     });
 
             WindowsEventLogService.TryWrite(
@@ -1026,9 +1114,9 @@ public sealed class UpdateService : IDisposable
         UpdateInfo expected,
         CancellationToken ct)
     {
-        var fresh =
-            await CheckAsync(
-                ct);
+        var fresh = expected.IsRollbackTarget
+            ? await FindOnlineRollbackAsync(ct)
+            : await CheckAsync(ct);
 
         if (!string.IsNullOrWhiteSpace(
                 fresh.Error))
@@ -1038,13 +1126,14 @@ public sealed class UpdateService : IDisposable
                 fresh.Error);
         }
 
-        if (!fresh.UpdateAvailable)
+        if (!fresh.UpdateAvailable && !fresh.IsRollbackTarget)
         {
             throw new InvalidOperationException(
-                "The selected update is no longer reported as available.");
+                "The selected release is no longer available for installation.");
         }
 
         var unchanged =
+            fresh.IsRollbackTarget == expected.IsRollbackTarget &&
             string.Equals(
                 fresh.ReleaseTag,
                 expected.ReleaseTag,
@@ -1303,6 +1392,60 @@ public sealed class UpdateService : IDisposable
             throw new InvalidOperationException(
                 $"Release download redirected to an untrusted host '{host}'.");
         }
+    }
+
+    // Pick the closest strictly older published version, never a same-version
+    // build. Missing architecture assets and drafts must not be offered.
+    internal static JsonElement SelectPreviousRelease(
+        JsonElement releases,
+        Version currentVersion,
+        string architecture,
+        bool allowPrerelease)
+    {
+        if (releases.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("Expected a GitHub Releases JSON array.");
+
+        var assetName = $"BitKeyBridge-{architecture}.zip";
+        JsonElement selected = default;
+        Version? best = null;
+
+        foreach (var candidate in releases.EnumerateArray())
+        {
+            if (candidate.ValueKind != JsonValueKind.Object ||
+                GetBool(candidate, "draft") ||
+                (!allowPrerelease && GetBool(candidate, "prerelease")))
+                continue;
+
+            var tag = GetString(candidate, "tag_name");
+            Version version;
+            try
+            {
+                version = ParseVersion(tag);
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            if (version >= currentVersion ||
+                (best is not null && version <= best))
+                continue;
+
+            if (!candidate.TryGetProperty("assets", out var assets) ||
+                assets.ValueKind != JsonValueKind.Array ||
+                !assets.EnumerateArray().Any(asset =>
+                    asset.ValueKind == JsonValueKind.Object &&
+                    string.Equals(
+                        GetString(asset, "name"),
+                        assetName,
+                        StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            best = version;
+            selected = candidate.Clone();
+        }
+
+        return selected;
     }
 
     internal static string ParseGitHubAssetDigest(
