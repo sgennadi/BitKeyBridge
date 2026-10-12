@@ -1927,6 +1927,7 @@ public sealed partial class MainForm : DpiAwareForm
             var adReady =
                 _directoryConnected;
             List<UnifiedDeviceInfo> rows;
+            UnifiedDeviceSearchReport? sourceReport = null;
 
             if (cloudReady)
             {
@@ -1939,14 +1940,15 @@ public sealed partial class MainForm : DpiAwareForm
                         ? UiStatusKind.Busy
                         : UiStatusKind.Warning);
 
-                rows =
-                    await service.SearchAsync(
+                sourceReport =
+                    await service.SearchWithStatusAsync(
                         _cloudToken!.AccessToken,
                         _unifiedQuery.Text,
                         includeActiveDirectory:
                             adReady,
                         ct:
                             cancellation.Token);
+                rows = sourceReport.Rows;
             }
             else if (adReady)
             {
@@ -2035,7 +2037,10 @@ public sealed partial class MainForm : DpiAwareForm
                             "yyyy-MM-dd HH:mm") ??
                     string.Empty);
                 item.SubItems.Add(
-                    row.RecoveryKeyCount.ToString());
+                    row.RecoveryKeyCount == 0 &&
+                    row.RecoveryMetadataIncomplete
+                        ? "?"
+                        : row.RecoveryKeyCount.ToString());
                 item.Tag =
                     row;
                 _unifiedResults.Items.Add(
@@ -2051,14 +2056,24 @@ public sealed partial class MainForm : DpiAwareForm
 
             UiStyle.SetStatus(
                 _unifiedStatus,
-                cloudReady
-                    ? adReady
-                        ? $"Unified search returned {rows.Count} device(s) from AD, Entra and Intune. Recovery passwords were not requested."
-                        : $"Cloud search returned {rows.Count} device(s) from Entra/Intune. AD was skipped because there is no active AD session."
-                    : $"AD search returned {rows.Count} device(s). Configure Cloud under Administration to add Entra/Intune data.",
-                cloudReady
-                    ? UiStatusKind.Success
-                    : UiStatusKind.Warning);
+                sourceReport is not null
+                    ? $"{rows.Count} device record(s). {sourceReport.SourceSummary}. " +
+                      (sourceReport.IsPartial
+                          ? "Some metadata is unverified; see diagnostics."
+                          : "All requested sources responded; recovery passwords were not requested.")
+                    : $"AD search returned {rows.Count} record(s). Cloud is not authenticated; configure Cloud to include Entra/Intune.",
+                sourceReport?.IsPartial == true || !cloudReady
+                    ? UiStatusKind.Warning
+                    : UiStatusKind.Success);
+
+            if (sourceReport?.IsPartial == true)
+            {
+                _unifiedDiagnostics.ShowMessage(
+                    "Unified Devices search is incomplete.",
+                    sourceReport.SourceSummary + Environment.NewLine +
+                    sourceReport.DiagnosticSummary + Environment.NewLine +
+                    "A source error is not proof that the device lacks BitLocker recovery metadata.");
+            }
 
             var ambiguousDevices = rows.Count(
                 row => row.IdentityStatus is "Name collision" or "Ambiguous device ID");
@@ -2082,7 +2097,8 @@ public sealed partial class MainForm : DpiAwareForm
                         ? _cloudToken?.AuthMode
                         : null,
                 details:
-                    $"Results={rows.Count}; CloudIncluded={cloudReady}");
+                    $"Results={rows.Count}; CloudIncluded={cloudReady}; " +
+                    $"Sources={sourceReport?.SourceSummary ?? "AD only"}");
         }
         catch (OperationCanceledException)
         {
@@ -2173,7 +2189,10 @@ public sealed partial class MainForm : DpiAwareForm
         _unifiedDetails.AppendText($"Intune last sync:  {row.LastSyncDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
         _unifiedDetails.AppendText($"AD last logon:     {row.AdLastLogonTimestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"}{Environment.NewLine}");
         _unifiedDetails.AppendText($"AD DN:             {row.AdDistinguishedName}{Environment.NewLine}");
-        _unifiedDetails.AppendText($"Recovery IDs:      {row.RecoveryKeyCount}{Environment.NewLine}");
+        _unifiedDetails.AppendText(
+            $"Recovery IDs:      {row.RecoveryKeyCount}" +
+            (row.RecoveryMetadataIncomplete ? " (metadata incomplete / unverified)" : string.Empty) +
+            Environment.NewLine);
         foreach (var recoveryId in row.RecoveryIds)
             _unifiedDetails.AppendText($"  {recoveryId}{Environment.NewLine}");
     }
