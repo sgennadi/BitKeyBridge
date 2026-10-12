@@ -336,6 +336,7 @@ public sealed partial class MainForm
         var actions =
             new FlowLayoutPanel
             {
+                Name = "LapsReadActions",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
@@ -562,6 +563,7 @@ public sealed partial class MainForm
         var detailsPanel =
             new TableLayoutPanel
             {
+                Name = "LapsDetailsPanel",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
@@ -601,6 +603,7 @@ public sealed partial class MainForm
             0,
             0);
 
+        _lapsDetails.Name = "LapsRecordDetails";
         _lapsDetails.Dock =
             DockStyle.Top;
         _lapsDetails.ReadOnly =
