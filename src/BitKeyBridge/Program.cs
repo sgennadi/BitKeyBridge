@@ -1813,6 +1813,57 @@ internal static class Program
                     failures.Add(
                         "Updater GitHub asset-digest parsing failed.");
                 }
+
+                // Online rollback selection is deterministic, architecture-bound,
+                // and must not select the installed/current/newer build.
+                using var releaseFixture = JsonDocument.Parse(
+                    """
+                    [
+                      {"tag_name":"v0.30.0","draft":false,"prerelease":false,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.28.5","draft":true,"prerelease":false,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.28.4-beta.1","draft":false,"prerelease":true,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.28.1","draft":false,"prerelease":false,"assets":[{"name":"BitKeyBridge-win-arm64.zip"}]},
+                      {"tag_name":"v0.28.0","draft":false,"prerelease":false,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.27.0","draft":false,"prerelease":false,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]}
+                    ]
+                    """);
+
+                var stableRollback = UpdateService.SelectPreviousRelease(
+                    releaseFixture.RootElement,
+                    new Version(0, 29, 0),
+                    "win-x64",
+                    allowPrerelease: false);
+                if (stableRollback.GetProperty("tag_name").GetString() != "v0.28.0")
+                    failures.Add("Rollback did not select the nearest older stable x64 release.");
+
+                var withPrerelease = UpdateService.SelectPreviousRelease(
+                    releaseFixture.RootElement,
+                    new Version(0, 29, 0),
+                    "win-x64",
+                    allowPrerelease: true);
+                if (withPrerelease.GetProperty("tag_name").GetString() != "v0.28.4-beta.1")
+                    failures.Add("Opt-in prerelease rollback selection failed.");
+
+                var withoutOlder = UpdateService.SelectPreviousRelease(
+                    releaseFixture.RootElement,
+                    new Version(0, 27, 0),
+                    "win-x64",
+                    allowPrerelease: false);
+                if (withoutOlder.ValueKind != JsonValueKind.Undefined)
+                    failures.Add("Rollback selected a current/newer release.");
+
+                var holdPath = Path.Combine(
+                    tempDirectory, "rollback-auto-update-hold.json");
+                UpdateRollbackHoldService.Activate("0.28.0", "Online", holdPath);
+                if (!UpdateRollbackHoldService.IsActiveForVersion("0.28.0", holdPath) ||
+                    UpdateRollbackHoldService.IsActiveForVersion("0.29.0", holdPath))
+                {
+                    failures.Add("Rollback auto-update hold was not version-scoped.");
+                }
+                UpdateRollbackHoldService.Clear(holdPath);
+                if (UpdateRollbackHoldService.IsActiveForVersion("0.28.0", holdPath))
+                    failures.Add("Rollback auto-update hold did not clear.");
+
             }
             catch (Exception ex) { failures.Add("Updater pure helpers: " + ex.Message); }
 
