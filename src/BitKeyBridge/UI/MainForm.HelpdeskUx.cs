@@ -98,6 +98,11 @@ public sealed partial class MainForm
 
     private async Task RollbackPreviousUpdateGuiAsync(bool forceOnline = false)
     {
+        // Match Update Now: persist any in-progress repository/signature
+        // settings edits before choosing and verifying a rollback package.
+        if (!SaveUpdateSettings(showConfirmation: false))
+            return;
+
         var current = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(current) || !File.Exists(current))
         {
