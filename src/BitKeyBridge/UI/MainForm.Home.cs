@@ -656,6 +656,10 @@ public sealed partial class MainForm
             return;
         }
 
+        if (selected is not null && !selected.IsCloudRecord &&
+            !selected.IdentityAmbiguous)
+            ConfigureComputerServiceTabs(selected);
+
         switch (HelpdeskStatus.ResolveHomeDefaultAction(selected))
         {
             case HomeDefaultAction.None:
@@ -765,7 +769,8 @@ public sealed partial class MainForm
         NavigateToLapsWorkspace(fromStart: true);
         _lapsSearchDebounceTimer?.Stop();
 
-        await ReadLapsAsync();
+        // No automatic password read when opening a computer.
+        // The operator must explicitly request the LAPS password.
     }
 
     private async Task
