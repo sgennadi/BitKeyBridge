@@ -1,4 +1,6 @@
-## 0.27.0 — Unified Helpdesk
+## 0.27.0
+
+**Unified Helpdesk**
 
 - Added authenticated Entra/Intune discovery to Start alongside AD BitLocker/LAPS. Search/Enter includes Cloud when the active Graph session is valid; live typing stays AD-only to avoid excessive Graph requests. Cloud-only searching works without an AD session.
 - Source-qualified cloud results never open AD Recovery/LAPS automatically. Selecting a Cloud row opens the Devices workspace, where the operator must explicitly identify the managed object before recovery/rotation.
