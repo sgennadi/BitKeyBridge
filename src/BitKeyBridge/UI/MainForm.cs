@@ -2261,8 +2261,9 @@ public sealed partial class MainForm : DpiAwareForm
 
         var answer = MessageBox.Show(
             this,
-            $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}{Environment.NewLine}" +
-            "Only rotate after the recovery operation is complete and the device can process the Intune action." +
+            $"Request BitLocker recovery-key rotation for {computerName}?{Environment.NewLine}" +
+            $"Exact Intune managedDeviceId: {managedDeviceId}{Environment.NewLine}{Environment.NewLine}" +
+            "Verify the exact Intune device ID above. Only rotate after recovery is complete and the device can process the action." +
             (string.IsNullOrWhiteSpace(context.Reference)
                 ? string.Empty
                 : Environment.NewLine + Environment.NewLine + "Reference: " + context.Reference),
