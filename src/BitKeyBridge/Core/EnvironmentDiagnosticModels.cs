@@ -52,6 +52,23 @@ public sealed record EnvironmentPortCheck(
 
 public static class EnvironmentDiagnosticPolicy
 {
+    // Observed site-specific endpoint for encrypted Windows LAPS / GKDI.
+    // This is NOT a protocol-defined static KDS port; RPC Endpoint Mapper on
+    // TCP 135 can advertise another endpoint, potentially on another DC.
+    public const int ObservedKdsRpcPort = 1344;
+
+    internal static EnvironmentCheckState ClassifyPort(
+        TcpProbeState state,
+        bool essential,
+        bool observedCandidate = false) =>
+        state == TcpProbeState.Connected
+            ? EnvironmentCheckState.Available
+            : essential
+                ? EnvironmentCheckState.Failed
+                : observedCandidate
+                    ? EnvironmentCheckState.NotVerified
+                    : EnvironmentCheckState.Warning;
+
     public static IReadOnlyList<EnvironmentPortCheck> DomainPorts(bool ldaps) =>
     [
         new(ldaps ? "LDAPS / TLS" : "LDAP signing and sealing", ldaps ? 636 : 389, true,
@@ -61,6 +78,10 @@ public static class EnvironmentDiagnosticPolicy
             "Used by domain authentication; a TCP probe does not prove the user's Kerberos ticket is valid."),
         new("RPC Endpoint Mapper", 135, false,
             "Useful for DPAPI-NG/KDS discovery. Port 135 alone never proves that KDS/decryption works."),
+        new("Observed KDS/GKDI RPC candidate", ObservedKdsRpcPort, false,
+            "Site-specific observation: opening TCP 1344 restored encrypted Windows LAPS decryption in this deployment. " +
+            "This is NOT a fixed/default KDS port; the current RPC endpoint may differ by DC or restart. " +
+            "A TCP connection does not establish the service identity, authenticated GKDI access, or decryption permissions."),
         new("SMB / SYSVOL", 445, false,
             "Optional for BitKeyBridge's direct LDAP reads; useful for normal domain policy and SYSVOL access.")
     ];
@@ -76,6 +97,8 @@ public static class EnvironmentDiagnosticPolicy
             : "No LAPS backup indicators visible. This does NOT prove missing backups or denied read permission.";
 
     public static string KdsVerificationDetail =>
-        "NOT VERIFIED: TCP 135 reachability is insufficient. DPAPI-NG requires a reachable KDS RPC endpoint, an appropriate " +
-        "AD encryption principal, and an authorized real encrypted-password decrypt test. Dynamic RPC ports are not scanned.";
+        "NOT VERIFIED: TCP 135 reachability is insufficient. This deployment observed successful encrypted LAPS decryption " +
+        "after permitting TCP 1344, but 1344 is not a universal static KDS port. The actual GKDI/RPC endpoint may vary by DC " +
+        "and service start; TCP port probes cannot identify or authenticate it. Verify the active endpoint, AD encryption " +
+        "principal, and a separately authorized live decrypt. Unbounded dynamic RPC ports are not scanned.";
 }

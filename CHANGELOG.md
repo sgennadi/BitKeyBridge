@@ -1,3 +1,14 @@
+## 0.29.2
+
+**Native GKDI/KDS RPC endpoint discovery and readable network failure diagnostics**
+
+- **Start > Environment Check** now probes the observed TCP 1344 endpoint as an explicitly site-specific diagnostic, not as a universal/static KDS port. A closed historical TCP 1344 port is informational if it is not advertised by the DC for MS-GKDI.
+- Added read-only native Windows RPC Endpoint Mapper inquiry on TCP 135 for the **MS-GKDI v1.0** interface UUID `b9785960-524f-11df-8b6d-83dcded72085`. The application displays the exact advertised `ncacn_ip_tcp` ports on the selected DC and checks only those ports. No dynamic RPC port-range scans, firewall changes, or secret/decrypt operations.
+- TCP probes now distinguish **Connected**, **Connection refused**, **Timed out**, **Unreachable** and **DNS failure** instead of reporting every failure as an undifferentiated timeout. An unreachable advertised GKDI endpoint is a warning; a successful TCP connection is not proof of authenticated decryption or permissions.
+- Added manual, copyable RPC/KDS checks in the AD LAPS diagnostic runbook and documented the difference between TCP 1344 / IANA ICAP registration and an actual listener.
+- Extended LAPS regression tests for endpoint parsing, port status classification, observed-port policy and the parameterized PowerShell troubleshooting guide.
+- No changes to BitLocker/LAPS secret handling, AD permissions, DC services or automatic firewall policy.
+
 ## 0.29.1
 
 **LAPS layout / HiDPI text-overlap regression**

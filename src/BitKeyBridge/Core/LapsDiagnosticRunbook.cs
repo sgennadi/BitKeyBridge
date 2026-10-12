@@ -137,6 +137,20 @@ public static class LapsDiagnosticRunbook
             "Never call Select-String -Pattern with an empty/null $sid; the Pattern parameter requires a nonempty value.",
             "A found SID proves token membership only, not LAPS password-read delegation or DPAPI-NG decrypt permission.",
             "",
+            "3a. ON THE BITKEYBRIDGE WORKSTATION - CHECK OBSERVED GKDI/RPC PORT (READ ONLY)",
+            "TCP 1344 was observed to matter for encrypted Windows LAPS decryption in this deployment; " +
+                "it is not a Microsoft-defined fixed KDS port. Do NOT open it globally or assume a listener is GKDI.",
+            "Test-NetConnection -ComputerName " + Quote(dc) + " -Port 135 -InformationLevel Detailed",
+            "Test-NetConnection -ComputerName " + Quote(dc) + " -Port 1344 -InformationLevel Detailed",
+            "Test-NetConnection only checks a TCP connection. A listening port does not prove the GKDI RPC interface, " +
+                "the required Kerberos/SPNEGO authentication or LAPS decrypt permissions.",
+            "ON THE SELECTED DOMAIN CONTROLLER (administrator shell):",
+            "Get-NetTCPConnection -State Listen -LocalPort 1344 -ErrorAction SilentlyContinue | Select-Object LocalAddress,LocalPort,OwningProcess",
+            "Optional when PortQry is installed: portqry.exe -n " + Quote(dc) + " -e 135 -p TCP",
+            "Look for the GKDI interface UUID b9785960-524f-11df-8b6d-83dcded72085 (v1.0) " +
+                "and its advertised RPC endpoint; the port can differ between DCs and after service restart.",
+            "The IANA assignment of TCP 1344 to ICAP does not establish which service is actually listening.",
+            "",
             "4. OPTIONAL: ON AN AUTHORIZED RSAT WINDOWS PC OR DC - LIVE PASSWORD-READ TEST",
             "Get-LapsADPassword -Identity " + Quote(computer) +
                 " -DomainController " + Quote(dc) +

@@ -323,6 +323,10 @@ public static class LapsSelfTest
             Assert(guide.Contains("Import-Module ActiveDirectory -UseWindowsPowerShell", StringComparison.Ordinal));
             Assert(guide.Contains("Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0", StringComparison.Ordinal));
             Assert(guide.Contains("$dc = 'yosh-dc02.yosh.ac.il'", StringComparison.Ordinal));
+            Assert(guide.Contains("Test-NetConnection -ComputerName 'yosh-dc02.yosh.ac.il' -Port 135", StringComparison.Ordinal));
+            Assert(guide.Contains("Test-NetConnection -ComputerName 'yosh-dc02.yosh.ac.il' -Port 1344", StringComparison.Ordinal));
+            Assert(guide.Contains(GkdiRpcEndpointDiscovery.InterfaceUuid, StringComparison.Ordinal));
+            Assert(guide.Contains("not a Microsoft-defined fixed KDS port", StringComparison.Ordinal));
             Assert(guide.Contains("$group = 'REPLACE-WITH-EXACT-AD-GROUP'", StringComparison.Ordinal));
             Assert(guide.Contains("Get-ADGroup -Identity $group -Server $dc -ErrorAction Stop", StringComparison.Ordinal));
             Assert(guide.Contains("if (-not [string]::IsNullOrWhiteSpace($sid))", StringComparison.Ordinal));
@@ -362,9 +366,24 @@ public static class LapsSelfTest
             var policy = EnvironmentDiagnosticPolicy.DomainPorts(ldaps: false);
             Assert(policy.Any(x => x.Port == 389 && x.Essential));
             Assert(policy.Any(x => x.Port == 135 && !x.Essential));
+            Assert(policy.Any(x => x.Port == 1344 && !x.Essential &&
+                x.Check.Contains("GKDI", StringComparison.Ordinal)));
             Assert(!policy.Any(x => x.Port >= 49152));
             Assert(EnvironmentDiagnosticPolicy.DomainPorts(ldaps: true).Any(x => x.Port == 636 && x.Essential));
             Assert(EnvironmentDiagnosticPolicy.KdsVerificationDetail.Contains("NOT VERIFIED", StringComparison.Ordinal));
+            Assert(EnvironmentDiagnosticPolicy.KdsVerificationDetail.Contains("not a universal static KDS port", StringComparison.Ordinal));
+            Assert(EnvironmentDiagnosticPolicy.ClassifyPort(TcpProbeState.Connected, essential: false) == EnvironmentCheckState.Available);
+            Assert(EnvironmentDiagnosticPolicy.ClassifyPort(TcpProbeState.TimedOut, essential: true) == EnvironmentCheckState.Failed);
+            Assert(EnvironmentDiagnosticPolicy.ClassifyPort(TcpProbeState.Refused, essential: false) == EnvironmentCheckState.Warning);
+            Assert(EnvironmentDiagnosticPolicy.ClassifyPort(TcpProbeState.Refused,
+                essential: false, observedCandidate: true) == EnvironmentCheckState.NotVerified);
+            Assert(TcpPortProbe.Describe(TcpProbeState.Refused).Detail.Contains("Connection refused", StringComparison.Ordinal));
+            Assert(TcpPortProbe.Describe(TcpProbeState.TimedOut).Detail.Contains("Timed out", StringComparison.Ordinal));
+            Assert(GkdiRpcEndpointDiscovery.TryParseTcpEndpoint("ncacn_ip_tcp", "1344", out var observedPort) &&
+                observedPort == 1344);
+            Assert(!GkdiRpcEndpointDiscovery.TryParseTcpEndpoint("ncacn_np", "1344", out _));
+            Assert(!GkdiRpcEndpointDiscovery.TryParseTcpEndpoint("ncacn_ip_tcp", "65536", out _));
+            Assert(!GkdiRpcEndpointDiscovery.TryParseTcpEndpoint("ncacn_ip_tcp", "not-a-port", out _));
             Assert(EnvironmentDiagnosticPolicy.BitLockerMetadataDetail(0).Contains("does NOT prove", StringComparison.Ordinal));
             Assert(EnvironmentDiagnosticPolicy.BitLockerMetadataDetail(2).Contains("NOT requested", StringComparison.Ordinal));
         });
