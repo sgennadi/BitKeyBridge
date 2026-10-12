@@ -1,3 +1,12 @@
+## 0.29.1
+
+**LAPS layout / HiDPI text-overlap regression**
+
+- Fixed LAPS text and warning overlays seen when an encrypted Windows LAPS password cannot be decrypted. The former percentage-height results row inside an AutoScroll TableLayoutPanel could collapse and paint record details over the actions or warning banner at compact sizes / 150%-200% scaling.
+- Moved scrolling into a dedicated viewport; all LAPS content sections now occupy individual AutoSize rows. Both results grids have explicit minimum/visible heights and their own scrollbars, and expanded record diagnostics have a dedicated measured height.
+- Preserved the pinned password/status footer outside the scrollable area, without changing LAPS read/decrypt permissions, secret-handling behavior or warning messages.
+- Extended the WinForms layout self-test to assert scroll ownership, row ordering, non-collapsing result grids, wrapping actions and footer separation at compact, 150% and 200% UI scales.
+
 ## 0.29.0
 
 **Verified Local and Online Rollback**
