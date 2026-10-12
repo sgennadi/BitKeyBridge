@@ -276,7 +276,7 @@ public sealed partial class MainForm
                     _trustedUpdatePublisher.Text);
 
             resumeAutoInstall.Enabled =
-                UpdateRollbackHoldService.IsActiveForCurrentBuild();
+                UpdateRollbackHoldService.HasRecordedHold();
         }
 
         _checkUpdatesOnStart.CheckedChanged +=
