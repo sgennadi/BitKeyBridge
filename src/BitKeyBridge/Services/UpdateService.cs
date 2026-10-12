@@ -830,6 +830,16 @@ public sealed class UpdateService : IDisposable
                 UpdateRollbackHoldService.Activate(
                     plan.ExpectedVersion,
                     plan.RollbackSource);
+
+                // Crucial for backwards compatibility: the restored binary
+                // predates rollback holds and would otherwise auto-install
+                // the latest GitHub release at its next startup.
+                var config = ConfigService.LoadAppConfig();
+                if (config.AutoInstallUpdatesOnStart)
+                {
+                    config.AutoInstallUpdatesOnStart = false;
+                    ConfigService.SaveAppConfig(config);
+                }
             }
             else
             {
