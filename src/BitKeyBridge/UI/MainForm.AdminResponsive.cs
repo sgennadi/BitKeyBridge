@@ -120,6 +120,11 @@ public sealed partial class MainForm
         var openRelease =
             NewActionButton(
                 "Open Release Page");
+        var resumeAutoInstall =
+            NewActionButton(
+                "Resume Auto-Install");
+        resumeAutoInstall.Name =
+            "ResumeAutoInstallAfterRollbackButton";
         openRelease.Name =
             "OpenUpdateReleaseButton";
 
@@ -129,7 +134,8 @@ public sealed partial class MainForm
             install,
             retry,
             toggleAutomatic,
-            openRelease
+            openRelease,
+            resumeAutoInstall
         ]);
         updateGrid.Controls.Add(
             updateActions,
@@ -215,6 +221,29 @@ public sealed partial class MainForm
         refreshHistory.Click +=
             (_, _) =>
                 RefreshUpdateHistory();
+        resumeAutoInstall.Click +=
+            (_, _) =>
+            {
+                try
+                {
+                    UpdateRollbackHoldService.Clear();
+                    UiStyle.SetStatus(
+                        _updateStatus,
+                        "Rollback hold removed. Automatic updates can install newer releases on the next startup.",
+                        UiStatusKind.Success);
+                    _audit.Write(
+                        "ResumeAutomaticUpdatesAfterRollback",
+                        source: "Local");
+                    RefreshAutomaticControls();
+                }
+                catch (Exception ex)
+                {
+                    UiStyle.SetStatus(
+                        _updateStatus,
+                        "Could not resume automatic updates: " + ex.Message,
+                        UiStatusKind.Error);
+                }
+            };
         _rollbackUpdateButton.Click +=
             async (_, _) =>
                 await RollbackPreviousUpdateGuiAsync();
@@ -239,6 +268,9 @@ public sealed partial class MainForm
                 _requireTrustedUpdateSignature.Checked ||
                 !string.IsNullOrWhiteSpace(
                     _trustedUpdatePublisher.Text);
+
+            resumeAutoInstall.Enabled =
+                UpdateRollbackHoldService.IsActiveForCurrentBuild();
         }
 
         _checkUpdatesOnStart.CheckedChanged +=
