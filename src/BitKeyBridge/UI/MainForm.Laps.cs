@@ -287,11 +287,11 @@ public sealed partial class MainForm
             "LAPS device search results";
         _lapsSearchRows.Dock =
             DockStyle.Top;
-        _lapsSearchRows.Height = 170;
+        _lapsSearchRows.Height = UiStyle.LapsSearchGridHeight;
         _lapsSearchRows.MinimumSize =
             new Size(
                 0,
-                120);
+                UiStyle.LapsSearchGridMinimumHeight);
         UiStyle.ConfigureDataGridView(
             _lapsSearchRows);
         _lapsSearchRows.ScrollBars = ScrollBars.Both;
@@ -495,11 +495,11 @@ public sealed partial class MainForm
         // the details and warning rows were drawn on top of each other.
         _lapsRows.Dock =
             DockStyle.Top;
-        _lapsRows.Height = 200;
+        _lapsRows.Height = UiStyle.LapsKeyGridHeight;
         _lapsRows.MinimumSize =
             new Size(
                 0,
-                160);
+                UiStyle.LapsKeyGridMinimumHeight);
         _lapsRows.ScrollBars =
             ScrollBars.Both;
         UiStyle.ConfigureDataGridView(
@@ -608,11 +608,11 @@ public sealed partial class MainForm
             DockStyle.Top;
         _lapsDetails.ReadOnly =
             true;
-        _lapsDetails.Height = 130;
+        _lapsDetails.Height = UiStyle.LapsDetailsHeight;
         _lapsDetails.MinimumSize =
             new Size(
                 0,
-                90);
+                UiStyle.LapsDetailsMinimumHeight);
         _lapsDetails.Font =
             UiStyle.CreateMonospaceFont(
                 9F);
