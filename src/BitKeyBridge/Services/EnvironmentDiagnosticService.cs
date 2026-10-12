@@ -1,6 +1,5 @@
 using System.DirectoryServices.ActiveDirectory;
 using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
 namespace BitKeyBridge;
@@ -11,7 +10,6 @@ namespace BitKeyBridge;
 /// </summary>
 public sealed class EnvironmentDiagnosticService
 {
-    private static readonly TimeSpan PortTimeout = TimeSpan.FromSeconds(4);
     private static readonly TimeSpan DnsTimeout = TimeSpan.FromSeconds(5);
 
     public async Task<EnvironmentDiagnosticReport> CheckAsync(
@@ -120,16 +118,73 @@ public sealed class EnvironmentDiagnosticService
                 " selected, TCP " + configuredPort +
                 ". TLS certificate trust and authenticated identity require an actual LDAP bind.");
 
+            TcpPortProbeResult? rpcMapperProbe = null;
+            TcpPortProbeResult? observedKdsProbe = null;
+
             foreach (var port in EnvironmentDiagnosticPolicy.DomainPorts(useLdaps))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var number = port.Essential ? configuredPort : port.Port;
-                var reachable = await CanConnectAsync(dc, number, cancellationToken);
+                var probe = await TcpPortProbe.CheckAsync(dc, number, cancellationToken);
+
+                if (number == 135)
+                    rpcMapperProbe = probe;
+                if (number == EnvironmentDiagnosticPolicy.ObservedKdsRpcPort)
+                    observedKdsProbe = probe;
+
+                // TCP 1344 mattered here previously, but is NOT the defined
+                // GKDI endpoint. A closed historical port is informational
+                // unless the Endpoint Mapper currently advertises it.
+                var observedCandidate =
+                    number == EnvironmentDiagnosticPolicy.ObservedKdsRpcPort;
+
+                var state = EnvironmentDiagnosticPolicy.ClassifyPort(
+                    probe.State, port.Essential, observedCandidate);
+
                 Add("Network", port.Check + " TCP " + number,
-                    reachable ? EnvironmentCheckState.Available :
-                        port.Essential ? EnvironmentCheckState.Failed : EnvironmentCheckState.Warning,
-                    reachable ? "TCP connection succeeded. " + port.Purpose :
-                        "TCP connection failed or timed out. " + port.Purpose);
+                    state,
+                    probe.Detail + " " + port.Purpose);
+            }
+
+            if (rpcMapperProbe?.Connected != true)
+            {
+                Add("RPC", "GKDI / KDS endpoint discovery", EnvironmentCheckState.NotVerified,
+                    "Skipped native RPC Endpoint Mapper inquiry because TCP 135 did not connect. " +
+                    (rpcMapperProbe?.Detail ?? "TCP 135 was not probed.") +
+                    " Diagnose the RPC endpoint mapper/network before investigating a dynamic port.");
+            }
+            else
+            {
+                var discovery = await GkdiRpcEndpointDiscovery.DiscoverAsync(
+                    dc, cancellationToken);
+
+                var discoveryState = discovery.State switch
+                {
+                    GkdiEndpointState.Found => EnvironmentCheckState.Available,
+                    GkdiEndpointState.Unsupported => EnvironmentCheckState.NotVerified,
+                    _ => EnvironmentCheckState.Warning
+                };
+
+                Add("RPC", "GKDI / KDS endpoint discovery",
+                    discoveryState, discovery.Detail);
+
+                // Probe ONLY the port(s) returned for the exact GKDI UUID.
+                // Never scan an entire dynamic RPC range or open firewall rules.
+                foreach (var dynamicPort in discovery.Ports)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var probe = dynamicPort == EnvironmentDiagnosticPolicy.ObservedKdsRpcPort &&
+                                observedKdsProbe is not null
+                        ? observedKdsProbe
+                        : await TcpPortProbe.CheckAsync(dc, dynamicPort, cancellationToken);
+
+                    Add("RPC", "GKDI advertised TCP " + dynamicPort,
+                        EnvironmentDiagnosticPolicy.ClassifyPort(probe.State, essential: false),
+                        probe.Detail +
+                        " This port was advertised by RPC Endpoint Mapper for MS-GKDI v1.0. " +
+                        "Successful TCP connect alone does not verify decryption permission.");
+                }
             }
 
             try
@@ -189,12 +244,11 @@ public sealed class EnvironmentDiagnosticService
         {
             foreach (var host in new[] { "login.microsoftonline.com", "graph.microsoft.com" })
             {
-                var reachable = await CanConnectAsync(host, 443, cancellationToken);
+                var probe = await TcpPortProbe.CheckAsync(host, 443, cancellationToken);
                 Add("Cloud", host + " TCP 443",
-                    reachable ? EnvironmentCheckState.Available : EnvironmentCheckState.Warning,
-                    reachable
-                        ? "HTTPS network path reached. Microsoft Graph consent, roles and sign-in are NOT verified."
-                        : "Could not connect. Check proxy, firewall, DNS and internet connectivity.");
+                    probe.Connected ? EnvironmentCheckState.Available : EnvironmentCheckState.Warning,
+                    probe.Detail +
+                    " Microsoft Graph consent, roles and sign-in are NOT verified.");
             }
         }
         else
@@ -291,23 +345,4 @@ public sealed class EnvironmentDiagnosticService
         }
     }
 
-    private static async Task<bool> CanConnectAsync(string host, int port, CancellationToken ct)
-    {
-        try
-        {
-            using var socket = new TcpClient();
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(PortTimeout);
-            await socket.ConnectAsync(host, port, timeout.Token);
-            return socket.Connected;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
 }
