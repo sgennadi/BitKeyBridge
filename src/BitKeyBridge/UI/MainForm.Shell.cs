@@ -148,9 +148,7 @@ public sealed partial class MainForm
                         _mainTabs.SelectedTab,
                         _computerWorkspaceTab))
                 {
-                    _recoveryBackToStart.Visible =
-                        false;
-                }
+                    _recoveryBackToStart.Visible = false;
                     _lapsBackToStart.Visible = false;
                 }
             };
