@@ -533,6 +533,19 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "Cloud Graph permissions default to read-only",
+            () =>
+            {
+                var config = new CloudAuthConfig();
+                Assert(!config.EnableIntuneRotationPermissions &&
+                       ManagedPermissionPolicy.Permission(false) ==
+                           "DeviceManagementManagedDevices.Read.All" &&
+                       ManagedPermissionPolicy.Permission(true) ==
+                           "DeviceManagementManagedDevices.ReadWrite.All",
+                    "Intune application setup was not read-only by default.");
+            });
+
+        Check(
             "Graph 403 remains an explicit failure",
             () =>
             {

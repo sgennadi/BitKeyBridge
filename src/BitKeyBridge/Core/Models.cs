@@ -130,6 +130,8 @@ public sealed class CloudAuthConfig
     public string AuthMode { get; set; } = "DeviceCode";
     public string BootstrapClientId { get; set; } = string.Empty;
     public bool EnableLapsPermissions { get; set; }
+    // Rotation permissions are opt-in; existing tenant grants are not automatically revoked.
+    public bool EnableIntuneRotationPermissions { get; set; }
 }
 
 public sealed class GraphToken

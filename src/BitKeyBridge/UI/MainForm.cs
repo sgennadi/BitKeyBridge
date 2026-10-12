@@ -48,6 +48,7 @@ public sealed partial class MainForm : DpiAwareForm
     private CancellationTokenSource? _cloudConnectCancellation;
     private bool _cloudConnecting;
     private readonly CheckBox _cloudLapsPermissions = new();
+    private readonly CheckBox _cloudRotationPermissions = new();
     private CancellationTokenSource? _cloudMaintenanceCancellation;
     private CloudAuthConfig _cloudConfig;
     private GraphToken? _cloudToken;
@@ -613,6 +614,7 @@ public sealed partial class MainForm : DpiAwareForm
 
         _cloudConfig = ConfigService.LoadCloudConfig();
         _cloudLapsPermissions.Checked = _cloudConfig.EnableLapsPermissions;
+        _cloudRotationPermissions.Checked = _cloudConfig.EnableIntuneRotationPermissions;
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
         _cloudUsername.Text = _cloudConfig.Username;
@@ -638,6 +640,7 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudConfig.ClientId = _cloudClient.Text.Trim();
         _cloudConfig.Username = _cloudUsername.Text.Trim();
         _cloudConfig.EnableLapsPermissions = _cloudLapsPermissions.Checked;
+        _cloudConfig.EnableIntuneRotationPermissions = _cloudRotationPermissions.Checked;
         _cloudConfig.CertificateThumbprint = _cloudThumbprint.Text.Trim();
         _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex switch
         {
@@ -709,7 +712,8 @@ public sealed partial class MainForm : DpiAwareForm
                                 _cloudUsername.Text,
                                 _cloudPassword.Text,
                                 ct,
-                                lapsOnly: forLaps),
+                                lapsOnly: forLaps,
+                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions),
                     _ =>
                         await graph
                             .AcquireDeviceCodeTokenAsync(
@@ -717,7 +721,8 @@ public sealed partial class MainForm : DpiAwareForm
                                 _cloudClient.Text,
                                 ShowDeviceCodeAsync,
                                 ct,
-                                lapsOnly: forLaps)
+                                lapsOnly: forLaps,
+                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions)
                 };
 
             var count = forLaps ? 0 :
@@ -951,7 +956,8 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudClient.Text.Trim()
                 .ToUpperInvariant(),
             mode,
-            identity.ToUpperInvariant());
+            identity.ToUpperInvariant(),
+            _cloudRotationPermissions.Checked ? "ROTATION" : "READ-ONLY");
     }
 
     private async Task RunNativeAutoSetupAsync()
@@ -1036,7 +1042,9 @@ public sealed partial class MainForm : DpiAwareForm
                     ct:
                         cancellation.Token,
                     includeLapsPermissions:
-                        _cloudLapsPermissions.Checked);
+                        _cloudLapsPermissions.Checked,
+                    includeIntuneRotationPermissions:
+                        _cloudRotationPermissions.Checked);
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -2233,6 +2241,14 @@ public sealed partial class MainForm : DpiAwareForm
         string? recoveryId,
         RecoveryAccessContext? existingContext = null)
     {
+        if (!_cloudConfig.EnableIntuneRotationPermissions)
+        {
+            ShowAppMessage("Intune rotation disabled",
+                "Enable optional Intune rotation under Administration > Cloud, " +
+                "consent to the write scope, then reconnect. Read-only is the default.");
+            return;
+        }
+
         if (!AuthorizeAction(
                 BitKeyBridgePermission.Rotate,
                 "RotateBitLockerKey",
