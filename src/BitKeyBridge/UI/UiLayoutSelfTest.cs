@@ -437,6 +437,59 @@ public static class UiLayoutSelfTest
             failures.Add("When BitLocker and LAPS coexist, the default action must be BitLocker.");
         }
 
+        selected.BitLockerKeyCount = 0;
+        selected.BitLockerLookupFailed = true;
+        selected.LapsCandidateFound = true;
+        selected.LapsStatus = "Detected";
+        if (HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+            HomeDefaultAction.ChooseRecoveryType)
+        {
+            failures.Add("A failed BitLocker lookup must not auto-route LAPS as if there were no key.");
+        }
+
+        selected.BitLockerLookupFailed = false;
+        selected.IdentityAmbiguous = true;
+        selected.BitLockerKeyCount = 1;
+        if (HelpdeskStatus.ResolveHomeDefaultAction(selected) !=
+                HomeDefaultAction.ChooseRecoveryType ||
+            HelpdeskStatus.CanAttemptLapsRead(true, selected) ||
+            HelpdeskStatus.CanAttemptBitLockerSearch(true, selected))
+        {
+            failures.Add("Ambiguous AD object identity must block both quick recovery actions.");
+        }
+
+        selected.IdentityAmbiguous = false;
+        if (!HelpdeskStatus.HasIdentityCollision(
+                [
+                    new RecoverySearchResult
+                    {
+                        ComputerName = "PC-DUP",
+                        ComputerDistinguishedName = "CN=PC-DUP,OU=Old,DC=example,DC=test"
+                    }
+                ],
+                [
+                    new LapsSearchResult
+                    {
+                        ComputerName = "PC-DUP",
+                        ComputerId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        ComputerDistinguishedName = "CN=PC-DUP,OU=New,DC=example,DC=test"
+                    }
+                ],
+                "PC-DUP") ||
+            HelpdeskStatus.HasIdentityCollision(
+                [],
+                [
+                    new LapsSearchResult
+                    {
+                        ComputerName = "PC-SINGLE",
+                        ComputerId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+                    }
+                ],
+                "PC-SINGLE"))
+        {
+            failures.Add("Stable AD identifiers are not being used to detect duplicate computer names.");
+        }
+
         if (!HelpdeskStatus.ShouldRetryBitLockerInDomain(
                 0, "OU=Win11,DC=yosh,DC=ac,DC=il", "DC=yosh,DC=ac,DC=il") ||
             HelpdeskStatus.ShouldRetryBitLockerInDomain(

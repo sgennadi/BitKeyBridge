@@ -2299,6 +2299,7 @@ public sealed partial class MainForm
         AddColumns(
             _unifiedResults,
             ("Computer", 150),
+            ("Identity", 145),
             ("AD", 45),
             ("Entra", 50),
             ("Intune", 52),
@@ -2881,6 +2882,9 @@ public sealed partial class MainForm
         {
             return;
         }
+
+        if (row.IdentityStatus is "Name collision" or "Ambiguous device ID")
+            return;
 
         foreach (var id in row.RecoveryIds)
             _deviceRecoveryIds.Items.Add(id);

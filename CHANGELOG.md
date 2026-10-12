@@ -1,3 +1,12 @@
+## 0.26.8
+
+- Hardened unified Devices identity correlation: AD computer objectGUID/DN, Intune managedDeviceId, and Entra deviceId are retained as source-qualified identifiers. An identical short hostname/UPN/serial does not prove cross-source identity, so such entries are kept separate and visibly marked as name collisions.
+- Attached cloud recovery IDs to a managed Intune device only when its Entra deviceId identifies exactly one Intune record. Conflicting Entra IDs keep recovery metadata isolated; ambiguous records disable quick recovery-key selection and rotation instead of guessing.
+- Added objectGUID collection to AD computer searches and exact-name collision protection. AD LAPS search metadata now preserves the computer distinguished name, allowing Start to detect two different AD objects with the same display name.
+- Made BitLocker and LAPS Start searches failure-isolated, including exact-name/domain retry. Results from the successful source remain visible; failed lookups are explicitly reported as failures, not proof that backups are absent. Canceled operations remain canceled.
+- Disabled one-click Start recovery actions for ambiguous AD computer names, and prevented automatic LAPS routing if BitLocker metadata could not be read.
+- Expanded deterministic offline and UI regression checks for source-ID collisions, recovery association, independent metadata errors, cancellation, and safe fallback behavior. No AD writes, Graph secret reads during search, automatic key rotation, or additional required operator permissions.
+
 ## 0.26.7
 
 - Updated Start results navigation: BitLocker metadata takes priority; confirmed LAPS-only metadata automatically opens the LAPS page on Enter/double-click. Unknown backup status continues to require an explicit choice.

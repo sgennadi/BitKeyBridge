@@ -10,6 +10,10 @@ public sealed class HomeSearchResult
 
     public int BitLockerKeyCount { get; set; }
 
+    public bool BitLockerLookupFailed { get; set; }
+    public bool LapsLookupFailed { get; set; }
+    public bool IdentityAmbiguous { get; set; }
+
     // The exact-computer BitLocker metadata was only found after
     // retrying outside the operator's currently selected OU.
     public bool BitLockerOutsideSelectedScope { get; set; }
@@ -68,8 +72,15 @@ public static class HelpdeskStatus
         if (selected is null)
             return HomeDefaultAction.None;
 
+        if (selected.IdentityAmbiguous)
+            return HomeDefaultAction.ChooseRecoveryType;
+
         if (selected.BitLockerKeyCount > 0)
             return HomeDefaultAction.BitLocker;
+
+        // A failed BitLocker lookup does not establish the absence of a key.
+        if (selected.BitLockerLookupFailed)
+            return HomeDefaultAction.ChooseRecoveryType;
 
         // An AD computer match by itself is not proof of a LAPS backup.
         // Only positive non-secret metadata may route directly to LAPS.
@@ -85,7 +96,39 @@ public static class HelpdeskStatus
     public static bool CanAttemptBitLockerSearch(
         bool connected,
         HomeSearchResult? selected) =>
-        connected && selected is not null;
+        connected && selected is not null && !selected.IdentityAmbiguous;
+
+    public static bool HasIdentityCollision(
+        IEnumerable<RecoverySearchResult> recovery,
+        IEnumerable<LapsSearchResult> laps,
+        string computerName)
+    {
+        var matchingRecovery = recovery
+            .Where(row => row.ComputerName.Equals(
+                computerName, StringComparison.OrdinalIgnoreCase));
+        var matchingLaps = laps
+            .Where(row => row.ComputerName.Equals(
+                computerName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matchingLaps
+            .Select(row => row.ComputerId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Skip(1)
+            .Any())
+        {
+            return true;
+        }
+
+        return matchingRecovery
+            .Select(row => row.ComputerDistinguishedName)
+            .Concat(matchingLaps.Select(row => row.ComputerDistinguishedName))
+            .Where(dn => !string.IsNullOrWhiteSpace(dn))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Skip(1)
+            .Any();
+    }
 
     public static bool ShouldRetryBitLockerInDomain(
         int scopedRecoveryCount,
@@ -114,7 +157,7 @@ public static class HelpdeskStatus
     // UI navigation only: the actual secret-read permission is enforced by
     // AuthorizeLapsAccess before any LAPS password attribute is requested.
     public static bool CanAttemptLapsRead(bool connected, HomeSearchResult? selected) =>
-        connected && selected is not null;
+        connected && selected is not null && !selected.IdentityAmbiguous;
 
     public static string BitLocker(
         IReadOnlyCollection<RecoverySearchResult> rows,

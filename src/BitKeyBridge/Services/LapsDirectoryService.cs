@@ -87,6 +87,7 @@ public sealed class LapsDirectoryService
                         string.Empty,
                     ComputerId =
                         computerId,
+                    ComputerDistinguishedName = entry.DistinguishedName,
                     KeyDateUtc =
                         null,
                     ExpiresAtUtc =

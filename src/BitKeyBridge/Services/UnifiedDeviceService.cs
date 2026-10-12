@@ -33,33 +33,13 @@ public sealed class UnifiedDeviceService
                         maximumItems),
                 ct);
 
-        return rows
-            .Select(
-                ad =>
-                    new UnifiedDeviceInfo
-                    {
-                        ComputerName =
-                            ad.ComputerName,
-                        FoundInAd =
-                            true,
-                        AdDistinguishedName =
-                            ad.DistinguishedName,
-                        OperatingSystem =
-                            ad.OperatingSystem,
-                        OsVersion =
-                            ad.OperatingSystemVersion,
-                        AdLastLogonTimestamp =
-                            ad.LastLogonTimestamp
-                    })
-            .OrderBy(
-                x =>
-                    x.ComputerName,
+        // The same source-qualified identity rules also apply when
+        // Microsoft Graph is disabled or not authenticated.
+        return UnifiedDeviceMerge.Merge(rows, [], [])
+            .Values
+            .OrderBy(x => x.ComputerName,
                 StringComparer.OrdinalIgnoreCase)
-            .Take(
-                Math.Clamp(
-                    maximumItems,
-                    1,
-                    1000))
+            .Take(Math.Clamp(maximumItems, 1, 1000))
             .ToList();
     }
 
@@ -135,8 +115,6 @@ public sealed class UnifiedDeviceService
             await recoveryTask;
         var adRows =
             new List<AdComputerInfo>();
-        var adAvailable =
-            false;
 
         if (adTask is not null)
         {
@@ -144,8 +122,6 @@ public sealed class UnifiedDeviceService
             {
                 adRows =
                     await adTask;
-                adAvailable =
-                    true;
             }
             catch (OperationCanceledException) when (
                 ct.IsCancellationRequested)
@@ -169,73 +145,9 @@ public sealed class UnifiedDeviceService
                 intuneRows,
                 recoveryRows);
 
-        // Enrich cloud/serial/UPN hits with AD metadata when AD is available.
-        if (adAvailable &&
-            !string.IsNullOrWhiteSpace(
-                dc))
-        {
-            foreach (var md in
-                     intuneRows)
-            {
-                var key =
-                    UnifiedDeviceMerge.NormalizeName(
-                        md.DeviceName);
-
-                if (string.IsNullOrWhiteSpace(
-                        key))
-                {
-                    key =
-                        md.EntraDeviceId;
-                }
-
-                if (string.IsNullOrWhiteSpace(
-                        key) ||
-                    !result.TryGetValue(
-                        key,
-                        out var row) ||
-                    row.FoundInAd ||
-                    string.IsNullOrWhiteSpace(
-                        md.DeviceName))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var ad =
-                        await Task.Run(
-                            () =>
-                                _ad.FindComputerByName(
-                                    dc,
-                                    md.DeviceName),
-                            ct);
-
-                    if (ad is not null)
-                    {
-                        row.FoundInAd =
-                            true;
-                        row.AdDistinguishedName =
-                            ad.DistinguishedName;
-                        row.AdLastLogonTimestamp =
-                            ad.LastLogonTimestamp;
-                    }
-                }
-                catch (OperationCanceledException) when (
-                    ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    WindowsEventLogService.TryWrite(
-                        "Unified device AD enrichment lookup failed: " +
-                        ex.Message,
-                        EventLogSeverity.Warning,
-                        4577,
-                        "Devices");
-                }
-            }
-        }
+        // A matching computer name cannot prove that an AD object and an
+        // Intune device are the same physical machine. Keep independent
+        // records until an authoritative link is available.
 
         // For Intune hits that did not appear in the initial recovery search
         // (for example serial-number or UPN searches), fetch metadata by Entra
@@ -245,6 +157,7 @@ public sealed class UnifiedDeviceService
                 .Where(
                     x =>
                         x.FoundInIntune &&
+                        x.IdentityStatus != "Ambiguous device ID" &&
                         !string.IsNullOrWhiteSpace(
                             x.EntraDeviceId) &&
                         x.RecoveryIds.Count ==

@@ -35,3 +35,10 @@ Security cautions:
 - The Entra App Registration authentication certificate is NOT the signing cert.
 - Do not export keys into repository variables or disable chain validation.
 - Use restricted signing identities, audit trails and a trustworthy runner.
+
+
+v0.26.8 continues to require explicit provisioning of an authorized
+organizational Code Signing certificate. Without a configured signing
+provider, CI correctly skips Authenticode and retains SHA-256 verification,
+provenance attestations and updater rollback. An LDAPS or Entra application
+certificate must not be repurposed as an executable signing certificate.

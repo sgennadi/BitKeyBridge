@@ -306,6 +306,7 @@ public sealed class ActiveDirectoryService
             "name",
             "distinguishedName",
             "dNSHostName",
+            "objectGUID",
             "operatingSystem",
             "operatingSystemVersion",
             "lastLogonTimestamp");
@@ -318,6 +319,7 @@ public sealed class ActiveDirectoryService
                 ComputerName = GetString(entry, "name") ?? string.Empty,
                 DistinguishedName = entry.DistinguishedName,
                 DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                ObjectGuid = GetBinaryGuid(entry, "objectGUID"),
                 OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
                 OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
                 LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
@@ -354,6 +356,7 @@ public sealed class ActiveDirectoryService
             "name",
             "distinguishedName",
             "dNSHostName",
+            "objectGUID",
             "operatingSystem",
             "operatingSystemVersion",
             "lastLogonTimestamp");
@@ -367,6 +370,7 @@ public sealed class ActiveDirectoryService
                 ComputerName = GetString(entry, "name") ?? string.Empty,
                 DistinguishedName = entry.DistinguishedName,
                 DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                ObjectGuid = GetBinaryGuid(entry, "objectGUID"),
                 OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
                 OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
                 LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
@@ -517,6 +521,7 @@ public sealed class ActiveDirectoryService
             "name",
             "distinguishedName",
             "dNSHostName",
+            "objectGUID",
             "operatingSystem",
             "operatingSystemVersion",
             "lastLogonTimestamp");
@@ -529,6 +534,7 @@ public sealed class ActiveDirectoryService
                 ComputerName = GetString(entry, "name") ?? string.Empty,
                 DistinguishedName = entry.DistinguishedName,
                 DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                ObjectGuid = GetBinaryGuid(entry, "objectGUID"),
                 OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
                 OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
                 LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
@@ -707,17 +713,21 @@ public sealed class ActiveDirectoryService
             "name",
             "distinguishedName",
             "dNSHostName",
+            "objectGUID",
             "operatingSystem",
             "operatingSystemVersion",
             "lastLogonTimestamp");
         var response = (SearchResponse)connection.SendRequest(request, _timeout);
         if (response.Entries.Count == 0) return null;
+        if (response.Entries.Count > 1)
+            throw new InvalidOperationException("Multiple AD computer objects have this name. Select a unique object GUID or distinguished name.");
         var entry = response.Entries[0];
         return new AdComputerInfo
         {
             ComputerName = GetString(entry, "name") ?? string.Empty,
             DistinguishedName = entry.DistinguishedName,
             DnsHostName = GetString(entry, "dNSHostName") ?? string.Empty,
+                ObjectGuid = GetBinaryGuid(entry, "objectGUID"),
             OperatingSystem = GetString(entry, "operatingSystem") ?? string.Empty,
             OperatingSystemVersion = GetString(entry, "operatingSystemVersion") ?? string.Empty,
             LastLogonTimestamp = GetFileTime(entry, "lastLogonTimestamp")
@@ -889,6 +899,16 @@ public sealed class ActiveDirectoryService
             });
         }
         return sb.ToString();
+    }
+
+    private static string GetBinaryGuid(SearchResultEntry entry, string attributeName)
+    {
+        var attribute = entry.Attributes[attributeName];
+        return attribute is { Count: > 0 } &&
+               attribute[0] is byte[] bytes &&
+               bytes.Length == 16
+            ? new Guid(bytes).ToString("D")
+            : string.Empty;
     }
 
     private static string? GetString(SearchResultEntry entry, string attributeName)

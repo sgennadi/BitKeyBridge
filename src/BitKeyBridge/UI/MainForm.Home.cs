@@ -104,25 +104,26 @@ public sealed partial class MainForm
             var scope =
                 _startScope!;
 
+            // Keep successful results when one metadata source fails.
             var recoveryTask =
-                SearchLiveAdRecoveryMetadataAsync(
-                    query,
-                    scope,
+                MetadataSourceIsolation.ExecuteAsync<RecoverySearchResult>(
+                    () => SearchLiveAdRecoveryMetadataAsync(
+                        query, scope, cancellation.Token),
                     cancellation.Token);
-
             var lapsTask =
-                SearchHomeLapsMetadataAsync(
-                    query,
+                MetadataSourceIsolation.ExecuteAsync<LapsSearchResult>(
+                    () => SearchHomeLapsMetadataAsync(
+                        query, cancellation.Token),
                     cancellation.Token);
 
-            await Task.WhenAll(
-                recoveryTask,
-                lapsTask);
+            await Task.WhenAll(recoveryTask, lapsTask);
 
-            var recoveryRows =
-                await recoveryTask;
-            var lapsRows =
-                await lapsTask;
+            var recoveryOutcome = await recoveryTask;
+            var lapsOutcome = await lapsTask;
+            var recoveryRows = recoveryOutcome.Rows;
+            var lapsRows = lapsOutcome.Rows;
+            string? recoveryFailure = recoveryOutcome.Error;
+            string? lapsFailure = lapsOutcome.Error;
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -136,16 +137,28 @@ public sealed partial class MainForm
                 .Take(10)
                 .ToList();
 
-            foreach (var computer in recoveryNames)
+            if (lapsFailure is null)
             {
-                if (lapsRows.Any(row => row.ComputerName.Equals(
-                        computer, StringComparison.OrdinalIgnoreCase)))
-                    continue;
+                foreach (var computer in recoveryNames)
+                {
+                    if (lapsRows.Any(row => row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)))
+                        continue;
 
-                var extra = await SearchHomeLapsMetadataAsync(
-                    computer, cancellation.Token);
-                lapsRows.AddRange(extra.Where(row => row.ComputerName.Equals(
-                    computer, StringComparison.OrdinalIgnoreCase)));
+                    var extra = await MetadataSourceIsolation.ExecuteAsync<LapsSearchResult>(
+                        () => SearchHomeLapsMetadataAsync(
+                            computer, cancellation.Token),
+                        cancellation.Token);
+                    if (!extra.Succeeded)
+                    {
+                        lapsFailure = extra.Error;
+                        break;
+                    }
+
+                    lapsRows.AddRange(extra.Rows.Where(row =>
+                        row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)));
+                }
             }
 
             var domainRecoveryNames =
@@ -157,33 +170,53 @@ public sealed partial class MainForm
                 .Take(10)
                 .ToList();
 
-            foreach (var computer in lapsNames)
+            if (recoveryFailure is null)
             {
-                if (recoveryRows.Any(row => row.ComputerName.Equals(
-                        computer, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
-                var extra = await SearchLiveAdRecoveryMetadataAsync(
-                    computer, scope, cancellation.Token);
-
-                if (HelpdeskStatus.ShouldRetryBitLockerInDomain(
-                    extra.Count, scope.SearchBase, _startDomainDn))
+                foreach (var computer in lapsNames)
                 {
-                    // Retry the exact computer across the domain without
-                    // modifying the operator's selected OU/search scope.
-                    var domainScope = new BitLockerScope(
-                        "Entire domain", _startDomainDn);
-                    extra = await SearchLiveAdRecoveryMetadataAsync(
-                        computer, domainScope, cancellation.Token);
-                    if (extra.Any(row => row.ComputerName.Equals(
+                    if (recoveryRows.Any(row => row.ComputerName.Equals(
                             computer, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        domainRecoveryNames.Add(computer);
-                    }
-                }
+                        continue;
 
-                recoveryRows.AddRange(extra.Where(row => row.ComputerName.Equals(
-                    computer, StringComparison.OrdinalIgnoreCase)));
+                    var extra = await MetadataSourceIsolation.ExecuteAsync<RecoverySearchResult>(
+                        () => SearchLiveAdRecoveryMetadataAsync(
+                            computer, scope, cancellation.Token),
+                        cancellation.Token);
+                    if (!extra.Succeeded)
+                    {
+                        recoveryFailure = extra.Error;
+                        break;
+                    }
+
+                    var extraRows = extra.Rows;
+                    if (HelpdeskStatus.ShouldRetryBitLockerInDomain(
+                        extraRows.Count, scope.SearchBase, _startDomainDn))
+                    {
+                        // Retry without changing the operator's current scope.
+                        var domainScope = new BitLockerScope(
+                            "Entire domain", _startDomainDn);
+                        var retried = await MetadataSourceIsolation.ExecuteAsync<RecoverySearchResult>(
+                            () => SearchLiveAdRecoveryMetadataAsync(
+                                computer, domainScope, cancellation.Token),
+                            cancellation.Token);
+                        if (!retried.Succeeded)
+                        {
+                            recoveryFailure = retried.Error;
+                            break;
+                        }
+
+                        extraRows = retried.Rows;
+                        if (extraRows.Any(row => row.ComputerName.Equals(
+                                computer, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            domainRecoveryNames.Add(computer);
+                        }
+                    }
+
+                    recoveryRows.AddRange(extraRows.Where(row =>
+                        row.ComputerName.Equals(
+                            computer, StringComparison.OrdinalIgnoreCase)));
+                }
             }
 
             if (generation !=
@@ -215,6 +248,10 @@ public sealed partial class MainForm
                     .Take(100)
                     .ToList();
 
+            var ambiguousNames = names
+                .Where(name => HelpdeskStatus.HasIdentityCollision(
+                    recoveryRows, lapsRows, name))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             _updatingHomeSearchResults = true;
 
             foreach (var computer in names)
@@ -267,6 +304,12 @@ public sealed partial class MainForm
                             string.Empty,
                         BitLockerKeyCount =
                             bitLocker.Count,
+                        BitLockerLookupFailed =
+                            recoveryFailure is not null,
+                        LapsLookupFailed =
+                            lapsFailure is not null,
+                        IdentityAmbiguous =
+                            ambiguousNames.Contains(computer),
                         BitLockerOutsideSelectedScope =
                             domainRecoveryNames.Contains(computer),
                         LatestBitLockerKeyUtc =
@@ -281,18 +324,27 @@ public sealed partial class MainForm
                         LapsExpiresAtUtc =
                             laps?.ExpiresAtUtc,
                         BitLockerStatus =
-                            bitLocker.Count == 0
-                                ? "Not verified"
-                                : HelpdeskStatus.BitLocker(
-                                    bitLocker,
-                                    _config.CoverageOldCloudKeyDays),
+                            ambiguousNames.Contains(computer)
+                                ? "Ambiguous"
+                                : recoveryFailure is not null
+                                    ? "Lookup failed"
+                                    : bitLocker.Count == 0
+                                        ? "Not verified"
+                                        : HelpdeskStatus.BitLocker(
+                                            bitLocker,
+                                            _config.CoverageOldCloudKeyDays),
                         LapsStatus =
-                            HelpdeskStatus.Laps(
-                                laps),
+                            ambiguousNames.Contains(computer)
+                                ? "Ambiguous"
+                                : lapsFailure is not null
+                                    ? "Lookup failed"
+                                    : HelpdeskStatus.Laps(laps),
                         SourceSummary =
-                            domainRecoveryNames.Contains(computer)
-                                ? "AD (domain retry)"
-                                : "AD"
+                            ambiguousNames.Contains(computer)
+                                ? "AD (ambiguous)"
+                                : domainRecoveryNames.Contains(computer)
+                                    ? "AD (domain retry)"
+                                    : "AD"
                     };
 
                 var rowIndex =
@@ -325,14 +377,44 @@ public sealed partial class MainForm
             _updatingHomeSearchResults = false;
             UpdateHomeSearchSelection();
 
+            var failedSources = new List<string>();
+            var diagnosticDetails = new List<string>();
+            if (recoveryFailure is not null)
+            {
+                failedSources.Add("BitLocker");
+                diagnosticDetails.Add("BitLocker metadata: " + recoveryFailure);
+            }
+            if (lapsFailure is not null)
+            {
+                failedSources.Add("LAPS");
+                diagnosticDetails.Add("LAPS metadata: " + lapsFailure);
+            }
+
+            if (failedSources.Count > 0)
+            {
+                _appDiagnostics.ShowMessage(
+                    "Start metadata search was incomplete.",
+                    string.Join(Environment.NewLine, diagnosticDetails) +
+                    Environment.NewLine +
+                    "An LDAP error is not proof that a backup is absent.");
+            }
+
+            var statusText = failedSources.Count > 0
+                ? $"Partial search: {string.Join(" and ", failedSources)} lookup failed. " +
+                  $"{names.Count} result(s) found; see diagnostics."
+                : ambiguousNames.Count > 0
+                    ? $"{names.Count} result(s); {ambiguousNames.Count} ambiguous computer name(s). " +
+                      "Use an exact AD object GUID or OU in LAPS/Recovery."
+                    : names.Count == 0
+                        ? "No matching computer, Recovery ID or device ID was found."
+                        : names.Count == 1
+                            ? "One computer found. Choose BitLocker or LAPS."
+                            : $"Found {names.Count} computers. Select one, then choose BitLocker or LAPS.";
+
             UiStyle.SetStatus(
                 _homeSearchStatus,
-                names.Count == 0
-                    ? "No matching computer, Recovery ID or device ID was found."
-                    : names.Count == 1
-                        ? "One computer found. Choose BitLocker or LAPS."
-                        : $"Found {names.Count} computers. Select one, then choose BitLocker or LAPS.",
-                names.Count == 0
+                statusText,
+                failedSources.Count > 0 || ambiguousNames.Count > 0 || names.Count == 0
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
         }
@@ -486,12 +568,14 @@ public sealed partial class MainForm
         _homeRevealBitLockerButton.Enabled =
             connected &&
             selected is not null &&
-            selected.BitLockerKeyCount > 0;
+            selected.BitLockerKeyCount > 0 &&
+            !selected.IdentityAmbiguous;
 
         _homeCopyBitLockerButton.Enabled =
             connected &&
             selected is not null &&
-            selected.BitLockerKeyCount > 0;
+            selected.BitLockerKeyCount > 0 &&
+            !selected.IdentityAmbiguous;
 
         _homeDeviceDetailsButton.Enabled =
             selected is not null;
@@ -502,6 +586,7 @@ public sealed partial class MainForm
 
         _homeRotateBitLockerButton.Enabled =
             selected is not null &&
+            !selected.IdentityAmbiguous &&
             !string.IsNullOrWhiteSpace(
                 _cloudConfig.TenantId) &&
             !string.IsNullOrWhiteSpace(
@@ -519,6 +604,15 @@ public sealed partial class MainForm
         OpenSelectedHomeDefaultAction()
     {
         var selected = GetSelectedHomeSearchResult();
+        if (selected?.IdentityAmbiguous == true)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Multiple AD objects share this name. Use an exact object GUID in LAPS or an exact computer/OU in Recovery.",
+                UiStatusKind.Warning);
+            return;
+        }
+
         switch (HelpdeskStatus.ResolveHomeDefaultAction(selected))
         {
             case HomeDefaultAction.None:
@@ -551,6 +645,15 @@ public sealed partial class MainForm
         if (selected is null)
         {
             NavigateToRecoveryWorkspace(fromStart: true);
+            return;
+        }
+
+        if (selected.IdentityAmbiguous)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Ambiguous computer name. Select an exact AD computer in the Recovery workspace.",
+                UiStatusKind.Warning);
             return;
         }
 
@@ -593,6 +696,15 @@ public sealed partial class MainForm
         if (selected is null)
         {
             NavigateToLapsWorkspace(fromStart: true);
+            return;
+        }
+
+        if (selected.IdentityAmbiguous)
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Ambiguous computer name. Use the exact AD object GUID in the LAPS workspace.",
+                UiStatusKind.Warning);
             return;
         }
 

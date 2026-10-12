@@ -1993,6 +1993,7 @@ public sealed partial class MainForm : DpiAwareForm
                     new ListViewItem(
                         row.ComputerName);
 
+                item.SubItems.Add(row.IdentityStatus);
                 item.SubItems.Add(
                     row.FoundInAd
                         ? "Yes"
@@ -2058,6 +2059,17 @@ public sealed partial class MainForm : DpiAwareForm
                 cloudReady
                     ? UiStatusKind.Success
                     : UiStatusKind.Warning);
+
+            var ambiguousDevices = rows.Count(
+                row => row.IdentityStatus is "Name collision" or "Ambiguous device ID");
+            if (ambiguousDevices > 0)
+            {
+                UiStyle.SetStatus(
+                    _unifiedStatus,
+                    $"Found {rows.Count} records; {ambiguousDevices} ambiguous identities. " +
+                    "Records remain separate. Verify exact object IDs before recovery or rotation.",
+                    UiStatusKind.Warning);
+            }
 
             _audit.Write(
                 "UnifiedDeviceSearch",
@@ -2144,6 +2156,11 @@ public sealed partial class MainForm : DpiAwareForm
             _unifiedResults.SelectedItems[0].Tag is not UnifiedDeviceInfo row) return;
 
         _unifiedDetails.AppendText($"Computer:          {row.ComputerName}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Identity status:   {row.IdentityStatus}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"Source object ID:  {row.IdentityKey}{Environment.NewLine}");
+        _unifiedDetails.AppendText($"AD object GUID:    {row.AdObjectGuid}{Environment.NewLine}");
+        if (!string.IsNullOrWhiteSpace(row.IdentityWarning))
+            _unifiedDetails.AppendText($"WARNING:           {row.IdentityWarning}{Environment.NewLine}");
         _unifiedDetails.AppendText($"AD:                {row.FoundInAd}{Environment.NewLine}");
         _unifiedDetails.AppendText($"Entra:             {row.FoundInEntra}  Device ID: {row.EntraDeviceId}{Environment.NewLine}");
         _unifiedDetails.AppendText($"Intune:            {row.FoundInIntune}  Managed Device ID: {row.ManagedDeviceId}{Environment.NewLine}");
@@ -2169,6 +2186,14 @@ public sealed partial class MainForm : DpiAwareForm
             ShowAppMessage(
                 "Rotate BitLocker Key",
                 "Select an Intune-managed device first.");
+            return;
+        }
+
+        if (row.IdentityStatus is "Name collision" or "Ambiguous device ID")
+        {
+            ShowAppMessage(
+                "Rotate BitLocker Key",
+                "The device identity is ambiguous. Verify its exact Entra and Intune device IDs before requesting rotation.");
             return;
         }
 
