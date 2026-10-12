@@ -369,6 +369,109 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "Devices AD source survives failed Intune and Entra",
+            () =>
+            {
+                var report = UnifiedDeviceSearchReport.Combine(
+                    new MetadataLookupResult<AdComputerInfo>(
+                        [new AdComputerInfo
+                        {
+                            ComputerName = "LAB-REPORT-01",
+                            ObjectGuid = "19191919-1919-1919-1919-191919191919",
+                            DistinguishedName = "CN=LAB-REPORT-01,DC=example,DC=test"
+                        }], null),
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [], "Graph returned 403 for Intune"),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [], "Graph returned 429 for Entra"));
+
+                Assert(report.IsPartial && report.Rows.Count == 1 &&
+                       report.Rows[0].FoundInAd &&
+                       report.Rows[0].RecoveryMetadataIncomplete &&
+                       !report.IntuneSucceeded && !report.EntraSucceeded &&
+                       report.DiagnosticSummary.Contains("403", StringComparison.Ordinal) &&
+                       report.DiagnosticSummary.Contains("429", StringComparison.Ordinal),
+                    "Partial Graph failure should preserve AD and mark recovery keys unverified.");
+            });
+
+        Check(
+            "Devices Intune source survives failed Entra metadata",
+            () =>
+            {
+                var report = UnifiedDeviceSearchReport.Combine(
+                    null,
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [new ManagedDeviceInfo
+                        {
+                            DeviceName = "LAB-CLOUD-02",
+                            ManagedDeviceId = "managed-two",
+                            EntraDeviceId = "20202020-2020-2020-2020-202020202020"
+                        }], null),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [], "403 insufficient Graph permissions"));
+
+                Assert(report.IsPartial && report.Rows.Count == 1 &&
+                       report.Rows[0].FoundInIntune &&
+                       report.Rows[0].RecoveryIds.Count == 0 &&
+                       report.Rows[0].RecoveryMetadataIncomplete &&
+                       report.SourceSummary.Contains("Entra BitLocker: failed",
+                           StringComparison.Ordinal),
+                    "Entra permission denial should not hide Intune device information.");
+            });
+
+        Check(
+            "Devices cloud source survives failed AD lookup",
+            () =>
+            {
+                var report = UnifiedDeviceSearchReport.Combine(
+                    new MetadataLookupResult<AdComputerInfo>(
+                        [], "LDAP server unavailable"),
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [new ManagedDeviceInfo
+                        {
+                            DeviceName = "LAB-CLOUD-03",
+                            ManagedDeviceId = "managed-three",
+                            EntraDeviceId = "30303030-3030-3030-3030-303030303030"
+                        }], null),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [new CloudRecoveryMetadata
+                        {
+                            ComputerName = "LAB-CLOUD-03",
+                            DeviceId = "30303030-3030-3030-3030-303030303030",
+                            RecoveryId = "cloud-key-three"
+                        }], null));
+
+                Assert(report.IsPartial && !report.AdSucceeded &&
+                       report.Rows.Count == 1 &&
+                       report.Rows[0].RecoveryIds.SequenceEqual(["cloud-key-three"]) &&
+                       report.Rows[0].FoundInIntune,
+                    "Failed AD must not discard independently retrieved cloud key metadata.");
+            });
+
+        Check(
+            "Devices all attempted source failures are explicit",
+            () =>
+            {
+                var failed = false;
+                try
+                {
+                    _ = UnifiedDeviceSearchReport.Combine(
+                        null,
+                        new MetadataLookupResult<ManagedDeviceInfo>(
+                            [], "Intune unavailable"),
+                        new MetadataLookupResult<CloudRecoveryMetadata>(
+                            [], "Entra unavailable"));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    failed = ex.Message.Contains("All device inventory sources failed",
+                        StringComparison.Ordinal);
+                }
+
+                Assert(failed, "All failed sources must not become a successful empty result.");
+            });
+
+        Check(
             "Graph 403 remains an explicit failure",
             () =>
             {
