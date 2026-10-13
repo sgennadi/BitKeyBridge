@@ -359,7 +359,7 @@ public sealed partial class MainForm
             new GroupBox
             {
                 Text =
-                    "Active Directory connection",
+                    "Connections",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
@@ -474,6 +474,7 @@ public sealed partial class MainForm
         _homeUseOtherAccount.AutoSize =
             true;
 
+        _startAdIdentityPanel = identity;
         identity.Controls.Add(
             _homeUseWindowsIdentity);
         identity.Controls.Add(
@@ -610,6 +611,14 @@ public sealed partial class MainForm
             _recoveryDiagnostics,
             0,
             7);
+
+        // Insert a single source chooser ABOVE the existing AD controls,
+        // preserving all their original row coordinates and dependencies.
+        connection.RowCount = 9;
+        connection.RowStyles.Insert(0, new RowStyle(SizeType.AutoSize));
+        foreach (Control existing in connection.Controls)
+            connection.SetRow(existing, connection.GetRow(existing) + 1);
+        connection.Controls.Add(BuildStartConnectionSourceChooser(), 0, 0);
 
         connectionGroup.Controls.Add(
             connection);
@@ -2595,48 +2604,64 @@ public sealed partial class MainForm
     {
         RestoreRecoveryUiState();
         RefreshHomeConnectionUi();
+        UpdateStartConnectionSourceControls();
+
+        var source = SelectedStartSource;
+        if (source == StartConnectionPolicy.Choose)
+        {
+            SetDirectoryConnectionStatus(
+                "Choose Active Directory, Microsoft Entra / Intune, or both on Start.",
+                UiStatusKind.Neutral);
+            return;
+        }
+
+        if (StartConnectionPolicy.NeedsMicrosoftCloud(source))
+        {
+            if (!StartCloudAppConfigured())
+            {
+                await ShowStartCloudWizardAsync(connectAfterSave: true);
+                if (IsDisposed)
+                    return;
+            }
+            else
+            {
+                UiStyle.SetStatus(_homeCloudConnectionStatus,
+                    "Cloud is configured. Click Connect to Microsoft 365 to sign in with MFA.",
+                    UiStatusKind.Neutral);
+            }
+        }
+
+        // Cloud-only sessions must NEVER trigger an AD credentials dialog.
+        if (!StartConnectionPolicy.NeedsActiveDirectory(source))
+            return;
 
         if (!_config.AutoConnectOnStart)
         {
             SetDirectoryConnectionStatus(
-                "Automatic AD connection is disabled. Choose an account to connect.",
+                "AD auto-connect is off. Click Connect to AD to use your Windows account.",
                 UiStatusKind.Neutral);
-
-            await TestDirectoryConnectionAsync(
-                promptForOu: false,
-                promptForSessionCredentials: true,
-                forceManualCredentials: true);
             return;
         }
 
         if (!CanAttemptAutomaticDirectoryConnection())
         {
             SetDirectoryConnectionStatus(
-                "AD connection requires session credentials.",
+                "AD requires explicit session credentials. Click Connect to AD.",
                 UiStatusKind.Warning);
-
-            await TestDirectoryConnectionAsync(
-                promptForOu: false,
-                promptForSessionCredentials: true,
-                forceManualCredentials: false);
             return;
         }
 
+        // Noninteractive integrated authentication first. A failed bind shows
+        // a warning and never silently asks for administrator credentials.
         await TestDirectoryConnectionAsync(
             promptForOu: false,
             promptForSessionCredentials: false);
 
-        if (!_directoryConnected &&
-            !IsDisposed)
+        if (!_directoryConnected && !IsDisposed)
         {
             SetDirectoryConnectionStatus(
-                "Automatic AD connection failed. Enter credentials to retry.",
+                "Automatic AD connection failed. Click Connect to AD to retry.",
                 UiStatusKind.Warning);
-
-            await TestDirectoryConnectionAsync(
-                promptForOu: false,
-                promptForSessionCredentials: true,
-                forceManualCredentials: true);
         }
     }
 
