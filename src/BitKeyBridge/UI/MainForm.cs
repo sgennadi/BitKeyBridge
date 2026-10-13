@@ -209,8 +209,13 @@ public sealed partial class MainForm : DpiAwareForm
         Controls.Add(
             BuildMainShell());
 
+        InitializeMainViewport();
         if (layoutSelfTest)
             return;
+
+        // Default to a maximized workspace; responsive reflow also handles
+        // later restore/maximize operations and changing RDP resolutions.
+        WindowState = FormWindowState.Maximized;
 
         LoadDirectorySettings();
         LoadDefaultScopes();
