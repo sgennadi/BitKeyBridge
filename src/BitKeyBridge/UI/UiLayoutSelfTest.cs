@@ -275,6 +275,10 @@ public static class UiLayoutSelfTest
                         _ =>
                             Task.CompletedTask)),
             (
+                "Startup connection wizard",
+                () => new StartupConnectionWizardDialog(
+                    StartConnectionPolicy.ActiveDirectory)),
+            (
                 "Non-admin Microsoft 365 connection wizard",
                 () => new CloudConnectionWizardDialog(
                     new CloudAuthConfig
@@ -616,6 +620,7 @@ public static class UiLayoutSelfTest
 
             VerifyMainViewportFill(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
+            VerifySelectedHomeRecoveryLayout(main, formName, scenario, failures);
         }
         else
         {
@@ -673,6 +678,90 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: maximized window leaves a small top-left workspace instead of filling the client area.");
+        }
+    }
+
+    private static void VerifySelectedHomeRecoveryLayout(
+        MainForm main,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        var root = FindByName(main, "HomeLayoutRoot") as TableLayoutPanel;
+        var area = FindByName(main, "HomeSearchResultsArea") as TableLayoutPanel;
+        var grid = FindByName(main, "HomeUnifiedSearchResults") as DataGridView;
+        var panel = FindByName(main, "HomeSelectionPanel") as TableLayoutPanel;
+        var cards = FindByName(main, "HomeServiceCards") as TableLayoutPanel;
+
+        if (root is null || area is null || grid is null ||
+            panel is null || cards is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: selected recovery layout is missing.");
+            return;
+        }
+
+        if (root.RowStyles[5].SizeType != SizeType.AutoSize ||
+            root.RowStyles[7].SizeType != SizeType.Percent)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: selected recovery cards must not be placed below a percentage-height results grid.");
+        }
+
+        // Metadata-only mock: no AD bind, Graph call or secret is performed.
+        try
+        {
+            var index = grid.Rows.Add(
+                "UI-TEST-PC", "AD", "Available", DateTime.UtcNow,
+                "Detected", DateTime.UtcNow);
+            grid.Rows[index].Tag = new HomeSearchResult
+            {
+                ComputerName = "UI-TEST-PC",
+                ComputerId = Guid.Empty.ToString(),
+                BitLockerKeyCount = 1,
+                BitLockerStatus = "Available",
+                LapsCandidateFound = true,
+                LapsStatus = "Detected"
+            };
+            grid.ClearSelection();
+            grid.Rows[index].Selected = true;
+            grid.CurrentCell = grid.Rows[index].Cells[0];
+            main.ReflowMainViewport();
+
+            var pairWidth = (int)Math.Ceiling(
+                UiStyle.HomeResultsSideBySideMinimumWidth *
+                main.DeviceDpi / (double)UiStyle.BaselineDpi);
+            var available = area.Parent?.ClientSize.Width ?? 0;
+            bool expectedSideBySide = available -
+                (area.Parent?.Padding.Horizontal ?? 0) >= pairWidth;
+            var gridCell = area.GetPositionFromControl(grid);
+            var selectedCell = area.GetPositionFromControl(panel);
+            var correct = expectedSideBySide
+                ? area.ColumnCount == 2 && area.RowCount == 1 &&
+                  gridCell.Column == 0 && gridCell.Row == 0 &&
+                  selectedCell.Column == 1 && selectedCell.Row == 0
+                : area.ColumnCount == 1 && area.RowCount == 2 &&
+                  gridCell.Row == 0 && selectedCell.Row == 1 &&
+                  area.RowStyles[0].SizeType == SizeType.Absolute;
+
+            if (!correct || !ReferenceEquals(cards.Parent, panel) ||
+                cards.Controls.Count != 2)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: selecting a computer must display BitLocker and LAPS directly beside the results on wide screens or below a compact list on small screens.");
+            }
+
+            if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
+                FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true })
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: metadata selection must not enable secret actions without authenticated source access.");
+            }
+        }
+        finally
+        {
+            grid.Rows.Clear();
+            main.ReflowMainViewport();
         }
     }
 
