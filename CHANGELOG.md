@@ -1,3 +1,14 @@
+## 0.29.6
+
+**Unified rounded Windows UI and direct BitLocker diagnostics**
+
+- Apply the modern rounded visual design across all DPI-aware windows and dialogs: page tabs, input fields, buttons, DataGridViews, group boxes, status indicators, menus, and supported Windows 11 window corners, without changing the business logic or credentials behavior.
+- Use a shared UiModernTheme connected to DpiAwareForm plus centralized UiStyle tokens for radius, backgrounds, borders, interaction states and DPI-safe rendering. Honor Windows high-contrast mode.
+- Remove the three confusing Start toolbar buttons (Device Details, Intune rotation selector and duplicate BitLocker diagnostics). Device details and confirmed Intune key rotation stay in the Devices workspace.
+- Place a direct **View diagnostic commands** link inside the BitLocker card. It opens the actual runbook for the selected computer without navigating to another workspace; the link remains disabled until selection.
+- Keep explicit Reveal/Copy, LAPS history, audit and sensitive-data protections unchanged.
+- Extend runtime UI checks to require the direct diagnostic link and reject obsolete navigation-only Start controls.
+
 ## 0.29.5
 
 **Polished BitLocker/LAPS recovery cards and inline password history**
