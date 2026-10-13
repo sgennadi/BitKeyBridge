@@ -20,11 +20,9 @@ public sealed partial class MainForm
         TextBox? target =
             ReferenceEquals(_mainTabs.SelectedTab, _homeWorkspaceTab)
                 ? _homeQuery
-                : ReferenceEquals(_mainTabs.SelectedTab, _computerWorkspaceTab) &&
-                  ReferenceEquals(_computerServiceTabs.SelectedTab, _recoveryWorkspaceTab)
+                : ReferenceEquals(_mainTabs.SelectedTab, _recoveryWorkspaceTab)
                     ? _startQuery
-                    : ReferenceEquals(_mainTabs.SelectedTab, _computerWorkspaceTab) &&
-                      ReferenceEquals(_computerServiceTabs.SelectedTab, _lapsWorkspaceTab)
+                    : ReferenceEquals(_mainTabs.SelectedTab, _lapsWorkspaceTab)
                         ? _lapsQuery
                         : null;
 
