@@ -1362,7 +1362,7 @@ public sealed partial class MainForm
 
     private TabPage BuildRecoveryWorkspaceTab()
     {
-        var tab = new TabPage("Recovery")
+        var tab = new TabPage("BitLocker")
         {
             Name = "RecoveryWorkspace"
         };
