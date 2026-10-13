@@ -682,43 +682,46 @@ public static class UiLayoutSelfTest
     }
 
     private static void VerifySelectedHomeRecoveryLayout(
-        MainForm main,
-        string formName,
-        Scenario scenario,
+        MainForm main, string formName, Scenario scenario,
         List<string> failures)
     {
         var root = FindByName(main, "HomeLayoutRoot") as TableLayoutPanel;
         var area = FindByName(main, "HomeSearchResultsArea") as TableLayoutPanel;
-        var grid = FindByName(main, "HomeUnifiedSearchResults") as DataGridView;
-        var panel = FindByName(main, "HomeSelectionPanel") as TableLayoutPanel;
         var cards = FindByName(main, "HomeServiceCards") as TableLayoutPanel;
-        var recoveryHost = FindByName(main, "HomeRecoveryPaneHost") as TableLayoutPanel;
-        var computersHost = FindByName(main, "HomeComputersPaneHost") as TableLayoutPanel;
-        var swap = FindByName(main, "HomeSwapPanesButton") as Button;
+        var grid = FindByName(main, "HomeUnifiedSearchResults") as DataGridView;
+        var bitLocker = FindByName(main, "HomeBitLockerPaneHost") as TableLayoutPanel;
+        var laps = FindByName(main, "HomeLapsPaneHost") as TableLayoutPanel;
+        var computers = FindByName(main, "HomeComputersPaneHost") as TableLayoutPanel;
+        var recent = FindByName(main, "HomeRecentComputers") as DataGridView;
+        var quickRecent = FindByName(main, "HomeRecentQuickPanel") as TableLayoutPanel;
 
-        if (root is null || area is null || grid is null ||
-            panel is null || cards is null || recoveryHost is null ||
-            computersHost is null || swap is null)
+        if (root is null || area is null || cards is null || grid is null ||
+            bitLocker is null || laps is null || computers is null ||
+            recent is null || quickRecent is null)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: selected recovery layout is missing.");
+                $"{formName}/{scenario.Name}: one of the three draggable Start panes or top-right Recent computers is missing.");
             return;
         }
 
-        if (root.RowStyles[5].SizeType != SizeType.AutoSize ||
-            root.RowStyles[7].SizeType != SizeType.Percent)
+        if (root.RowCount != 6 ||
+            root.RowStyles[5].SizeType != SizeType.Percent ||
+            !ReferenceEquals(cards.Parent, area) ||
+            cards.Controls.Count != 3 ||
+            !ReferenceEquals(recent.Parent, quickRecent))
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: selected recovery cards must not be placed below a percentage-height results grid.");
+                $"{formName}/{scenario.Name}: Start must reserve its workspace for three equal panes, with Recent computers in Connections' top-right area.");
         }
 
-        // Metadata-only mock: no AD bind, Graph call or secret is performed.
+        // Simulate metadata-only computer selection. Do not connect to AD,
+        // call Graph or retrieve any recovery password in the layout test.
         try
         {
-            var index = grid.Rows.Add(
+            var rowIndex = grid.Rows.Add(
                 "UI-TEST-PC", "AD", "Available", DateTime.UtcNow,
                 "Detected", DateTime.UtcNow);
-            grid.Rows[index].Tag = new HomeSearchResult
+            var computer = new HomeSearchResult
             {
                 ComputerName = "UI-TEST-PC",
                 ComputerId = Guid.Empty.ToString(),
@@ -727,83 +730,85 @@ public static class UiLayoutSelfTest
                 LapsCandidateFound = true,
                 LapsStatus = "Detected"
             };
+            grid.Rows[rowIndex].Tag = computer;
             grid.ClearSelection();
-            grid.Rows[index].Selected = true;
-            grid.CurrentCell = grid.Rows[index].Cells[0];
+            grid.Rows[rowIndex].Selected = true;
+            grid.CurrentCell = grid.Rows[rowIndex].Cells[0];
             main.ReflowMainViewport();
 
-            var pairWidth = (int)Math.Ceiling(
-                UiStyle.HomeResultsSideBySideMinimumWidth *
+            var width = area.Parent?.ClientSize.Width ?? 0;
+            width -= area.Parent?.Padding.Horizontal ?? 0;
+            bool expectedThree = width >= (int)Math.Ceiling(
+                UiStyle.HomeThreePaneMinimumWidth *
                 main.DeviceDpi / (double)UiStyle.BaselineDpi);
-            var available = area.Parent?.ClientSize.Width ?? 0;
-            bool expectedSideBySide = available -
-                (area.Parent?.Padding.Horizontal ?? 0) >= pairWidth;
-            var computerCell = area.GetPositionFromControl(computersHost);
-            var recoveryCell = area.GetPositionFromControl(recoveryHost);
-            var correct = expectedSideBySide
-                ? area.ColumnCount == 2 && area.RowCount == 1 &&
-                  recoveryCell.Row == 0 && computerCell.Row == 0 &&
-                  recoveryCell.Column != computerCell.Column &&
-                  recoveryCell.Column is 0 or 1 &&
-                  computerCell.Column is 0 or 1 &&
-                  area.ColumnStyles.Count == 2 &&
-                  Math.Abs(area.ColumnStyles[recoveryCell.Column].Width -
-                           UiStyle.HomeRecoveryColumnPercent) < 0.1F &&
-                  Math.Abs(area.ColumnStyles[computerCell.Column].Width -
-                           (100F - UiStyle.HomeRecoveryColumnPercent)) < 0.1F
-                : area.ColumnCount == 1 && area.RowCount == 2 &&
-                  computerCell.Column == 0 && computerCell.Row == 0 &&
-                  recoveryCell.Column == 0 && recoveryCell.Row == 1 &&
-                  area.RowStyles[0].SizeType == SizeType.Absolute;
 
-            if (!correct || !ReferenceEquals(cards.Parent, panel) ||
-                cards.Controls.Count != 2)
+            var hosts = new[] { bitLocker, laps, computers };
+            var cells = hosts.Select(cards.GetPositionFromControl).ToArray();
+            if (expectedThree)
             {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: wide Start must keep the recovery pane at 66% on either side of the 34% computer pane; compact Start must show the list above the recovery cards.");
-            }
+                bool equallySized =
+                    cards.ColumnCount == 3 && cards.RowCount == 1 &&
+                    cells.All(position => position.Row == 0 &&
+                        position.Column is >= 0 and <= 2) &&
+                    cells.Select(position => position.Column).Distinct().Count() == 3 &&
+                    cards.ColumnStyles.Count == 3 &&
+                    cards.ColumnStyles.All(style =>
+                        style.SizeType == SizeType.Percent &&
+                        Math.Abs(style.Width - 100F / 3F) < 0.1F);
+                if (!equallySized)
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: BitLocker, LAPS and Computers must each occupy one equal third of the wide Start workspace.");
 
-            if (expectedSideBySide)
-            {
-                // Swap the two real WinForms pane hosts without altering source
-                // connections, selected results, secrets or saved user settings.
-                var originalRecoveryColumn = recoveryCell.Column;
-                if (!swap.Enabled)
+                // Any panel can exchange places with either other panel.
+                // This action must preserve the selected computer and cards.
+                var originalBitLocker = cards.GetPositionFromControl(bitLocker).Column;
+                var originalComputers = cards.GetPositionFromControl(computers).Column;
+                main.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
+                main.ReflowMainViewport();
+                if (cards.GetPositionFromControl(bitLocker).Column != originalComputers ||
+                    cards.GetPositionFromControl(computers).Column != originalBitLocker ||
+                    grid.SelectedRows.Count != 1 ||
+                    !ReferenceEquals(grid.SelectedRows[0].Tag, computer))
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: the pane swap action must be enabled for a wide selected-computer layout.");
+                        $"{formName}/{scenario.Name}: dragging BitLocker onto Computers must swap their positions without losing the computer selection.");
                 }
-                else
-                {
-                    main.SwapHomePanesForUiSelfTest();
-                    main.ReflowMainViewport();
-                    var newRecoveryColumn = area.GetPositionFromControl(recoveryHost).Column;
-                    var newComputerColumn = area.GetPositionFromControl(computersHost).Column;
-                    if (newRecoveryColumn == originalRecoveryColumn ||
-                        newComputerColumn == newRecoveryColumn ||
-                        grid.SelectedRows.Count != 1 ||
-                        !ReferenceEquals(cards.Parent, panel))
-                    {
-                        failures.Add(
-                            $"{formName}/{scenario.Name}: pane swap failed: recovery column {originalRecoveryColumn}->{newRecoveryColumn}, computer column {newComputerColumn}, selected rows {grid.SelectedRows.Count}, card parent intact {ReferenceEquals(cards.Parent, panel)}.");
-                    }
+                main.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
+                main.ReflowMainViewport();
 
-                    // Restore initial order. Layout tests never write profile preferences.
-                    main.SwapHomePanesForUiSelfTest();
-                    main.ReflowMainViewport();
+                // Verify the third pane can be moved independently.
+                var originalLaps = cards.GetPositionFromControl(laps).Column;
+                originalComputers = cards.GetPositionFromControl(computers).Column;
+                main.ExchangeHomePanesForUiSelfTest("Laps", "Computers");
+                main.ReflowMainViewport();
+                if (cards.GetPositionFromControl(laps).Column != originalComputers ||
+                    cards.GetPositionFromControl(computers).Column != originalLaps)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: LAPS must be independently draggable onto Computers.");
                 }
+                main.ExchangeHomePanesForUiSelfTest("Laps", "Computers");
+                main.ReflowMainViewport();
             }
-            else if (swap.Enabled)
+            else
             {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: swap is disabled when panes are stacked for narrow displays.");
+                if (cards.ColumnCount != 1 || cards.RowCount != 3 ||
+                    cells.Any(position => position.Column != 0) ||
+                    cells.Select(position => position.Row).Distinct().Count() != 3 ||
+                    cards.RowStyles.Count != 3 ||
+                    cards.RowStyles.Any(row => row.SizeType != SizeType.Absolute))
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: compact HiDPI Start must stack all three equally high panes with scrolling.");
+                }
             }
 
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
-                FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true })
+                FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true } ||
+                FindByName(cards, "HomeLoadLapsHistoryButton") is Button { Enabled: true })
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: metadata selection must not enable secret actions without authenticated source access.");
+                    $"{formName}/{scenario.Name}: metadata-only selection cannot reveal LAPS/BitLocker secrets or load history without authorization.");
             }
         }
         finally
@@ -905,9 +910,10 @@ public static class UiLayoutSelfTest
                     "HomeConnectionSourceChooser",
                     "HomeConnectionSource",
                     "HomeReconnectWizardButton",
-                    "HomeRecoveryPaneHost",
+                    "HomeBitLockerPaneHost",
+                    "HomeLapsPaneHost",
                     "HomeComputersPaneHost",
-                    "HomeSwapPanesButton",
+                    "HomeRecentQuickPanel",
                     "HomeConnectCloudButton",
                     "HomeConfigureCloudButton",
                     "HomeCloudConnectionStatus",
@@ -944,21 +950,16 @@ public static class UiLayoutSelfTest
 
             if (FindByName(startPage, "HomeServiceCards") is TableLayoutPanel cards)
             {
-                if (FindByName(cards, "HomeBitLockerCard") is not UiRecoveryCard bitLocker ||
-                    FindByName(cards, "HomeLapsCard") is not UiRecoveryCard laps)
+                if (FindByName(cards, "HomeBitLockerCard") is not UiRecoveryCard ||
+                    FindByName(cards, "HomeLapsCard") is not UiRecoveryCard ||
+                    FindByName(cards, "HomeComputersCard") is not UiRecoveryCard ||
+                    cards.Controls.Count != 3)
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start must contain BitLocker and LAPS recovery cards.");
-                }
-                else if (cards.GetPositionFromControl(bitLocker).Column != 0 ||
-                         cards.GetPositionFromControl(laps).Column != 1)
-                {
-                    failures.Add(
-                        $"{formName}/{scenario.Name}: BitLocker must be left of LAPS at startup.");
+                        $"{formName}/{scenario.Name}: Start requires three equal draggable cards: BitLocker, LAPS and Computers.");
                 }
 
-                if (cards.Visible ||
-                    FindByName(startPage, "HomeRevealLapsButton") is Button { Enabled: true } ||
+                if (FindByName(startPage, "HomeRevealLapsButton") is Button { Enabled: true } ||
                     FindByName(startPage, "HomeCopyLapsButton") is Button { Enabled: true } ||
                     FindByName(startPage, "HomeLoadLapsHistoryButton") is Button { Enabled: true })
                 {
