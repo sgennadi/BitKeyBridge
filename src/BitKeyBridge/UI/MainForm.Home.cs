@@ -439,8 +439,8 @@ public sealed partial class MainForm
                     : names.Count == 0
                         ? "No matching computer, Recovery ID or device ID was found."
                         : names.Count == 1
-                            ? "One computer found. Choose BitLocker or LAPS."
-                            : $"Found {names.Count} computers. Select one, then choose BitLocker or LAPS.";
+                            ? "One computer found. BitLocker and LAPS actions are below."
+                            : $"Found {names.Count} computers. Select one to view its recovery cards.";
 
             if (cloudOutcome is not null)
             {
@@ -689,7 +689,7 @@ public sealed partial class MainForm
                 UiStyle.SetStatus(
                     _homeSearchStatus,
                     $"BitLocker for {selected!.ComputerName} is not verified. " +
-                    "Choose BitLocker Recovery to retry, or LAPS Passwords for LAPS.",
+                    "Use the BitLocker and LAPS recovery cards to retry or view diagnostics.",
                     UiStatusKind.Warning);
                 return;
         }
