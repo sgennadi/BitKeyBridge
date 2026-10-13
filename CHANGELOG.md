@@ -1,3 +1,14 @@
+## 0.29.3
+
+**Start computer tabs for BitLocker and LAPS (test build)**
+
+- Selected AD computers now show neighboring **BitLocker | LAPS** tabs directly under Start search results, with BitLocker first and only metadata-confirmed services shown when lookups complete.
+- BitLocker Reveal/Copy and recovery diagnostics remain available in the BitLocker tab; LAPS gains **Reveal LAPS Password** and **Copy LAPS Password** on Start.
+- Selecting a computer or switching tabs never reads or reveals either password. LAPS only reads through the existing authorized, audited AD/decryption flow after an explicit action; secrets are shown in a temporary dialog or copied with the existing clipboard expiry.
+- AD LAPS reads that return no passwords display a specific access/backup-policy warning. Multiple current readable password records require explicit selection in the detailed LAPS view.
+- Advanced Recovery, Devices and LAPS views remain available. Navigating to detailed LAPS no longer triggers a password read automatically.
+- Tab height is centralized in UiStyle for DPI scaling and wrapping action buttons.
+
 ## 0.29.2
 
 **Native GKDI/KDS RPC endpoint discovery and readable network failure diagnostics**
