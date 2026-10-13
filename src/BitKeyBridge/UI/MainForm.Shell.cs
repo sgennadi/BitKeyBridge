@@ -68,6 +68,7 @@ public sealed partial class MainForm
     {
         var root = new TableLayoutPanel
         {
+            Name = "MainLayoutRoot",
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 4,
@@ -275,6 +276,7 @@ public sealed partial class MainForm
         var root =
             new TableLayoutPanel
             {
+                Name = "HomeLayoutRoot",
                 Dock =
                     DockStyle.Fill,
                 AutoScroll =
