@@ -302,11 +302,11 @@ internal static class UiModernTheme
         var textHeight = TextRenderer.MeasureText(
             string.IsNullOrWhiteSpace(group.Text) ? " " : group.Text,
             group.Font).Height;
-        var top = Math.Max(1, textHeight / 2f);
+        var outlineTop = Math.Max(1, textHeight / 2f);
         graphics.Clear(group.Parent?.BackColor ?? UiStyle.ModernCanvas);
         using var outline = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0.5f, top, group.Width - 1.5f,
-                Math.Max(2f, group.Height - top - 1.5f)),
+            new RectangleF(0.5f, outlineTop, group.Width - 1.5f,
+                Math.Max(2f, group.Height - outlineTop - 1.5f)),
             UiStyle.ModernSurfaceRadius * group.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var fill = new SolidBrush(UiStyle.ModernSurface);
         graphics.FillPath(fill, outline);
