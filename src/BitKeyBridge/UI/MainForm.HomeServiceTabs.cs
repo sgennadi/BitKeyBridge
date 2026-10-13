@@ -11,7 +11,7 @@ public sealed partial class MainForm
     private readonly Button _homeRevealLapsButton = new();
     private readonly Button _homeCopyLapsButton = new();
     private bool _homeLapsBusy;
-    private string _homeServiceTabIdentity = string.Empty;
+    private string _homeServiceTabIdentity = "<uninitialized>";
 
     private Control BuildHomeServiceTabs()
     {
@@ -171,6 +171,9 @@ public sealed partial class MainForm
         var computer = selected.ComputerName;
         _homeLapsBusy = true;
         UpdateHomeServiceTabs(selected);
+        UiStyle.SetStatus(_homeSearchStatus,
+            "Reading LAPS for " + computer + " (password requested by operator)...",
+            UiStatusKind.Busy);
         try
         {
             // Reuse the established LAPS read, privileged authorization,
