@@ -634,7 +634,7 @@ public sealed partial class MainForm
             _secretVisibleUntilUtc is not null ||
             _clipboardClearAtUtc is not null;
 
-        UpdateHomeServiceTabs(selected);
+        UpdateHomeServiceCards(selected);
         RefreshHomeSelectionSummary();
     }
 
@@ -651,17 +651,17 @@ public sealed partial class MainForm
             return;
         }
 
-        // Double-clicking a computer stays on Start. This changes the
-        // visible service tab only; it does not request any password.
+        // Double-clicking a computer stays on Start, with both available
+        // service cards shown below. It does not request any password.
         if (selected is not null && !selected.IsCloudRecord)
         {
-            UpdateHomeServiceTabs(selected);
-            if (_homeServiceTabs.TabPages.Count > 0)
+            UpdateHomeServiceCards(selected);
+            if (_homeServiceCards.Visible)
             {
-                _homeServiceTabs.Focus();
+                _homeServiceCards.Focus();
                 UiStyle.SetStatus(_homeSearchStatus,
-                    "Computer selected. Choose BitLocker or LAPS below, " +
-                    "then click Reveal or Copy to request the secret.",
+                    "Computer selected. BitLocker and LAPS actions are shown below. " +
+                    "Click Reveal or Copy to request a password.",
                     UiStatusKind.Neutral);
                 return;
             }
