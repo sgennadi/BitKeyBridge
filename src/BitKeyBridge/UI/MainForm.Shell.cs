@@ -340,7 +340,7 @@ public sealed partial class MainForm
             new Label
             {
                 Text =
-                    "Connect once, search once, then choose BitLocker or LAPS. " +
+                    "Connect once, search once, then view BitLocker and LAPS side by side. " +
                     "Search reads metadata only — secrets are still read on demand.",
                 AutoSize =
                     true,
