@@ -37,7 +37,10 @@ public class DpiAwareForm : Form
 
         // A scrollbar is preferable to clipped controls on high DPI, large-text
         // configurations, RDP sessions, or small displays.
-        AutoScroll = true;
+        // MainForm owns a Dock=Fill workspace and its pages provide scrolling.
+        // Form-level AutoScroll can freeze a maximized docked root at its
+        // original preferred size on high-DPI and remote-desktop desktops.
+        AutoScroll = this is not MainForm;
         UiModernTheme.Apply(this);
         RefreshResponsiveLayout();
     }
@@ -75,8 +78,7 @@ public class DpiAwareForm : Form
 
     internal void PrepareResponsiveLayoutForTesting()
     {
-        AutoScroll =
-            true;
+        AutoScroll = this is not MainForm;
         UiModernTheme.Apply(this);
         ApplyResponsiveDefaults(
             this);
@@ -359,6 +361,11 @@ public class DpiAwareForm : Form
 
     private void ConstrainToWorkingArea()
     {
+        // Never resize/reposition a maximized window. Changing Size/Location
+        // here breaks WinForms Dock=Fill after WM_SIZE (especially RDP / 4K).
+        if (WindowState != FormWindowState.Normal)
+            return;
+
         var workingArea = Screen.FromControl(this).WorkingArea;
         var margin =
             ScaleLogical(
