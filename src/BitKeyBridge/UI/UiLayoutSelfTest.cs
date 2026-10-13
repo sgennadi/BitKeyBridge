@@ -1060,10 +1060,10 @@ public static class UiLayoutSelfTest
                 if (computersHost is null || recoveryHost is null ||
                     !ReferenceEquals(resultsGrid.Parent, computersHost) ||
                     !ReferenceEquals(selectionPanel.Parent, recoveryHost) ||
-                    resultsArea.GetPositionFromControl(computersHost) !=
-                        new TableLayoutPanelCellPosition(0, 0) ||
-                    resultsArea.GetPositionFromControl(recoveryHost) !=
-                        new TableLayoutPanelCellPosition(0, 1))
+                    resultsArea.GetPositionFromControl(computersHost).Column != 0 ||
+                    resultsArea.GetPositionFromControl(computersHost).Row != 0 ||
+                    resultsArea.GetPositionFromControl(recoveryHost).Column != 0 ||
+                    resultsArea.GetPositionFromControl(recoveryHost).Row != 1)
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: before a computer is selected, the bounded computer picker must be above the hidden recovery pane.");
