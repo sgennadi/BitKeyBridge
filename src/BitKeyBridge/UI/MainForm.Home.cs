@@ -612,6 +612,9 @@ public sealed partial class MainForm
 
         UpdateHomeServiceCards(selected);
         RefreshHomeSelectionSummary();
+        // Selection changes the Start split layout immediately. A selected
+        // computer must never be hidden below an oversized empty result grid.
+        QueueMainViewportReflow();
     }
 
     private async void

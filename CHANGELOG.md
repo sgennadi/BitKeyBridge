@@ -1,3 +1,13 @@
+## 0.29.8
+
+**Explicit first-screen connection wizard and immediately visible BitLocker/LAPS cards**
+
+- Open a dedicated **Connect to BitKeyBridge** wizard on every interactive launch after the updater, even when Active Directory was the previously saved choice. Pick **Active Directory**, **Microsoft Entra / Intune (Microsoft 365)**, **Both**, or **Choose later**; only Connect starts authentication.
+- For AD, integrated Windows credentials are preferred. An explicit optional choice requests another AD account. For cloud, use the existing delegated Device Code/MFA flow, launching the cloud configuration wizard if Tenant/Client ID are missing. No local-admin or tenant-admin credential is silently requested.
+- Fix Start's percentage-height search results region that pushed the BitLocker and LAPS cards far below a mostly empty grid. A selected computer now displays search results on the left and recovery cards on the right on a wide display; a narrow/RDP/HiDPI window uses a bounded compact grid immediately above the recovery cards.
+- Keep Recent Computers in the remaining scrollable Start workspace, preserve masked/on-demand passwords and LAPS history, and reflow the layout when selection or window size changes.
+- Extend UI self-tests: exercise the actual selected-computer layout at compact, 150% and 200% scenarios; ensure metadata-only selection cannot reveal secrets; include the startup connection wizard in cross-DPI dialog tests.
+
 ## 0.29.7
 
 **Responsive maximized workspace, selectable AD / Microsoft Entra sources, least-privilege onboarding**

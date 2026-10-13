@@ -38,6 +38,7 @@ public sealed partial class MainForm
     private readonly ProgressBar _homeSearchProgress = new();
     private readonly UiStatusLabel _homeSearchStatus = new();
     private readonly DataGridView _homeSearchResults = new();
+    private readonly TableLayoutPanel _homeResultsArea = new();
     private readonly DataGridView _homeRecentResults = new();
     private readonly RadioButton _homeUseWindowsIdentity = new();
     private readonly RadioButton _homeUseOtherAccount = new();
@@ -296,22 +297,14 @@ public sealed partial class MainForm
                 SizeType.Percent,
                 100F));
 
-        for (var index = 0;
-             index < 9;
-             index++)
+        // Results and recovery cards are intrinsically sized. Giving the
+        // search grid a percentage of the whole window previously pushed
+        // the BitLocker/LAPS cards below a giant empty grid viewport.
+        for (var index = 0; index < 9; index++)
         {
-            root.RowStyles.Add(
-                new RowStyle(
-                    index == 5
-                        ? SizeType.Percent
-                        : index == 7
-                            ? SizeType.Percent
-                            : SizeType.AutoSize,
-                    index == 5
-                        ? 62F
-                        : index == 7
-                            ? 38F
-                            : 0F));
+            root.RowStyles.Add(new RowStyle(
+                index == 7 ? SizeType.Percent : SizeType.AutoSize,
+                index == 7 ? 100F : 0F));
         }
 
         tab.Controls.Add(
@@ -822,35 +815,23 @@ public sealed partial class MainForm
         _homeSearchResults.Columns["LapsDate"]!
             .DefaultCellStyle.Format =
             "yyyy-MM-dd HH:mm:ss";
-        var resultsArea =
-            new TableLayoutPanel
-            {
-                Name =
-                    "HomeSearchResultsArea",
-                Dock =
-                    DockStyle.Fill,
-                ColumnCount =
-                    1,
-                RowCount =
-                    2,
-                Margin =
-                    new Padding(
-                        0)
-            };
+        _homeResultsArea.Name = "HomeSearchResultsArea";
+        _homeResultsArea.Dock = DockStyle.Top;
+        _homeResultsArea.AutoSize = true;
+        _homeResultsArea.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _homeResultsArea.ColumnCount = 1;
+        _homeResultsArea.RowCount = 2;
+        _homeResultsArea.Margin = Padding.Empty;
+        _homeResultsArea.ColumnStyles.Clear();
+        _homeResultsArea.ColumnStyles.Add(
+            new ColumnStyle(SizeType.Percent, 100F));
+        _homeResultsArea.RowStyles.Clear();
+        _homeResultsArea.RowStyles.Add(
+            new RowStyle(SizeType.Absolute, UiStyle.HomeCompactSearchResultsHeight));
+        _homeResultsArea.RowStyles.Add(
+            new RowStyle(SizeType.AutoSize));
 
-        resultsArea.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                100F));
-        resultsArea.RowStyles.Add(
-            new RowStyle(
-                SizeType.Percent,
-                100F));
-        resultsArea.RowStyles.Add(
-            new RowStyle(
-                SizeType.AutoSize));
-
-        resultsArea.Controls.Add(
+        _homeResultsArea.Controls.Add(
             _homeSearchResults,
             0,
             0);
@@ -894,9 +875,10 @@ public sealed partial class MainForm
             false;
         _homeSelectionPanel.ColumnStyles.Clear();
         _homeSelectionPanel.ColumnStyles.Add(
-            new ColumnStyle(
-                SizeType.Percent,
-                100F));
+            new ColumnStyle(SizeType.Percent, 100F));
+        _homeSelectionPanel.RowStyles.Clear();
+        for (var row = 0; row < 3; row++)
+            _homeSelectionPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         UiStyle.ConfigureStatusLabel(
             _homeSelectionSummary);
@@ -970,13 +952,13 @@ public sealed partial class MainForm
             0,
             2);
 
-        resultsArea.Controls.Add(
+        _homeResultsArea.Controls.Add(
             _homeSelectionPanel,
             0,
             1);
 
         root.Controls.Add(
-            resultsArea,
+            _homeResultsArea,
             0,
             5);
 

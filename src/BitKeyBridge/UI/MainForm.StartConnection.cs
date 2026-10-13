@@ -121,7 +121,7 @@ public sealed partial class MainForm
 
     private string SelectedStartSource => _startConnectionPreferences.Source;
 
-    private async Task OnStartConnectionSourceSelectedAsync()
+    private async Task OnStartConnectionSourceSelectedAsync(bool openCloudWizardIfNeeded = true)
     {
         _startConnectionPreferences.Source = _homeConnectionSource.SelectedIndex switch
         {
@@ -154,7 +154,8 @@ public sealed partial class MainForm
         UpdateStartConnectionSourceControls();
         RefreshHomeConnectionUi();
 
-        if (StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource) &&
+        if (openCloudWizardIfNeeded &&
+            StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource) &&
             !StartCloudAppConfigured())
             await ShowStartCloudWizardAsync(connectAfterSave: true);
     }
