@@ -23,7 +23,9 @@ public static class UiStyle
     public const int MinimumButtonHeight = 32;
     public const int MinimumButtonWidth = 88;
     // Start's BitLocker/LAPS tab body, with room for wrapped actions at high DPI.
-    public const int HomeServiceTabsHeight = 196;
+    // Responsive two-column recovery cards on Start.
+    public const int HomeRecoveryCardsPairMinimumWidth = 820;
+    public const int HomeRecoveryCardMaxTextWidth = 740;
     public const int AdCredentialDialogWidth = 800;
     public const int AdCredentialDialogHeight = 520;
     public const int AdCredentialDialogMinimumWidth = 640;
