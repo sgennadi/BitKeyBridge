@@ -831,11 +831,6 @@ public sealed partial class MainForm
         _homeResultsArea.RowStyles.Add(
             new RowStyle(SizeType.AutoSize));
 
-        _homeResultsArea.Controls.Add(
-            _homeSearchResults,
-            0,
-            0);
-
         // Recovery buttons are owned by their cards; no navigation-only toolbar.
         _homeRevealBitLockerButton.Name =
             "HomeRevealBitLockerButton";
@@ -952,10 +947,10 @@ public sealed partial class MainForm
             0,
             2);
 
-        _homeResultsArea.Controls.Add(
-            _homeSelectionPanel,
-            0,
-            1);
+        // Dedicated draggable pane headers keep content intact when swapped.
+        BuildHomePaneHosts();
+        _homeResultsArea.Controls.Add(_homeComputersPaneHost, 0, 0);
+        _homeResultsArea.Controls.Add(_homeRecoveryPaneHost, 0, 1);
 
         root.Controls.Add(
             _homeResultsArea,
