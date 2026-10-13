@@ -10,6 +10,10 @@ public sealed class StartConnectionPreferences
 
     // User-specific visual preference. No credentials or secrets are persisted.
     public bool RecoveryCardsOnLeft { get; set; } = true;
+
+    // Three draggable equal-size panes; contains only their IDs, never secrets.
+    // Empty indicates migration from the earlier two-pane left/right choice.
+    public string HomePaneOrder { get; set; } = string.Empty;
 }
 
 public static class StartConnectionPolicy
