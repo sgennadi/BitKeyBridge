@@ -70,6 +70,8 @@ public static class UiLayoutSelfTest
         VerifyLapsHelpdeskStates(
             failures);
 
+        VerifyStartSourcePolicies(failures);
+
         var factories =
             CreateFormFactories();
 
@@ -272,6 +274,14 @@ public static class UiLayoutSelfTest
                         },
                         _ =>
                             Task.CompletedTask)),
+            (
+                "Non-admin Microsoft 365 connection wizard",
+                () => new CloudConnectionWizardDialog(
+                    new CloudAuthConfig
+                    {
+                        TenantId = "contoso.onmicrosoft.com",
+                        ClientId = Guid.Empty.ToString()
+                    })),
             (
                 "Recovery access",
                 () =>
@@ -596,21 +606,26 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: AutoScaleMode is {form.AutoScaleMode}, expected Dpi.");
         }
 
-        if (!form.AutoScroll)
+        if (form is MainForm main)
         {
-            failures.Add(
-                $"{formName}/{scenario.Name}: form scrolling is disabled.");
-        }
+            if (form.AutoScroll)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: MainForm must use page scrolling, not form scrolling.");
+            }
 
-        if (form is MainForm)
-        {
-            VerifyMainFormTabs(
-                form,
-                formName,
-                scenario,
-                failures);
+            VerifyMainViewportFill(main, formName, scenario, failures);
+            VerifyMainFormTabs(form, formName, scenario, failures);
         }
         else
+        {
+            if (!form.AutoScroll)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: dialog scrolling is disabled.");
+            }
+        }
+        if (form is not MainForm)
         {
             VerifyDialogKeyboardBehavior(
                 form,
@@ -623,6 +638,53 @@ public static class UiLayoutSelfTest
                 formName,
                 scenario,
                 failures);
+        }
+    }
+
+    private static void VerifyMainViewportFill(
+        MainForm main,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        var shell = FindByName(main, "MainLayoutRoot");
+        var tabs = FindByName(main, "MainWorkspaceTabs");
+        var start = FindByName(main, "HomeLayoutRoot");
+        if (shell is null || tabs is null || start is null)
+        {
+            failures.Add($"{formName}/{scenario.Name}: docked workspace layout is missing.");
+            return;
+        }
+
+        // Tests the real resizing logic, not NormalizeDockFillSizes: this
+        // catches the formerly tiny, top-left Start viewport after maximize.
+        main.ClientSize = new Size(
+            Math.Max(1500, scenario.ClientSize.Width + 240),
+            Math.Max(900, scenario.ClientSize.Height + 140));
+        main.PerformLayout();
+        main.ReflowMainViewport();
+        main.PerformLayout();
+
+        if (shell.Dock != DockStyle.Fill ||
+            tabs.Dock != DockStyle.Fill ||
+            start.Dock != DockStyle.Fill ||
+            shell.Width < main.ClientSize.Width * 0.90 ||
+            tabs.Width < shell.ClientSize.Width * 0.90)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: maximized window leaves a small top-left workspace instead of filling the client area.");
+        }
+    }
+
+    private static void VerifyStartSourcePolicies(List<string> failures)
+    {
+        if (StartConnectionPolicy.Normalize("unknown") != StartConnectionPolicy.Choose ||
+            StartConnectionPolicy.NeedsActiveDirectory(StartConnectionPolicy.MicrosoftCloud) ||
+            StartConnectionPolicy.NeedsMicrosoftCloud(StartConnectionPolicy.ActiveDirectory) ||
+            !StartConnectionPolicy.NeedsActiveDirectory(StartConnectionPolicy.Both) ||
+            !StartConnectionPolicy.NeedsMicrosoftCloud(StartConnectionPolicy.Both))
+        {
+            failures.Add("Start connection source must isolate AD from cloud-only searches.");
         }
     }
 
@@ -683,6 +745,11 @@ public static class UiLayoutSelfTest
             var requiredStartControls =
                 new[]
                 {
+                    "HomeConnectionSourceChooser",
+                    "HomeConnectionSource",
+                    "HomeConnectCloudButton",
+                    "HomeConfigureCloudButton",
+                    "HomeCloudConnectionStatus",
                     "HomeConnectionStatus",
                     "HomeAdAccountStatus",
                     "HomeConnectAdButton",
