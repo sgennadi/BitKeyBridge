@@ -176,6 +176,6 @@ public sealed partial class MainForm
         _homeComputersDragHandle.Cursor = sideBySide ? Cursors.SizeAll : Cursors.Default;
         _homeSwapPanesButton.Visible = sideBySide;
         _homeSwapPanesButton.Enabled = sideBySide;
-        _homeRecoveryPaneHost.Visible = _homeSelectionPanel.Visible;
+        _homeRecoveryPaneHost.Visible = GetSelectedHomeSearchResult() is not null;
     }
 }
