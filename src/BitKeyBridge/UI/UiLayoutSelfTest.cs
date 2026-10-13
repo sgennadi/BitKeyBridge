@@ -530,6 +530,34 @@ public static class UiLayoutSelfTest
             failures.Add("Unverified BitLocker navigation must retry the domain scope.");
         }
 
+        var onlyBitLocker = new HomeSearchResult
+        {
+            BitLockerKeyCount = 1,
+            LapsCandidateFound = true,
+            LapsStatus = "Not verified"
+        };
+        var onlyLaps = new HomeSearchResult
+        {
+            LapsCandidateFound = true,
+            LapsStatus = "Detected"
+        };
+        var both = new HomeSearchResult
+        {
+            BitLockerKeyCount = 1,
+            LapsCandidateFound = true,
+            LapsStatus = "Expired"
+        };
+        if (HelpdeskStatus.VisibleHomeServices(null) != (false, false) ||
+            HelpdeskStatus.VisibleHomeServices(cloud) != (false, false) ||
+            HelpdeskStatus.VisibleHomeServices(onlyBitLocker) != (true, false) ||
+            HelpdeskStatus.VisibleHomeServices(onlyLaps) != (false, true) ||
+            HelpdeskStatus.VisibleHomeServices(both) != (true, true) ||
+            HelpdeskStatus.VisibleHomeServices(new HomeSearchResult()) != (true, true))
+        {
+            failures.Add(
+                "Start cards must show only verified services while leaving completely unknown results diagnosable.");
+        }
+
         candidate.ExpiresAtUtc = DateTime.UtcNow.AddDays(10);
         if (HelpdeskStatus.Laps(candidate) != "Detected")
             failures.Add("Start LAPS future expiration must be Detected.");
