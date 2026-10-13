@@ -580,15 +580,9 @@ public sealed partial class MainForm
             RememberComputerQuery(selected.ComputerName);
         }
 
-        _homeBitLockerButton.Text =
-            selected is null
-                ? "BitLocker Recovery"
-                : $"BitLocker Recovery — {selected.ComputerName}";
+        _homeBitLockerButton.Text = "BitLocker details...";
 
-        _homeLapsButton.Text =
-            selected is null
-                ? "LAPS Passwords"
-                : $"LAPS Passwords — {selected.ComputerName}";
+        _homeLapsButton.Text = "LAPS details / history...";
 
         var connected =
             _directoryConnected &&
@@ -640,6 +634,7 @@ public sealed partial class MainForm
             _secretVisibleUntilUtc is not null ||
             _clipboardClearAtUtc is not null;
 
+        UpdateHomeServiceTabs(selected);
         RefreshHomeSelectionSummary();
     }
 
@@ -654,6 +649,22 @@ public sealed partial class MainForm
                 "Multiple AD objects share this name. Use an exact object GUID in LAPS or an exact computer/OU in Recovery.",
                 UiStatusKind.Warning);
             return;
+        }
+
+        // Double-clicking a computer stays on Start. This changes the
+        // visible service tab only; it does not request any password.
+        if (selected is not null && !selected.IsCloudRecord)
+        {
+            UpdateHomeServiceTabs(selected);
+            if (_homeServiceTabs.TabPages.Count > 0)
+            {
+                _homeServiceTabs.Focus();
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "Computer selected. Choose BitLocker or LAPS below, " +
+                    "then click Reveal or Copy to request the secret.",
+                    UiStatusKind.Neutral);
+                return;
+            }
         }
 
         switch (HelpdeskStatus.ResolveHomeDefaultAction(selected))
@@ -765,7 +776,8 @@ public sealed partial class MainForm
         NavigateToLapsWorkspace(fromStart: true);
         _lapsSearchDebounceTimer?.Stop();
 
-        await ReadLapsAsync();
+        // The detailed LAPS page also requires an explicit Read action.
+        // Navigation alone never fetches a password.
     }
 
     private async Task
