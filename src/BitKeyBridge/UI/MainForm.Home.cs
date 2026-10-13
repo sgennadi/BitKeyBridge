@@ -580,24 +580,7 @@ public sealed partial class MainForm
             RememberComputerQuery(selected.ComputerName);
         }
 
-        _homeBitLockerButton.Text = "BitLocker details...";
-
-        _homeLapsButton.Text = "LAPS details / history...";
-
-        var connected =
-            _directoryConnected &&
-            !_directoryConnecting;
-
-        // This button opens a search, not a secret read. Keep it available
-        // even when the selected OU or permissions hide recovery metadata.
-        _homeBitLockerButton.Enabled =
-            selected?.IsCloudRecord != true &&
-            HelpdeskStatus.CanAttemptBitLockerSearch(connected, selected);
-
-        // Missing metadata must not block an explicit, authorized LAPS read.
-        _homeLapsButton.Enabled =
-            selected?.IsCloudRecord != true &&
-            HelpdeskStatus.CanAttemptLapsRead(connected, selected);
+        var connected = _directoryConnected && !_directoryConnecting;
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
@@ -613,21 +596,8 @@ public sealed partial class MainForm
             !selected.IdentityAmbiguous &&
             !selected.IsCloudRecord;
 
-        _homeDeviceDetailsButton.Enabled =
-            selected is not null;
-
-        // Diagnostics remain available when backup metadata is absent.
-        _homeBitLockerDiagnosticButton.Enabled =
-            selected is not null;
-
-        _homeRotateBitLockerButton.Enabled =
-            selected is not null &&
-            !selected.IsCloudRecord &&
-            !selected.IdentityAmbiguous &&
-            !string.IsNullOrWhiteSpace(
-                _cloudConfig.TenantId) &&
-            !string.IsNullOrWhiteSpace(
-                _cloudConfig.ClientId);
+        // Opens the real BitLocker diagnostic-command dialog in-place.
+        _homeBitLockerDiagnosticLink.Enabled = selected is not null;
 
         _homeSelectionPanel.Visible =
             selected is not null ||
