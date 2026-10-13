@@ -2,69 +2,99 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
-    // Start is the shared computer workspace. Switching tabs never reads secrets.
-    private readonly TabControl _homeServiceTabs = new();
-    private readonly TabPage _homeBitLockerTab = new("BitLocker");
-    private readonly TabPage _homeLapsTab = new("LAPS");
-    private readonly Label _homeBitLockerTabSummary = new();
-    private readonly Label _homeLapsTabSummary = new();
+    // These are two independent side-by-side cards, not navigation tabs.
+    // Selecting a computer only loads metadata; secrets require an explicit click.
+    private readonly TableLayoutPanel _homeServiceCards = new();
+    private readonly GroupBox _homeBitLockerCard = new();
+    private readonly GroupBox _homeLapsCard = new();
+    private readonly Label _homeBitLockerCardStatus = new();
+    private readonly Label _homeBitLockerCardKeyId = new();
+    private readonly Label _homeLapsCardStatus = new();
+    private readonly Label _homeLapsCardAccount = new();
     private readonly Button _homeRevealLapsButton = new();
     private readonly Button _homeCopyLapsButton = new();
     private bool _homeLapsBusy;
-    private string _homeServiceTabIdentity = "<uninitialized>";
+    private bool _homeCardsHasBitLocker;
+    private bool _homeCardsHasLaps;
+    private bool _homeCardsLayingOut;
+    private string _homeCardsLayoutKey = string.Empty;
 
-    private Control BuildHomeServiceTabs()
+    private Control BuildHomeServiceCards()
     {
-        _homeServiceTabs.Name = "HomeServiceTabs";
-        _homeServiceTabs.AccessibleName = "Selected computer BitLocker and LAPS";
-        _homeServiceTabs.Dock = DockStyle.Top;
-        _homeServiceTabs.Height = UiStyle.HomeServiceTabsHeight;
-        _homeServiceTabs.MinimumSize = new Size(0, UiStyle.HomeServiceTabsHeight);
-        _homeServiceTabs.Visible = false;
+        _homeServiceCards.Name = "HomeServiceCards";
+        _homeServiceCards.AccessibleName = "BitLocker and LAPS computer recovery cards";
+        _homeServiceCards.Dock = DockStyle.Top;
+        _homeServiceCards.AutoSize = true;
+        _homeServiceCards.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _homeServiceCards.Margin = Padding.Empty;
+        _homeServiceCards.Padding = Padding.Empty;
+        _homeServiceCards.Visible = false;
 
-        _homeBitLockerTab.Name = "HomeBitLockerTab";
-        _homeLapsTab.Name = "HomeLapsTab";
-        _homeBitLockerTab.AutoScroll = true;
-        _homeLapsTab.AutoScroll = true;
-
-        _homeBitLockerTab.Controls.Add(BuildHomeServicePage(
-            _homeBitLockerTabSummary,
-            [
-                _homeRevealBitLockerButton,
-                _homeCopyBitLockerButton,
-                _homeBitLockerButton,
-                _homeBitLockerDiagnosticButton,
-                _homeRotateBitLockerButton
-            ]));
+        _homeBitLockerCard.Name = "HomeBitLockerCard";
+        _homeBitLockerCard.Text = "BitLocker";
+        _homeBitLockerCard.Controls.Add(BuildHomeRecoveryCardBody(
+            _homeBitLockerCardStatus,
+            _homeBitLockerCardKeyId,
+            "Recovery password: ••••••••••••",
+            [_homeRevealBitLockerButton, _homeCopyBitLockerButton]));
 
         _homeRevealLapsButton.Name = "HomeRevealLapsButton";
-        _homeRevealLapsButton.Text = "Reveal LAPS Password";
+        _homeRevealLapsButton.Text = "Reveal Password";
         _homeRevealLapsButton.AccessibleName = "Read and reveal the selected computer LAPS password";
         UiStyle.ConfigureActionButton(_homeRevealLapsButton);
         _homeRevealLapsButton.Enabled = false;
 
         _homeCopyLapsButton.Name = "HomeCopyLapsButton";
-        _homeCopyLapsButton.Text = "Copy LAPS Password";
+        _homeCopyLapsButton.Text = "Copy Password";
         _homeCopyLapsButton.AccessibleName = "Read and copy the selected computer LAPS password";
         UiStyle.ConfigureActionButton(_homeCopyLapsButton);
         _homeCopyLapsButton.Enabled = false;
 
-        _homeLapsTab.Controls.Add(BuildHomeServicePage(
-            _homeLapsTabSummary,
-            [
-                _homeRevealLapsButton,
-                _homeCopyLapsButton,
-                _homeLapsButton
-            ]));
+        _homeLapsCard.Name = "HomeLapsCard";
+        _homeLapsCard.Text = "LAPS";
+        _homeLapsCard.Controls.Add(BuildHomeRecoveryCardBody(
+            _homeLapsCardStatus,
+            _homeLapsCardAccount,
+            "Password: ••••••••••••",
+            [_homeRevealLapsButton, _homeCopyLapsButton]));
 
-        _homeServiceTabs.TabPages.Add(_homeBitLockerTab);
-        _homeServiceTabs.TabPages.Add(_homeLapsTab);
-        _homeRevealLapsButton.Click += async (_, _) => await ShowHomeLapsPasswordAsync(copy: false);
-        _homeCopyLapsButton.Click += async (_, _) => await ShowHomeLapsPasswordAsync(copy: true);
-        return _homeServiceTabs;
+        foreach (var card in new[] { _homeBitLockerCard, _homeLapsCard })
+        {
+            card.Dock = DockStyle.Fill;
+            card.AutoSize = true;
+            card.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            card.Padding = new Padding(UiStyle.ControlGap);
+            card.Margin = new Padding(
+                UiStyle.ControlGap / 2,
+                UiStyle.ControlGap,
+                UiStyle.ControlGap / 2,
+                UiStyle.ControlGap);
+        }
+
+        // Keep both cards in the initial control tree for accessibility and
+        // HiDPI self-tests, even though Start has no selected computer yet.
+        _homeServiceCards.ColumnCount = 2;
+        _homeServiceCards.RowCount = 1;
+        _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _homeServiceCards.Controls.Add(_homeBitLockerCard, 0, 0);
+        _homeServiceCards.Controls.Add(_homeLapsCard, 1, 0);
+
+        _homeServiceCards.SizeChanged += (_, _) => ArrangeHomeServiceCards();
+        _homeRevealLapsButton.Click +=
+            async (_, _) => await ShowHomeLapsPasswordAsync(copy: false);
+        _homeCopyLapsButton.Click +=
+            async (_, _) => await ShowHomeLapsPasswordAsync(copy: true);
+
+        return _homeServiceCards;
     }
 
-    private static Control BuildHomeServicePage(Label summary, Control[] buttons)
+    private static Control BuildHomeRecoveryCardBody(
+        Label status,
+        Label details,
+        string maskedSecretLabel,
+        Control[] actions)
     {
         var layout = new TableLayoutPanel
         {
@@ -72,111 +102,158 @@ public sealed partial class MainForm
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(UiStyle.ControlGap),
-            Margin = Padding.Empty
+            RowCount = 4,
+            Margin = Padding.Empty,
+            Padding = new Padding(UiStyle.ControlGap)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var row = 0; row < 4; row++)
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        summary.AutoSize = true;
-        summary.Dock = DockStyle.Top;
-        summary.Font = UiStyle.CreateBodyFont(10F);
-        summary.MaximumSize = new Size(1100, 0);
-        summary.Margin = new Padding(0, 0, 0, UiStyle.ControlGap);
-        layout.Controls.Add(summary, 0, 0);
+        foreach (var label in new[] { status, details })
+        {
+            label.AutoSize = true;
+            label.AutoEllipsis = false;
+            label.Dock = DockStyle.Top;
+            label.MaximumSize = new Size(UiStyle.HomeRecoveryCardMaxTextWidth, 0);
+            label.Margin = new Padding(0, 0, 0, UiStyle.ControlGap);
+            label.UseMnemonic = false;
+        }
+        status.Font = UiStyle.CreateEmphasisFont();
+        layout.Controls.Add(status, 0, 0);
+        layout.Controls.Add(details, 0, 1);
+        layout.Controls.Add(new Label
+        {
+            Text = maskedSecretLabel,
+            AutoSize = true,
+            AutoEllipsis = false,
+            Dock = DockStyle.Top,
+            MaximumSize = new Size(UiStyle.HomeRecoveryCardMaxTextWidth, 0),
+            Margin = new Padding(0, 0, 0, UiStyle.ControlGap),
+            UseMnemonic = false
+        }, 0, 2);
 
-        var actions = new FlowLayoutPanel
+        var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             WrapContents = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = Padding.Empty
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        actions.Controls.AddRange(buttons);
-        layout.Controls.Add(actions, 0, 1);
+        buttons.Controls.AddRange(actions);
+        layout.Controls.Add(buttons, 0, 3);
         return layout;
     }
 
-    private void UpdateHomeServiceTabs(HomeSearchResult? selected)
+    private void UpdateHomeServiceCards(HomeSearchResult? selected)
     {
-        if (selected is null)
-        {
-            // Keep both hidden pages parented so the existing UI layout
-            // self-test and accessible-control tree can still inspect them.
-            _homeServiceTabIdentity = "<uninitialized>";
-            if (_homeServiceTabs.TabPages.Count != 2 ||
-                !_homeServiceTabs.TabPages.Contains(_homeBitLockerTab) ||
-                !_homeServiceTabs.TabPages.Contains(_homeLapsTab))
-            {
-                _homeServiceTabs.TabPages.Clear();
-                _homeServiceTabs.TabPages.Add(_homeBitLockerTab);
-                _homeServiceTabs.TabPages.Add(_homeLapsTab);
-            }
-            _homeServiceTabs.Visible = false;
-            _homeRevealLapsButton.Enabled = false;
-            _homeCopyLapsButton.Enabled = false;
-            return;
-        }
-
-        bool showBitLocker = selected is not null &&
+        bool showBitLocker = selected is not null && !selected.IsCloudRecord &&
             (selected.BitLockerKeyCount > 0 || selected.BitLockerLookupFailed);
-        bool showLaps = selected is not null &&
+        bool showLaps = selected is not null && !selected.IsCloudRecord &&
             (selected.LapsCandidateFound || selected.LapsLookupFailed);
 
-        // Inconclusive metadata must not be mistaken for a missing backup.
-        if (selected is not null && !showBitLocker && !showLaps)
+        // Incomplete/missing metadata cannot prove that a recovery backup
+        // is absent. Give the operator both manual read/diagnostic options.
+        if (selected is { IsCloudRecord: false } && !showBitLocker && !showLaps)
             showBitLocker = showLaps = true;
 
-        _homeBitLockerTabSummary.Text = selected is null
-            ? "BitLocker recovery key is not loaded."
-            : "BitLocker: " + selected.BitLockerStatus +
-              " | Recovery records: " + selected.BitLockerKeyCount +
-              " | Key not loaded until Reveal or Copy.";
-        _homeLapsTabSummary.Text = selected is null
-            ? "LAPS password is not loaded."
-            : "LAPS: " + selected.LapsStatus +
-              " | Password not loaded until Reveal or Copy.";
+        _homeBitLockerCardStatus.Text = selected is null
+            ? "Status: Not selected"
+            : "Status: " + selected.BitLockerStatus +
+              " | Recovery entries: " + selected.BitLockerKeyCount;
+        _homeBitLockerCardKeyId.Text = selected is null ||
+            string.IsNullOrWhiteSpace(selected.LatestRecoveryId)
+            ? "Recovery Key ID: Not verified"
+            : "Recovery Key ID: " + selected.LatestRecoveryId;
 
-        var identity = selected is null
-            ? string.Empty
-            : selected.ComputerName + "|" + selected.ComputerId + "|" +
-              showBitLocker + "|" + showLaps + "|" + selected.IsCloudRecord;
+        _homeLapsCardStatus.Text = selected is null
+            ? "Status: Not selected"
+            : "Status: " + selected.LapsStatus;
+        _homeLapsCardAccount.Text = "Account: Not loaded (read on demand)";
 
-        if (!string.Equals(identity, _homeServiceTabIdentity, StringComparison.Ordinal))
-        {
-            _homeServiceTabIdentity = identity;
-            _homeServiceTabs.SuspendLayout();
-            try
-            {
-                _homeServiceTabs.TabPages.Clear();
-                if (showBitLocker && selected?.IsCloudRecord != true)
-                    _homeServiceTabs.TabPages.Add(_homeBitLockerTab);
-                if (showLaps && selected?.IsCloudRecord != true)
-                    _homeServiceTabs.TabPages.Add(_homeLapsTab);
+        _homeCardsHasBitLocker = showBitLocker;
+        _homeCardsHasLaps = showLaps;
+        ArrangeHomeServiceCards();
 
-                // Alphabetical order, BitLocker selected when both exist.
-                if (_homeServiceTabs.TabPages.Contains(_homeBitLockerTab))
-                    _homeServiceTabs.SelectedTab = _homeBitLockerTab;
-                else if (_homeServiceTabs.TabPages.Contains(_homeLapsTab))
-                    _homeServiceTabs.SelectedTab = _homeLapsTab;
-            }
-            finally
-            {
-                _homeServiceTabs.ResumeLayout();
-            }
-        }
+        _homeServiceCards.Visible = selected is not null &&
+            !selected.IsCloudRecord && (showBitLocker || showLaps);
 
-        _homeServiceTabs.Visible = _homeServiceTabs.TabPages.Count > 0;
         bool canReadLaps = selected is not null &&
             _directoryConnected && !_directoryConnecting &&
             !selected.IdentityAmbiguous && !selected.IsCloudRecord &&
             !_homeLapsBusy && !_lapsReading;
         _homeRevealLapsButton.Enabled = canReadLaps;
         _homeCopyLapsButton.Enabled = canReadLaps;
+    }
+
+    private void ArrangeHomeServiceCards()
+    {
+        if (_homeCardsLayingOut || _homeServiceCards.IsDisposed)
+            return;
+
+        var available = _homeSelectionPanel.ClientSize.Width;
+        if (available <= 0)
+            available = _homeServiceCards.ClientSize.Width;
+
+        var threshold = (int)Math.Ceiling(
+            UiStyle.HomeRecoveryCardsPairMinimumWidth *
+            DeviceDpi / (double)UiStyle.BaselineDpi);
+
+        bool both = _homeCardsHasBitLocker && _homeCardsHasLaps;
+        bool stacked = both && available > 0 && available < threshold;
+        var desiredKey = (_homeCardsHasBitLocker ? "B" : "-") +
+                         (_homeCardsHasLaps ? "L" : "-") +
+                         (stacked ? "S" : "H");
+
+        if (_homeCardsLayoutKey == desiredKey)
+            return;
+
+        _homeCardsLayoutKey = desiredKey;
+        _homeCardsLayingOut = true;
+        _homeServiceCards.SuspendLayout();
+        try
+        {
+            _homeServiceCards.Controls.Clear();
+            _homeServiceCards.ColumnStyles.Clear();
+            _homeServiceCards.RowStyles.Clear();
+
+            // When no computer is selected, keep both hidden cards parented
+            // to the control tree for UI self-testing.
+            bool initial = !_homeCardsHasBitLocker && !_homeCardsHasLaps;
+            if (both && !stacked || initial)
+            {
+                _homeServiceCards.ColumnCount = 2;
+                _homeServiceCards.RowCount = 1;
+                _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+                _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+                _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _homeServiceCards.Controls.Add(_homeBitLockerCard, 0, 0);
+                _homeServiceCards.Controls.Add(_homeLapsCard, 1, 0);
+            }
+            else
+            {
+                _homeServiceCards.ColumnCount = 1;
+                _homeServiceCards.RowCount = both ? 2 : 1;
+                _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                if (both)
+                    _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+                if (_homeCardsHasBitLocker)
+                    _homeServiceCards.Controls.Add(_homeBitLockerCard, 0, 0);
+                if (_homeCardsHasLaps)
+                    _homeServiceCards.Controls.Add(_homeLapsCard, 0,
+                        _homeCardsHasBitLocker ? 1 : 0);
+            }
+        }
+        finally
+        {
+            _homeServiceCards.ResumeLayout(true);
+            _homeCardsLayingOut = false;
+        }
     }
 
     private async Task ShowHomeLapsPasswordAsync(bool copy)
