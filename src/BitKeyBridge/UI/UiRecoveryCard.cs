@@ -94,6 +94,8 @@ public sealed class UiRecoveryBadge : Label
 {
     private UiStatusKind _kind = UiStatusKind.Neutral;
 
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public UiStatusKind Kind
     {
         get => _kind;
@@ -199,7 +201,8 @@ internal static class UiRecoveryGraphics
                 g.DrawLine(pen, 17, 15, 4, 28);
                 g.DrawLines(pen, [new PointF(4, 28), new PointF(4, 21), new PointF(10, 21)]);
                 g.DrawLine(pen, 9, 23, 9, 17);
-                g.FillEllipse(new SolidBrush(color), 20, 8, 3, 3);
+                using (var dot = new SolidBrush(color))
+                    g.FillEllipse(dot, 20, 8, 3, 3);
                 break;
             case RecoveryGlyphKind.Eye:
                 using (var eye = new GraphicsPath())
