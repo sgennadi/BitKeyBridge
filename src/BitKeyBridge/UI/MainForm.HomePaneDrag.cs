@@ -244,7 +244,7 @@ public sealed partial class MainForm
 
         // SetCellPosition swaps existing parents and keeps every form control,
         // selected computer, loaded history and masked secret untouched.
-        _homePaneLayoutKey = string.Empty;
+        _homeResultsLayoutKey = string.Empty;
         ReflowHomeResultsArea();
     }
 
