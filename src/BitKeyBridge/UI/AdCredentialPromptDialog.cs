@@ -19,8 +19,8 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
     {
         Text = "Connect to Active Directory";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(620, 440);
-        MinimumSize = new Size(480, 340);
+        ClientSize = new Size(UiStyle.AdCredentialDialogWidth, UiStyle.AdCredentialDialogHeight);
+        MinimumSize = new Size(UiStyle.AdCredentialDialogMinimumWidth, UiStyle.AdCredentialDialogMinimumHeight);
         MaximizeBox = false;
         MinimizeBox = false;
         Font = UiStyle.BodyFont;
@@ -42,7 +42,7 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
         {
             Text = "Enter the account for this connection. The password stays in this process. " +
                 "A domain or DC can be entered on a standalone computer. Empty DC uses automatic discovery.",
-            AutoSize = true, Dock = DockStyle.Top, MaximumSize = new Size(560, 0),
+            AutoSize = true, Dock = DockStyle.Top, MaximumSize = new Size(UiStyle.AdCredentialDialogTextWidth, 0),
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
         }, 0, 1);
 
@@ -60,8 +60,8 @@ public sealed class AdCredentialPromptDialog : DpiAwareForm
         _domain.Text = configuredDomain;
         _server.Text = configuredServer;
         _username.PlaceholderText = @"DOMAIN\user or user@domain";
-        _domain.PlaceholderText = "Domain DNS name (optional on a domain-joined host)";
-        _server.PlaceholderText = "DC DNS name (optional; empty = automatic discovery)";
+        _domain.PlaceholderText = "Domain DNS name (optional)";
+        _server.PlaceholderText = "DC DNS name (optional)";
         _password.UseSystemPasswordChar = true;
         root.Controls.Add(fields, 0, 2);
 
