@@ -32,8 +32,8 @@ public sealed partial class MainForm
     /// <summary>
     /// Keep selected recovery cards visible without scrolling through an
     /// oversized results grid. On a wide monitor the recovery cards are
-    /// on the left and the computer list on the right. On narrow/RDP layouts
-    /// the list stays above the cards so another computer remains easy to select.
+    /// on either side of the computer list, controlled by a per-user setting.
+    /// On narrow/RDP layouts the list stays above the cards for easy selection.
     /// </summary>
     private void ReflowHomeResultsArea()
     {
@@ -48,7 +48,11 @@ public sealed partial class MainForm
             DeviceDpi / (double)UiStyle.BaselineDpi);
         bool sideBySide = available >= required &&
             GetSelectedHomeSearchResult() is not null;
-        var key = sideBySide ? "SideBySide" : "Stacked";
+        bool recoveryLeft = _startConnectionPreferences.RecoveryCardsOnLeft;
+        var key = sideBySide
+            ? recoveryLeft ? "RecoveryLeft" : "ComputersLeft"
+            : "Stacked";
+        UpdateHomePaneDragUi(sideBySide);
         if (_homeResultsLayoutKey == key)
         {
             ArrangeHomeServiceCards();
@@ -66,18 +70,18 @@ public sealed partial class MainForm
             {
                 _homeResultsArea.ColumnCount = 2;
                 _homeResultsArea.RowCount = 1;
-                // Recovery is the primary helpdesk task; use the wider
-                // left column for BitLocker and LAPS side-by-side cards.
-                // The compact computer picker occupies the right column.
-                _homeResultsArea.ColumnStyles.Add(
-                    new ColumnStyle(SizeType.Percent,
-                        UiStyle.HomeRecoveryColumnPercent));
-                _homeResultsArea.ColumnStyles.Add(
-                    new ColumnStyle(SizeType.Percent,
-                        100F - UiStyle.HomeRecoveryColumnPercent));
+                // The recovery pane always owns the larger share. The user
+                // can swap its side by dragging either labeled pane header.
+                var recoveryWidth = UiStyle.HomeRecoveryColumnPercent;
+                _homeResultsArea.ColumnStyles.Add(new ColumnStyle(
+                    SizeType.Percent, recoveryLeft ? recoveryWidth : 100F - recoveryWidth));
+                _homeResultsArea.ColumnStyles.Add(new ColumnStyle(
+                    SizeType.Percent, recoveryLeft ? 100F - recoveryWidth : recoveryWidth));
                 _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                _homeResultsArea.Controls.Add(_homeSelectionPanel, 0, 0);
-                _homeResultsArea.Controls.Add(_homeSearchResults, 1, 0);
+                _homeResultsArea.Controls.Add(
+                    recoveryLeft ? _homeRecoveryPaneHost : _homeComputersPaneHost, 0, 0);
+                _homeResultsArea.Controls.Add(
+                    recoveryLeft ? _homeComputersPaneHost : _homeRecoveryPaneHost, 1, 0);
             }
             else
             {
@@ -90,8 +94,8 @@ public sealed partial class MainForm
                         UiStyle.HomeCompactSearchResultsHeight *
                         DeviceDpi / (float)UiStyle.BaselineDpi));
                 _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                _homeResultsArea.Controls.Add(_homeSearchResults, 0, 0);
-                _homeResultsArea.Controls.Add(_homeSelectionPanel, 0, 1);
+                _homeResultsArea.Controls.Add(_homeComputersPaneHost, 0, 0);
+                _homeResultsArea.Controls.Add(_homeRecoveryPaneHost, 0, 1);
             }
 
             _homeSearchResults.Dock = DockStyle.Fill;
