@@ -133,6 +133,7 @@ public sealed partial class MainForm
             (_, _) =>
             {
                 ApplyComputerQueryToSelectedWorkspace();
+                QueueMainViewportReflow();
 
                 if (ReferenceEquals(
                         _mainTabs.SelectedTab,
