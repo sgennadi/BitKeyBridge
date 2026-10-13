@@ -242,7 +242,7 @@ public sealed partial class MainForm : DpiAwareForm
             if (await TryAutomaticUpdateOnStartAsync())
                 return;
 
-            await InitializeRecoveryWorkspaceAsync();
+            await ShowStartupConnectionWizardAsync();
         };
     }
 
