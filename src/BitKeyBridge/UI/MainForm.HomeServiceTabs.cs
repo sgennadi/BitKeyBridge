@@ -64,6 +64,10 @@ public sealed partial class MainForm
             "Copy the selected LAPS current or historical password";
         _homeLoadLapsHistoryButton.AccessibleName =
             "Load current and historical LAPS records with permission checks";
+        // No selected computer at startup: every privileged LAPS action is disabled.
+        _homeRevealLapsButton.Enabled = false;
+        _homeCopyLapsButton.Enabled = false;
+        _homeLoadLapsHistoryButton.Enabled = false;
 
         var historyArea = BuildHomeLapsHistoryArea();
         _homeLapsCard.Controls.Add(BuildHomeRecoveryCardBody(
