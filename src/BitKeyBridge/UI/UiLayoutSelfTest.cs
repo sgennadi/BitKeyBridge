@@ -692,6 +692,11 @@ public static class UiLayoutSelfTest
                     "HomeServiceCards",
                     "HomeBitLockerCard",
                     "HomeLapsCard",
+                    "HomeLapsHistoryArea",
+                    "HomeLapsHistoryGrid",
+                    "HomeLapsHistoryStatus",
+                    "HomeLoadLapsHistoryButton",
+                    "HomeLapsSelectedRecord",
                     "HomeRevealBitLockerButton",
                     "HomeCopyBitLockerButton",
                     "HomeBitLockerDiagnosticButton",
@@ -713,8 +718,8 @@ public static class UiLayoutSelfTest
 
             if (FindByName(startPage, "HomeServiceCards") is TableLayoutPanel cards)
             {
-                if (FindByName(cards, "HomeBitLockerCard") is not GroupBox bitLocker ||
-                    FindByName(cards, "HomeLapsCard") is not GroupBox laps)
+                if (FindByName(cards, "HomeBitLockerCard") is not UiRecoveryCard bitLocker ||
+                    FindByName(cards, "HomeLapsCard") is not UiRecoveryCard laps)
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: Start must contain BitLocker and LAPS recovery cards.");
@@ -728,10 +733,33 @@ public static class UiLayoutSelfTest
 
                 if (cards.Visible ||
                     FindByName(startPage, "HomeRevealLapsButton") is Button { Enabled: true } ||
-                    FindByName(startPage, "HomeCopyLapsButton") is Button { Enabled: true })
+                    FindByName(startPage, "HomeCopyLapsButton") is Button { Enabled: true } ||
+                    FindByName(startPage, "HomeLoadLapsHistoryButton") is Button { Enabled: true })
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: Start cannot reveal or copy LAPS without a selected computer and explicit action.");
+                }
+            }
+
+            if (FindByName(startPage, "HomeLapsHistoryGrid") is DataGridView historyGrid)
+            {
+                if (!historyGrid.ReadOnly ||
+                    historyGrid.MultiSelect ||
+                    historyGrid.ScrollBars != ScrollBars.Both ||
+                    historyGrid.Columns.Count != 4 ||
+                    historyGrid.Rows.Count != 0)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: LAPS history must be empty, non-secret, read-only and horizontally scrollable at startup.");
+                }
+
+                if (historyGrid.Columns["Type"] is null ||
+                    historyGrid.Columns["Account"] is null ||
+                    historyGrid.Columns["Updated"] is null ||
+                    historyGrid.Columns["Status"] is null)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: LAPS history requires Type, Account, Updated and Status columns.");
                 }
             }
 
