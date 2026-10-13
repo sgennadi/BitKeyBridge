@@ -39,6 +39,9 @@ public sealed partial class MainForm
     private readonly UiStatusLabel _homeSearchStatus = new();
     private readonly DataGridView _homeSearchResults = new();
     private readonly TableLayoutPanel _homeResultsArea = new();
+    private TableLayoutPanel? _homeConnectionsRecentLayout;
+    private TableLayoutPanel? _homeAdConnectionLayout;
+    private TableLayoutPanel? _homeRecentQuickPanel;
     private readonly DataGridView _homeRecentResults = new();
     private readonly RadioButton _homeUseWindowsIdentity = new();
     private readonly RadioButton _homeUseOtherAccount = new();
@@ -682,6 +685,9 @@ public sealed partial class MainForm
         UiStyle.ConfigureWrappingLabel(recentExplanation);
         recentPanel.Controls.Add(recentExplanation, 0, 2);
         connectionSplit.Controls.Add(recentPanel, 1, 0);
+        _homeConnectionsRecentLayout = connectionSplit;
+        _homeAdConnectionLayout = connection;
+        _homeRecentQuickPanel = recentPanel;
         connectionGroup.Controls.Add(connectionSplit);
         root.Controls.Add(connectionGroup, 0, 2);
 
