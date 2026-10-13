@@ -1,3 +1,14 @@
+## 0.29.10
+
+**Three equally sized, freely rearrangeable Start panes**
+
+- Replace the previous paired BitLocker/LAPS + Computers split with **three individual, equally sized rounded panels**: BitLocker, LAPS and Computers, each receiving exactly one-third of the workspace on a wide display.
+- Drag the heading of **any panel onto either of the other two** to exchange their positions. Remove the redundant **Swap sides** button. Right-click a heading for Move left / Move right. Preserve the selected computer, LAPS history, recovery secrets, authorization and audit state when rearranging.
+- Remember all six possible pane orders per Windows user. Convert older two-pane left/right preferences without losing them. No password or cloud/AD credential is stored with the layout.
+- Place **Recent computers** in the previously blank upper-right area of **Connections** instead of below the recovery panels, leaving the main Start workspace available for the three primary panels.
+- In narrow/RDP/high-DPI windows, stack the three cards in their preferred order with equal-height rows, and allow scrolling rather than clipping content.
+- Add runtime UI regression checks for equal thirds, all-to-all swaps, 100%-200% DPI, initial masked passwords, selected-computer preservation, and top-right Recent computers.
+
 ## 0.29.9
 
 **Recovery cards on the left, computer picker on the right**
