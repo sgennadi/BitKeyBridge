@@ -704,6 +704,30 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        var connectionLayout =
+            FindByName(main, "HomeConnectionsAndRecent") as TableLayoutPanel;
+        if (connectionLayout is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: upper Connections and Recent layout must be responsive.");
+        }
+        else
+        {
+            var scale = Math.Max(
+                main.DeviceDpi / (double)UiStyle.BaselineDpi,
+                main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+            var actualWidth = connectionLayout.Parent?.ClientSize.Width ?? 0;
+            actualWidth -= connectionLayout.Parent?.Padding.Horizontal ?? 0;
+            var pair = actualWidth >= (int)Math.Ceiling(
+                UiStyle.HomeConnectionRecentPairMinimumWidth * scale);
+            if (pair && connectionLayout.ColumnCount != 2 ||
+                !pair && connectionLayout.ColumnCount != 1)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Recent computers must use unused Connections space on wide screens and stack on narrow/high-DPI screens.");
+            }
+        }
+
         if (root.RowCount != 6 ||
             root.RowStyles[5].SizeType != SizeType.Percent ||
             !ReferenceEquals(cards.Parent, area) ||
@@ -738,9 +762,11 @@ public static class UiLayoutSelfTest
 
             var width = area.Parent?.ClientSize.Width ?? 0;
             width -= area.Parent?.Padding.Horizontal ?? 0;
+            var effectiveScale = Math.Max(
+                main.DeviceDpi / (double)UiStyle.BaselineDpi,
+                main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
             bool expectedThree = width >= (int)Math.Ceiling(
-                UiStyle.HomeThreePaneMinimumWidth *
-                main.DeviceDpi / (double)UiStyle.BaselineDpi);
+                UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
 
             var hosts = new[] { bitLocker, laps, computers };
             var cells = hosts.Select(cards.GetPositionFromControl).ToArray();
@@ -758,6 +784,16 @@ public static class UiLayoutSelfTest
                 if (!equallySized)
                     failures.Add(
                         $"{formName}/{scenario.Name}: BitLocker, LAPS and Computers must each occupy one equal third of the wide Start workspace.");
+
+                // Uniform margins and Dock=Fill also guarantee equal rendered
+                // width and height, not just equal percentage column styles.
+                if (hosts.All(host => host.Width > 0 && host.Height > 0) &&
+                    (hosts.Max(host => host.Width) - hosts.Min(host => host.Width) > 4 ||
+                     hosts.Max(host => host.Height) - hosts.Min(host => host.Height) > 4))
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: the three draggable cards must have equal actual dimensions.");
+                }
 
                 // Any panel can exchange places with either other panel.
                 // This action must preserve the selected computer and cards.
