@@ -131,6 +131,14 @@ public sealed partial class MainForm
             _ => StartConnectionPolicy.Choose
         };
 
+        // Discard previous-source results and any revealed secrets immediately.
+        // In-flight AD/cloud searches must never populate another source's view.
+        _homeSearchCancellation?.Cancel();
+        _homeSearchGeneration++;
+        ClearVisibleSecretsNow();
+        _homeSearchResults.Rows.Clear();
+        UpdateHomeSearchSelection();
+
         try
         {
             ConfigService.SaveStartConnectionPreferences(_startConnectionPreferences);
