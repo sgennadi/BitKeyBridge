@@ -958,7 +958,7 @@ public sealed partial class MainForm
             1);
 
         root.Controls.Add(
-            resultsArea,
+            _homeResultsArea,
             0,
             5);
 
