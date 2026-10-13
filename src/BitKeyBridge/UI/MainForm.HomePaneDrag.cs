@@ -177,6 +177,17 @@ public sealed partial class MainForm
         ReflowHomeResultsArea();
     }
 
+    // Hidden UI-layout test forms cannot invoke Button.PerformClick:
+    // WinForms ignores clicks when an ancestor isn't shown. Test the same
+    // command directly without altering saved preferences.
+    internal void SwapHomePanesForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException(
+                "This entry point is reserved for offline layout tests.");
+        SwapHomePanes();
+    }
+
     private void UpdateHomePaneDragUi(bool sideBySide)
     {
         _homeRecoveryDragHandle.Cursor = sideBySide ? Cursors.SizeAll : Cursors.Default;
