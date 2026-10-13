@@ -4,6 +4,8 @@ public sealed partial class MainForm
 {
     private bool _mainViewportReflowQueued;
     private bool _mainViewportReflowRunning;
+    private bool _homeResultsReflowRunning;
+    private string _homeResultsLayoutKey = string.Empty;
 
     private void InitializeMainViewport()
     {
@@ -26,6 +28,84 @@ public sealed partial class MainForm
         }));
     }
 
+
+    /// <summary>
+    /// Keep selected recovery cards visible without scrolling through an
+    /// oversized results grid. On a wide monitor the results list is left
+    /// and recovery cards right; on narrow/RDP layouts the results list
+    /// has a bounded height directly above the cards.
+    /// </summary>
+    private void ReflowHomeResultsArea()
+    {
+        if (_homeResultsReflowRunning || _homeResultsArea.IsDisposed ||
+            _homeResultsArea.Parent is null)
+            return;
+
+        var available = Math.Max(0, _homeResultsArea.Parent.ClientSize.Width -
+            _homeResultsArea.Parent.Padding.Horizontal);
+        var required = (int)Math.Ceiling(
+            UiStyle.HomeResultsSideBySideMinimumWidth *
+            DeviceDpi / (double)UiStyle.BaselineDpi);
+        bool sideBySide = available >= required &&
+            GetSelectedHomeSearchResult() is not null;
+        var key = sideBySide ? "SideBySide" : "Stacked";
+        if (_homeResultsLayoutKey == key)
+        {
+            ArrangeHomeServiceCards();
+            return;
+        }
+
+        _homeResultsReflowRunning = true;
+        _homeResultsArea.SuspendLayout();
+        try
+        {
+            _homeResultsArea.Controls.Clear();
+            _homeResultsArea.ColumnStyles.Clear();
+            _homeResultsArea.RowStyles.Clear();
+            if (sideBySide)
+            {
+                _homeResultsArea.ColumnCount = 2;
+                _homeResultsArea.RowCount = 1;
+                _homeResultsArea.ColumnStyles.Add(
+                    new ColumnStyle(SizeType.Percent,
+                        UiStyle.HomeResultsLeftColumnPercent));
+                _homeResultsArea.ColumnStyles.Add(
+                    new ColumnStyle(SizeType.Percent,
+                        100F - UiStyle.HomeResultsLeftColumnPercent));
+                _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _homeResultsArea.Controls.Add(_homeSearchResults, 0, 0);
+                _homeResultsArea.Controls.Add(_homeSelectionPanel, 1, 0);
+            }
+            else
+            {
+                _homeResultsArea.ColumnCount = 1;
+                _homeResultsArea.RowCount = 2;
+                _homeResultsArea.ColumnStyles.Add(
+                    new ColumnStyle(SizeType.Percent, 100F));
+                _homeResultsArea.RowStyles.Add(
+                    new RowStyle(SizeType.Absolute,
+                        UiStyle.HomeCompactSearchResultsHeight *
+                        DeviceDpi / (float)UiStyle.BaselineDpi));
+                _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _homeResultsArea.Controls.Add(_homeSearchResults, 0, 0);
+                _homeResultsArea.Controls.Add(_homeSelectionPanel, 0, 1);
+            }
+
+            _homeSearchResults.Dock = DockStyle.Fill;
+            _homeSelectionPanel.Dock = DockStyle.Top;
+            _homeResultsLayoutKey = key;
+        }
+        finally
+        {
+            _homeResultsArea.ResumeLayout(true);
+            _homeResultsReflowRunning = false;
+        }
+
+        _homeSelectionPanel.PerformLayout();
+        _homeResultsArea.PerformLayout();
+        ArrangeHomeServiceCards();
+    }
+
     internal void ReflowMainViewport()
     {
         if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width == 0)
@@ -46,6 +126,7 @@ public sealed partial class MainForm
             if (shell.Bounds != ClientRectangle)
                 shell.Bounds = ClientRectangle;
 
+            ReflowHomeResultsArea();
             shell.PerformLayout();
             _mainTabs.Dock = DockStyle.Fill;
             _mainTabs.PerformLayout();
