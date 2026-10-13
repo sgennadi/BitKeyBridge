@@ -31,9 +31,9 @@ public sealed partial class MainForm
 
     /// <summary>
     /// Keep selected recovery cards visible without scrolling through an
-    /// oversized results grid. On a wide monitor the results list is left
-    /// and recovery cards right; on narrow/RDP layouts the results list
-    /// has a bounded height directly above the cards.
+    /// oversized results grid. On a wide monitor the recovery cards are
+    /// on the left and the computer list on the right. On narrow/RDP layouts
+    /// the list stays above the cards so another computer remains easy to select.
     /// </summary>
     private void ReflowHomeResultsArea()
     {
@@ -66,15 +66,18 @@ public sealed partial class MainForm
             {
                 _homeResultsArea.ColumnCount = 2;
                 _homeResultsArea.RowCount = 1;
+                // Recovery is the primary helpdesk task; use the wider
+                // left column for BitLocker and LAPS side-by-side cards.
+                // The compact computer picker occupies the right column.
                 _homeResultsArea.ColumnStyles.Add(
                     new ColumnStyle(SizeType.Percent,
-                        UiStyle.HomeResultsLeftColumnPercent));
+                        UiStyle.HomeRecoveryColumnPercent));
                 _homeResultsArea.ColumnStyles.Add(
                     new ColumnStyle(SizeType.Percent,
-                        100F - UiStyle.HomeResultsLeftColumnPercent));
+                        100F - UiStyle.HomeRecoveryColumnPercent));
                 _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                _homeResultsArea.Controls.Add(_homeSearchResults, 0, 0);
-                _homeResultsArea.Controls.Add(_homeSelectionPanel, 1, 0);
+                _homeResultsArea.Controls.Add(_homeSelectionPanel, 0, 0);
+                _homeResultsArea.Controls.Add(_homeSearchResults, 1, 0);
             }
             else
             {
