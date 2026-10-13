@@ -250,7 +250,7 @@ public sealed partial class MainForm
 
     private async Task ConnectStartCloudAsync()
     {
-        if (_cloudConnecting || _cloudWizardOpening)
+        if (_cloudConnecting)
             return;
 
         if (!StartCloudAppConfigured())
