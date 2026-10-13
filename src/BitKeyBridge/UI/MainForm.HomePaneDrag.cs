@@ -41,6 +41,13 @@ public sealed partial class MainForm
         EnableHomePaneDrop(_homeServiceCards, targetRecovery: true);
         EnableHomePaneDrop(_homeRecoveryDragHandle, targetRecovery: true);
         EnableHomePaneDrop(_homeComputersDragHandle, targetRecovery: false);
+        if (_homeRecoveryDragHandle.Parent is Control recoveryHeader)
+            EnableHomePaneDrop(recoveryHeader, targetRecovery: true);
+        if (_homeComputersDragHandle.Parent is Control computersHeader)
+            EnableHomePaneDrop(computersHeader, targetRecovery: false);
+        EnableHomePaneDrop(_homeSwapPanesButton, targetRecovery: true);
+        EnableHomePaneDrop(_homeBitLockerCard, targetRecovery: true);
+        EnableHomePaneDrop(_homeLapsCard, targetRecovery: true);
     }
 
     private static void BuildHomePaneHost(
