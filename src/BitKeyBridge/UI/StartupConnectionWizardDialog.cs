@@ -24,7 +24,8 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
     public bool UseOtherAdAccount => _otherAdAccount.Checked &&
         StartConnectionPolicy.NeedsActiveDirectory(SelectedSource);
 
-    public StartupConnectionWizardDialog(string? previouslySelectedSource)
+    public StartupConnectionWizardDialog(string? previouslySelectedSource,
+        bool preferOtherAdAccount = false)
     {
         Name = "StartupConnectionWizardDialog";
         Text = "BitKeyBridge - Connect";
@@ -139,6 +140,9 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
             case StartConnectionPolicy.Both: _both.Checked = true; break;
             default: _later.Checked = true; break;
         }
+        if (preferOtherAdAccount &&
+            StartConnectionPolicy.NeedsActiveDirectory(SelectedSource))
+            _otherAdAccount.Checked = true;
         UpdateOptions();
     }
 
