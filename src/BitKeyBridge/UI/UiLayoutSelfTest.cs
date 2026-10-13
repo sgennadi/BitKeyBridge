@@ -785,7 +785,7 @@ public static class UiLayoutSelfTest
                         !ReferenceEquals(cards.Parent, panel))
                     {
                         failures.Add(
-                            $"{formName}/{scenario.Name}: swapping recovery and computer panes must reverse their positions without losing the selection or recovery cards.");
+                            $"{formName}/{scenario.Name}: pane swap failed: recovery column {originalRecoveryColumn}->{newRecoveryColumn}, computer column {newComputerColumn}, selected rows {grid.SelectedRows.Count}, card parent intact {ReferenceEquals(cards.Parent, panel)}.");
                     }
 
                     // Restore initial order. Layout tests never write profile preferences.
@@ -1053,18 +1053,20 @@ public static class UiLayoutSelfTest
                     startPage,
                     "HomeSelectionPanel") is TableLayoutPanel selectionPanel)
             {
-                var gridRow =
-                    resultsArea.GetRow(
-                        resultsGrid);
-                var selectionRow =
-                    resultsArea.GetRow(
-                        selectionPanel);
-
-                if (gridRow != 0 ||
-                    selectionRow != 1)
+                var computersHost =
+                    FindByName(startPage, "HomeComputersPaneHost") as TableLayoutPanel;
+                var recoveryHost =
+                    FindByName(startPage, "HomeRecoveryPaneHost") as TableLayoutPanel;
+                if (computersHost is null || recoveryHost is null ||
+                    !ReferenceEquals(resultsGrid.Parent, computersHost) ||
+                    !ReferenceEquals(selectionPanel.Parent, recoveryHost) ||
+                    resultsArea.GetPositionFromControl(computersHost) !=
+                        new TableLayoutPanelCellPosition(0, 0) ||
+                    resultsArea.GetPositionFromControl(recoveryHost) !=
+                        new TableLayoutPanelCellPosition(0, 1))
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start result actions are not structurally below the results grid (grid row {gridRow}, action row {selectionRow}).");
+                        $"{formName}/{scenario.Name}: before a computer is selected, the bounded computer picker must be above the hidden recovery pane.");
                 }
 
                 if (selectionPanel.Visible)
