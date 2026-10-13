@@ -752,7 +752,7 @@ public static class UiLayoutSelfTest
                         position.Column is >= 0 and <= 2) &&
                     cells.Select(position => position.Column).Distinct().Count() == 3 &&
                     cards.ColumnStyles.Count == 3 &&
-                    cards.ColumnStyles.All(style =>
+                    cards.ColumnStyles.Cast<ColumnStyle>().All(style =>
                         style.SizeType == SizeType.Percent &&
                         Math.Abs(style.Width - 100F / 3F) < 0.1F);
                 if (!equallySized)
@@ -796,7 +796,7 @@ public static class UiLayoutSelfTest
                     cells.Any(position => position.Column != 0) ||
                     cells.Select(position => position.Row).Distinct().Count() != 3 ||
                     cards.RowStyles.Count != 3 ||
-                    cards.RowStyles.Any(row => row.SizeType != SizeType.Absolute))
+                    cards.RowStyles.Cast<RowStyle>().Any(row => row.SizeType != SizeType.Absolute))
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: compact HiDPI Start must stack all three equally high panes with scrolling.");
