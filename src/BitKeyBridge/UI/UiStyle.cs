@@ -22,6 +22,8 @@ public static class UiStyle
     public const int ControlGap = 8;
     public const int MinimumButtonHeight = 32;
     public const int MinimumButtonWidth = 88;
+    // Start's BitLocker/LAPS tab body, with room for wrapped actions at high DPI.
+    public const int HomeServiceTabsHeight = 196;
     // Height of the LAPS scrollable grids/details at the 96-DPI baseline.
     // Keep these values in the shared style instead of individual forms.
     public const int LapsSearchGridHeight = 170;
