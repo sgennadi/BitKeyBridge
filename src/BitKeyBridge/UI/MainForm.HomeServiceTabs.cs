@@ -266,7 +266,7 @@ public sealed partial class MainForm
 
         var computer = selected.ComputerName;
         _homeLapsBusy = true;
-        UpdateHomeServiceTabs(selected);
+        UpdateHomeServiceCards(selected);
         UiStyle.SetStatus(_homeSearchStatus,
             "Reading LAPS for " + computer + " (password requested by operator)...",
             UiStatusKind.Busy);
@@ -395,7 +395,7 @@ public sealed partial class MainForm
             if (_lapsResult is not null)
                 ClearLapsResult();
             _homeLapsBusy = false;
-            UpdateHomeServiceTabs(GetSelectedHomeSearchResult());
+            UpdateHomeServiceCards(GetSelectedHomeSearchResult());
         }
     }
 }
