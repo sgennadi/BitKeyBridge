@@ -1048,7 +1048,8 @@ public sealed partial class MainForm
                 await TestDirectoryConnectionAsync(
                     promptForOu: false,
                     promptForSessionCredentials: true,
-                    forceManualCredentials: false);
+                    forceManualCredentials: _lastAdConnectionFailed &&
+                        _homeUseOtherAccount.Checked);
 
         _homeDisconnectAdButton.Click +=
             (_, _) =>
