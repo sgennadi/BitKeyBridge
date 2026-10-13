@@ -692,9 +692,13 @@ public static class UiLayoutSelfTest
         var grid = FindByName(main, "HomeUnifiedSearchResults") as DataGridView;
         var panel = FindByName(main, "HomeSelectionPanel") as TableLayoutPanel;
         var cards = FindByName(main, "HomeServiceCards") as TableLayoutPanel;
+        var recoveryHost = FindByName(main, "HomeRecoveryPaneHost") as TableLayoutPanel;
+        var computersHost = FindByName(main, "HomeComputersPaneHost") as TableLayoutPanel;
+        var swap = FindByName(main, "HomeSwapPanesButton") as Button;
 
         if (root is null || area is null || grid is null ||
-            panel is null || cards is null)
+            panel is null || cards is null || recoveryHost is null ||
+            computersHost is null || swap is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: selected recovery layout is missing.");
@@ -734,21 +738,65 @@ public static class UiLayoutSelfTest
             var available = area.Parent?.ClientSize.Width ?? 0;
             bool expectedSideBySide = available -
                 (area.Parent?.Padding.Horizontal ?? 0) >= pairWidth;
-            var gridCell = area.GetPositionFromControl(grid);
-            var selectedCell = area.GetPositionFromControl(panel);
+            var computerCell = area.GetPositionFromControl(computersHost);
+            var recoveryCell = area.GetPositionFromControl(recoveryHost);
             var correct = expectedSideBySide
                 ? area.ColumnCount == 2 && area.RowCount == 1 &&
-                  gridCell.Column == 0 && gridCell.Row == 0 &&
-                  selectedCell.Column == 1 && selectedCell.Row == 0
+                  recoveryCell.Row == 0 && computerCell.Row == 0 &&
+                  recoveryCell.Column != computerCell.Column &&
+                  recoveryCell.Column is 0 or 1 &&
+                  computerCell.Column is 0 or 1 &&
+                  area.ColumnStyles.Count == 2 &&
+                  Math.Abs(area.ColumnStyles[recoveryCell.Column].Width -
+                           UiStyle.HomeRecoveryColumnPercent) < 0.1F &&
+                  Math.Abs(area.ColumnStyles[computerCell.Column].Width -
+                           (100F - UiStyle.HomeRecoveryColumnPercent)) < 0.1F
                 : area.ColumnCount == 1 && area.RowCount == 2 &&
-                  gridCell.Row == 0 && selectedCell.Row == 1 &&
+                  computerCell.Column == 0 && computerCell.Row == 0 &&
+                  recoveryCell.Column == 0 && recoveryCell.Row == 1 &&
                   area.RowStyles[0].SizeType == SizeType.Absolute;
 
             if (!correct || !ReferenceEquals(cards.Parent, panel) ||
                 cards.Controls.Count != 2)
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: selecting a computer must display BitLocker and LAPS directly beside the results on wide screens or below a compact list on small screens.");
+                    $"{formName}/{scenario.Name}: wide Start must keep the recovery pane at 66% on either side of the 34% computer pane; compact Start must show the list above the recovery cards.");
+            }
+
+            if (expectedSideBySide)
+            {
+                // Swap the two real WinForms pane hosts without altering source
+                // connections, selected results, secrets or saved user settings.
+                var originalRecoveryColumn = recoveryCell.Column;
+                if (!swap.Enabled)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: the pane swap action must be enabled for a wide selected-computer layout.");
+                }
+                else
+                {
+                    main.SwapHomePanesForUiSelfTest();
+                    main.ReflowMainViewport();
+                    var newRecoveryColumn = area.GetPositionFromControl(recoveryHost).Column;
+                    var newComputerColumn = area.GetPositionFromControl(computersHost).Column;
+                    if (newRecoveryColumn == originalRecoveryColumn ||
+                        newComputerColumn == newRecoveryColumn ||
+                        grid.SelectedRows.Count != 1 ||
+                        !ReferenceEquals(cards.Parent, panel))
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}: pane swap failed: recovery column {originalRecoveryColumn}->{newRecoveryColumn}, computer column {newComputerColumn}, selected rows {grid.SelectedRows.Count}, card parent intact {ReferenceEquals(cards.Parent, panel)}.");
+                    }
+
+                    // Restore initial order. Layout tests never write profile preferences.
+                    main.SwapHomePanesForUiSelfTest();
+                    main.ReflowMainViewport();
+                }
+            }
+            else if (swap.Enabled)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: swap is disabled when panes are stacked for narrow displays.");
             }
 
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
@@ -774,6 +822,26 @@ public static class UiLayoutSelfTest
             !StartConnectionPolicy.NeedsMicrosoftCloud(StartConnectionPolicy.Both))
         {
             failures.Add("Start connection source must isolate AD from cloud-only searches.");
+        }
+
+        // Detect wrong passwords using error codes (not only English text).
+        // Network outages and unrelated LDAP errors must not trigger
+        // an automatic credential prompt.
+        if (!MainForm.IsAdLogonFailure(
+                new System.ComponentModel.Win32Exception(1326)) ||
+            !MainForm.IsAdLogonFailure(
+                new Exception("The user name or password is incorrect.")) ||
+            MainForm.IsAdLogonFailure(
+                new Exception("The domain controller is unreachable.")))
+        {
+            failures.Add(
+                "AD sign-in retry must recognize logon failure without retrying on connection outages.");
+        }
+
+        if (!new StartConnectionPreferences().RecoveryCardsOnLeft)
+        {
+            failures.Add(
+                "First run must default to BitLocker/LAPS recovery on the left.");
         }
     }
 
@@ -836,6 +904,10 @@ public static class UiLayoutSelfTest
                 {
                     "HomeConnectionSourceChooser",
                     "HomeConnectionSource",
+                    "HomeReconnectWizardButton",
+                    "HomeRecoveryPaneHost",
+                    "HomeComputersPaneHost",
+                    "HomeSwapPanesButton",
                     "HomeConnectCloudButton",
                     "HomeConfigureCloudButton",
                     "HomeCloudConnectionStatus",
@@ -981,18 +1053,20 @@ public static class UiLayoutSelfTest
                     startPage,
                     "HomeSelectionPanel") is TableLayoutPanel selectionPanel)
             {
-                var gridRow =
-                    resultsArea.GetRow(
-                        resultsGrid);
-                var selectionRow =
-                    resultsArea.GetRow(
-                        selectionPanel);
-
-                if (gridRow != 0 ||
-                    selectionRow != 1)
+                var computersHost =
+                    FindByName(startPage, "HomeComputersPaneHost") as TableLayoutPanel;
+                var recoveryHost =
+                    FindByName(startPage, "HomeRecoveryPaneHost") as TableLayoutPanel;
+                if (computersHost is null || recoveryHost is null ||
+                    !ReferenceEquals(resultsGrid.Parent, computersHost) ||
+                    !ReferenceEquals(selectionPanel.Parent, recoveryHost) ||
+                    resultsArea.GetPositionFromControl(computersHost).Column != 0 ||
+                    resultsArea.GetPositionFromControl(computersHost).Row != 0 ||
+                    resultsArea.GetPositionFromControl(recoveryHost).Column != 0 ||
+                    resultsArea.GetPositionFromControl(recoveryHost).Row != 1)
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start result actions are not structurally below the results grid (grid row {gridRow}, action row {selectionRow}).");
+                        $"{formName}/{scenario.Name}: before a computer is selected, the bounded computer picker must be above the hidden recovery pane.");
                 }
 
                 if (selectionPanel.Visible)

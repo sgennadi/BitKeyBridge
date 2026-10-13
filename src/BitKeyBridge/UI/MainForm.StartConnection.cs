@@ -4,6 +4,7 @@ public sealed partial class MainForm
 {
     private readonly ComboBox _homeConnectionSource = new();
     private readonly Button _homeConnectCloudButton = new();
+    private readonly Button _homeReconnectWizardButton = new();
     private readonly Button _homeConfigureCloudButton = new();
     private readonly UiStatusLabel _homeCloudConnectionStatus = new();
 
@@ -78,6 +79,18 @@ public sealed partial class MainForm
             _initializingStartSource = false;
         }
         row.Controls.Add(_homeConnectionSource);
+
+        _homeReconnectWizardButton.Name = "HomeReconnectWizardButton";
+        _homeReconnectWizardButton.Text = "Reconnect / Change connection...";
+        _homeReconnectWizardButton.AccessibleName =
+            "Reopen the AD or Microsoft 365 connection wizard to change source, " +
+            "account or retry after a failed password";
+        UiStyle.ConfigureActionButton(_homeReconnectWizardButton);
+        row.Controls.Add(_homeReconnectWizardButton);
+        _homeReconnectWizardButton.Click += async (_, _) =>
+            await ShowConnectionWizardAsync(
+                preferOtherAdAccount: _lastAdConnectionFailed &&
+                    StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource));
 
         _homeConnectCloudButton.Name = "HomeConnectCloudButton";
         _homeConnectCloudButton.Text = "Connect to Microsoft 365";
@@ -183,6 +196,8 @@ public sealed partial class MainForm
         _homeConfigureCloudButton.Visible = cloud;
         _homeCloudConnectionStatus.Visible = cloud ||
             SelectedStartSource == StartConnectionPolicy.Choose;
+        _homeReconnectWizardButton.Enabled = !_directoryConnecting &&
+            !_cloudConnecting && !_connectionWizardOpening;
         _homeConnectCloudButton.Enabled = cloud && !_cloudConnecting;
         _homeConfigureCloudButton.Enabled = cloud && !_cloudWizardOpening;
 

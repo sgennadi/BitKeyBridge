@@ -1,3 +1,16 @@
+## 0.29.9
+
+**Recovery cards on the left, computer picker on the right**
+
+- Reversed Start's wide-screen layout: the main BitLocker and LAPS recovery cards occupy the left 66% of the available workspace, while the computer/results list stays on the right (34%) for switching computers without navigating away.
+- BitLocker remains left of LAPS within the recovery area; LAPS password history and explicit Reveal/Copy/Diagnostics operations are unchanged.
+- At narrow window widths, RDP resolutions or elevated DPI, keep a compact computer list above the cards so the search and selected-device actions remain usable without clipping.
+- Added draggable pane headers and an accessible **Swap sides** button to swap BitLocker/LAPS and the computer picker on a wide Start layout without losing the selected computer. The side order is saved per Windows user under LocalAppData; compact screens still show the list above the cards.
+- Added a persistent **Reconnect / Change connection...** action on Start to reopen the AD / Microsoft 365 wizard without restarting BitKeyBridge.
+- If an AD sign-in fails because the password is invalid, discard the rejected session password and offer a one-time automatic retry wizard. **Retry AD Login** always requests a fresh password for a manual account; repeat failures never create an endless prompt loop. Windows Credential Manager entries are not silently deleted.
+- Extended WinForms UI tests for both pane orders, swap controls and the invalid-credential retry classifier, preserving LAPS/BitLocker secrets and history during layout changes.
+- Updated the runtime WinForms layout regression for compact, 150% and 200% display scaling.
+
 ## 0.29.8
 
 **Explicit first-screen connection wizard and immediately visible BitLocker/LAPS cards**

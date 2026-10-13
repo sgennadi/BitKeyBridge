@@ -27,7 +27,8 @@ public static class UiStyle
     public const int HomeRecoveryCardsPairMinimumWidth = 820;
     public const int HomeCompactSearchResultsHeight = 182;
     public const int HomeResultsSideBySideMinimumWidth = 1370;
-    public const float HomeResultsLeftColumnPercent = 34F;
+    // Primary recovery actions left, compact computer selector right.
+    public const float HomeRecoveryColumnPercent = 66F;
     public const int HomeRecoveryCardMaxTextWidth = 740;
     // Application-wide modern Windows treatment. Controls use these tokens,
     // not per-window hardcoded fonts, colors or radii.

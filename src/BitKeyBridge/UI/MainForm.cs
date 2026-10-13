@@ -4013,6 +4013,8 @@ public sealed partial class MainForm : DpiAwareForm
             _connectedAdAccount = result.Account;
             _connectedAdAuthentication = result.Authentication;
             _directoryConnected = true;
+            _lastAdConnectionFailed = false;
+            _adRetryWizardAutoOffered = false;
             _disconnectAdButton.Enabled = true;
             RefreshHomeConnectionUi();
 
@@ -4100,6 +4102,16 @@ public sealed partial class MainForm : DpiAwareForm
                 return;
             }
 
+            // A failed bind must never silently reuse an invalid password
+            // from the previous attempt. A protected vault entry is not
+            // modified, but the next manual attempt uses session credentials.
+            var invalidPassword = IsAdLogonFailure(ex);
+            if (invalidPassword)
+            {
+                AdSessionCredentials.Clear();
+                _adPassword.Clear();
+            }
+            _lastAdConnectionFailed = invalidPassword;
             _directoryConnected = false;
             _connectedAdAccount = string.Empty;
             _connectedAdAuthentication = string.Empty;
@@ -4117,13 +4129,19 @@ public sealed partial class MainForm : DpiAwareForm
             _startKey.Clear();
 
             SetDirectoryConnectionStatus(
-                "Connection failed: " +
-                ex.Message,
+                "Connection failed: " + ex.Message +
+                (invalidPassword
+                    ? " Wrong password cleared. Use Retry AD Login or " +
+                      "Reconnect / Change connection to enter new credentials."
+                    : " Use Reconnect / Change connection to try again."),
                 UiStatusKind.Error);
 
             UiStyle.SetStatus(
                 _startPurposeStatus,
-                "Active Directory connection failed. Review the diagnostic panel or adjust Advanced connection settings.",
+                invalidPassword
+                    ? "Active Directory rejected the sign-in. Re-enter the password in " +
+                      "the connection wizard; the rejected password is not retained."
+                    : "Active Directory connection failed. Retry, review diagnostics or adjust Advanced settings.",
                 UiStatusKind.Error);
 
             _recoveryDiagnostics.ShowError(
@@ -4138,6 +4156,11 @@ public sealed partial class MainForm : DpiAwareForm
                 ("ExplicitCredentials", _config.AdUseExplicitCredentials.ToString()),
                 ("CredentialStorage", _config.AdCredentialStorageMode),
                 ("User", _config.AdUsername));
+
+            // Offer one automatic retry on genuine authentication failure.
+            // Cancel remains available; future attempts use the Reconnect button.
+            if (invalidPassword)
+                ScheduleAdCredentialRetryWizard();
         }
         finally
         {
@@ -4462,6 +4485,8 @@ public sealed partial class MainForm : DpiAwareForm
         _homeConnectAdButton.Enabled =
             !_directoryConnecting &&
             !_directoryConnected;
+        _homeConnectAdButton.Text =
+            _lastAdConnectionFailed ? "Retry AD Login" : "Connect to AD";
 
         _homeDisconnectAdButton.Enabled =
             !_directoryConnecting &&

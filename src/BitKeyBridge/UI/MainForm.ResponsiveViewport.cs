@@ -31,9 +31,9 @@ public sealed partial class MainForm
 
     /// <summary>
     /// Keep selected recovery cards visible without scrolling through an
-    /// oversized results grid. On a wide monitor the results list is left
-    /// and recovery cards right; on narrow/RDP layouts the results list
-    /// has a bounded height directly above the cards.
+    /// oversized results grid. On a wide monitor the recovery cards are
+    /// on either side of the computer list, controlled by a per-user setting.
+    /// On narrow/RDP layouts the list stays above the cards for easy selection.
     /// </summary>
     private void ReflowHomeResultsArea()
     {
@@ -48,13 +48,57 @@ public sealed partial class MainForm
             DeviceDpi / (double)UiStyle.BaselineDpi);
         bool sideBySide = available >= required &&
             GetSelectedHomeSearchResult() is not null;
-        var key = sideBySide ? "SideBySide" : "Stacked";
+        bool recoveryLeft = _startConnectionPreferences.RecoveryCardsOnLeft;
+        var key = sideBySide
+            ? recoveryLeft ? "RecoveryLeft" : "ComputersLeft"
+            : "Stacked";
+        UpdateHomePaneDragUi(sideBySide);
         if (_homeResultsLayoutKey == key)
         {
             ArrangeHomeServiceCards();
             return;
         }
 
+        // A left/right swap does not need control reparenting. Move the pane
+        // hosts between existing table cells so DataGridView selection and
+        // secret-bearing card instances remain entirely untouched.
+        if (sideBySide &&
+            _homeResultsArea.ColumnCount == 2 &&
+            _homeResultsArea.RowCount == 1 &&
+            _homeResultsArea.Controls.Contains(_homeRecoveryPaneHost) &&
+            _homeResultsArea.Controls.Contains(_homeComputersPaneHost))
+        {
+            _homeResultsReflowRunning = true;
+            _homeResultsArea.SuspendLayout();
+            try
+            {
+                _homeResultsArea.SetCellPosition(_homeRecoveryPaneHost,
+                    new TableLayoutPanelCellPosition(recoveryLeft ? 0 : 1, 0));
+                _homeResultsArea.SetCellPosition(_homeComputersPaneHost,
+                    new TableLayoutPanelCellPosition(recoveryLeft ? 1 : 0, 0));
+                _homeResultsArea.ColumnStyles[0].Width =
+                    recoveryLeft ? UiStyle.HomeRecoveryColumnPercent :
+                    100F - UiStyle.HomeRecoveryColumnPercent;
+                _homeResultsArea.ColumnStyles[1].Width =
+                    recoveryLeft ? 100F - UiStyle.HomeRecoveryColumnPercent :
+                    UiStyle.HomeRecoveryColumnPercent;
+                _homeResultsLayoutKey = key;
+            }
+            finally
+            {
+                _homeResultsArea.ResumeLayout(true);
+                _homeResultsReflowRunning = false;
+            }
+
+            _homeResultsArea.PerformLayout();
+            ArrangeHomeServiceCards();
+            return;
+        }
+
+        // Reparenting the host panels can recreate the WinForms grid handle.
+        // Preserve the computer selection by stable row identity so swapping
+        // never replaces an already-selected recovery context.
+        var selectedComputer = GetSelectedHomeSearchResult();
         _homeResultsReflowRunning = true;
         _homeResultsArea.SuspendLayout();
         try
@@ -66,15 +110,18 @@ public sealed partial class MainForm
             {
                 _homeResultsArea.ColumnCount = 2;
                 _homeResultsArea.RowCount = 1;
-                _homeResultsArea.ColumnStyles.Add(
-                    new ColumnStyle(SizeType.Percent,
-                        UiStyle.HomeResultsLeftColumnPercent));
-                _homeResultsArea.ColumnStyles.Add(
-                    new ColumnStyle(SizeType.Percent,
-                        100F - UiStyle.HomeResultsLeftColumnPercent));
+                // The recovery pane always owns the larger share. The user
+                // can swap its side by dragging either labeled pane header.
+                var recoveryWidth = UiStyle.HomeRecoveryColumnPercent;
+                _homeResultsArea.ColumnStyles.Add(new ColumnStyle(
+                    SizeType.Percent, recoveryLeft ? recoveryWidth : 100F - recoveryWidth));
+                _homeResultsArea.ColumnStyles.Add(new ColumnStyle(
+                    SizeType.Percent, recoveryLeft ? 100F - recoveryWidth : recoveryWidth));
                 _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                _homeResultsArea.Controls.Add(_homeSearchResults, 0, 0);
-                _homeResultsArea.Controls.Add(_homeSelectionPanel, 1, 0);
+                _homeResultsArea.Controls.Add(
+                    recoveryLeft ? _homeRecoveryPaneHost : _homeComputersPaneHost, 0, 0);
+                _homeResultsArea.Controls.Add(
+                    recoveryLeft ? _homeComputersPaneHost : _homeRecoveryPaneHost, 1, 0);
             }
             else
             {
@@ -87,8 +134,8 @@ public sealed partial class MainForm
                         UiStyle.HomeCompactSearchResultsHeight *
                         DeviceDpi / (float)UiStyle.BaselineDpi));
                 _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                _homeResultsArea.Controls.Add(_homeSearchResults, 0, 0);
-                _homeResultsArea.Controls.Add(_homeSelectionPanel, 0, 1);
+                _homeResultsArea.Controls.Add(_homeComputersPaneHost, 0, 0);
+                _homeResultsArea.Controls.Add(_homeRecoveryPaneHost, 0, 1);
             }
 
             _homeSearchResults.Dock = DockStyle.Fill;
@@ -99,6 +146,21 @@ public sealed partial class MainForm
         {
             _homeResultsArea.ResumeLayout(true);
             _homeResultsReflowRunning = false;
+        }
+
+        if (selectedComputer is not null &&
+            GetSelectedHomeSearchResult() is null)
+        {
+            var selectedRow = _homeSearchResults.Rows
+                .Cast<DataGridViewRow>()
+                .FirstOrDefault(row => ReferenceEquals(row.Tag, selectedComputer));
+            if (selectedRow is not null)
+            {
+                _homeSearchResults.ClearSelection();
+                selectedRow.Selected = true;
+                if (selectedRow.Cells.Count > 0)
+                    _homeSearchResults.CurrentCell = selectedRow.Cells[0];
+            }
         }
 
         _homeSelectionPanel.PerformLayout();
