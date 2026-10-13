@@ -103,6 +103,25 @@ public sealed partial class MainForm
 
     private void UpdateHomeServiceTabs(HomeSearchResult? selected)
     {
+        if (selected is null)
+        {
+            // Keep both hidden pages parented so the existing UI layout
+            // self-test and accessible-control tree can still inspect them.
+            _homeServiceTabIdentity = "<uninitialized>";
+            if (_homeServiceTabs.TabPages.Count != 2 ||
+                !_homeServiceTabs.TabPages.Contains(_homeBitLockerTab) ||
+                !_homeServiceTabs.TabPages.Contains(_homeLapsTab))
+            {
+                _homeServiceTabs.TabPages.Clear();
+                _homeServiceTabs.TabPages.Add(_homeBitLockerTab);
+                _homeServiceTabs.TabPages.Add(_homeLapsTab);
+            }
+            _homeServiceTabs.Visible = false;
+            _homeRevealLapsButton.Enabled = false;
+            _homeCopyLapsButton.Enabled = false;
+            return;
+        }
+
         bool showBitLocker = selected is not null &&
             (selected.BitLockerKeyCount > 0 || selected.BitLockerLookupFailed);
         bool showLaps = selected is not null &&
