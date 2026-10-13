@@ -666,6 +666,8 @@ public static class UiLayoutSelfTest
                     "HomeLapsCard",
                     "HomeRevealBitLockerButton",
                     "HomeCopyBitLockerButton",
+                    "HomeBitLockerDiagnosticButton",
+                    "HomeRotateBitLockerButton",
                     "HomeRevealLapsButton",
                     "HomeCopyLapsButton",
                     "HomeDeviceDetailsButton",
@@ -703,6 +705,14 @@ public static class UiLayoutSelfTest
                     failures.Add(
                         $"{formName}/{scenario.Name}: Start cannot reveal or copy LAPS without a selected computer and explicit action.");
                 }
+            }
+
+            if (FindByName(startPage, "HomeRotateBitLockerButton") is Button rotate &&
+                !rotate.Text.Contains("Select Intune device",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Start must require choosing an exact Intune device before rotation.");
             }
 
             foreach (var controlName in
