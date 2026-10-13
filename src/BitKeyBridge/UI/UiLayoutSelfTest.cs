@@ -661,16 +661,14 @@ public static class UiLayoutSelfTest
                     "HomeDisconnectAdButton",
                     "HomeEnvironmentCheckButton",
                     "HomeAdvancedDiagnosticsButton",
-                    "HomeBitLockerDiagnosticButton",
-                    "HomeBitLockerButton",
+                    "HomeServiceCards",
+                    "HomeBitLockerCard",
+                    "HomeLapsCard",
                     "HomeRevealBitLockerButton",
                     "HomeCopyBitLockerButton",
-                    "HomeRotateBitLockerButton",
-                    "HomeDeviceDetailsButton",
-                    "HomeLapsButton",
-                    "HomeServiceTabs",
                     "HomeRevealLapsButton",
                     "HomeCopyLapsButton",
+                    "HomeDeviceDetailsButton",
                     "HomeSelectionSummary",
                     "SecretLifetimeStatus",
                     "StartSetupStatus",
@@ -683,31 +681,28 @@ public static class UiLayoutSelfTest
                     "AdvancedConnectionGroup"
                 };
 
-            if (FindByName(startPage, "HomeServiceTabs") is TabControl services)
+            if (FindByName(startPage, "HomeServiceCards") is TableLayoutPanel cards)
             {
-                if (services.TabPages.Count != 2 ||
-                    services.TabPages[0].Text != "BitLocker" ||
-                    services.TabPages[1].Text != "LAPS")
+                if (FindByName(cards, "HomeBitLockerCard") is not GroupBox bitLocker ||
+                    FindByName(cards, "HomeLapsCard") is not GroupBox laps)
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start service tabs must have BitLocker first, then LAPS.");
+                        $"{formName}/{scenario.Name}: Start must contain BitLocker and LAPS recovery cards.");
+                }
+                else if (cards.GetPositionFromControl(bitLocker).Column != 0 ||
+                         cards.GetPositionFromControl(laps).Column != 1)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: BitLocker must be left of LAPS at startup.");
                 }
 
-                if (services.Visible ||
+                if (cards.Visible ||
                     FindByName(startPage, "HomeRevealLapsButton") is Button { Enabled: true } ||
                     FindByName(startPage, "HomeCopyLapsButton") is Button { Enabled: true })
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start cannot reveal or copy LAPS without computer selection and explicit action.");
+                        $"{formName}/{scenario.Name}: Start cannot reveal or copy LAPS without a selected computer and explicit action.");
                 }
-            }
-
-            if (FindByName(startPage, "HomeRotateBitLockerButton") is Button rotate &&
-                !rotate.Text.Contains("Select Intune device",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add(
-                    $"{formName}/{scenario.Name}: Start must require choosing an Intune device, not perform name-based rotation.");
             }
 
             foreach (var controlName in
@@ -1137,7 +1132,7 @@ public static class UiLayoutSelfTest
                 if (checkRecoveryConnection &&
                     string.Equals(
                         page.Text,
-                        "Recovery",
+                        "BitLocker",
                         StringComparison.OrdinalIgnoreCase))
                 {
                     VerifyMainConnectionBar(
