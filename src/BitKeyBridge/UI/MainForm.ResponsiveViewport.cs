@@ -6,6 +6,8 @@ public sealed partial class MainForm
     private bool _mainViewportReflowRunning;
     private bool _homeResultsReflowRunning;
     private string _homeResultsLayoutKey = string.Empty;
+    private string _homeConnectionsRecentLayoutKey = string.Empty;
+    private bool _homeConnectionsRecentReflowRunning;
 
     private void InitializeMainViewport()
     {
@@ -29,6 +31,64 @@ public sealed partial class MainForm
     }
 
 
+    private double EffectiveHomeDpiScale() =>
+        Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
+            Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+
+    private void ReflowConnectionsRecent()
+    {
+        var layout = _homeConnectionsRecentLayout;
+        var connection = _homeAdConnectionLayout;
+        var recent = _homeRecentQuickPanel;
+        if (_homeConnectionsRecentReflowRunning || layout is null ||
+            connection is null || recent is null || layout.IsDisposed ||
+            layout.Parent is null)
+            return;
+
+        var width = Math.Max(0,
+            layout.Parent.ClientSize.Width - layout.Parent.Padding.Horizontal);
+        bool horizontal = width >= (int)Math.Ceiling(
+            UiStyle.HomeConnectionRecentPairMinimumWidth * EffectiveHomeDpiScale());
+        var key = horizontal ? "ConnectionsRecentWide" : "ConnectionsRecentStacked";
+        if (_homeConnectionsRecentLayoutKey == key)
+            return;
+
+        _homeConnectionsRecentReflowRunning = true;
+        layout.SuspendLayout();
+        try
+        {
+            layout.Controls.Clear();
+            layout.ColumnStyles.Clear();
+            layout.RowStyles.Clear();
+            if (horizontal)
+            {
+                layout.ColumnCount = 2;
+                layout.RowCount = 1;
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62F));
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38F));
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                layout.Controls.Add(connection, 0, 0);
+                layout.Controls.Add(recent, 1, 0);
+            }
+            else
+            {
+                layout.ColumnCount = 1;
+                layout.RowCount = 2;
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                layout.Controls.Add(connection, 0, 0);
+                layout.Controls.Add(recent, 0, 1);
+            }
+            _homeConnectionsRecentLayoutKey = key;
+        }
+        finally
+        {
+            layout.ResumeLayout(true);
+            _homeConnectionsRecentReflowRunning = false;
+        }
+    }
+
     /// <summary>
     /// Three equal-size draggable panes. The main form owns the height,
     /// not a data grid with a percentage row that hides recovery actions.
@@ -44,12 +104,11 @@ public sealed partial class MainForm
         if (width <= 0)
             width = _homeResultsArea.ClientSize.Width;
         width -= _homeResultsArea.Parent?.Padding.Horizontal ?? 0;
+        var effectiveScale = EffectiveHomeDpiScale();
         var scaledWidth = (int)Math.Ceiling(
-            UiStyle.HomeThreePaneMinimumWidth *
-            DeviceDpi / (double)UiStyle.BaselineDpi);
+            UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
         var scaledHeight = (int)Math.Ceiling(
-            UiStyle.HomeThreePaneMinimumHeight *
-            DeviceDpi / (double)UiStyle.BaselineDpi);
+            UiStyle.HomeThreePaneMinimumHeight * effectiveScale);
         bool threeColumns = width >= scaledWidth;
         UpdateHomePaneDragUi(threeColumns);
 
@@ -161,6 +220,8 @@ public sealed partial class MainForm
             if (shell.Bounds != ClientRectangle)
                 shell.Bounds = ClientRectangle;
 
+            shell.PerformLayout();
+            ReflowConnectionsRecent();
             shell.PerformLayout();
             ReflowHomeResultsArea();
             _mainTabs.Dock = DockStyle.Fill;
