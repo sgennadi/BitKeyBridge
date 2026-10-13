@@ -6,6 +6,7 @@ public sealed partial class MainForm
     private bool _connectionWizardOpening;
     private bool _lastAdConnectionFailed;
     private bool _adRetryWizardAutoOffered;
+    private bool _adRetryWizardPending;
 
     /// <summary>
     /// On every interactive launch present the source chooser after the updater.
@@ -96,6 +97,11 @@ public sealed partial class MainForm
             {
                 UpdateStartConnectionSourceControls();
                 RefreshHomeConnectionUi();
+                if (_adRetryWizardPending)
+                {
+                    _adRetryWizardPending = false;
+                    QueueAdRetryWizard();
+                }
             }
         }
     }
@@ -111,6 +117,22 @@ public sealed partial class MainForm
             return;
 
         _adRetryWizardAutoOffered = true;
+        if (_connectionWizardOpening)
+        {
+            // Both-source wizard can still be completing cloud sign-in.
+            // Wait until the original wizard is closed before prompting.
+            _adRetryWizardPending = true;
+            return;
+        }
+
+        QueueAdRetryWizard();
+    }
+
+    private void QueueAdRetryWizard()
+    {
+        if (IsDisposed || !IsHandleCreated)
+            return;
+
         BeginInvoke(new MethodInvoker(async () =>
         {
             if (!IsDisposed && !_directoryConnected && !_directoryConnecting)
@@ -118,7 +140,7 @@ public sealed partial class MainForm
         }));
     }
 
-    private static bool IsAdLogonFailure(Exception error)
+    internal static bool IsAdLogonFailure(Exception error)
     {
         for (Exception? ex = error; ex is not null; ex = ex.InnerException)
         {
