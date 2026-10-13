@@ -1,3 +1,14 @@
+## 0.29.7
+
+**Responsive maximized workspace, selectable AD / Microsoft Entra sources, least-privilege onboarding**
+
+- Fix large-screen and RDP maximize behavior: MainForm now uses page-level scrollbars and a full-client Dock=Fill root, skips working-area corrections while maximized, reflows the active workspace on resize/DPI changes, and starts maximized for ordinary use.
+- Add **Connect using** on Start: choose Active Directory, Microsoft Entra / Intune (Microsoft 365), or Both. The source is saved in each user's LocalAppData without requiring administrator access, and Start searches only the selected/connected source(s).
+- Remove forced Active Directory credential prompts on startup. Integrated Windows identity is attempted only for selected AD source when AutoConnectOnStart is enabled; failed AD auto-connect waits for an explicit Connect action.
+- Add a non-administrative Microsoft Entra connection wizard. Use an IT-approved App Registration's Tenant and Client IDs, then sign in using Device Code and MFA. A separate, explicit administrator setup path invokes the existing privileged Entra/Intune wizard if a new application or tenant consent is required.
+- Keep BitLocker/LAPS password read privilege checks, audit, and masking unchanged; no broad privileges or secret storage are automatically granted. Document delegated Graph consent, per-device Entra roles and Windows LAPS AD delegation in docs/least-privilege-setup.md.
+- Extend Windows UI layout regression to check full-width resize rather than only normalizing dock geometry in tests, verify the new source controls and wizard, and preserve HiDPI accessibility.
+
 ## 0.29.6
 
 **Unified rounded Windows UI and direct BitLocker diagnostics**
