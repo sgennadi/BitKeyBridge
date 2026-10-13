@@ -233,7 +233,7 @@ internal static class UiModernTheme
         if (control.IsDisposed || SystemInformation.HighContrast)
             return;
 
-        var logicalRadius = radius ?? control switch
+        var logicalRadius = radius ?? (control switch
         {
             Button => UiStyle.ModernButtonRadius,
             ComboBox or TextBoxBase or UpDownBase or DateTimePicker =>
@@ -241,7 +241,7 @@ internal static class UiModernTheme
             UiStatusLabel or ProgressBar => UiStyle.ModernSmallRadius,
             DataGridView or ListView or Panel => UiStyle.ModernSurfaceRadius,
             _ => 0
-        };
+        });
         if (logicalRadius <= 0 || control.Width < 2 || control.Height < 2)
             return;
 
