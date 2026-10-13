@@ -25,6 +25,9 @@ public static class UiStyle
     // Start's BitLocker/LAPS tab body, with room for wrapped actions at high DPI.
     // Responsive two-column recovery cards on Start.
     public const int HomeRecoveryCardsPairMinimumWidth = 820;
+    public const int HomeCompactSearchResultsHeight = 182;
+    public const int HomeResultsSideBySideMinimumWidth = 1370;
+    public const float HomeResultsLeftColumnPercent = 34F;
     public const int HomeRecoveryCardMaxTextWidth = 740;
     // Application-wide modern Windows treatment. Controls use these tokens,
     // not per-window hardcoded fonts, colors or radii.
