@@ -288,7 +288,7 @@ public sealed partial class MainForm
             }
             _lapsSearchDebounceTimer?.Stop();
 
-            await ReadLapsAsync();
+            await ReadLapsAsync(includeHistoryOverride: false);
 
             // A different selected computer must never receive the old
             // computer password after an asynchronous LDAP operation.
