@@ -36,7 +36,12 @@ public sealed partial class MainForm
             _homeBitLockerCardStatus,
             _homeBitLockerCardKeyId,
             "Recovery password: ••••••••••••",
-            [_homeRevealBitLockerButton, _homeCopyBitLockerButton]));
+            [
+                _homeRevealBitLockerButton,
+                _homeCopyBitLockerButton,
+                _homeBitLockerDiagnosticButton,
+                _homeRotateBitLockerButton
+            ]));
 
         _homeRevealLapsButton.Name = "HomeRevealLapsButton";
         _homeRevealLapsButton.Text = "Reveal Password";
