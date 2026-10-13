@@ -823,6 +823,26 @@ public static class UiLayoutSelfTest
         {
             failures.Add("Start connection source must isolate AD from cloud-only searches.");
         }
+
+        // Detect wrong passwords using error codes (not only English text).
+        // Network outages and unrelated LDAP errors must not trigger
+        // an automatic credential prompt.
+        if (!MainForm.IsAdLogonFailure(
+                new System.ComponentModel.Win32Exception(1326)) ||
+            !MainForm.IsAdLogonFailure(
+                new Exception("The user name or password is incorrect.")) ||
+            MainForm.IsAdLogonFailure(
+                new Exception("The domain controller is unreachable.")))
+        {
+            failures.Add(
+                "AD sign-in retry must recognize logon failure without retrying on connection outages.");
+        }
+
+        if (!new StartConnectionPreferences().RecoveryCardsOnLeft)
+        {
+            failures.Add(
+                "First run must default to BitLocker/LAPS recovery on the left.");
+        }
     }
 
     private static void VerifyDialogKeyboardBehavior(
