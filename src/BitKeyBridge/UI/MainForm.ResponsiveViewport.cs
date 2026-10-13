@@ -59,6 +59,42 @@ public sealed partial class MainForm
             return;
         }
 
+        // A left/right swap does not need control reparenting. Move the pane
+        // hosts between existing table cells so DataGridView selection and
+        // secret-bearing card instances remain entirely untouched.
+        if (sideBySide &&
+            _homeResultsArea.ColumnCount == 2 &&
+            _homeResultsArea.RowCount == 1 &&
+            _homeResultsArea.Controls.Contains(_homeRecoveryPaneHost) &&
+            _homeResultsArea.Controls.Contains(_homeComputersPaneHost))
+        {
+            _homeResultsReflowRunning = true;
+            _homeResultsArea.SuspendLayout();
+            try
+            {
+                _homeResultsArea.SetCellPosition(_homeRecoveryPaneHost,
+                    new TableLayoutPanelCellPosition(recoveryLeft ? 0 : 1, 0));
+                _homeResultsArea.SetCellPosition(_homeComputersPaneHost,
+                    new TableLayoutPanelCellPosition(recoveryLeft ? 1 : 0, 0));
+                _homeResultsArea.ColumnStyles[0].Width =
+                    recoveryLeft ? UiStyle.HomeRecoveryColumnPercent :
+                    100F - UiStyle.HomeRecoveryColumnPercent;
+                _homeResultsArea.ColumnStyles[1].Width =
+                    recoveryLeft ? 100F - UiStyle.HomeRecoveryColumnPercent :
+                    UiStyle.HomeRecoveryColumnPercent;
+                _homeResultsLayoutKey = key;
+            }
+            finally
+            {
+                _homeResultsArea.ResumeLayout(true);
+                _homeResultsReflowRunning = false;
+            }
+
+            _homeResultsArea.PerformLayout();
+            ArrangeHomeServiceCards();
+            return;
+        }
+
         // Reparenting the host panels can recreate the WinForms grid handle.
         // Preserve the computer selection by stable row identity so swapping
         // never replaces an already-selected recovery context.
