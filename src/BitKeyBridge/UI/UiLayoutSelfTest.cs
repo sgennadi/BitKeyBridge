@@ -690,6 +690,7 @@ public static class UiLayoutSelfTest
                     "HomeEnvironmentCheckButton",
                     "HomeAdvancedDiagnosticsButton",
                     "HomeServiceCards",
+                    "HomeBitLockerDiagnosticLink",
                     "HomeBitLockerCard",
                     "HomeLapsCard",
                     "HomeLapsHistoryArea",
@@ -699,11 +700,8 @@ public static class UiLayoutSelfTest
                     "HomeLapsSelectedRecord",
                     "HomeRevealBitLockerButton",
                     "HomeCopyBitLockerButton",
-                    "HomeBitLockerDiagnosticButton",
-                    "HomeRotateBitLockerButton",
                     "HomeRevealLapsButton",
                     "HomeCopyLapsButton",
-                    "HomeDeviceDetailsButton",
                     "HomeSelectionSummary",
                     "SecretLifetimeStatus",
                     "StartSetupStatus",
@@ -763,12 +761,20 @@ public static class UiLayoutSelfTest
                 }
             }
 
-            if (FindByName(startPage, "HomeRotateBitLockerButton") is Button rotate &&
-                !rotate.Text.Contains("Select Intune device",
-                    StringComparison.OrdinalIgnoreCase))
+            if (FindByName(startPage, "HomeBitLockerDiagnosticLink") is LinkLabel help &&
+                (!help.Text.Contains("diagnostic", StringComparison.OrdinalIgnoreCase) ||
+                 help.Enabled))
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: Start must require choosing an exact Intune device before rotation.");
+                    $"{formName}/{scenario.Name}: inline BitLocker diagnostic commands link must start disabled until selection.");
+            }
+
+            if (FindByName(startPage, "HomeDeviceDetailsButton") is not null ||
+                FindByName(startPage, "HomeRotateBitLockerButton") is not null ||
+                FindByName(startPage, "HomeBitLockerDiagnosticButton") is not null)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Start must not contain navigation-only device or BitLocker diagnostic buttons.");
             }
 
             foreach (var controlName in

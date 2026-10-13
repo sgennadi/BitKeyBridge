@@ -38,6 +38,7 @@ public class DpiAwareForm : Form
         // A scrollbar is preferable to clipped controls on high DPI, large-text
         // configurations, RDP sessions, or small displays.
         AutoScroll = true;
+        UiModernTheme.Apply(this);
         RefreshResponsiveLayout();
     }
 
@@ -76,21 +77,25 @@ public class DpiAwareForm : Form
     {
         AutoScroll =
             true;
+        UiModernTheme.Apply(this);
         ApplyResponsiveDefaults(
             this);
         PerformLayout();
         RefreshResponsiveLabelWidths();
         PerformLayout();
+        UiModernTheme.Refresh(this);
     }
 
     private void RefreshResponsiveLayout()
     {
+        UiModernTheme.Apply(this);
         ApplyResponsiveDefaults(
             this);
         ConstrainToWorkingArea();
         PerformLayout();
         RefreshResponsiveLabelWidths();
         PerformLayout();
+        UiModernTheme.Refresh(this);
     }
 
     private void ApplyResponsiveDefaults(

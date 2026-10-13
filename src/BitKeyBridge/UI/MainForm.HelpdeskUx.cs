@@ -9,8 +9,6 @@ public sealed partial class MainForm
     private readonly TableLayoutPanel _homeSelectionPanel = new();
     private readonly Button _homeRevealBitLockerButton = new();
     private readonly Button _homeCopyBitLockerButton = new();
-    private readonly Button _homeRotateBitLockerButton = new();
-    private readonly Button _homeDeviceDetailsButton = new();
     private readonly UiStatusLabel _secretLifetimeStatus = new();
     private readonly UiStatusLabel _setupStatus = new();
     private readonly UiStatusLabel _startSetupStatus = new();

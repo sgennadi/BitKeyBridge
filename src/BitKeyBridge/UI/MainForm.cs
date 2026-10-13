@@ -4479,10 +4479,8 @@ public sealed partial class MainForm : DpiAwareForm
             !_directoryConnecting &&
             !_directoryConnected;
 
-        _homeBitLockerButton.Enabled =
-            ready;
-        _homeLapsButton.Enabled =
-            ready;
+        // Start recovery and diagnostic actions update through the selected
+        // computer metadata, not obsolete navigation buttons.
 
         if (!searchReady)
         {

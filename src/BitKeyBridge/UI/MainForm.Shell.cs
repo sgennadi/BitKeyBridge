@@ -14,7 +14,6 @@ public sealed partial class MainForm
     private readonly TableLayoutPanel _bitLockerZeroWarningPanel = new();
     private readonly UiStatusLabel _bitLockerZeroWarning = new();
     private readonly Button _bitLockerDiagnosticCommands = new();
-    private readonly Button _homeBitLockerDiagnosticButton = new();
     private readonly GroupBox _advancedConnectionGroup = new();
     private readonly GroupBox _recoveryCard = new();
     private readonly Label _recoveryCardComputer = new();
@@ -32,8 +31,6 @@ public sealed partial class MainForm
     private readonly Button _homeDisconnectAdButton = new();
     private readonly Button _homeEnvironmentCheckButton = new();
     private readonly Button _homeAdvancedDiagnosticsButton = new();
-    private readonly Button _homeBitLockerButton = new();
-    private readonly Button _homeLapsButton = new();
     private readonly ProgressBar _homeConnectionProgress = new();
     private readonly TextBox _homeQuery = new();
     private readonly Button _homeSearchButton = new();
@@ -846,57 +843,7 @@ public sealed partial class MainForm
             0,
             0);
 
-        var taskActions =
-            new FlowLayoutPanel
-            {
-                Dock =
-                    DockStyle.Top,
-                AutoSize =
-                    true,
-                WrapContents =
-                    true,
-                FlowDirection =
-                    FlowDirection.LeftToRight,
-                Margin =
-                    new Padding(
-                        0,
-                        UiStyle.ControlGap,
-                        0,
-                        UiStyle.SectionGap)
-            };
-
-        _homeBitLockerButton.Name =
-            "HomeBitLockerButton";
-        _homeBitLockerButton.Text =
-            "BitLocker Recovery";
-        _homeBitLockerButton.MinimumSize =
-            new Size(
-                220,
-                48);
-        _homeBitLockerButton.Font =
-            UiStyle.CreateEmphasisFont(
-                10.5F);
-        UiStyle.ConfigureActionButton(
-            _homeBitLockerButton);
-        _homeBitLockerButton.Enabled =
-            false;
-
-        _homeLapsButton.Name =
-            "HomeLapsButton";
-        _homeLapsButton.Text =
-            "LAPS Passwords";
-        _homeLapsButton.MinimumSize =
-            new Size(
-                220,
-                48);
-        _homeLapsButton.Font =
-            UiStyle.CreateEmphasisFont(
-                10.5F);
-        UiStyle.ConfigureActionButton(
-            _homeLapsButton);
-        _homeLapsButton.Enabled =
-            false;
-
+        // Recovery buttons are owned by their cards; no navigation-only toolbar.
         _homeRevealBitLockerButton.Name =
             "HomeRevealBitLockerButton";
         _homeRevealBitLockerButton.Text =
@@ -914,41 +861,6 @@ public sealed partial class MainForm
             _homeCopyBitLockerButton);
         _homeCopyBitLockerButton.Enabled =
             false;
-
-        _homeRotateBitLockerButton.Name =
-            "HomeRotateBitLockerButton";
-        _homeRotateBitLockerButton.Text =
-            "Select Intune device to rotate...";
-        UiStyle.ConfigureActionButton(
-            _homeRotateBitLockerButton);
-        _homeRotateBitLockerButton.Enabled =
-            false;
-
-        _homeBitLockerDiagnosticButton.Name =
-            "HomeBitLockerDiagnosticButton";
-        _homeBitLockerDiagnosticButton.Text =
-            "BitLocker diagnostics...";
-        UiStyle.ConfigureActionButton(_homeBitLockerDiagnosticButton);
-        _homeBitLockerDiagnosticButton.Enabled = false;
-
-        _homeDeviceDetailsButton.Name =
-            "HomeDeviceDetailsButton";
-        _homeDeviceDetailsButton.Text =
-            "Device Details";
-        UiStyle.ConfigureActionButton(
-            _homeDeviceDetailsButton);
-        _homeDeviceDetailsButton.Enabled =
-            false;
-
-        // Secret actions are grouped under the Start BitLocker / LAPS tabs.
-        // Device Details remains available independently of AD secret sources.
-        // Secondary administration actions stay below the clean recovery cards.
-        // They are not navigation controls between BitLocker and LAPS.
-        taskActions.Controls.AddRange([
-            _homeDeviceDetailsButton,
-            _homeBitLockerDiagnosticButton,
-            _homeRotateBitLockerButton
-        ]);
 
         _homeSelectionPanel.Name =
             "HomeSelectionPanel";
@@ -993,27 +905,8 @@ public sealed partial class MainForm
             0,
             0);
 
-        taskActions.Margin =
-            new Padding(
-                0,
-                UiStyle.ControlGap,
-                0,
-                0);
-        var homeActions = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = Padding.Empty
-        };
-        homeActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        homeActions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        homeActions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        homeActions.Controls.Add(BuildHomeServiceCards(), 0, 0);
-        homeActions.Controls.Add(taskActions, 0, 1);
-        _homeSelectionPanel.Controls.Add(homeActions, 0, 1);
+        _homeSelectionPanel.Controls.Add(BuildHomeServiceCards(), 0, 1);
+
 
         var secretLifetime =
             new FlowLayoutPanel
@@ -1156,18 +1049,6 @@ public sealed partial class MainForm
         _homeCopyBitLockerButton.Click +=
             async (_, _) =>
                 await CopyHomeBitLockerAsync();
-
-        _homeRotateBitLockerButton.Click +=
-            async (_, _) =>
-                await RotateHomeBitLockerAsync();
-
-        _homeDeviceDetailsButton.Click +=
-            (_, _) =>
-                OpenHomeDeviceDetails();
-
-        _homeBitLockerDiagnosticButton.Click +=
-            (_, _) =>
-                ShowHomeBitLockerDiagnosticCommands();
 
         _clearSecretNow.Click +=
             (_, _) =>

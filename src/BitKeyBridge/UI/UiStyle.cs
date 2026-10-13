@@ -26,6 +26,35 @@ public static class UiStyle
     // Responsive two-column recovery cards on Start.
     public const int HomeRecoveryCardsPairMinimumWidth = 820;
     public const int HomeRecoveryCardMaxTextWidth = 740;
+    // Application-wide modern Windows treatment. Controls use these tokens,
+    // not per-window hardcoded fonts, colors or radii.
+    public const int ModernButtonRadius = 11;
+    public const int ModernInputRadius = 9;
+    public const int ModernSmallRadius = 7;
+    public const int ModernSurfaceRadius = 15;
+    public const int ModernTabRadius = 11;
+    public const int ModernTabHorizontalPadding = 17;
+    public const int ModernTabVerticalPadding = 7;
+
+    public static Color ModernCanvas =>
+        SystemInformation.HighContrast ? SystemColors.Control : Color.FromArgb(247, 248, 251);
+    public static Color ModernSurface => SystemColors.Window;
+    public static Color ModernForeground => SystemColors.WindowText;
+    public static Color ModernAccent =>
+        SystemInformation.HighContrast ? SystemColors.HotTrack : Color.FromArgb(27, 91, 164);
+    public static Color ModernMuted =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(100, 106, 113);
+    public static Color ModernBorder =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(224, 228, 233);
+    public static Color ModernHeader =>
+        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(239, 242, 247);
+    public static Color ModernAlternateRow =>
+        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(251, 252, 254);
+    public static Color ModernHover =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(232, 238, 247);
+    public static Color ModernPressed =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(218, 229, 242);
+
     // Shared Windows 11-inspired helpdesk card design at 96 DPI.
     public const int RecoveryCardCornerRadius = 20;
     public const int RecoveryCardPadding = 20;
