@@ -942,7 +942,13 @@ public sealed partial class MainForm
 
         // Secret actions are grouped under the Start BitLocker / LAPS tabs.
         // Device Details remains available independently of AD secret sources.
-        taskActions.Controls.Add(_homeDeviceDetailsButton);
+        // Secondary administration actions stay below the clean recovery cards.
+        // They are not navigation controls between BitLocker and LAPS.
+        taskActions.Controls.AddRange([
+            _homeDeviceDetailsButton,
+            _homeBitLockerDiagnosticButton,
+            _homeRotateBitLockerButton
+        ]);
 
         _homeSelectionPanel.Name =
             "HomeSelectionPanel";
