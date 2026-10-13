@@ -1,3 +1,14 @@
+## 0.29.4
+
+**Side-by-side BitLocker and LAPS on Start**
+
+- Replaced the Start BitLocker/LAPS switchable tabs with two compact recovery cards shown simultaneously: BitLocker on the left, LAPS on the right. There is no service-navigation button in either card; Reveal/Copy are available directly.
+- When metadata confirms only one recovery service, its card fills the available width. Unknown or failed lookups remain explicitly unverified, never claimed to mean no backup.
+- Both cards wrap into a single column on narrow windows/high DPI and use shared UiStyle sizing constants. Only metadata appears by default, with masked placeholders until explicit password request.
+- Start LAPS Reveal/Copy requests only the current password (not history) through the established authorized/audited read/decrypt path, without changing the history setting in the detailed LAPS workspace.
+- Renamed the main navigation tab from **Recovery** to **BitLocker**; internal recovery identifiers and behavior remain unchanged.
+- Updated the WinForms UI self-test to verify the two recovery cards, order, and disabled secret actions before a computer is selected.
+
 ## 0.29.3
 
 **Start computer tabs for BitLocker and LAPS (test build)**
