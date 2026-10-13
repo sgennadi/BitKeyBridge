@@ -1351,7 +1351,7 @@ public sealed partial class MainForm
         }
     }
 
-    private async Task ReadLapsAsync()
+    private async Task ReadLapsAsync(bool? includeHistoryOverride = null)
     {
         if (_lapsReading) return;
         var query = _lapsQuery.Text.Trim();
@@ -1373,7 +1373,7 @@ public sealed partial class MainForm
 
         ClearLapsResult();
         var generation = _lapsGeneration;
-        var history = _lapsHistory.Checked;
+        var history = includeHistoryOverride ?? _lapsHistory.Checked;
         using var cancellation = new CancellationTokenSource();
         _lapsReadCancellation = cancellation;
         _lapsReading = true;
