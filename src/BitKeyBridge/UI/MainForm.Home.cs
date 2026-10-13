@@ -439,8 +439,8 @@ public sealed partial class MainForm
                     : names.Count == 0
                         ? "No matching computer, Recovery ID or device ID was found."
                         : names.Count == 1
-                            ? "One computer found. Choose BitLocker or LAPS."
-                            : $"Found {names.Count} computers. Select one, then choose BitLocker or LAPS.";
+                            ? "One computer found. BitLocker and LAPS actions are below."
+                            : $"Found {names.Count} computers. Select one to view its recovery cards.";
 
             if (cloudOutcome is not null)
             {
@@ -634,7 +634,7 @@ public sealed partial class MainForm
             _secretVisibleUntilUtc is not null ||
             _clipboardClearAtUtc is not null;
 
-        UpdateHomeServiceTabs(selected);
+        UpdateHomeServiceCards(selected);
         RefreshHomeSelectionSummary();
     }
 
@@ -651,17 +651,17 @@ public sealed partial class MainForm
             return;
         }
 
-        // Double-clicking a computer stays on Start. This changes the
-        // visible service tab only; it does not request any password.
+        // Double-clicking a computer stays on Start, with both available
+        // service cards shown below. It does not request any password.
         if (selected is not null && !selected.IsCloudRecord)
         {
-            UpdateHomeServiceTabs(selected);
-            if (_homeServiceTabs.TabPages.Count > 0)
+            UpdateHomeServiceCards(selected);
+            if (_homeServiceCards.Visible)
             {
-                _homeServiceTabs.Focus();
+                _homeServiceCards.Focus();
                 UiStyle.SetStatus(_homeSearchStatus,
-                    "Computer selected. Choose BitLocker or LAPS below, " +
-                    "then click Reveal or Copy to request the secret.",
+                    "Computer selected. BitLocker and LAPS actions are shown below. " +
+                    "Click Reveal or Copy to request a password.",
                     UiStatusKind.Neutral);
                 return;
             }
@@ -689,7 +689,7 @@ public sealed partial class MainForm
                 UiStyle.SetStatus(
                     _homeSearchStatus,
                     $"BitLocker for {selected!.ComputerName} is not verified. " +
-                    "Choose BitLocker Recovery to retry, or LAPS Passwords for LAPS.",
+                    "Use the BitLocker and LAPS recovery cards to retry or view diagnostics.",
                     UiStatusKind.Warning);
                 return;
         }

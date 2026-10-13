@@ -68,6 +68,27 @@ public enum HomeDefaultAction
 
 public static class HelpdeskStatus
 {
+    // Metadata-only search must not treat a matching AD computer object
+    // as a confirmed LAPS password backup. Failed lookups remain visible
+    // as explicitly unverified; they are not proof that a secret is absent.
+    public static (bool BitLocker, bool Laps) VisibleHomeServices(
+        HomeSearchResult? selected)
+    {
+        if (selected is null || selected.IsCloudRecord)
+            return (false, false);
+
+        var bitLocker = selected.BitLockerKeyCount > 0 ||
+                        selected.BitLockerLookupFailed;
+        var laps = selected.LapsLookupFailed ||
+                   (selected.LapsCandidateFound &&
+                    selected.LapsStatus is ("Detected" or "Expired"));
+
+        if (!bitLocker && !laps)
+            return (true, true); // Both unknown: allow manual diagnostics.
+
+        return (bitLocker, laps);
+    }
+
     // An LDAP metadata miss cannot prove that no recovery key exists.
     public static HomeDefaultAction ResolveHomeDefaultAction(
         HomeSearchResult? selected)

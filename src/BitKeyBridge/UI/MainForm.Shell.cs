@@ -340,7 +340,7 @@ public sealed partial class MainForm
             new Label
             {
                 Text =
-                    "Connect once, search once, then choose BitLocker or LAPS. " +
+                    "Connect once, search once, then view BitLocker and LAPS side by side. " +
                     "Search reads metadata only — secrets are still read on demand.",
                 AutoSize =
                     true,
@@ -1005,7 +1005,7 @@ public sealed partial class MainForm
         homeActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         homeActions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         homeActions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        homeActions.Controls.Add(BuildHomeServiceTabs(), 0, 0);
+        homeActions.Controls.Add(BuildHomeServiceCards(), 0, 0);
         homeActions.Controls.Add(taskActions, 0, 1);
         _homeSelectionPanel.Controls.Add(homeActions, 0, 1);
 
@@ -1298,14 +1298,6 @@ public sealed partial class MainForm
                 }
             };
 
-        _homeBitLockerButton.Click +=
-            (_, _) =>
-                OpenSelectedHomeBitLocker();
-
-        _homeLapsButton.Click +=
-            async (_, _) =>
-                await OpenSelectedHomeLapsAsync();
-
         _homeRecentResults.CellDoubleClick +=
             async (_, e) =>
             {
@@ -1370,7 +1362,7 @@ public sealed partial class MainForm
 
     private TabPage BuildRecoveryWorkspaceTab()
     {
-        var tab = new TabPage("Recovery")
+        var tab = new TabPage("BitLocker")
         {
             Name = "RecoveryWorkspace"
         };
