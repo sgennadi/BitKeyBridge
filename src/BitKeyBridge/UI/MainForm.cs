@@ -4467,7 +4467,9 @@ public sealed partial class MainForm : DpiAwareForm
             _directoryConnected;
 
         var searchReady =
-            ready || HasCloudSearchSession();
+            (StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource) && ready) ||
+            (StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource) &&
+             HasCloudSearchSession());
         _homeQuery.Enabled =
             searchReady;
         _homeSearchButton.Enabled =
@@ -4490,6 +4492,7 @@ public sealed partial class MainForm : DpiAwareForm
                 false;
         }
 
+        UpdateStartConnectionSourceControls();
         UpdateHomeSearchSelection();
         RefreshSetupStatus();
     }
