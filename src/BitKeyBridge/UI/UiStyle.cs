@@ -30,6 +30,7 @@ public static class UiStyle
     public const int HomeThreePaneMinimumWidth = 1200;
     public const int HomeThreePaneMinimumHeight = 325;
     public const int HomeRecentQuickListHeight = 154;
+    public const int HomeConnectionRecentPairMinimumWidth = 1020;
     public const int HomeRecoveryCardMaxTextWidth = 740;
     // Application-wide modern Windows treatment. Controls use these tokens,
     // not per-window hardcoded fonts, colors or radii.
