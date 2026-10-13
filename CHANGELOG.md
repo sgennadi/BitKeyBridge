@@ -1,3 +1,14 @@
+## 0.29.5
+
+**Polished BitLocker/LAPS recovery cards and inline password history**
+
+- Rebuilt the Start recovery cards with a unified modern Windows-style visual system: rounded white surfaces, vector shield/key/eye/copy icons, soft status pills, clearer typography, generous spacing, and prominent full-width Reveal/Copy actions. Design colors, typography, spacing, badge palettes and button geometry live in the central UiStyle/UiRecoveryCard layer with high-contrast support.
+- Kept BitLocker on the left and LAPS on the right when space permits, with responsive stacking on narrow/high-DPI displays. Advanced diagnostics and safe Intune rotation remain in the secondary Start toolbar.
+- Added **Password history** directly inside the LAPS card. **Load history** is an explicit privileged action: the resulting read-only grid shows current/historical records, managed account, update timestamp and access status, but never plaintext passwords.
+- Selecting a current or historical row changes the target for **Reveal Password** / **Copy Password**, with existing per-operation authorization, decryption and audit logging. If a record is unreadable, a diagnostic warning replaces the secret.
+- Computer changes, password lifetime expiry and **Clear secrets now** also clear Start history selections and cached credentials. Start never auto-reads a password when a computer is selected.
+- Extended the WinForms UI layout self-tests to verify the new card hierarchy and initially masked/empty history controls.
+
 ## 0.29.4
 
 **Side-by-side BitLocker and LAPS on Start**
