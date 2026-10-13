@@ -217,13 +217,13 @@ public sealed partial class MainForm
         if (source == destination || _homeServiceCards.ColumnCount != 3)
             return;
 
-        var left = Array.IndexOf(_homePaneOrder, source);
-        var right = Array.IndexOf(_homePaneOrder, destination);
-        if (left < 0 || right < 0)
+        var sourceIndex = Array.IndexOf(_homePaneOrder, source);
+        var destinationIndex = Array.IndexOf(_homePaneOrder, destination);
+        if (sourceIndex < 0 || destinationIndex < 0)
             return;
 
-        (_homePaneOrder[left], _homePaneOrder[right]) =
-            (_homePaneOrder[right], _homePaneOrder[left]);
+        (_homePaneOrder[sourceIndex], _homePaneOrder[destinationIndex]) =
+            (_homePaneOrder[destinationIndex], _homePaneOrder[sourceIndex]);
         _startConnectionPreferences.HomePaneOrder = string.Join(",", _homePaneOrder);
         _startConnectionPreferences.RecoveryCardsOnLeft =
             _homePaneOrder[0] != HomePaneKind.Computers;
