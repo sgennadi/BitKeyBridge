@@ -6,6 +6,7 @@ public sealed partial class MainForm
     private readonly UiRecoveryCard _homeBitLockerCard = new();
     private readonly UiRecoveryCard _homeLapsCard = new();
     private readonly UiRecoveryBadge _homeBitLockerCardStatus = new();
+    private readonly LinkLabel _homeBitLockerDiagnosticLink = new();
     private readonly Label _homeBitLockerCardKeyId = new();
     private readonly UiRecoveryBadge _homeLapsCardStatus = new();
     private readonly Label _homeLapsCardAccount = new();
@@ -42,6 +43,33 @@ public sealed partial class MainForm
         _homeLapsCard.Name = "HomeLapsCard";
         _homeLapsCard.AccessibleName = "Windows and legacy LAPS recovery";
 
+        _homeBitLockerDiagnosticLink.Name = "HomeBitLockerDiagnosticLink";
+        _homeBitLockerDiagnosticLink.AccessibleName =
+            "Open commands to diagnose BitLocker recovery for the selected computer";
+        _homeBitLockerDiagnosticLink.Text = "View diagnostic commands";
+        _homeBitLockerDiagnosticLink.LinkBehavior = LinkBehavior.HoverUnderline;
+        _homeBitLockerDiagnosticLink.LinkColor = UiStyle.ModernAccent;
+        _homeBitLockerDiagnosticLink.ActiveLinkColor = UiStyle.ModernAccent;
+        _homeBitLockerDiagnosticLink.Font = UiStyle.CreateEmphasisFont(9F);
+        _homeBitLockerDiagnosticLink.AutoSize = true;
+        _homeBitLockerDiagnosticLink.Enabled = false;
+        _homeBitLockerDiagnosticLink.Margin =
+            new Padding(0, UiStyle.SectionGap, 0, 0);
+        _homeBitLockerDiagnosticLink.LinkClicked += (_, _) =>
+            ShowHomeBitLockerDiagnosticCommands();
+
+        var bitLockerHelp = new FlowLayoutPanel
+        {
+            Name = "HomeBitLockerHelp",
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Dock = DockStyle.Top,
+            Margin = Padding.Empty
+        };
+        bitLockerHelp.Controls.Add(_homeBitLockerDiagnosticLink);
+
         _homeBitLockerCard.Controls.Add(BuildHomeRecoveryCardBody(
             RecoveryGlyphKind.Shield,
             "BitLocker",
@@ -53,7 +81,7 @@ public sealed partial class MainForm
                 (_homeRevealBitLockerButton, RecoveryGlyphKind.Eye, "Reveal Key"),
                 (_homeCopyBitLockerButton, RecoveryGlyphKind.Copy, "Copy Key")
             ],
-            null));
+            bitLockerHelp));
 
         _homeRevealLapsButton.Name = "HomeRevealLapsButton";
         _homeCopyLapsButton.Name = "HomeCopyLapsButton";
