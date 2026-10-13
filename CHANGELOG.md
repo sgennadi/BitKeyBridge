@@ -1,3 +1,12 @@
+## 0.29.9
+
+**Recovery cards on the left, computer picker on the right**
+
+- Reversed Start's wide-screen layout: the main BitLocker and LAPS recovery cards occupy the left 66% of the available workspace, while the computer/results list stays on the right (34%) for switching computers without navigating away.
+- BitLocker remains left of LAPS within the recovery area; LAPS password history and explicit Reveal/Copy/Diagnostics operations are unchanged.
+- At narrow window widths, RDP resolutions or elevated DPI, keep a compact computer list above the cards so the search and selected-device actions remain usable without clipping.
+- Updated the runtime WinForms layout regression to enforce both the reversed column positions and the 66/34 width split at compact, 150% and 200% display scaling.
+
 ## 0.29.8
 
 **Explicit first-screen connection wizard and immediately visible BitLocker/LAPS cards**
