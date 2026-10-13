@@ -738,17 +738,23 @@ public static class UiLayoutSelfTest
             var selectedCell = area.GetPositionFromControl(panel);
             var correct = expectedSideBySide
                 ? area.ColumnCount == 2 && area.RowCount == 1 &&
-                  gridCell.Column == 0 && gridCell.Row == 0 &&
-                  selectedCell.Column == 1 && selectedCell.Row == 0
+                  selectedCell.Column == 0 && selectedCell.Row == 0 &&
+                  gridCell.Column == 1 && gridCell.Row == 0 &&
+                  area.ColumnStyles.Count == 2 &&
+                  Math.Abs(area.ColumnStyles[0].Width -
+                           UiStyle.HomeRecoveryColumnPercent) < 0.1F &&
+                  Math.Abs(area.ColumnStyles[1].Width -
+                           (100F - UiStyle.HomeRecoveryColumnPercent)) < 0.1F
                 : area.ColumnCount == 1 && area.RowCount == 2 &&
-                  gridCell.Row == 0 && selectedCell.Row == 1 &&
+                  gridCell.Column == 0 && gridCell.Row == 0 &&
+                  selectedCell.Column == 0 && selectedCell.Row == 1 &&
                   area.RowStyles[0].SizeType == SizeType.Absolute;
 
             if (!correct || !ReferenceEquals(cards.Parent, panel) ||
                 cards.Controls.Count != 2)
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: selecting a computer must display BitLocker and LAPS directly beside the results on wide screens or below a compact list on small screens.");
+                    $"{formName}/{scenario.Name}: wide Start must show BitLocker/LAPS left and computer list right (66/34); compact Start must show a bounded list above the recovery cards.");
             }
 
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
