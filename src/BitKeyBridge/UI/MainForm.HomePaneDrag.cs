@@ -61,12 +61,11 @@ public sealed partial class MainForm
         })
         {
             EnableHomePaneDrop(host, kind);
-            EnableHomePaneDrop(card, kind);
+            EnableHomePaneDropTree(card, kind);
             EnableHomePaneDrop(handle, kind);
             if (handle.Parent is Control header)
                 EnableHomePaneDrop(header, kind);
         }
-        EnableHomePaneDrop(_homeSearchResults, HomePaneKind.Computers);
 
         // Never take a credential or recreate a secret-bearing card when
         // reordering. Only these three outer WinForms hosts change position.
@@ -177,6 +176,19 @@ public sealed partial class MainForm
             moveRight.Enabled = _homeServiceCards.ColumnCount == 3 && position < 2;
         };
         handle.ContextMenuStrip = menu;
+    }
+
+    private void EnableHomePaneDropTree(Control target, HomePaneKind destination)
+    {
+        // The card's content TableLayoutPanel normally covers the surface,
+        // so handling only the outer Panel would not accept most drops.
+        EnableHomePaneDrop(target, destination);
+        foreach (Control child in target.Controls)
+        {
+            if (child is TextBoxBase)
+                continue;
+            EnableHomePaneDropTree(child, destination);
+        }
     }
 
     private void EnableHomePaneDrop(Control target, HomePaneKind destination)
