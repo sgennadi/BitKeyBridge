@@ -448,7 +448,7 @@ public sealed partial class MainForm
                     entry.IsHistory ? "History" : "Current",
                     string.IsNullOrWhiteSpace(entry.AccountName) ?
                         "Not returned" : entry.AccountName,
-                    entry.UpdatedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "Unknown",
+                    entry.UpdatedAtUtc?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm") ?? "Unknown",
                     HelpdeskStatus.LapsEntry(entry));
                 // Never put password strings in DataGridView cells or audit metadata.
                 _homeLapsHistoryGrid.Rows[index].Tag = entry;
@@ -650,6 +650,18 @@ public sealed partial class MainForm
                 action, result.ComputerName, _lapsResourceId, _lapsAuditSource);
             if (context is null)
                 return;
+
+            // Access dialogs can outlive the secure-memory timeout. Never use
+            // a disposed historical entry or a newly selected computer.
+            if (!ReferenceEquals(result, _lapsResult) ||
+                !ReferenceEquals(selected, GetSelectedHomeSearchResult()) ||
+                !row.HasPassword)
+            {
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "LAPS credentials expired or the computer changed. Reload the record.",
+                    UiStatusKind.Warning);
+                return;
+            }
 
             WriteRecoveryAudit(action, context,
                 computerName: result.ComputerName,
