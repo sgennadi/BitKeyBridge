@@ -692,9 +692,13 @@ public static class UiLayoutSelfTest
         var grid = FindByName(main, "HomeUnifiedSearchResults") as DataGridView;
         var panel = FindByName(main, "HomeSelectionPanel") as TableLayoutPanel;
         var cards = FindByName(main, "HomeServiceCards") as TableLayoutPanel;
+        var recoveryHost = FindByName(main, "HomeRecoveryPaneHost") as TableLayoutPanel;
+        var computersHost = FindByName(main, "HomeComputersPaneHost") as TableLayoutPanel;
+        var swap = FindByName(main, "HomeSwapPanesButton") as Button;
 
         if (root is null || area is null || grid is null ||
-            panel is null || cards is null)
+            panel is null || cards is null || recoveryHost is null ||
+            computersHost is null || swap is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: selected recovery layout is missing.");
@@ -734,27 +738,65 @@ public static class UiLayoutSelfTest
             var available = area.Parent?.ClientSize.Width ?? 0;
             bool expectedSideBySide = available -
                 (area.Parent?.Padding.Horizontal ?? 0) >= pairWidth;
-            var gridCell = area.GetPositionFromControl(grid);
-            var selectedCell = area.GetPositionFromControl(panel);
+            var computerCell = area.GetPositionFromControl(computersHost);
+            var recoveryCell = area.GetPositionFromControl(recoveryHost);
             var correct = expectedSideBySide
                 ? area.ColumnCount == 2 && area.RowCount == 1 &&
-                  selectedCell.Column == 0 && selectedCell.Row == 0 &&
-                  gridCell.Column == 1 && gridCell.Row == 0 &&
+                  recoveryCell.Row == 0 && computerCell.Row == 0 &&
+                  recoveryCell.Column != computerCell.Column &&
+                  recoveryCell.Column is 0 or 1 &&
+                  computerCell.Column is 0 or 1 &&
                   area.ColumnStyles.Count == 2 &&
-                  Math.Abs(area.ColumnStyles[0].Width -
+                  Math.Abs(area.ColumnStyles[recoveryCell.Column].Width -
                            UiStyle.HomeRecoveryColumnPercent) < 0.1F &&
-                  Math.Abs(area.ColumnStyles[1].Width -
+                  Math.Abs(area.ColumnStyles[computerCell.Column].Width -
                            (100F - UiStyle.HomeRecoveryColumnPercent)) < 0.1F
                 : area.ColumnCount == 1 && area.RowCount == 2 &&
-                  gridCell.Column == 0 && gridCell.Row == 0 &&
-                  selectedCell.Column == 0 && selectedCell.Row == 1 &&
+                  computerCell.Column == 0 && computerCell.Row == 0 &&
+                  recoveryCell.Column == 0 && recoveryCell.Row == 1 &&
                   area.RowStyles[0].SizeType == SizeType.Absolute;
 
             if (!correct || !ReferenceEquals(cards.Parent, panel) ||
                 cards.Controls.Count != 2)
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: wide Start must show BitLocker/LAPS left and computer list right (66/34); compact Start must show a bounded list above the recovery cards.");
+                    $"{formName}/{scenario.Name}: wide Start must keep the recovery pane at 66% on either side of the 34% computer pane; compact Start must show the list above the recovery cards.");
+            }
+
+            if (expectedSideBySide)
+            {
+                // Swap the two real WinForms pane hosts without altering source
+                // connections, selected results, secrets or saved user settings.
+                var originalRecoveryColumn = recoveryCell.Column;
+                if (!swap.Enabled)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: the pane swap action must be enabled for a wide selected-computer layout.");
+                }
+                else
+                {
+                    swap.PerformClick();
+                    main.ReflowMainViewport();
+                    var newRecoveryColumn = area.GetPositionFromControl(recoveryHost).Column;
+                    var newComputerColumn = area.GetPositionFromControl(computersHost).Column;
+                    if (newRecoveryColumn == originalRecoveryColumn ||
+                        newComputerColumn == newRecoveryColumn ||
+                        grid.SelectedRows.Count != 1 ||
+                        !ReferenceEquals(cards.Parent, panel))
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}: swapping recovery and computer panes must reverse their positions without losing the selection or recovery cards.");
+                    }
+
+                    // Restore initial order. Layout tests never write profile preferences.
+                    swap.PerformClick();
+                    main.ReflowMainViewport();
+                }
+            }
+            else if (swap.Enabled)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: swap is disabled when panes are stacked for narrow displays.");
             }
 
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
@@ -842,6 +884,10 @@ public static class UiLayoutSelfTest
                 {
                     "HomeConnectionSourceChooser",
                     "HomeConnectionSource",
+                    "HomeReconnectWizardButton",
+                    "HomeRecoveryPaneHost",
+                    "HomeComputersPaneHost",
+                    "HomeSwapPanesButton",
                     "HomeConnectCloudButton",
                     "HomeConfigureCloudButton",
                     "HomeCloudConnectionStatus",
