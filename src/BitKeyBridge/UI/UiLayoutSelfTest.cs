@@ -775,7 +775,7 @@ public static class UiLayoutSelfTest
                 }
                 else
                 {
-                    swap.PerformClick();
+                    main.SwapHomePanesForUiSelfTest();
                     main.ReflowMainViewport();
                     var newRecoveryColumn = area.GetPositionFromControl(recoveryHost).Column;
                     var newComputerColumn = area.GetPositionFromControl(computersHost).Column;
@@ -789,7 +789,7 @@ public static class UiLayoutSelfTest
                     }
 
                     // Restore initial order. Layout tests never write profile preferences.
-                    swap.PerformClick();
+                    main.SwapHomePanesForUiSelfTest();
                     main.ReflowMainViewport();
                 }
             }
