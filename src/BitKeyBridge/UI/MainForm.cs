@@ -209,8 +209,13 @@ public sealed partial class MainForm : DpiAwareForm
         Controls.Add(
             BuildMainShell());
 
+        InitializeMainViewport();
         if (layoutSelfTest)
             return;
+
+        // Default to a maximized workspace; responsive reflow also handles
+        // later restore/maximize operations and changing RDP resolutions.
+        WindowState = FormWindowState.Maximized;
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -4467,7 +4472,9 @@ public sealed partial class MainForm : DpiAwareForm
             _directoryConnected;
 
         var searchReady =
-            ready || HasCloudSearchSession();
+            (StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource) && ready) ||
+            (StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource) &&
+             HasCloudSearchSession());
         _homeQuery.Enabled =
             searchReady;
         _homeSearchButton.Enabled =
@@ -4490,6 +4497,7 @@ public sealed partial class MainForm : DpiAwareForm
                 false;
         }
 
+        UpdateStartConnectionSourceControls();
         UpdateHomeSearchSelection();
         RefreshSetupStatus();
     }

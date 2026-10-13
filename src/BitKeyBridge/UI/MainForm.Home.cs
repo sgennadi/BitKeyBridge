@@ -48,9 +48,13 @@ public sealed partial class MainForm
             return;
         }
 
-        if (!_directoryConnected)
+        // Honor the selected search source. An old AD session must not
+        // override a new cloud-only choice, and vice versa.
+        if (!StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource) ||
+            !_directoryConnected)
         {
-            if (HasCloudSearchSession())
+            if (StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource) &&
+                HasCloudSearchSession())
             {
                 await SearchHomeCloudOnlyAsync(query);
                 return;
@@ -58,8 +62,10 @@ public sealed partial class MainForm
 
             UiStyle.SetStatus(
                 _homeSearchStatus,
-                "Connect to AD or authenticate Cloud under Administration > Cloud. " +
-                "An active cloud session can search Entra/Intune without AD.",
+                SelectedStartSource == StartConnectionPolicy.Choose
+                    ? "Choose Active Directory, Microsoft Entra / Intune, or both above."
+                    : "Connect to the selected source above. For Microsoft 365, use " +
+                      "Connect to Microsoft 365 and follow Device Code / MFA.",
                 UiStatusKind.Warning);
             return;
         }
