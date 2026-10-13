@@ -668,6 +668,9 @@ public static class UiLayoutSelfTest
                     "HomeRotateBitLockerButton",
                     "HomeDeviceDetailsButton",
                     "HomeLapsButton",
+                    "HomeServiceTabs",
+                    "HomeRevealLapsButton",
+                    "HomeCopyLapsButton",
                     "HomeSelectionSummary",
                     "SecretLifetimeStatus",
                     "StartSetupStatus",
@@ -679,6 +682,25 @@ public static class UiLayoutSelfTest
                     "HomeConnectionSettingsButton",
                     "AdvancedConnectionGroup"
                 };
+
+            if (FindByName(startPage, "HomeServiceTabs") is TabControl services)
+            {
+                if (services.TabPages.Count != 2 ||
+                    services.TabPages[0].Text != "BitLocker" ||
+                    services.TabPages[1].Text != "LAPS")
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Start service tabs must have BitLocker first, then LAPS.");
+                }
+
+                if (services.Visible ||
+                    FindByName(startPage, "HomeRevealLapsButton") is Button { Enabled: true } ||
+                    FindByName(startPage, "HomeCopyLapsButton") is Button { Enabled: true })
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Start cannot reveal or copy LAPS without computer selection and explicit action.");
+                }
+            }
 
             if (FindByName(startPage, "HomeRotateBitLockerButton") is Button rotate &&
                 !rotate.Text.Contains("Select Intune device",
