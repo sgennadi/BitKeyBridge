@@ -8,6 +8,7 @@
 - AD LAPS reads that return no passwords display a specific access/backup-policy warning. Multiple current readable password records require explicit selection in the detailed LAPS view.
 - Advanced Recovery, Devices and LAPS views remain available. Navigating to detailed LAPS no longer triggers a password read automatically.
 - Tab height is centralized in UiStyle for DPI scaling and wrapping action buttons.
+- Enlarged the AD credential connection dialog and shortened field placeholders so explanatory text and credential fields fit without the prior clipping; dimensions are centralized in UiStyle.
 
 ## 0.29.2
 
