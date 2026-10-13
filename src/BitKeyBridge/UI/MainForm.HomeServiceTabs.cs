@@ -155,15 +155,8 @@ public sealed partial class MainForm
 
     private void UpdateHomeServiceCards(HomeSearchResult? selected)
     {
-        bool showBitLocker = selected is not null && !selected.IsCloudRecord &&
-            (selected.BitLockerKeyCount > 0 || selected.BitLockerLookupFailed);
-        bool showLaps = selected is not null && !selected.IsCloudRecord &&
-            (selected.LapsCandidateFound || selected.LapsLookupFailed);
-
-        // Incomplete/missing metadata cannot prove that a recovery backup
-        // is absent. Give the operator both manual read/diagnostic options.
-        if (selected is { IsCloudRecord: false } && !showBitLocker && !showLaps)
-            showBitLocker = showLaps = true;
+        var (showBitLocker, showLaps) =
+            HelpdeskStatus.VisibleHomeServices(selected);
 
         _homeBitLockerCardStatus.Text = selected is null
             ? "Status: Not selected"
