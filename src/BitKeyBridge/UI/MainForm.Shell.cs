@@ -39,6 +39,9 @@ public sealed partial class MainForm
     private readonly UiStatusLabel _homeSearchStatus = new();
     private readonly DataGridView _homeSearchResults = new();
     private readonly TableLayoutPanel _homeResultsArea = new();
+    private TableLayoutPanel? _homeConnectionsRecentLayout;
+    private TableLayoutPanel? _homeAdConnectionLayout;
+    private TableLayoutPanel? _homeRecentQuickPanel;
     private readonly DataGridView _homeRecentResults = new();
     private readonly RadioButton _homeUseWindowsIdentity = new();
     private readonly RadioButton _homeUseOtherAccount = new();
@@ -289,7 +292,7 @@ public sealed partial class MainForm
                 ColumnCount =
                     1,
                 RowCount =
-                    9
+                    6
             };
 
         root.ColumnStyles.Add(
@@ -300,12 +303,12 @@ public sealed partial class MainForm
         // Results and recovery cards are intrinsically sized. Giving the
         // search grid a percentage of the whole window previously pushed
         // the BitLocker/LAPS cards below a giant empty grid viewport.
-        for (var index = 0; index < 9; index++)
-        {
+        // Keep Connections, search and optional selection status compact.
+        // All remaining vertical space is shared by the three equal panes.
+        for (var index = 0; index < 6; index++)
             root.RowStyles.Add(new RowStyle(
-                index == 7 ? SizeType.Percent : SizeType.AutoSize,
-                index == 7 ? 100F : 0F));
-        }
+                index == 5 ? SizeType.Percent : SizeType.AutoSize,
+                index == 5 ? 100F : 0F));
 
         tab.Controls.Add(
             root);
@@ -616,12 +619,77 @@ public sealed partial class MainForm
             connection.SetRow(existing, connection.GetRow(existing) + 1);
         connection.Controls.Add(BuildStartConnectionSourceChooser(), 0, 0);
 
-        connectionGroup.Controls.Add(
-            connection);
-        root.Controls.Add(
-            connectionGroup,
-            0,
-            2);
+        // Utilize the formerly empty upper-right part of Connections.
+        // Recent computers contain names/action metadata only, not secrets.
+        var connectionSplit = new TableLayoutPanel
+        {
+            Name = "HomeConnectionsAndRecent",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty
+        };
+        connectionSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62F));
+        connectionSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38F));
+        connectionSplit.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        connection.Margin = new Padding(0, 0, UiStyle.SectionGap, 0);
+        connectionSplit.Controls.Add(connection, 0, 0);
+
+        var recentPanel = new TableLayoutPanel
+        {
+            Name = "HomeRecentQuickPanel",
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = new Padding(UiStyle.ControlGap, 0, 0, 0)
+        };
+        recentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        recentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        recentPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,
+            UiStyle.HomeRecentQuickListHeight *
+            DeviceDpi / (float)UiStyle.BaselineDpi));
+        recentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        recentPanel.Controls.Add(new Label
+        {
+            Text = "Recent computers",
+            Font = UiStyle.CreateSectionTitleFont(),
+            AutoSize = true,
+            Dock = DockStyle.Top,
+            Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
+        }, 0, 0);
+
+        _homeRecentResults.Name = "HomeRecentComputers";
+        _homeRecentResults.AccessibleName = "Recent computers without stored secrets";
+        _homeRecentResults.Dock = DockStyle.Fill;
+        _homeRecentResults.MinimumSize = new Size(0, 100);
+        UiStyle.ConfigureDataGridView(_homeRecentResults);
+        _homeRecentResults.Columns.AddRange([
+            UiStyle.CreateSortableTextColumn("Computer", "Computer", 170),
+            UiStyle.CreateSortableTextColumn("LastAction", "Last action", 120),
+            UiStyle.CreateSortableTextColumn("LastUsed", "Last used", 130)
+        ]);
+        _homeRecentResults.Columns["LastUsed"]!
+            .DefaultCellStyle.Format = "yyyy-MM-dd HH:mm:ss";
+        recentPanel.Controls.Add(_homeRecentResults, 0, 1);
+        var recentExplanation = new Label
+        {
+            Text = "Stores only device names and last action. No recovery passwords.",
+            AutoSize = true,
+            Dock = DockStyle.Top,
+            Margin = new Padding(0, UiStyle.ControlGap, 0, 0)
+        };
+        UiStyle.ConfigureWrappingLabel(recentExplanation);
+        recentPanel.Controls.Add(recentExplanation, 0, 2);
+        connectionSplit.Controls.Add(recentPanel, 1, 0);
+        _homeConnectionsRecentLayout = connectionSplit;
+        _homeAdConnectionLayout = connection;
+        _homeRecentQuickPanel = recentPanel;
+        connectionGroup.Controls.Add(connectionSplit);
+        root.Controls.Add(connectionGroup, 0, 2);
 
         ConfigureAdvancedConnectionGroup();
         root.Controls.Add(
@@ -816,9 +884,8 @@ public sealed partial class MainForm
             .DefaultCellStyle.Format =
             "yyyy-MM-dd HH:mm:ss";
         _homeResultsArea.Name = "HomeSearchResultsArea";
-        _homeResultsArea.Dock = DockStyle.Top;
-        _homeResultsArea.AutoSize = true;
-        _homeResultsArea.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _homeResultsArea.Dock = DockStyle.Fill;
+        _homeResultsArea.AutoSize = false;
         _homeResultsArea.ColumnCount = 1;
         _homeResultsArea.RowCount = 2;
         _homeResultsArea.Margin = Padding.Empty;
@@ -826,10 +893,8 @@ public sealed partial class MainForm
         _homeResultsArea.ColumnStyles.Add(
             new ColumnStyle(SizeType.Percent, 100F));
         _homeResultsArea.RowStyles.Clear();
-        _homeResultsArea.RowStyles.Add(
-            new RowStyle(SizeType.Absolute, UiStyle.HomeCompactSearchResultsHeight));
-        _homeResultsArea.RowStyles.Add(
-            new RowStyle(SizeType.AutoSize));
+        _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _homeResultsArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         // Recovery buttons are owned by their cards; no navigation-only toolbar.
         _homeRevealBitLockerButton.Name =
@@ -859,7 +924,7 @@ public sealed partial class MainForm
         _homeSelectionPanel.ColumnCount =
             1;
         _homeSelectionPanel.RowCount =
-            3;
+            2;
         _homeSelectionPanel.Margin =
             new Padding(
                 0,
@@ -872,7 +937,7 @@ public sealed partial class MainForm
         _homeSelectionPanel.ColumnStyles.Add(
             new ColumnStyle(SizeType.Percent, 100F));
         _homeSelectionPanel.RowStyles.Clear();
-        for (var row = 0; row < 3; row++)
+        for (var row = 0; row < 2; row++)
             _homeSelectionPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         UiStyle.ConfigureStatusLabel(
@@ -894,7 +959,7 @@ public sealed partial class MainForm
             0,
             0);
 
-        _homeSelectionPanel.Controls.Add(BuildHomeServiceCards(), 0, 1);
+        BuildHomeServiceCards();
 
 
         var secretLifetime =
@@ -945,91 +1010,18 @@ public sealed partial class MainForm
         _homeSelectionPanel.Controls.Add(
             secretLifetime,
             0,
-            2);
+            1);
 
-        // Dedicated draggable pane headers keep content intact when swapped.
+        // Three independently draggable, equally sized cards occupy the
+        // shared workspace; selection info is a compact bar above them.
         BuildHomePaneHosts();
-        _homeResultsArea.Controls.Add(_homeComputersPaneHost, 0, 0);
-        _homeResultsArea.Controls.Add(_homeRecoveryPaneHost, 0, 1);
+        _homeResultsArea.Controls.Add(_homeSelectionPanel, 0, 0);
+        _homeResultsArea.Controls.Add(_homeServiceCards, 0, 1);
 
         root.Controls.Add(
             _homeResultsArea,
             0,
             5);
-
-        root.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Recent computers",
-                Font =
-                    UiStyle.CreateSectionTitleFont(),
-                AutoSize =
-                    true,
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.ControlGap)
-            },
-            0,
-            6);
-
-        _homeRecentResults.Name =
-            "HomeRecentComputers";
-        _homeRecentResults.AccessibleName =
-            "Recent computers without stored secrets";
-        _homeRecentResults.Dock =
-            DockStyle.Fill;
-        _homeRecentResults.MinimumSize =
-            new Size(
-                0,
-                100);
-        UiStyle.ConfigureDataGridView(
-            _homeRecentResults);
-        _homeRecentResults.Columns.AddRange([
-            UiStyle.CreateSortableTextColumn(
-                "Computer",
-                "Computer",
-                170),
-            UiStyle.CreateSortableTextColumn(
-                "LastAction",
-                "Last action",
-                120),
-            UiStyle.CreateSortableTextColumn(
-                "LastUsed",
-                "Last used",
-                130)
-        ]);
-        _homeRecentResults.Columns["LastUsed"]!
-            .DefaultCellStyle.Format =
-            "yyyy-MM-dd HH:mm:ss";
-        root.Controls.Add(
-            _homeRecentResults,
-            0,
-            7);
-
-        root.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Recent stores computer/device identifiers and last action only. Recovery keys and LAPS passwords are never stored here.",
-                AutoSize =
-                    true,
-                MaximumSize =
-                    new Size(
-                        1100,
-                        0),
-                Margin =
-                    new Padding(
-                        0,
-                        UiStyle.ControlGap,
-                        0,
-                        0)
-            },
-            0,
-            8);
 
         _homeRevealBitLockerButton.Click +=
             async (_, _) =>

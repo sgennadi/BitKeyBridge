@@ -21,22 +21,20 @@ public sealed partial class MainForm
     private bool _homeLapsHistoryLoaded;
     private string _homeLapsHistoryComputer = string.Empty;
     private string _homeCardsSelectedIdentity = string.Empty;
-    private bool _homeCardsHasBitLocker;
-    private bool _homeCardsHasLaps;
-    private bool _homeCardsLayingOut;
-    private string _homeCardsLayoutKey = string.Empty;
 
     private Control BuildHomeServiceCards()
     {
         _homeServiceCards.Name = "HomeServiceCards";
         _homeServiceCards.AccessibleName = "Selected computer: BitLocker and LAPS recovery";
-        _homeServiceCards.Dock = DockStyle.Top;
-        _homeServiceCards.AutoSize = true;
-        _homeServiceCards.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _homeServiceCards.Dock = DockStyle.Fill;
+        _homeServiceCards.AutoSize = false;
+        _homeServiceCards.MinimumSize = new Size(0, UiStyle.HomeThreePaneMinimumHeight);
+        _homeServiceCards.AccessibleDescription =
+            "Three equal draggable panels: BitLocker, LAPS and Computers.";
         _homeServiceCards.Margin = Padding.Empty;
         _homeServiceCards.Padding = Padding.Empty;
         _homeServiceCards.BackColor = SystemColors.Control;
-        _homeServiceCards.Visible = false;
+        _homeServiceCards.Visible = true;
 
         _homeBitLockerCard.Name = "HomeBitLockerCard";
         _homeBitLockerCard.AccessibleName = "BitLocker recovery";
@@ -112,19 +110,20 @@ public sealed partial class MainForm
             ],
             historyArea));
 
-        _homeServiceCards.ColumnCount = 2;
+        // Cards will be parented to separate drag hosts by BuildHomePaneHosts().
+        // This table remains the shared three-way equal-size layout.
+        _homeServiceCards.ColumnCount = 3;
         _homeServiceCards.RowCount = 1;
-        _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        _homeServiceCards.Controls.Add(_homeBitLockerCard, 0, 0);
-        _homeServiceCards.Controls.Add(_homeLapsCard, 1, 0);
-
-        _homeBitLockerCard.Margin = new Padding(0, 6, UiStyle.ControlGap, 6);
-        _homeLapsCard.Margin = new Padding(UiStyle.ControlGap, 6, 0, 6);
+        for (var column = 0; column < 3; column++)
+            _homeServiceCards.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100F / 3F));
+        _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _homeBitLockerCard.Dock = DockStyle.Fill;
         _homeLapsCard.Dock = DockStyle.Fill;
-        _homeServiceCards.SizeChanged += (_, _) => ArrangeHomeServiceCards();
+        _homeBitLockerCard.AutoSize = false;
+        _homeLapsCard.AutoSize = false;
+        _homeBitLockerCard.AutoScroll = true;
+        _homeLapsCard.AutoScroll = true;
 
         _homeRevealLapsButton.Click +=
             async (_, _) => await ShowHomeLapsPasswordAsync(copy: false);
@@ -331,7 +330,6 @@ public sealed partial class MainForm
                 ClearLapsResult();
         }
 
-        var (showBitLocker, showLaps) = HelpdeskStatus.VisibleHomeServices(selected);
         _homeBitLockerCardStatus.Text = selected is null ? "Not verified" :
             selected.BitLockerLookupFailed ? "Not verified" : selected.BitLockerStatus;
         _homeBitLockerCardStatus.Kind = selected is null ? UiStatusKind.Neutral :
@@ -354,11 +352,9 @@ public sealed partial class MainForm
                 StringComparison.OrdinalIgnoreCase))
             _homeLapsCardAccount.Text = "Not loaded";
 
-        _homeCardsHasBitLocker = showBitLocker;
-        _homeCardsHasLaps = showLaps;
-        ArrangeHomeServiceCards();
-        _homeServiceCards.Visible = selected is not null &&
-            !selected.IsCloudRecord && (showBitLocker || showLaps);
+        // Keep all three equally sized panes visible, even for a computer
+        // with only one known backup source. Unknown is not proof of absence.
+        _homeServiceCards.Visible = true;
 
         bool canReadLaps = selected is not null &&
             _directoryConnected && !_directoryConnecting &&
@@ -368,70 +364,6 @@ public sealed partial class MainForm
         _homeCopyLapsButton.Enabled = canReadLaps;
         _homeLoadLapsHistoryButton.Enabled = canReadLaps;
     }
-
-    private void ArrangeHomeServiceCards()
-    {
-        if (_homeCardsLayingOut || _homeServiceCards.IsDisposed)
-            return;
-
-        var available = _homeSelectionPanel.ClientSize.Width;
-        if (available <= 0)
-            available = _homeServiceCards.ClientSize.Width;
-        var threshold = (int)Math.Ceiling(
-            UiStyle.HomeRecoveryCardsPairMinimumWidth *
-            DeviceDpi / (double)UiStyle.BaselineDpi);
-
-        bool both = _homeCardsHasBitLocker && _homeCardsHasLaps;
-        bool stacked = both && available > 0 && available < threshold;
-        var desiredKey = (_homeCardsHasBitLocker ? "B" : "-") +
-                         (_homeCardsHasLaps ? "L" : "-") +
-                         (stacked ? "S" : "H");
-        if (_homeCardsLayoutKey == desiredKey)
-            return;
-
-        _homeCardsLayoutKey = desiredKey;
-        _homeCardsLayingOut = true;
-        _homeServiceCards.SuspendLayout();
-        try
-        {
-            _homeServiceCards.Controls.Clear();
-            _homeServiceCards.ColumnStyles.Clear();
-            _homeServiceCards.RowStyles.Clear();
-
-            bool initial = !_homeCardsHasBitLocker && !_homeCardsHasLaps;
-            if ((both && !stacked) || initial)
-            {
-                _homeServiceCards.ColumnCount = 2;
-                _homeServiceCards.RowCount = 1;
-                _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-                _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-                _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                _homeServiceCards.Controls.Add(_homeBitLockerCard, 0, 0);
-                _homeServiceCards.Controls.Add(_homeLapsCard, 1, 0);
-            }
-            else
-            {
-                _homeServiceCards.ColumnCount = 1;
-                _homeServiceCards.RowCount = both ? 2 : 1;
-                _homeServiceCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                if (both)
-                    _homeServiceCards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-                if (_homeCardsHasBitLocker)
-                    _homeServiceCards.Controls.Add(_homeBitLockerCard, 0, 0);
-                if (_homeCardsHasLaps)
-                    _homeServiceCards.Controls.Add(_homeLapsCard, 0,
-                        _homeCardsHasBitLocker ? 1 : 0);
-            }
-        }
-        finally
-        {
-            _homeServiceCards.ResumeLayout(true);
-            _homeCardsLayingOut = false;
-        }
-    }
-
 
     // History must be requested explicitly: AD history attributes are
     // privileged, and may contain encrypted older passwords.
