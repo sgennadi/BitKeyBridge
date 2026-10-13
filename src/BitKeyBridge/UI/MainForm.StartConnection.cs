@@ -261,9 +261,10 @@ public sealed partial class MainForm
 
         // Reuse existing Graph authentication, tenant policy checks and audit.
         // Never request/create privileged app-only tokens implicitly.
-        _cloudAuthMode.SelectedIndex =
-            _cloudConfig.AuthMode.Equals("Certificate", StringComparison.OrdinalIgnoreCase)
-                ? 2 : 0;
+        // Start is the least-privilege interactive helpdesk path. Even if
+        // administration configured an app-only certificate, never silently
+        // elevate a Start session to that application identity.
+        _cloudAuthMode.SelectedIndex = 0; // delegated Device Code + MFA
 
         await ConnectCloudFromUiAsync();
         UpdateStartConnectionSourceControls();
