@@ -1080,44 +1080,46 @@ public static class UiLayoutSelfTest
                     $"{formName}/{scenario.Name}: hidden Advanced layout collapsed the AD credential status width to {credentialStatus.MaximumSize.Width}px.");
             }
 
-            if (FindByName(
-                    startPage,
-                    "HomeSearchResultsArea") is TableLayoutPanel resultsArea &&
-                FindByName(
-                    startPage,
-                    "HomeUnifiedSearchResults") is DataGridView resultsGrid &&
-                FindByName(
-                    startPage,
-                    "HomeSelectionPanel") is TableLayoutPanel selectionPanel)
+            if (FindByName(startPage, "HomeSearchResultsArea")
+                    is TableLayoutPanel resultsArea &&
+                FindByName(startPage, "HomeServiceCards")
+                    is TableLayoutPanel threeCards &&
+                FindByName(startPage, "HomeUnifiedSearchResults")
+                    is DataGridView resultsGrid &&
+                FindByName(startPage, "HomeSelectionPanel")
+                    is TableLayoutPanel selectionPanel &&
+                FindByName(startPage, "HomeComputersCard")
+                    is UiRecoveryCard computersCard &&
+                FindByName(startPage, "HomeBitLockerPaneHost")
+                    is TableLayoutPanel bitLockerHost &&
+                FindByName(startPage, "HomeLapsPaneHost")
+                    is TableLayoutPanel lapsHost &&
+                FindByName(startPage, "HomeComputersPaneHost")
+                    is TableLayoutPanel computersHost)
             {
-                var computersHost =
-                    FindByName(startPage, "HomeComputersPaneHost") as TableLayoutPanel;
-                var recoveryHost =
-                    FindByName(startPage, "HomeRecoveryPaneHost") as TableLayoutPanel;
-                if (computersHost is null || recoveryHost is null ||
-                    !ReferenceEquals(resultsGrid.Parent, computersHost) ||
-                    !ReferenceEquals(selectionPanel.Parent, recoveryHost) ||
-                    resultsArea.GetPositionFromControl(computersHost).Column != 0 ||
-                    resultsArea.GetPositionFromControl(computersHost).Row != 0 ||
-                    resultsArea.GetPositionFromControl(recoveryHost).Column != 0 ||
-                    resultsArea.GetPositionFromControl(recoveryHost).Row != 1)
+                if (!ReferenceEquals(threeCards.Parent, resultsArea) ||
+                    !ReferenceEquals(selectionPanel.Parent, resultsArea) ||
+                    !ReferenceEquals(resultsGrid.Parent, computersCard) ||
+                    !ReferenceEquals(bitLockerHost.Parent, threeCards) ||
+                    !ReferenceEquals(lapsHost.Parent, threeCards) ||
+                    !ReferenceEquals(computersHost.Parent, threeCards) ||
+                    threeCards.Controls.Count != 3)
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: before a computer is selected, the bounded computer picker must be above the hidden recovery pane.");
+                        $"{formName}/{scenario.Name}: Start must show three equal draggable BitLocker, LAPS and Computers panes, even before selection.");
                 }
 
                 if (selectionPanel.Visible)
                 {
                     failures.Add(
-                        $"{formName}/{scenario.Name}: Start selection actions must stay hidden until a result is selected.");
+                        $"{formName}/{scenario.Name}: secret/selection status must stay hidden until a computer is selected.");
                 }
             }
             else
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: Start results/action layout container is missing.");
+                    $"{formName}/{scenario.Name}: three-pane Start recovery/results container is missing.");
             }
-
 
         }
 
