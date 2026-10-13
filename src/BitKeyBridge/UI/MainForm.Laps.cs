@@ -2393,6 +2393,8 @@ public sealed partial class MainForm
             "No LAPS record selected",
             UiStatusKind.Neutral);
         _lapsRows.Rows.Clear();
+        // The Start history view must never retain stale password-row references.
+        ClearHomeLapsHistory();
         _lapsZeroWarningPanel.Visible = false;
         _lapsDetails.Clear();
         _lapsDetails.Visible =

@@ -26,6 +26,105 @@ public static class UiStyle
     // Responsive two-column recovery cards on Start.
     public const int HomeRecoveryCardsPairMinimumWidth = 820;
     public const int HomeRecoveryCardMaxTextWidth = 740;
+    // Shared Windows 11-inspired helpdesk card design at 96 DPI.
+    public const int RecoveryCardCornerRadius = 20;
+    public const int RecoveryCardPadding = 20;
+    public const int RecoveryTitleGlyphSize = 31;
+    public const int RecoveryActionGlyphSize = 20;
+    public const int RecoveryActionMinimumHeight = 46;
+    public const int RecoveryHistoryGridHeight = 155;
+    public const int RecoveryHistoryGridMinimumHeight = 120;
+    public const int RecoveryCardFieldSpacing = 10;
+
+    public static Color RecoveryCardBackground => SystemColors.Window;
+    public static Color RecoveryCardBorder => Color.FromArgb(226, 228, 231);
+    public static Color RecoveryCardForeground => SystemColors.WindowText;
+    public static Color RecoveryCardMutedText =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(103, 107, 113);
+    public static Color RecoveryActionBackground =>
+        SystemInformation.HighContrast ? SystemColors.Control : Color.FromArgb(241, 243, 245);
+
+    public static (Color Background, Color Foreground) ResolveRecoveryBadgeColors(
+        UiStatusKind kind)
+    {
+        if (SystemInformation.HighContrast)
+            return (SystemColors.Window, SystemColors.WindowText);
+        return kind switch
+        {
+            UiStatusKind.Success => (Color.FromArgb(220, 247, 234), Color.FromArgb(21, 127, 61)),
+            UiStatusKind.Warning => (Color.FromArgb(255, 243, 216), Color.FromArgb(152, 88, 14)),
+            UiStatusKind.Error => (Color.FromArgb(255, 225, 226), Color.FromArgb(167, 43, 43)),
+            UiStatusKind.Busy => (Color.FromArgb(228, 238, 253), Color.FromArgb(43, 87, 170)),
+            _ => (Color.FromArgb(237, 238, 240), SystemColors.ControlText)
+        };
+    }
+
+    public static void ConfigureRecoveryActionButton(
+        Button button, RecoveryGlyphKind glyph, bool secondary = false)
+    {
+        button.AutoSize = true;
+        button.MinimumSize = new Size(
+            Math.Max(button.MinimumSize.Width, 148),
+            Math.Max(button.MinimumSize.Height, RecoveryActionMinimumHeight));
+        button.Font = CreateEmphasisFont(10F);
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor =
+            SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(229, 232, 236);
+        button.FlatAppearance.MouseDownBackColor =
+            SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(218, 223, 228);
+        button.BackColor = RecoveryActionBackground;
+        button.ForeColor = RecoveryCardForeground;
+        button.UseVisualStyleBackColor = false;
+        button.TextAlign = ContentAlignment.MiddleLeft;
+        button.ImageAlign = ContentAlignment.MiddleLeft;
+        button.TextImageRelation = TextImageRelation.ImageBeforeText;
+        button.Padding = new Padding(14, 6, 12, 6);
+        button.Margin = new Padding(0, 0, 0, secondary ? 0 : ControlGap);
+        var image = UiRecoveryGraphics.CreateGlyphImage(
+            glyph, RecoveryActionGlyphSize, RecoveryCardForeground);
+        var oldImage = button.Image;
+        button.Image = image;
+        oldImage?.Dispose();
+        button.Disposed += (_, _) => image.Dispose();
+
+        void RefreshCorners()
+        {
+            if (button.IsDisposed || button.Width < 2 || button.Height < 2)
+                return;
+            using var path = UiRecoveryGraphics.RoundRect(
+                new RectangleF(0, 0, button.Width, button.Height),
+                12f * button.DeviceDpi / BaselineDpi);
+            var old = button.Region;
+            button.Region = new Region(path);
+            old?.Dispose();
+        }
+
+        button.SizeChanged += (_, _) => RefreshCorners();
+        button.DpiChangedAfterParent += (_, _) => RefreshCorners();
+        RefreshCorners();
+    }
+
+    public static void ConfigureRecoveryFieldCaption(Label caption)
+    {
+        ConfigureWrappingLabel(caption);
+        caption.Font = CreateBodyFont(9.5F);
+        caption.ForeColor = RecoveryCardMutedText;
+        caption.MaximumSize = new Size(HomeRecoveryCardMaxTextWidth, 0);
+        caption.Margin = new Padding(0, RecoveryCardFieldSpacing, 0, 2);
+        caption.Dock = DockStyle.Top;
+    }
+
+    public static void ConfigureRecoveryFieldValue(Label value)
+    {
+        ConfigureWrappingLabel(value);
+        value.Font = CreateEmphasisFont(11F);
+        value.ForeColor = RecoveryCardForeground;
+        value.MaximumSize = new Size(HomeRecoveryCardMaxTextWidth, 0);
+        value.Margin = new Padding(0, 0, 0, ControlGap);
+        value.Dock = DockStyle.Top;
+    }
+
     public const int AdCredentialDialogWidth = 800;
     public const int AdCredentialDialogHeight = 520;
     public const int AdCredentialDialogMinimumWidth = 640;
