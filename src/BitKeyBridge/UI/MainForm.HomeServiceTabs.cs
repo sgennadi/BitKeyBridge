@@ -53,6 +53,7 @@ public sealed partial class MainForm
         _homeBitLockerDiagnosticLink.Font = UiStyle.CreateEmphasisFont(9F);
         _homeBitLockerDiagnosticLink.AutoSize = true;
         _homeBitLockerDiagnosticLink.Enabled = false;
+        _homeBitLockerDiagnosticLink.Enabled = false;
         _homeBitLockerDiagnosticLink.Margin =
             new Padding(0, UiStyle.SectionGap, 0, 0);
         _homeBitLockerDiagnosticLink.LinkClicked += (_, _) =>
