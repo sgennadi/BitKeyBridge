@@ -59,6 +59,10 @@ public sealed partial class MainForm
             return;
         }
 
+        // Reparenting the host panels can recreate the WinForms grid handle.
+        // Preserve the computer selection by stable row identity so swapping
+        // never replaces an already-selected recovery context.
+        var selectedComputer = GetSelectedHomeSearchResult();
         _homeResultsReflowRunning = true;
         _homeResultsArea.SuspendLayout();
         try
@@ -106,6 +110,21 @@ public sealed partial class MainForm
         {
             _homeResultsArea.ResumeLayout(true);
             _homeResultsReflowRunning = false;
+        }
+
+        if (selectedComputer is not null &&
+            GetSelectedHomeSearchResult() is null)
+        {
+            var selectedRow = _homeSearchResults.Rows
+                .Cast<DataGridViewRow>()
+                .FirstOrDefault(row => ReferenceEquals(row.Tag, selectedComputer));
+            if (selectedRow is not null)
+            {
+                _homeSearchResults.ClearSelection();
+                selectedRow.Selected = true;
+                if (selectedRow.Cells.Count > 0)
+                    _homeSearchResults.CurrentCell = selectedRow.Cells[0];
+            }
         }
 
         _homeSelectionPanel.PerformLayout();
