@@ -7,6 +7,9 @@ namespace BitKeyBridge;
 public sealed class StartConnectionPreferences
 {
     public string Source { get; set; } = StartConnectionPolicy.Choose;
+
+    // User-specific visual preference. No credentials or secrets are persisted.
+    public bool RecoveryCardsOnLeft { get; set; } = true;
 }
 
 public static class StartConnectionPolicy
