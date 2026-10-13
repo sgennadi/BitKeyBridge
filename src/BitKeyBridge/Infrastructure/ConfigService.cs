@@ -67,6 +67,38 @@ public static class ConfigService
         }
     }
 
+    public static StartConnectionPreferences LoadStartConnectionPreferences()
+    {
+        try
+        {
+            var preferences =
+                JsonStore.Read<StartConnectionPreferences>(AppPaths.StartConnectionPreferencesFile)
+                ?? new StartConnectionPreferences();
+            preferences.Source = StartConnectionPolicy.Normalize(preferences.Source);
+            return preferences;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Invalid user preferences are not security policy; require the
+            // operator to choose again, rather than connecting to AD.
+            return new StartConnectionPreferences();
+        }
+        catch (IOException)
+        {
+            return new StartConnectionPreferences();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new StartConnectionPreferences();
+        }
+    }
+
+    public static void SaveStartConnectionPreferences(StartConnectionPreferences preferences)
+    {
+        preferences.Source = StartConnectionPolicy.Normalize(preferences.Source);
+        JsonStore.WriteAtomic(AppPaths.StartConnectionPreferencesFile, preferences);
+    }
+
     public static CloudAuthConfig LoadCloudConfig()
     {
         try
