@@ -40,6 +40,8 @@ public static class UiStyle
         SystemInformation.HighContrast ? SystemColors.Control : Color.FromArgb(247, 248, 251);
     public static Color ModernSurface => SystemColors.Window;
     public static Color ModernForeground => SystemColors.WindowText;
+    public static Color ModernAccent =>
+        SystemInformation.HighContrast ? SystemColors.HotTrack : Color.FromArgb(27, 91, 164);
     public static Color ModernMuted =>
         SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(100, 106, 113);
     public static Color ModernBorder =>
