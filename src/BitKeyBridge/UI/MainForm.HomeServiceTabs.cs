@@ -399,6 +399,159 @@ public sealed partial class MainForm
         }
     }
 
+
+    // History must be requested explicitly: AD history attributes are
+    // privileged, and may contain encrypted older passwords.
+    private async Task LoadHomeLapsHistoryAsync()
+    {
+        var selected = GetSelectedHomeSearchResult();
+        if (selected is null || selected.IdentityAmbiguous ||
+            selected.IsCloudRecord || !_directoryConnected ||
+            _directoryConnecting || _homeLapsBusy || _lapsReading)
+            return;
+
+        var computer = selected.ComputerName;
+        _homeLapsBusy = true;
+        UpdateHomeServiceCards(selected);
+        _homeLapsHistoryStatus.Text = "Loading current and historical LAPS records...";
+        try
+        {
+            PrepareHomeLapsRead(computer);
+            await ReadLapsAsync(includeHistoryOverride: true);
+
+            if (!ReferenceEquals(selected, GetSelectedHomeSearchResult()))
+            {
+                ClearLapsResult();
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "Computer selection changed. LAPS history was discarded.",
+                    UiStatusKind.Warning);
+                return;
+            }
+
+            var result = _lapsResult;
+            if (result is null ||
+                !string.Equals(result.ComputerName, computer,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _homeLapsHistoryStatus.Text =
+                    "History could not be loaded. Check the LAPS diagnostic messages.";
+                return;
+            }
+
+            _homeLapsHistoryComputer = computer;
+            _homeLapsHistoryLoaded = true;
+            _homeLapsHistoryGrid.Rows.Clear();
+
+            foreach (var entry in result.OrderedEntries)
+            {
+                var index = _homeLapsHistoryGrid.Rows.Add(
+                    entry.IsHistory ? "History" : "Current",
+                    string.IsNullOrWhiteSpace(entry.AccountName) ?
+                        "Not returned" : entry.AccountName,
+                    entry.UpdatedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "Unknown",
+                    HelpdeskStatus.LapsEntry(entry));
+                // Never put password strings in DataGridView cells or audit metadata.
+                _homeLapsHistoryGrid.Rows[index].Tag = entry;
+            }
+
+            var historyCount = result.Entries.Count(x => x.IsHistory);
+            var readable = result.Entries.Count(x => x.HasPassword &&
+                x.Status == LapsPasswordStatus.Available);
+            _homeLapsHistoryGrid.Visible = _homeLapsHistoryGrid.Rows.Count > 0;
+
+            _homeLapsHistoryStatus.Text =
+                result.Entries.Count == 0
+                    ? LapsReadDiagnostics.EmptyStatus(result, cloud: false)
+                    : historyCount == 0
+                        ? "No previous passwords were returned. History may be disabled, empty or unreadable."
+                        : historyCount + " historical record(s). Select a row to reveal or copy its password.";
+
+            if (_homeLapsHistoryGrid.Rows.Count > 0)
+            {
+                _homeLapsHistoryGrid.ClearSelection();
+                var current = _homeLapsHistoryGrid.Rows
+                    .Cast<DataGridViewRow>()
+                    .FirstOrDefault(x => x.Tag is LapsPasswordEntry { IsHistory: false }) ??
+                    _homeLapsHistoryGrid.Rows[0];
+                current.Selected = true;
+                if (current.Cells.Count > 0)
+                    _homeLapsHistoryGrid.CurrentCell = current.Cells[0];
+                UpdateHomeLapsHistorySelection();
+            }
+
+            UiStyle.SetStatus(_homeSearchStatus,
+                result.Entries.Count == 0
+                    ? LapsReadDiagnostics.EmptyStatus(result, cloud: false)
+                    : $"LAPS history loaded: {result.Entries.Count} records; " +
+                      $"{readable} readable. Passwords remain hidden.",
+                result.Entries.Count == 0 || readable == 0 ?
+                    UiStatusKind.Warning : UiStatusKind.Success);
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "LAPS history could not be loaded. Review diagnostics.",
+                UiStatusKind.Error);
+            _appDiagnostics.ShowError("LAPS history failed.", "HomeLapsHistory", ex);
+        }
+        finally
+        {
+            _homeLapsBusy = false;
+            UpdateHomeServiceCards(GetSelectedHomeSearchResult());
+        }
+    }
+
+    private void PrepareHomeLapsRead(string computer)
+    {
+        if (_lapsSource.SelectedIndex != 0)
+            _lapsSource.SelectedIndex = 0;
+        _suppressLapsSearchQueue = true;
+        try
+        {
+            _lapsQuery.Text = computer;
+        }
+        finally
+        {
+            _suppressLapsSearchQueue = false;
+        }
+        _lapsSearchDebounceTimer?.Stop();
+    }
+
+    private void UpdateHomeLapsHistorySelection()
+    {
+        if (!_homeLapsHistoryLoaded ||
+            _homeLapsHistoryGrid.SelectedRows.Count != 1 ||
+            _homeLapsHistoryGrid.SelectedRows[0].Tag is not LapsPasswordEntry entry)
+        {
+            _homeLapsSelectedRecord.Text =
+                "Current password is used unless you select a history record.";
+            return;
+        }
+
+        _homeLapsCardAccount.Text =
+            string.IsNullOrWhiteSpace(entry.AccountName) ? "Not returned" : entry.AccountName;
+        _homeLapsSelectedRecord.Text =
+            (entry.IsHistory ? "Selected history" : "Selected current") +
+            " • " + entry.Source +
+            " • " + HelpdeskStatus.LapsEntry(entry);
+    }
+
+    // Called on explicit secret clear, computer change and password timeout.
+    private void ClearHomeLapsHistory()
+    {
+        _homeLapsHistoryLoaded = false;
+        _homeLapsHistoryComputer = string.Empty;
+        if (!_homeLapsHistoryGrid.IsDisposed)
+        {
+            _homeLapsHistoryGrid.Rows.Clear();
+            _homeLapsHistoryGrid.Visible = false;
+        }
+        _homeLapsHistoryStatus.Text = "History has not been loaded.";
+        _homeLapsSelectedRecord.Text =
+            "Current password is used unless you select a history record.";
+        _homeLapsCardAccount.Text = "Not loaded";
+    }
+
     private async Task ShowHomeLapsPasswordAsync(bool copy)
     {
         var selected = GetSelectedHomeSearchResult();
@@ -410,36 +563,29 @@ public sealed partial class MainForm
         var computer = selected.ComputerName;
         _homeLapsBusy = true;
         UpdateHomeServiceCards(selected);
-        UiStyle.SetStatus(_homeSearchStatus,
-            "Reading LAPS for " + computer + " (password requested by operator)...",
-            UiStatusKind.Busy);
+        bool retainHistory = false;
         try
         {
-            // Reuse the established LAPS read, privileged authorization,
-            // audit and DPAPI-NG decryption code without navigating away.
-            if (_lapsSource.SelectedIndex != 0)
-                _lapsSource.SelectedIndex = 0;
+            retainHistory = _homeLapsHistoryLoaded &&
+                string.Equals(_homeLapsHistoryComputer, computer,
+                    StringComparison.OrdinalIgnoreCase) &&
+                _lapsResult is not null;
 
-            _suppressLapsSearchQueue = true;
-            try
+            if (!retainHistory)
             {
-                _lapsQuery.Text = computer;
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "Reading the current LAPS password for " + computer + "...",
+                    UiStatusKind.Busy);
+                PrepareHomeLapsRead(computer);
+                await ReadLapsAsync(includeHistoryOverride: false);
             }
-            finally
-            {
-                _suppressLapsSearchQueue = false;
-            }
-            _lapsSearchDebounceTimer?.Stop();
 
-            await ReadLapsAsync(includeHistoryOverride: false);
-
-            // A different selected computer must never receive the old
-            // computer password after an asynchronous LDAP operation.
             if (!ReferenceEquals(selected, GetSelectedHomeSearchResult()))
             {
                 UiStyle.SetStatus(_homeSearchStatus,
                     "Computer selection changed; the LAPS result was discarded.",
                     UiStatusKind.Warning);
+                retainHistory = false;
                 return;
             }
 
@@ -449,36 +595,56 @@ public sealed partial class MainForm
                     StringComparison.OrdinalIgnoreCase))
             {
                 UiStyle.SetStatus(_homeSearchStatus,
-                    "LAPS read did not complete. Open LAPS details for diagnostics.",
+                    "LAPS read did not complete. Check LAPS diagnostics.",
                     UiStatusKind.Warning);
+                retainHistory = false;
                 return;
             }
 
-            var current = result.OrderedEntries.Where(row =>
-                !row.IsHistory &&
-                row.HasPassword &&
-                row.Status == LapsPasswordStatus.Available).ToList();
+            LapsPasswordEntry? row;
+            if (retainHistory)
+            {
+                row = _homeLapsHistoryGrid.SelectedRows.Count == 1 ?
+                    _homeLapsHistoryGrid.SelectedRows[0].Tag as LapsPasswordEntry : null;
+                if (row is null || !result.Entries.Contains(row))
+                {
+                    UiStyle.SetStatus(_homeSearchStatus,
+                        "Select a current or historical LAPS record first.",
+                        UiStatusKind.Warning);
+                    return;
+                }
+            }
+            else
+            {
+                var current = result.OrderedEntries.Where(entry =>
+                    !entry.IsHistory &&
+                    entry.HasPassword &&
+                    entry.Status == LapsPasswordStatus.Available).ToList();
+                if (current.Count != 1)
+                {
+                    UiStyle.SetStatus(_homeSearchStatus,
+                        current.Count == 0
+                            ? result.Entries.Count == 0
+                                ? LapsReadDiagnostics.EmptyStatus(result, cloud: false)
+                                : LapsReadDiagnostics.UnreadableStatus(result, cloud: false)
+                            : "Multiple current LAPS credentials exist. " +
+                              "Load history and choose the exact account.",
+                        UiStatusKind.Warning);
+                    return;
+                }
+                row = current[0];
+            }
 
-            if (current.Count == 0)
+            if (!row.HasPassword || row.Status != LapsPasswordStatus.Available)
             {
                 UiStyle.SetStatus(_homeSearchStatus,
-                    result.Entries.Count == 0
-                        ? LapsReadDiagnostics.EmptyStatus(result, cloud: false)
-                        : LapsReadDiagnostics.UnreadableStatus(result, cloud: false),
+                    "The selected LAPS record is not readable: " +
+                    HelpdeskStatus.LapsEntry(row) + ". " +
+                    row.StatusDetail,
                     UiStatusKind.Warning);
                 return;
             }
 
-            if (current.Count > 1)
-            {
-                UiStyle.SetStatus(_homeSearchStatus,
-                    "Multiple current LAPS passwords are readable. Open LAPS details " +
-                    "to choose the exact account and password attribute.",
-                    UiStatusKind.Warning);
-                return;
-            }
-
-            var row = current[0];
             var action = copy ? "CopyLapsPassword" : "RevealLapsPassword";
             var context = AuthorizeLapsAccess(
                 action, result.ComputerName, _lapsResourceId, _lapsAuditSource);
@@ -491,18 +657,20 @@ public sealed partial class MainForm
                 source: _lapsAuditSource,
                 details: "Attribute=" + row.Attribute +
                     "; Account=" + row.AccountName +
-                    "; History=False; Updated=" +
-                    row.UpdatedAtUtc?.ToString("O"));
+                    "; History=" + row.IsHistory +
+                    "; Updated=" + row.UpdatedAtUtc?.ToString("O"));
 
             RecordRecentComputer(result.ComputerName, result.ComputerId,
                 copy ? "LAPS copy" : "LAPS reveal");
-
             var password = row.CopyPassword();
+
             if (copy)
             {
-                // Clear the LAPS result BEFORE copying. ClearLapsResult
-                // deliberately clears a clipboard matching any stored secret.
-                ClearLapsResult();
+                // The transient current-password read can be erased immediately.
+                // For loaded history the existing LAPS lifetime timer will erase
+                // all retained credentials and conditionally clear the clipboard.
+                if (!retainHistory)
+                    ClearLapsResult();
                 CopyKeyWithAutoClear(password);
                 UiStyle.SetStatus(_homeSearchStatus,
                     "LAPS password copied. Clipboard clears in " +
@@ -512,12 +680,12 @@ public sealed partial class MainForm
             else
             {
                 using var dialog = new SecretDisplayDialog(
-                    "LAPS Password",
+                    row.IsHistory ? "Historical LAPS Password" : "LAPS Password",
                     result.ComputerName + " | " + row.AccountName +
                         " | " + row.Source,
                     password,
-                    "This password was read on demand. The display is closed " +
-                    "and its in-memory content is cleared when you close this window.",
+                    "Password shown on demand; the window and any clipboard copy " +
+                    "are cleared on close or after the configured interval.",
                     _config.SensitiveClipboardSeconds);
                 dialog.ShowDialog(this);
                 UiStyle.SetStatus(_homeSearchStatus,
@@ -535,7 +703,7 @@ public sealed partial class MainForm
         }
         finally
         {
-            if (_lapsResult is not null)
+            if (_lapsResult is not null && !retainHistory)
                 ClearLapsResult();
             _homeLapsBusy = false;
             UpdateHomeServiceCards(GetSelectedHomeSearchResult());
