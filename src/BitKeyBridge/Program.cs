@@ -2583,6 +2583,16 @@ internal static class Program
                     "SelfTest2",
                     details: "Second chained audit record");
 
+                // Strict enterprise auditing must reject an arbitrary writable
+                // file even if appending to it would otherwise succeed.
+                if (audit.Write(
+                        "UnsafeProtectedAudit",
+                        requireProtectedStorage: true) is not null)
+                {
+                    failures.Add(
+                        "Strict protected audit accepted an untrusted custom file.");
+                }
+
                 var entries = audit.ReadRecent(10);
                 if (entries.Count != 2 ||
                     entries.Any(x =>
