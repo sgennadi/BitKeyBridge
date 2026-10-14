@@ -41,9 +41,25 @@ $installed = $false
 
 function Invoke-ElevatedTestCommand {
     param([Parameter(Mandatory)][string[]]$Arguments)
-    & $Executable @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "BitKeyBridge failed with exit $LASTEXITCODE for: $($Arguments -join ' ')"
+    # WinExe is a graphical subsystem executable, so PowerShell's native
+    # $LASTEXITCODE is not reliable. Always wait and examine Process.ExitCode.
+    $nonce = [guid]::NewGuid().ToString('N')
+    $stdoutPath = Join-Path $env:RUNNER_TEMP ("broker-admin-" + $nonce + ".out")
+    $stderrPath = Join-Path $env:RUNNER_TEMP ("broker-admin-" + $nonce + ".err")
+    try {
+        $process = Start-Process -FilePath $Executable -ArgumentList $Arguments `
+            -Wait -PassThru -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -Raw } else { '' }
+        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { '' }
+        if ($stdout) { Write-Host $stdout }
+        if ($process.ExitCode -ne 0) {
+            throw "BitKeyBridge failed with exit $($process.ExitCode) for: " +
+                "$($Arguments -join ' '); $stderr"
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -103,8 +119,8 @@ try {
 
     $readerSid = (Get-LocalUser -Name $readerName).SID.Value
 
+    $installed = $true  # Ensure cleanup even when service setup partially fails.
     Invoke-ElevatedTestCommand -Arguments @('--install-service', '--no-elevation')
-    $installed = $true
     Invoke-ElevatedTestCommand -Arguments @(
         '--rbac-enable', '--rbac-admin-bypass', 'off',
         '--rbac-reader-add', $readerSid, '--no-elevation'
@@ -153,8 +169,10 @@ try {
 finally {
     if ($installed) {
         try {
-            & $Executable --uninstall-service --no-elevation
-            Write-Host "Service cleanup exit code: $LASTEXITCODE"
+            $cleanup = Start-Process -FilePath $Executable `
+                -ArgumentList @('--uninstall-service', '--no-elevation') `
+                -Wait -PassThru
+            Write-Host "Service cleanup exit code: $($cleanup.ExitCode)"
         }
         catch {
             Write-Warning "Service cleanup: $($_.Exception.Message)"
