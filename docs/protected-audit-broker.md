@@ -56,10 +56,12 @@ audit event. It does not itself grant AD, Entra, Graph or LAPS access.
 7. Remove the user's AD/Graph permission or RBAC group membership and
    confirm access is denied. Stop the service and verify that *strict audit*
    causes a fail-closed refusal, **not** user-profile journal fallback.
-8. Confirm `--audit-verify` for the legacy journal remains independent.
-   Verify the separate `ProtectedAudit\audit.jsonl` hash chain from an
-   administrator context with AuditIntegrityService or the supported
-   diagnostics. Do not grant users write access to make tests pass.
+8. Run `BitKeyBridge.exe --audit-broker-verify --no-elevation`
+   in an **already elevated** administrator shell. It checks owner/write NTFS
+   ACLs and the protected hash chain, returns nonzero on failure and prints
+   safe verification metadata. `--audit-verify` still checks only the
+   independent legacy journal. Do not grant users write access to make
+   the tests pass.
 
 ## Authentication & IPC boundaries
 
