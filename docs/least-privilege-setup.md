@@ -112,6 +112,9 @@ denied (fail closed).
 
 - **Protected machine audit**: `%ProgramData%\BitKeyBridge\audit.jsonl`.
   This is the preferred tamper-evident chain for managed workstations.
+  Strict mode checks trusted SYSTEM/Administrators/service ownership and
+  rejects file/directory ACLs granting writes to untrusted principals.
+  Simply placing a user-writable file under ProgramData does not qualify.
   Provision its protected ACL/service identity before assigning Helpdesk staff.
 - **Portable current-user fallback**: `%LocalAppData%\BitKeyBridge\audit.user.jsonl`.
   It is used only when the normal machine journal cannot be written and the
