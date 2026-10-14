@@ -2039,6 +2039,12 @@ internal static class Program
                 request.Reason = "password=verysecret\n";
                 if (ProtectedAuditBrokerProtocol.Validate(request))
                     failures.Add("Broker accepted multiline metadata.");
+                request.Reason = "password=verysecret";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a password-bearing ticket field.");
+                request.Reason = "123456-123456-123456-123456-123456-123456-123456-123456";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a BitLocker recovery password in metadata.");
                 request.Reason = "Approved by Helpdesk";
                 request.RequestId = "not-a-guid";
                 if (ProtectedAuditBrokerProtocol.Validate(request))
