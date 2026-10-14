@@ -1252,10 +1252,15 @@ public static class UiLayoutSelfTest
         }
 
         if (!tabs.TabPages.Cast<TabPage>().Any(page => page.Text == "Diagnostics") ||
-            FindByName(form, "AccessHealthTab") is null)
+            FindByName(form, "AccessHealthTab") is null ||
+            FindByName(form, "DiagnosticToolsTab") is null ||
+            FindByName(form, "RunEnvironmentCheckButton") is null ||
+            FindByName(form, "RunAdvancedDeviceDiagnosticsButton") is null ||
+            FindByName(form, "RunBitLockerCommandsButton") is null ||
+            FindByName(form, "RunLapsCommandsButton") is null)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Diagnostics must contain the metadata-only Access Health workspace.");
+                $"{formName}/{scenario.Name}: Diagnostics must provide Access Health and the existing recovery runbooks.");
         }
 
         if (FindByName(
