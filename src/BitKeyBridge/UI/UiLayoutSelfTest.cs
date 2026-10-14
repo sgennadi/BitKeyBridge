@@ -61,6 +61,8 @@ public static class UiLayoutSelfTest
         VerifyWrappingStatusMeasurement(
             failures);
 
+        VerifyStatusGlyphAlignmentInset(failures);
+
         VerifyHighContrastStatusPalette(
             failures);
 
@@ -621,6 +623,7 @@ public static class UiLayoutSelfTest
             VerifyMainViewportFill(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
             VerifySelectedHomeRecoveryLayout(main, formName, scenario, failures);
+            VerifyHomeStatusGlyphColumn(main, formName, scenario, failures);
         }
         else
         {
@@ -1806,6 +1809,82 @@ public static class UiLayoutSelfTest
                 formName,
                 scenario,
                 failures);
+        }
+    }
+
+    private static void VerifyStatusGlyphAlignmentInset(
+        List<string> failures)
+    {
+        using var bordered = new UiStatusLabel();
+        UiStyle.ConfigureStatusLabel(bordered);
+        UiStyle.SetStatus(bordered, "Connected", UiStatusKind.Success);
+        var baseWidth = bordered.GetPreferredSize(Size.Empty).Width;
+        var baseX = bordered.GlyphLeftInset;
+        bordered.GlyphColumnInset = UiStyle.ControlGap * 2;
+        var alignedWidth = bordered.GetPreferredSize(Size.Empty).Width;
+
+        using var inline = new UiStatusLabel();
+        UiStyle.ConfigureInlineStatusLabel(inline);
+        UiStyle.SetStatus(inline, "Connected as: helpdesk", UiStatusKind.Success);
+
+        if (bordered.GlyphLeftInset - baseX != UiStyle.ControlGap * 2 ||
+            alignedWidth < baseWidth + UiStyle.ControlGap * 2 - 1 ||
+            inline.GlyphBaseLeftInset >= bordered.GlyphBaseLeftInset)
+        {
+            failures.Add(
+                "Status glyph column offset must change both paint position and measured width, including inline Connected as labels.");
+        }
+    }
+
+    private static void VerifyHomeStatusGlyphColumn(
+        MainForm main,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        var page = FindByName(main, "HomeLayoutRoot");
+        if (page is null)
+            return;
+
+        var names = new[]
+        {
+            "HomeConnectionStatus", "HomeAdAccountStatus",
+            "HomeCloudConnectionStatus", "StartSetupStatus",
+            "HomeUnifiedSearchStatus", "HomeSelectionSummary",
+            "SecretLifetimeStatus"
+        };
+        var visible = names
+            .Select(name => FindByName(main, name) as UiStatusLabel)
+            .Where(label => label is { Visible: true, Width: > 0, Image: not null })
+            .Select(label => new
+            {
+                Label = label!,
+                Painted = MainForm.HomeGlyphPaintedX(page, label!)
+            })
+            .Where(item => item.Painted.HasValue)
+            .ToArray();
+
+        var tolerance = (int)Math.Ceiling(
+            UiStyle.HomeStatusGlyphGroupingDistance *
+            Math.Max(main.DeviceDpi / (double)UiStyle.BaselineDpi,
+                main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size)));
+
+        for (var i = 0; i < visible.Length; i++)
+        {
+            for (var j = i + 1; j < visible.Length; j++)
+            {
+                var first = visible[i];
+                var second = visible[j];
+                var baseDistance = Math.Abs(
+                    first.Painted!.Value - first.Label.GlyphColumnInset -
+                    (second.Painted!.Value - second.Label.GlyphColumnInset));
+                if (baseDistance <= tolerance &&
+                    Math.Abs(first.Painted.Value - second.Painted.Value) > 1)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: the Start status checkmarks '{first.Label.Name}' and '{second.Label.Name}' are not in one vertical column.");
+                }
+            }
         }
     }
 
