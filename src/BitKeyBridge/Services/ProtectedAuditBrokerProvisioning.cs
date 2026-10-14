@@ -42,12 +42,40 @@ internal static class ProtectedAuditBrokerProvisioning
         Directory.CreateDirectory(AppPaths.BrokerAuditDirectory);
         RejectReparsePoint(AppPaths.MachineConfigDirectory);
         RejectReparsePoint(AppPaths.BrokerAuditDirectory);
+        RejectReparsePoint(AppPaths.AppSettingsFile);
+
+        // Persist the original ACLs in an administrator-only archive BEFORE
+        // modifying existing machine policy permissions. A recovery engineer
+        // can restore the previous SDDL without guessing at historical ACLs.
+        var rootSddl = new DirectoryInfo(AppPaths.MachineConfigDirectory)
+            .GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access)
+            .GetSecurityDescriptorSddlForm(
+                AccessControlSections.Owner | AccessControlSections.Access);
+        var configSddl = new FileInfo(AppPaths.AppSettingsFile)
+            .GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access)
+            .GetSecurityDescriptorSddlForm(
+                AccessControlSections.Owner | AccessControlSections.Access);
 
         // Do not touch existing legacy audit.jsonl (retained for rollback).
         // We protect the parent machine policy folder to prevent a local user
         // from replacing machine RBAC/config files under the service's feet.
         SecureDirectory(AppPaths.MachineConfigDirectory, allowUsersRead: true);
         SecureDirectory(AppPaths.BrokerAuditDirectory, allowUsersRead: false);
+
+        var backupFile = Path.Combine(
+            AppPaths.BrokerAuditDirectory,
+            "pre-provision-acl-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") +
+            "-" + Guid.NewGuid().ToString("N")[..8] + ".json");
+        var backup = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SavedAtUtc = DateTime.UtcNow,
+            OriginalMachineDirectory = AppPaths.MachineConfigDirectory,
+            OriginalMachineDirectorySddl = rootSddl,
+            OriginalAppConfig = AppPaths.AppSettingsFile,
+            OriginalAppConfigSddl = configSddl
+        });
+        File.WriteAllText(backupFile, backup);
+        SecureFile(backupFile, allowUsersRead: false);
 
         if (!File.Exists(AppPaths.BrokerAuditLogFile))
             File.WriteAllText(AppPaths.BrokerAuditLogFile, string.Empty);
