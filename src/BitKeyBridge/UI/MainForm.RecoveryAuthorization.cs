@@ -135,7 +135,9 @@ public sealed partial class MainForm
                 reference: context.Reference,
                 reason: context.Reason,
                 correlationId: context.SessionId,
-                requireProtectedStorage: _config.RequireProtectedAuditForRecovery);
+                requireProtectedStorage: _config.RequireProtectedAuditForRecovery,
+                preferBroker: _config.RequireProtectedAuditForRecovery &&
+                              _config.AuditBrokerEnabled);
 
             if (authorizationEntry is null)
             {
@@ -143,9 +145,13 @@ public sealed partial class MainForm
                     "Recovery access blocked: audit is unavailable",
                     "The authorization event could not be saved. No recovery secret will be read. " +
                     (_config.RequireProtectedAuditForRecovery
-                        ? "Protected auditing is mandatory: the machine journal must already exist " +
-                          "with a trusted SYSTEM/Administrators/service owner and restricted NTFS write ACL. " +
-                          "Your account also needs an approved protected writer or service."
+                        ? _config.AuditBrokerEnabled
+                            ? "Protected audit broker is unavailable or rejected this Windows account. " +
+                              "Ask an administrator to check the BitKeyBridge service, RBAC RecoveryReaders, " +
+                              "broker provisioning and protected journal; no UAC is needed in this GUI."
+                            : "Protected auditing is mandatory: the machine journal must already exist " +
+                              "with a trusted SYSTEM/Administrators/service owner and restricted NTFS write ACL. " +
+                              "Your account also needs an approved protected writer or service."
                         : "Check machine audit write access and the current-user portable audit folder.") +
                     " Do not weaken AD/Entra permissions or launch the entire GUI elevated.");
                 WindowsEventLogService.TryWrite(
