@@ -59,6 +59,9 @@ audit event. It does not itself grant AD, Entra, Graph or LAPS access.
    `AuditBrokerHealthProbe` event. An administrator not included in the
    explicit RecoveryReaders allowlist will also receive exit 3; use
    `--service-status` and `--audit-broker-verify` for admin-only checks.
+   The same authenticated nonblocking test is available in the GUI through
+   **Diagnostics → Tools → Check Protected Audit...**. It never reads secrets
+   and intentionally records only a synthetic health event.
 6. Launch the GUI as a standard Helpdesk account. Connect to AD or Entra
    as that account, perform an authorized LAPS/BitLocker read, and confirm
    the **SYSTEM-owned** broker journal received a matching, hash-chained
