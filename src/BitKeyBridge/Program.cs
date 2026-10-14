@@ -458,11 +458,28 @@ internal static class Program
                     Console.WriteLine(
                         "ProtectedJournal=" +
                         ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile));
-                // Service existence alone does not prove the IPC listener is up.
-                // Real recovery performs a separate authenticated ACK check.
-                return info.Installed && config.AuditBrokerEnabled &&
-                    string.Equals(info.State, "Running", StringComparison.OrdinalIgnoreCase)
-                    ? 0 : 3;
+                // Service SCM status is not proof that the protected
+                // local pipe is listening or that this account can write.
+                // A synthetic event receives an ACK only after the SYSTEM
+                // worker authenticates our token and flushes its journal.
+                var configured =
+                    info.Installed &&
+                    config.AuditBrokerEnabled &&
+                    config.RequireProtectedAuditForRecovery &&
+                    config.RbacEnabled &&
+                    config.RbacRecoveryReaders.Count > 0 &&
+                    string.Equals(info.State, "Running", StringComparison.OrdinalIgnoreCase);
+                var committed = configured && ProtectedAuditBrokerClient.TryProbe();
+                Console.WriteLine(
+                    "BrokerProbe=" + (committed ? "Committed" : "DeniedOrUnavailable") +
+                    "; CheckedIdentity=" + AuthorizationService.CurrentIdentityName());
+                if (!committed)
+                    Console.Error.WriteLine(
+                        "The current Windows identity did not receive a protected " +
+                        "audit ACK. Check explicit RecoveryReaders membership, " +
+                        "service startup, named-pipe access and protected journal. " +
+                        "This command writes a synthetic health event only when allowed.");
+                return committed ? 0 : 3;
             }
             catch (Exception ex)
             {
