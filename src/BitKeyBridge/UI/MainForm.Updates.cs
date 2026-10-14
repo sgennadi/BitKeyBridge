@@ -40,7 +40,9 @@ public sealed partial class MainForm
                     _updateStatus,
                     _config.CheckForUpdatesOnStart
                         ? _config.AutoInstallUpdatesOnStart
-                            ? "Automatic startup updates are enabled. BitKeyBridge will check, verify, install, and restart when a newer release is available."
+                            ? UpdateTrustPolicy.CanInstallUnattended(_config)
+                                ? "Automatic updates will install only publisher-verified releases."
+                                : "Saved auto-install setting is blocked: configure a required trusted signature and publisher."
                             : "Automatic startup update checks are enabled. Installation remains manual."
                         : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
                     UiStatusKind.Neutral);
@@ -82,6 +84,18 @@ public sealed partial class MainForm
                 "Update repository is invalid: " +
                 ex.Message,
                 UiStatusKind.Error);
+            return false;
+        }
+
+        if (_autoInstallUpdatesOnStart.Checked &&
+            !UpdateTrustPolicy.CanEnableUnattended(
+                _requireTrustedUpdateSignature.Checked,
+                _trustedUpdatePublisher.Text))
+        {
+            UiStyle.SetStatus(_updateStatus,
+                "Cannot enable unattended installation without both a required " +
+                "trusted Authenticode signature and a non-empty expected publisher.",
+                UiStatusKind.Warning);
             return false;
         }
 
@@ -200,8 +214,7 @@ public sealed partial class MainForm
             // trusted, explicitly pinned publisher. SHA-256 alone is not
             // a publisher identity check for an elevated update helper.
             if (_config.AutoInstallUpdatesOnStart &&
-                (!_config.RequireTrustedUpdateSignature ||
-                 string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)))
+                !UpdateTrustPolicy.CanInstallUnattended(_config))
             {
                 UiStyle.SetStatus(_updateStatus,
                     "Automatic installation needs a required trusted Authenticode signature " +
@@ -340,7 +353,7 @@ public sealed partial class MainForm
             Environment.NewLine +
             $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}" +
             Environment.NewLine +
-            $"Automatic install: {(UpdateRollbackHoldService.IsActiveForCurrentBuild() ? "Paused after rollback" : _config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? "Enabled" : "Disabled")}" +
+            $"Automatic install: {(UpdateRollbackHoldService.IsActiveForCurrentBuild() ? "Paused after rollback" : _config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? UpdateTrustPolicy.CanInstallUnattended(_config) ? "Enabled" : "Blocked: trusted publisher required" : "Disabled")}" +
             Environment.NewLine +
             $"Authenticode trust required: {(_config.RequireTrustedUpdateSignature ? "Yes" : "No")}" +
             (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)
