@@ -877,6 +877,21 @@ public static class UiLayoutSelfTest
             failures.Add("Least-privilege startup policy regression: GUI must not request UAC.");
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            var metadataOnlyPolicy = new AppConfig
+            {
+                RbacEnabled = true,
+                RbacAllowLocalAdministrators = false
+            };
+            var metadataAuthorization = new AuthorizationService(metadataOnlyPolicy);
+            if (!metadataAuthorization.Check(BitKeyBridgePermission.SearchDevices).Allowed ||
+                metadataAuthorization.Check(BitKeyBridgePermission.RecoveryRead).Allowed)
+            {
+                failures.Add("Metadata-only search must not grant secret RecoveryRead access.");
+            }
+        }
+
         // Simulate an unwritable audit destination; the audit service must
         // report failure, never claim that an access event was recorded.
         var invalidDirectory = System.IO.Path.GetTempFileName();
