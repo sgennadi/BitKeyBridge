@@ -96,7 +96,10 @@ internal static class ProtectedAuditBrokerProvisioning
             PropagationFlags.None, AccessControlType.Allow));
         if (allowUsersRead)
             security.AddAccessRule(new FileSystemAccessRule(
-                AuthenticatedUsersSid, FileSystemRights.ReadAndExecute,
+                AuthenticatedUsersSid,
+                FileSystemRights.Traverse |
+                FileSystemRights.ReadAttributes |
+                FileSystemRights.ReadPermissions,
                 InheritanceFlags.None, PropagationFlags.None,
                 AccessControlType.Allow));
         directory.SetAccessControl(security);
