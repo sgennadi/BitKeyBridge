@@ -4908,8 +4908,12 @@ public sealed partial class MainForm : DpiAwareForm
             protectedCache ? "ProtectedCache" :
             localCache ? "LocalCSV" : "AD";
 
+        // Local caches may hold cleartext secrets; they retain RecoveryRead.
+        // Live AD search returns metadata and may be used by ordinary Helpdesk.
         if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
+                localCache || protectedCache
+                    ? BitKeyBridgePermission.RecoveryRead
+                    : BitKeyBridgePermission.SearchDevices,
                 "SearchRecoveryMetadata",
                 source: searchSource))
         {
