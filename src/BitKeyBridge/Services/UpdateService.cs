@@ -99,11 +99,13 @@ public sealed class UpdateService : IDisposable
                     if (json.RootElement.ValueKind != JsonValueKind.Array)
                         throw new InvalidOperationException("GitHub returned an unexpected release-list response.");
 
-                    var found = json.RootElement.EnumerateArray()
-                        .FirstOrDefault(x => !GetBool(x, "draft"));
-                    release = found.ValueKind == JsonValueKind.Undefined
-                        ? default
-                        : found.Clone();
+                    // GitHub lists releases by creation time, not SemVer.
+                    // Select the highest complete version, not simply the first
+                    // published item, and skip drafts/missing architecture assets.
+                    release = SelectLatestRelease(
+                        json.RootElement,
+                        info.Architecture,
+                        allowPrerelease: true);
                     break;
                 }
                 else
@@ -444,17 +446,16 @@ public sealed class UpdateService : IDisposable
                 "The downloaded release contains BitKeyBridge.exe outside the package root.");
         }
 
-        var fileVersion =
-            FileVersionInfo.GetVersionInfo(
-                executable)
-                .FileVersion;
-
-        if (!ReleaseVersionsMatch(
-                fileVersion,
+        var versionInfo = FileVersionInfo.GetVersionInfo(executable);
+        if (!ReleaseExecutableMatches(
+                versionInfo.FileVersion,
+                versionInfo.ProductVersion,
                 info.LatestVersion))
         {
             throw new InvalidOperationException(
-                $"Staged executable version '{fileVersion}' does not match release {info.LatestVersion}.");
+                $"Staged executable FileVersion '{versionInfo.FileVersion}' / " +
+                $"ProductVersion '{versionInfo.ProductVersion}' does not match " +
+                $"release {info.LatestVersion}.");
         }
 
         var stagedHashBeforeSelfTest =
@@ -1067,17 +1068,16 @@ public sealed class UpdateService : IDisposable
                     "Staged BitKeyBridge executable SHA-256 changed after verification.");
             }
 
-            var fileVersion =
-                FileVersionInfo.GetVersionInfo(
-                    fullPath)
-                    .FileVersion;
-
-            if (!ReleaseVersionsMatch(
-                    fileVersion,
+            var versionInfo = FileVersionInfo.GetVersionInfo(fullPath);
+            if (!ReleaseExecutableMatches(
+                    versionInfo.FileVersion,
+                    versionInfo.ProductVersion,
                     plan.ExpectedVersion))
             {
                 throw new InvalidDataException(
-                    $"Staged executable version '{fileVersion}' no longer matches expected version {plan.ExpectedVersion}.");
+                    $"Staged executable FileVersion '{versionInfo.FileVersion}' / " +
+                    $"ProductVersion '{versionInfo.ProductVersion}' no longer matches " +
+                    $"expected version {plan.ExpectedVersion}.");
             }
 
             stream.Position = 0;
@@ -1394,11 +1394,10 @@ public sealed class UpdateService : IDisposable
         }
     }
 
-    // Pick the closest strictly older published version, never a same-version
-    // build. Missing architecture assets and drafts must not be offered.
-    internal static JsonElement SelectPreviousRelease(
+    // GitHub's release-list ordering is based on creation time, not SemVer.
+    // A newer RC can have an older creation timestamp than a stable release.
+    internal static JsonElement SelectLatestRelease(
         JsonElement releases,
-        Version currentVersion,
         string architecture,
         bool allowPrerelease)
     {
@@ -1407,38 +1406,18 @@ public sealed class UpdateService : IDisposable
 
         var assetName = $"BitKeyBridge-{architecture}.zip";
         JsonElement selected = default;
-        Version? best = null;
+        SemanticVersion? best = null;
 
         foreach (var candidate in releases.EnumerateArray())
         {
-            if (candidate.ValueKind != JsonValueKind.Object ||
-                GetBool(candidate, "draft") ||
-                (!allowPrerelease && GetBool(candidate, "prerelease")))
+            if (!IsEligibleRelease(candidate, assetName, allowPrerelease))
                 continue;
 
-            var tag = GetString(candidate, "tag_name");
-            Version version;
-            try
-            {
-                version = ParseVersion(tag);
-            }
-            catch (InvalidOperationException)
-            {
-                continue;
-            }
+            SemanticVersion version;
+            try { version = ParseVersion(GetString(candidate, "tag_name")); }
+            catch (InvalidOperationException) { continue; }
 
-            if (version >= currentVersion ||
-                (best is not null && version <= best))
-                continue;
-
-            if (!candidate.TryGetProperty("assets", out var assets) ||
-                assets.ValueKind != JsonValueKind.Array ||
-                !assets.EnumerateArray().Any(asset =>
-                    asset.ValueKind == JsonValueKind.Object &&
-                    string.Equals(
-                        GetString(asset, "name"),
-                        assetName,
-                        StringComparison.OrdinalIgnoreCase)))
+            if (best is not null && version <= best.Value)
                 continue;
 
             best = version;
@@ -1446,6 +1425,74 @@ public sealed class UpdateService : IDisposable
         }
 
         return selected;
+    }
+
+    // Existing numeric-version consumers and historical offline tests remain
+    // source compatible. Actual updater calls use the SemVer overload.
+    internal static JsonElement SelectPreviousRelease(
+        JsonElement releases,
+        Version currentVersion,
+        string architecture,
+        bool allowPrerelease) =>
+        SelectPreviousRelease(
+            releases,
+            SemanticVersion.FromAssembly(currentVersion),
+            architecture,
+            allowPrerelease);
+
+    // Pick the closest strictly older release, including RC -> older RC, while
+    // honoring the requested prerelease channel and target architecture.
+    internal static JsonElement SelectPreviousRelease(
+        JsonElement releases,
+        SemanticVersion currentVersion,
+        string architecture,
+        bool allowPrerelease)
+    {
+        if (releases.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("Expected a GitHub Releases JSON array.");
+
+        var assetName = $"BitKeyBridge-{architecture}.zip";
+        JsonElement selected = default;
+        SemanticVersion? best = null;
+
+        foreach (var candidate in releases.EnumerateArray())
+        {
+            if (!IsEligibleRelease(candidate, assetName, allowPrerelease))
+                continue;
+
+            SemanticVersion version;
+            try { version = ParseVersion(GetString(candidate, "tag_name")); }
+            catch (InvalidOperationException) { continue; }
+
+            if (version >= currentVersion ||
+                (best is not null && version <= best.Value))
+                continue;
+
+            best = version;
+            selected = candidate.Clone();
+        }
+
+        return selected;
+    }
+
+    private static bool IsEligibleRelease(
+        JsonElement candidate,
+        string architectureAsset,
+        bool allowPrerelease)
+    {
+        if (candidate.ValueKind != JsonValueKind.Object ||
+            GetBool(candidate, "draft") ||
+            (!allowPrerelease && GetBool(candidate, "prerelease")))
+            return false;
+
+        return candidate.TryGetProperty("assets", out var assets) &&
+               assets.ValueKind == JsonValueKind.Array &&
+               assets.EnumerateArray().Any(asset =>
+                   asset.ValueKind == JsonValueKind.Object &&
+                   string.Equals(
+                       GetString(asset, "name"),
+                       architectureAsset,
+                       StringComparison.OrdinalIgnoreCase));
     }
 
     internal static string ParseGitHubAssetDigest(
@@ -1618,10 +1665,25 @@ public sealed class UpdateService : IDisposable
             list.Add(value);
     }
 
-    private static Version GetCurrentVersion()
+    // A Windows PE FileVersion is numeric. InformationalVersion carries the
+    // original prerelease suffix so RC -> stable updates are not mistaken for
+    // same-version installations.
+    internal static SemanticVersion GetCurrentVersion()
     {
-        var version = typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0, 0);
-        return new Version(version.Major, version.Minor, version.Build < 0 ? 0 : version.Build);
+        var informational = typeof(UpdateService).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+
+        if (!string.IsNullOrWhiteSpace(informational))
+        {
+            try { return ParseVersion(informational); }
+            catch (InvalidOperationException) { /* Old binaries fall back to numeric AssemblyVersion. */ }
+        }
+
+        return SemanticVersion.FromAssembly(
+            typeof(UpdateService).Assembly.GetName().Version ??
+            new Version(0, 0, 0, 0));
     }
 
     internal static string GetRid() => RuntimeInformation.ProcessArchitecture switch
@@ -1643,13 +1705,8 @@ public sealed class UpdateService : IDisposable
         return parts[0] + "/" + parts[1];
     }
 
-    internal static Version ParseVersion(string value)
-    {
-        var text = NormalizeVersionText(value);
-        if (!Version.TryParse(text, out var version))
-            throw new InvalidOperationException($"Invalid release version '{value}'.");
-        return new Version(version.Major, version.Minor, version.Build < 0 ? 0 : version.Build);
-    }
+    internal static SemanticVersion ParseVersion(string value) =>
+        SemanticVersion.Parse(value);
 
     internal static bool ReleaseVersionsMatch(
         string? actual,
@@ -1657,11 +1714,8 @@ public sealed class UpdateService : IDisposable
     {
         try
         {
-            return ParseVersion(
-                    actual ?? string.Empty)
-                .Equals(
-                    ParseVersion(
-                        expected ?? string.Empty));
+            return ParseVersion(actual ?? string.Empty)
+                .Equals(ParseVersion(expected ?? string.Empty));
         }
         catch (InvalidOperationException)
         {
@@ -1669,16 +1723,33 @@ public sealed class UpdateService : IDisposable
         }
     }
 
-    private static string NormalizeVersionText(string? value)
+    // Windows FileVersion is numeric (0.30.0.0), so it cannot prove RC identity.
+    // ProductVersion comes from .NET AssemblyInformationalVersion and must match
+    // the full SemVer precedence (ignoring non-semantic +build metadata).
+    internal static bool ReleaseExecutableMatches(
+        string? fileVersion,
+        string? productVersion,
+        string? expectedVersion)
     {
-        var text = (value ?? string.Empty).Trim();
-        if (text.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-            text = text[1..];
-        var dash = text.IndexOf('-');
-        if (dash > 0) text = text[..dash];
-        var plus = text.IndexOf('+');
-        if (plus > 0) text = text[..plus];
-        return text;
+        try
+        {
+            var expected = ParseVersion(expectedVersion ?? string.Empty);
+            var file = ParseVersion(fileVersion ?? string.Empty);
+            if (file.Major != expected.Major ||
+                file.Minor != expected.Minor ||
+                file.Patch != expected.Patch ||
+                file.IsPrerelease)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(productVersion))
+                return !expected.IsPrerelease; // Never accept unknown RC identity.
+
+            return ReleaseVersionsMatch(productVersion, expectedVersion);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     internal static string ParseChecksum(string text, string assetName)
