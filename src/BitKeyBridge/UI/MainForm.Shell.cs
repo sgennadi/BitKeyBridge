@@ -117,13 +117,12 @@ public sealed partial class MainForm
         _mainTabs.TabPages.Add(
             _lapsWorkspaceTab);
 
+        // Read-only access diagnostics are useful to non-admin Helpdesk staff.
+        // Privileged service, DC and signed-audit controls remain gated.
+        _mainTabs.TabPages.Add(
+            BuildHealthAuditWorkspaceTab());
         if (AdministrationAllowed)
-        {
-            _mainTabs.TabPages.Add(
-                BuildAdministrationWorkspaceTab());
-            _mainTabs.TabPages.Add(
-                BuildHealthAuditWorkspaceTab());
-        }
+            _mainTabs.TabPages.Add(BuildAdministrationWorkspaceTab());
 
         foreach (TabPage page in
                  _mainTabs.TabPages)
@@ -2357,17 +2356,31 @@ public sealed partial class MainForm
 
     private TabPage BuildAdministrationWorkspaceTab()
     {
-        var tab = new TabPage("Administration");
+        var tab = new TabPage("Settings");
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
 
+        // Everyday settings are immediately visible; enterprise features live
+        // under a single explicit group instead of competing at the top level.
         nested.TabPages.Add(BuildHelpdeskBasicsResponsiveTab());
         nested.TabPages.Add(BuildCloudAdministrationTab());
         nested.TabPages.Add(BuildUpdatesResponsiveTab());
-        nested.TabPages.Add(BuildSecuritySettingsResponsiveTab());
-        nested.TabPages.Add(BuildExportAutomationResponsiveTab());
+
+        var enterprise = new TabPage("Enterprise")
+        {
+            Name = "EnterpriseSettingsTab"
+        };
+        var enterpriseSections = new TabControl
+        {
+            Name = "EnterpriseSettingsSections",
+            Dock = DockStyle.Fill
+        };
+        enterpriseSections.TabPages.Add(BuildSecuritySettingsResponsiveTab());
+        enterpriseSections.TabPages.Add(BuildExportAutomationResponsiveTab());
+        enterprise.Controls.Add(enterpriseSections);
+        nested.TabPages.Add(enterprise);
 
         tab.Controls.Add(nested);
         return tab;
@@ -2375,16 +2388,19 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Health & Audit");
+        var tab = new TabPage("Diagnostics");
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
 
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());
-        nested.TabPages.Add(BuildServiceHealthResponsiveTab());
-        nested.TabPages.Add(BuildDomainControllersResponsiveTab());
-        nested.TabPages.Add(BuildAuditResponsiveTab());
+        if (AdministrationAllowed)
+        {
+            nested.TabPages.Add(BuildServiceHealthResponsiveTab());
+            nested.TabPages.Add(BuildDomainControllersResponsiveTab());
+            nested.TabPages.Add(BuildAuditResponsiveTab());
+        }
 
         tab.Controls.Add(nested);
         return tab;
@@ -2550,25 +2566,6 @@ public sealed partial class MainForm
         control.Dock = DockStyle.Top;
         control.Margin = new Padding(0, 3, 0, 4);
         grid.Controls.Add(control, 1, row);
-    }
-
-    private static void HideToolButtons(
-        Control root,
-        params string[] labels)
-    {
-        foreach (Control child in root.Controls)
-        {
-            if (child is Button button &&
-                labels.Contains(
-                    button.Text,
-                    StringComparer.OrdinalIgnoreCase))
-            {
-                button.Visible = false;
-            }
-
-            if (child.HasChildren)
-                HideToolButtons(child, labels);
-        }
     }
 
     private void RestoreRecoveryUiState()
