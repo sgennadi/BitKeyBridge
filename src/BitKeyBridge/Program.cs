@@ -306,11 +306,12 @@ internal static class Program
         // Ordinary GUI sessions must keep the helpdesk user's Windows identity.
         // Only privileged CLI maintenance is eligible for UAC. Suppressing the
         // prompt with --no-elevation never bypasses the administrator check.
-        if (isCli &&
-            !readOnlyStatusCommand &&
-            !currentUserVaultCommand &&
-            !identityBoundCommand &&
-            !SecurityContext.IsAdministrator())
+        if (StartupPrivilegePolicy.NeedsElevation(
+                isCli,
+                readOnlyStatusCommand,
+                currentUserVaultCommand,
+                identityBoundCommand,
+                SecurityContext.IsAdministrator()))
         {
             if (noElevation || !Environment.UserInteractive)
             {
