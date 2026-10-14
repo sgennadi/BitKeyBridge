@@ -68,7 +68,14 @@ internal static class ProtectedAuditBrokerProtocol
         value is not null &&
         value.Length <= limit &&
         (!required || !string.IsNullOrWhiteSpace(value)) &&
-        !value.Any(char.IsControl);
+        !value.Any(char.IsControl) &&
+        // Free-text ticket/incident fields may accidentally contain a secret.
+        // A value that the central redaction layer would modify must never be
+        // sent through the IPC channel in the first place.
+        string.Equals(
+            DiagnosticRedaction.Sanitize(value),
+            value,
+            StringComparison.Ordinal);
 
     internal static async Task<T> ReadAsync<T>(
         Stream stream, int maximumBytes, CancellationToken cancellationToken)
