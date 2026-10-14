@@ -40,6 +40,10 @@ audit event. It does not itself grant AD, Entra, Graph or LAPS access.
    - `ProtectedAudit\audit.jsonl`: separate journal, owned and writable
      only by SYSTEM/Administrators. No ordinary user read/write privileges.
    - Existing legacy `audit.jsonl` remains in place and is not overwritten.
+   - Original machine-folder and appsettings NTFS owner/DACL SDDL are saved
+     automatically as an admin-only `ProtectedAudit\\pre-provision-acl-*.json`
+     snapshot before any existing permissions are changed. Preserve this
+     file if you need to restore the prior ACLs after testing.
 4. Restart the service from an elevated console: `BitKeyBridge.exe --stop-service`,
    then `BitKeyBridge.exe --start-service`. Inspect Windows Event Log for
    `Protected local-only recovery audit broker is active.`
