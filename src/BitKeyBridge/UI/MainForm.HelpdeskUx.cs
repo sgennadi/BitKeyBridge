@@ -395,7 +395,7 @@ public sealed partial class MainForm
             "Reject recovery secret retrieval unless the machine-protected audit event is saved";
         recoveryGrid.Controls.Add(_requireProtectedRecoveryAuditSetting, 1, 2);
 
-        var brokerStatus = new Label
+        var brokerStatus = new UiStatusLabel
         {
             Name = "ProtectedAuditBrokerStatus",
             AutoSize = true,
