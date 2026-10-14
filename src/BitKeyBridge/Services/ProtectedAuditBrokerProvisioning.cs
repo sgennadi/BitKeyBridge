@@ -59,7 +59,8 @@ internal static class ProtectedAuditBrokerProvisioning
         // Do not touch existing legacy audit.jsonl (retained for rollback).
         // We protect the parent machine policy folder to prevent a local user
         // from replacing machine RBAC/config files under the service's feet.
-        SecureDirectory(AppPaths.MachineConfigDirectory, allowUsersRead: true);
+        // Secure the NEW isolated folder first; preserve the original root
+        // SDDL before touching any existing machine configuration ACLs.
         SecureDirectory(AppPaths.BrokerAuditDirectory, allowUsersRead: false);
 
         var backupFile = Path.Combine(
@@ -76,6 +77,9 @@ internal static class ProtectedAuditBrokerProvisioning
         });
         File.WriteAllText(backupFile, backup);
         SecureFile(backupFile, allowUsersRead: false);
+
+        // Only now change the existing machine configuration folder.
+        SecureDirectory(AppPaths.MachineConfigDirectory, allowUsersRead: true);
 
         if (!File.Exists(AppPaths.BrokerAuditLogFile))
             File.WriteAllText(AppPaths.BrokerAuditLogFile, string.Empty);
