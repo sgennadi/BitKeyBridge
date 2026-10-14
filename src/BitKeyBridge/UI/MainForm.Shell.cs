@@ -2394,6 +2394,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill
         };
 
+        nested.TabPages.Add(BuildDiagnosticToolsPage());
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());
         if (AdministrationAllowed)
         {
