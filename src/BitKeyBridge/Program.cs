@@ -1732,10 +1732,10 @@ internal static class Program
                 var updateDefaults =
                     new AppConfig();
                 if (!updateDefaults.CheckForUpdatesOnStart ||
-                    !updateDefaults.AutoInstallUpdatesOnStart)
+                    updateDefaults.AutoInstallUpdatesOnStart)
                 {
                     failures.Add(
-                        "Automatic verified updates must be enabled by default.");
+                        "Startup update checks should be enabled, but unattended installation must be opt-in.");
                 }
 
                 var expectedHash = new string('a', 64);
