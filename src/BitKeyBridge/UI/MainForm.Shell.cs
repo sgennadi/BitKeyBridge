@@ -2573,22 +2573,26 @@ public sealed partial class MainForm
 
     private void RestoreRecoveryUiState()
     {
+        var recoverySource = string.IsNullOrWhiteSpace(_startConnectionPreferences.RecoverySearchSource)
+            ? _config.RecoverySearchSource
+            : _startConnectionPreferences.RecoverySearchSource;
         _recoverySource.SelectedIndex =
-            _config.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
+            recoverySource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
                 ? 2
-                : _config.RecoverySearchSource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
+                : recoverySource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
                     ? 1 : 0;
 
-        if (!string.IsNullOrWhiteSpace(
-                _config.LastRecoveryScopeSearchBase))
+        var scopeDn = string.IsNullOrWhiteSpace(_startConnectionPreferences.LastRecoveryScopeSearchBase)
+            ? _config.LastRecoveryScopeSearchBase
+            : _startConnectionPreferences.LastRecoveryScopeSearchBase;
+        var scopeName = string.IsNullOrWhiteSpace(_startConnectionPreferences.LastRecoveryScopeSearchBase)
+            ? _config.LastRecoveryScopeName
+            : _startConnectionPreferences.LastRecoveryScopeName;
+        if (!string.IsNullOrWhiteSpace(scopeDn))
         {
-            _startScope =
-                new BitLockerScope(
-                    string.IsNullOrWhiteSpace(
-                        _config.LastRecoveryScopeName)
-                        ? "Last OU"
-                        : _config.LastRecoveryScopeName,
-                    _config.LastRecoveryScopeSearchBase);
+            _startScope = new BitLockerScope(
+                string.IsNullOrWhiteSpace(scopeName) ? "Last OU" : scopeName,
+                scopeDn);
 
             UiStyle.SetStatus(
                 _startOuStatus,
@@ -2650,19 +2654,15 @@ public sealed partial class MainForm
     {
         try
         {
-            _config.RecoverySearchSource =
+            _startConnectionPreferences.RecoverySearchSource =
                 _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
                 _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD";
-
             if (_startScope is not null)
             {
-                _config.LastRecoveryScopeName =
-                    _startScope.Name;
-                _config.LastRecoveryScopeSearchBase =
-                    _startScope.SearchBase;
+                _startConnectionPreferences.LastRecoveryScopeName = _startScope.Name;
+                _startConnectionPreferences.LastRecoveryScopeSearchBase = _startScope.SearchBase;
             }
-
-            ConfigService.SaveAppConfig(_config);
+            ConfigService.SaveStartConnectionPreferences(_startConnectionPreferences);
         }
         catch
         {
