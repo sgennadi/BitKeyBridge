@@ -26,6 +26,9 @@ if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) {
     throw "Executable not found: $Executable"
 }
 $Executable = (Resolve-Path -LiteralPath $Executable).Path
+# Standard users should run the installed, machine-readable binary, not an
+# Actions runner temporary file with unrelated runner-account-only ACLs.
+$standardExecutable = Join-Path $env:ProgramFiles 'BitKeyBridge\BitKeyBridge.exe'
 if (Get-Service -Name BitKeyBridge -ErrorAction SilentlyContinue) {
     throw 'Refusing test: BitKeyBridge Windows Service already exists.'
 }
@@ -72,7 +75,8 @@ function Invoke-StandardUserProbe {
     $outPath = Join-Path $env:RUNNER_TEMP ("audit-broker-" + $nonce + ".out")
     $errPath = Join-Path $env:RUNNER_TEMP ("audit-broker-" + $nonce + ".err")
     try {
-        $process = Start-Process -FilePath $Executable `
+        $process = Start-Process -FilePath $standardExecutable `
+            -WorkingDirectory (Join-Path $env:WINDIR 'System32') `
             -ArgumentList @('--audit-broker-status', '--no-elevation') `
             -Credential $Credential -LoadUserProfile -Wait -PassThru `
             -RedirectStandardOutput $outPath -RedirectStandardError $errPath
@@ -121,6 +125,9 @@ try {
 
     $installed = $true  # Ensure cleanup even when service setup partially fails.
     Invoke-ElevatedTestCommand -Arguments @('--install-service', '--no-elevation')
+    if (-not (Test-Path -LiteralPath $standardExecutable -PathType Leaf)) {
+        throw 'The installed service executable is not readable from Program Files.'
+    }
     Invoke-ElevatedTestCommand -Arguments @(
         '--rbac-enable', '--rbac-admin-bypass', 'off',
         '--rbac-reader-add', $readerSid, '--no-elevation'
