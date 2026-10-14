@@ -859,6 +859,40 @@ public static class UiLayoutSelfTest
 
     private static void VerifyStartSourcePolicies(List<string> failures)
     {
+        // A Helpdesk GUI must never auto-elevate, and disabling the CLI UAC
+        // prompt must not allow privileged maintenance without admin rights.
+        if (StartupPrivilegePolicy.NeedsElevation(
+                false, false, false, false, false) ||
+            !StartupPrivilegePolicy.NeedsElevation(
+                true, false, false, false, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, true, false, false, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, false, true, false, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, false, false, true, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, false, false, false, true))
+        {
+            failures.Add("Least-privilege startup policy regression: GUI must not request UAC.");
+        }
+
+        // Simulate an unwritable audit destination; the audit service must
+        // report failure, never claim that an access event was recorded.
+        var invalidDirectory = System.IO.Path.GetTempFileName();
+        try
+        {
+            var audit = new AuditService(
+                System.IO.Path.Combine(invalidDirectory, "audit.jsonl"));
+            if (audit.Write("AuditStorageRegression") is not null)
+                failures.Add("Mandatory audit preflight must detect unwritable destinations.");
+        }
+        finally
+        {
+            try { File.Delete(invalidDirectory); }
+            catch (IOException) { /* Only temporary test cleanup. */ }
+            catch (UnauthorizedAccessException) { /* Only temporary test cleanup. */ }
+        }
         if (StartConnectionPolicy.Normalize("unknown") != StartConnectionPolicy.Choose ||
             StartConnectionPolicy.NeedsActiveDirectory(StartConnectionPolicy.MicrosoftCloud) ||
             StartConnectionPolicy.NeedsMicrosoftCloud(StartConnectionPolicy.ActiveDirectory) ||
