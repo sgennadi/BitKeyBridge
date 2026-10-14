@@ -132,7 +132,7 @@ public sealed class AuditService
                 }
             }
 
-            if (TryAppend(_path, entry))
+            if (TryAppend(_path, entry, durable: requireProtectedStorage))
                 return entry;
 
             if (!requireProtectedStorage &&
@@ -152,7 +152,7 @@ public sealed class AuditService
         }
     }
 
-    private bool TryAppend(string path, AuditEntry entry)
+    private bool TryAppend(string path, AuditEntry entry, bool durable = false)
     {
         try
         {
@@ -168,12 +168,29 @@ public sealed class AuditService
             RotateIfNeeded(path);
             entry.EntryHash = AuditIntegrityService.ComputeHash(entry);
 
-            File.AppendAllText(
-                path,
-                JsonSerializer.Serialize(entry) +
-                Environment.NewLine);
+            var serialized = JsonSerializer.Serialize(entry);
+            if (durable)
+            {
+                // Acknowledgement is issued only after an actual Windows
+                // FlushFileBuffers on the SYSTEM-managed journal handle.
+                using var stream = new FileStream(
+                    path, FileMode.Append, FileAccess.Write,
+                    FileShare.Read, 4096, FileOptions.WriteThrough);
+                using (var writer = new StreamWriter(
+                           stream, new System.Text.UTF8Encoding(false),
+                           4096, leaveOpen: true))
+                {
+                    writer.WriteLine(serialized);
+                    writer.Flush();
+                }
+                stream.Flush(flushToDisk: true);
+            }
+            else
+            {
+                File.AppendAllText(path, serialized + Environment.NewLine);
+            }
 
-            // The audit was durably appended before optional SIEM queueing.
+            // The protected audit was flushed before optional SIEM queueing.
             SiemForwardingService.TryQueueFromAudit(entry);
             return true;
         }
