@@ -3514,7 +3514,17 @@ internal static class Program
             return 0;
         }
 
-        foreach (var failure in failures) Console.Error.WriteLine("SELF-TEST FAILED: " + failure);
+        var reportLines = failures.Select(failure => "SELF-TEST FAILED: " + failure).ToArray();
+        foreach (var line in reportLines) Console.Error.WriteLine(line);
+        try
+        {
+            File.WriteAllLines(Path.Combine(AppContext.BaseDirectory, "self-test.log"), reportLines);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("SELF-TEST report could not be written: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
         return 1;
     }
 
