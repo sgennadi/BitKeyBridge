@@ -18,6 +18,27 @@ Do not include real recovery passwords, production LDAP distinguished names, ten
 A dedicated restricted share is preferred over broadly readable SYSVOL/NETLOGON storage for recovery passwords.
 
 
+## Non-admin recovery and audit boundary
+
+The ordinary interactive GUI runs as its caller, without attempting a global
+UAC elevation. Authorization for password recovery remains enforced by AD
+ACLs/decryption delegation, Microsoft Graph permissions and device roles,
+plus configured BitKeyBridge RBAC/JIT/approval policy. Metadata-only search
+does not imply the right to read secrets.
+
+Before a privileged recovery operation fetches a password, BitKeyBridge
+commits an authorization audit event. If writing to both journals fails,
+the operation is rejected. The current-user portable audit fallback is stored
+in LocalAppData only when protected ProgramData auditing is not writable,
+and the GUI displays a warning. This fallback **does not provide tamper
+resistance** against its owner even though events are hash-chained. IT-managed
+endpoints that require integrity must provision a protected journal/service
+and enable `RequireProtectedAuditForRecovery` in Helpdesk settings.
+
+A machine-wide audit file must **not** be made writable by all ordinary
+users to make portable Helpdesk access work. Centralized log collection,
+access controls, and SIEM delivery remain administrator responsibilities.
+
 ## Update security
 
 BitKeyBridge binds update metadata to the configured GitHub repository, release tag, architecture asset name, and exact asset size. Release ZIPs are verified against `SHA256SUMS.txt` and, when available, the SHA-256 digest returned in GitHub release-asset metadata. When both checksum sources are present they must agree. Release metadata is revalidated immediately before download, redirected downloads must remain HTTPS on GitHub/GitHubusercontent, and the staged package must contain exactly one root `BitKeyBridge.exe` whose version exactly matches the selected release. The staged executable must then pass `--self-test` before installation, and the elevated helper rechecks its hash and exact version before replacement.
