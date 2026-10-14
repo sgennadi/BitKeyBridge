@@ -16,6 +16,13 @@ public sealed class AuditService
 
     public string Path => _path;
 
+    /// <summary>
+    /// True only when the last successful write landed in the per-user audit
+    /// journal instead of the centrally protected machine journal.
+    /// A per-user file can be modified by its owner and is not tamper-proof.
+    /// </summary>
+    public bool LastWriteUsedUserFallback { get; private set; }
+
     public AuditEntry? Write(
         string action,
         string result = "Success",
@@ -26,7 +33,8 @@ public sealed class AuditService
         string? details = null,
         string? reference = null,
         string? reason = null,
-        string? correlationId = null)
+        string? correlationId = null,
+        bool requireProtectedStorage = false)
     {
         var entry = new AuditEntry
         {
@@ -35,10 +43,10 @@ public sealed class AuditService
             Host = Environment.MachineName,
             Action = action,
             Result = result,
-            ComputerName = computerName ?? string.Empty,
-            RecoveryId = recoveryId ?? string.Empty,
-            Source = source ?? string.Empty,
-            AuthMode = authMode ?? string.Empty,
+            ComputerName = Sanitize(computerName),
+            RecoveryId = Sanitize(recoveryId),
+            Source = Sanitize(source),
+            AuthMode = Sanitize(authMode),
             Reference = Sanitize(reference),
             Reason = Sanitize(reason),
             Details = Sanitize(details),
@@ -47,42 +55,59 @@ public sealed class AuditService
 
         lock (Sync)
         {
-            try
+            LastWriteUsedUserFallback = false;
+            if (TryAppend(_path, entry))
+                return entry;
+
+            // Only the standard machine audit can use this portable fallback.
+            // Never silently downgrade explicitly configured/custom audit paths.
+            if (!requireProtectedStorage &&
+                string.Equals(_path, AppPaths.AuditLogFile, StringComparison.OrdinalIgnoreCase) &&
+                TryAppend(AppPaths.UserAuditLogFile, entry))
             {
-                var directory = System.IO.Path.GetDirectoryName(_path)!;
-                Directory.CreateDirectory(directory);
-
-                using var processLock = AcquireInterprocessLock();
-                if (processLock is null)
-                    return null;
-
-                var previousHash =
-                    AuditIntegrityService.GetLastHash(_path);
-
-                RotateIfNeeded();
-
-                entry.ChainVersion =
-                    AuditIntegrityService.CurrentChainVersion;
-                entry.PreviousHash = previousHash;
-                entry.EntryHash =
-                    AuditIntegrityService.ComputeHash(entry);
-
-                File.AppendAllText(
-                    _path,
-                    JsonSerializer.Serialize(entry) +
-                    Environment.NewLine);
-
-                SiemForwardingService
-                    .TryQueueFromAudit(
-                        entry);
-
+                LastWriteUsedUserFallback = true;
+                WindowsEventLogService.TryWrite(
+                    "Protected audit journal unavailable; audit event was saved only " +
+                    "to current-user storage. Action=" + Sanitize(action),
+                    EventLogSeverity.Warning, 4681, "RecoveryAudit");
                 return entry;
             }
-            catch
-            {
-                // Audit logging must not expose a recovery key or crash the recovery workflow.
-                return null;
-            }
+
+            return null;
+        }
+    }
+
+    private bool TryAppend(string path, AuditEntry entry)
+    {
+        try
+        {
+            var directory = System.IO.Path.GetDirectoryName(path)!;
+            Directory.CreateDirectory(directory);
+
+            using var processLock = AcquireInterprocessLock(path);
+            if (processLock is null)
+                return false;
+
+            entry.ChainVersion = AuditIntegrityService.CurrentChainVersion;
+            entry.PreviousHash = AuditIntegrityService.GetLastHash(path);
+            RotateIfNeeded(path);
+            entry.EntryHash = AuditIntegrityService.ComputeHash(entry);
+
+            File.AppendAllText(
+                path,
+                JsonSerializer.Serialize(entry) +
+                Environment.NewLine);
+
+            // The audit was durably appended before optional SIEM queueing.
+            SiemForwardingService.TryQueueFromAudit(entry);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Audit journal unavailable: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+            return false;
         }
     }
 
@@ -91,43 +116,57 @@ public sealed class AuditService
         maximum = Math.Clamp(maximum, 1, 5000);
         lock (Sync)
         {
-            try
-            {
-                if (!File.Exists(_path)) return [];
-                var lines = File.ReadLines(_path)
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .TakeLast(maximum)
-                    .ToArray();
-                var result = new List<AuditEntry>(lines.Length);
-                foreach (var line in lines)
-                {
-                    try
-                    {
-                        var entry = JsonSerializer.Deserialize<AuditEntry>(line);
-                        if (entry is not null) result.Add(entry);
-                    }
-                    catch (Exception ex)
-                    {
-                        WindowsEventLogService.TryWrite(
-                            "Audit entry parse failed while reading recent entries: " + ex.Message,
-                            EventLogSeverity.Warning,
-                            4559,
-                            "Audit");
-                    }
-                }
-                result.Reverse();
-                return result;
-            }
-            catch
-            {
-                return [];
-            }
+            var entries = ReadRecentFromPath(_path, maximum);
+            if (string.Equals(_path, AppPaths.AuditLogFile, StringComparison.OrdinalIgnoreCase))
+                entries.AddRange(ReadRecentFromPath(AppPaths.UserAuditLogFile, maximum));
+
+            return entries
+                .OrderByDescending(x => x.TimestampUtc)
+                .Take(maximum)
+                .ToList();
         }
     }
 
-    private FileStream? AcquireInterprocessLock()
+    private static List<AuditEntry> ReadRecentFromPath(string path, int maximum)
     {
-        var lockPath = _path + ".lock";
+        try
+        {
+            if (!File.Exists(path))
+                return [];
+
+            var result = new List<AuditEntry>();
+            foreach (var line in File.ReadLines(path)
+                         .Where(x => !string.IsNullOrWhiteSpace(x))
+                         .TakeLast(maximum))
+            {
+                try
+                {
+                    var entry = JsonSerializer.Deserialize<AuditEntry>(line);
+                    if (entry is not null)
+                        result.Add(entry);
+                }
+                catch (Exception ex)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Audit entry parse failed: " +
+                        DiagnosticRedaction.Sanitize(ex.Message),
+                        EventLogSeverity.Warning, 4559, "Audit");
+                }
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Unable to read audit journal: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+            return [];
+        }
+    }
+
+    private static FileStream? AcquireInterprocessLock(string path)
+    {
+        var lockPath = path + ".lock";
 
         for (var attempt = 0; attempt < 100; attempt++)
         {
@@ -152,12 +191,12 @@ public sealed class AuditService
         return null;
     }
 
-    private void RotateIfNeeded()
+    private void RotateIfNeeded(string path)
     {
-        if (!File.Exists(_path) || new FileInfo(_path).Length < _maxBytes) return;
-        var old = _path + ".old";
+        if (!File.Exists(path) || new FileInfo(path).Length < _maxBytes) return;
+        var old = path + ".old";
         if (File.Exists(old)) File.Delete(old);
-        File.Move(_path, old);
+        File.Move(path, old);
     }
 
     private static string GetCurrentUser()
