@@ -237,12 +237,11 @@ public sealed partial class MainForm : DpiAwareForm
 
         Shown += async (_, _) =>
         {
-            // Update first. A startup update must not be delayed by AD discovery,
-            // credential prompts, or helpdesk workflow initialization.
-            if (await TryAutomaticUpdateOnStartAsync())
-                return;
-
+            // Show the source chooser promptly. Network update checks must not
+            // hold the connection wizard hostage while GitHub is unavailable.
             await ShowStartupConnectionWizardAsync();
+            if (!IsDisposed)
+                _ = TryAutomaticUpdateOnStartAsync();
         };
     }
 
@@ -2722,6 +2721,20 @@ public sealed partial class MainForm : DpiAwareForm
                 EventLogSeverity.Information,
                 4101,
                 "Update");
+
+            // Unattended replacement must be opt-in AND restricted to a
+            // trusted, explicitly pinned publisher. SHA-256 alone is not
+            // a publisher identity check for an elevated update helper.
+            if (_config.AutoInstallUpdatesOnStart &&
+                (!_config.RequireTrustedUpdateSignature ||
+                 string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)))
+            {
+                UiStyle.SetStatus(_updateStatus,
+                    "Automatic installation needs a required trusted Authenticode signature " +
+                    "and trusted publisher. Adjust Update Settings or use a manual update.",
+                    UiStatusKind.Warning);
+                return false;
+            }
 
             if (!_config.AutoInstallUpdatesOnStart)
             {
