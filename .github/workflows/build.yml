@@ -365,6 +365,38 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
+  audit-broker-integration:
+    # Must run only on GitHub-hosted ephemeral Windows. This isolated test
+    # creates temporary local accounts, installs an SCM service and adjusts
+    # ProgramData ACLs; it must never run on a persistent/self-hosted machine.
+    if: github.event_name == 'pull_request' && github.head_ref == 'feature/protected-audit-broker-20261014'
+    needs: [build]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout integration harness
+        uses: actions/checkout@v7
+
+      - name: Download tested x64 executable package
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: broker-integration
+
+      - name: Verify strict audit with two genuine standard Windows tokens
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or
+              $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Protected audit integration must use an ephemeral GitHub-hosted Windows runner.'
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'bkb-broker-integration'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Expand-Archive -Path broker-integration/BitKeyBridge-win-x64.zip -DestinationPath $root -Force
+          ./tests/windows/ProtectedAuditBrokerIntegration.ps1 `
+            -Executable (Join-Path $root 'BitKeyBridge.exe') `
+            -EphemeralHostedRunner
+
   release:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
