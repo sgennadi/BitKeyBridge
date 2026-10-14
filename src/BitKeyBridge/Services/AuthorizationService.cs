@@ -4,6 +4,8 @@ namespace BitKeyBridge;
 
 public enum BitKeyBridgePermission
 {
+    // Metadata-only searches are still constrained by AD / Graph permissions.
+    SearchDevices,
     RecoveryRead,
     Rotate,
     Administrator,
@@ -82,6 +84,17 @@ public sealed class AuthorizationService
         var identityName =
             identity.Name ??
             Environment.UserName;
+
+        if (permission == BitKeyBridgePermission.SearchDevices)
+        {
+            return new AuthorizationDecision
+            {
+                Allowed = true,
+                Permission = permission.ToString(),
+                Identity = identityName,
+                Reason = "Metadata search is allowed; Active Directory and Microsoft Graph still enforce their own read permissions."
+            };
+        }
 
         if (privilegedControl &&
             !policyEnabled)
