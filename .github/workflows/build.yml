@@ -262,8 +262,17 @@ jobs:
 
       - name: Offline self-test (supported Windows Server architecture)
         if: matrix.rid == 'win-x64'
-        shell: cmd
-        run: start /wait "" artifacts\${{ matrix.rid }}\BitKeyBridge.exe --self-test
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $report = "artifacts\${{ matrix.rid }}\self-test.log"
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-test" -Wait -PassThru
+          if (Test-Path $report) {
+            Get-Content $report
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Offline self-test failed with exit code $($process.ExitCode)."
+          }
 
       - name: Runtime UI layout self-test
         if: matrix.rid == 'win-x64'
