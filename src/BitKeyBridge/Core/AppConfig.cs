@@ -54,7 +54,8 @@ public sealed class AppConfig
 
     public string UpdateRepository { get; set; } = "sgennadi/BitKeyBridge";
     public bool CheckForUpdatesOnStart { get; set; } = true;
-    public bool AutoInstallUpdatesOnStart { get; set; } = true;
+    // Only check for updates on first launch; never auto-install by default.
+    public bool AutoInstallUpdatesOnStart { get; set; } = false;
     public bool AllowPrereleaseUpdates { get; set; } = false;
     public bool RequireTrustedUpdateSignature { get; set; } = false;
     public string TrustedUpdatePublisher { get; set; } = string.Empty;
