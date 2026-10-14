@@ -142,9 +142,12 @@ public sealed partial class MainForm
                 ShowAppMessage(
                     "Recovery access blocked: audit is unavailable",
                     "The authorization event could not be saved. No recovery secret will be read. " +
-                    "Check write access to the protected BitKeyBridge audit directory. " +
-                    "For portable clients, verify that the current-user audit journal is available. " +
-                    "Do not weaken AD/Entra permissions or launch the entire GUI elevated.");
+                    (_config.RequireProtectedAuditForRecovery
+                        ? "Protected auditing is mandatory: the machine journal must already exist " +
+                          "with a trusted SYSTEM/Administrators/service owner and restricted NTFS write ACL. " +
+                          "Your account also needs an approved protected writer or service."
+                        : "Check machine audit write access and the current-user portable audit folder.") +
+                    " Do not weaken AD/Entra permissions or launch the entire GUI elevated.");
                 WindowsEventLogService.TryWrite(
                     "Recovery access denied because required audit storage failed. " +
                     "Action=" + action + "; Computer=" + computerName +
