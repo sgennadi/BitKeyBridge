@@ -82,7 +82,7 @@ public sealed partial class MainForm
         }
 
         if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
+                BitKeyBridgePermission.SearchDevices,
                 "StartUnifiedSearch",
                 source: "AD"))
         {
