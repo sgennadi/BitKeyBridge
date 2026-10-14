@@ -3479,8 +3479,6 @@ public sealed partial class MainForm : DpiAwareForm
         _outputSubdirectory.Text =
             _config.OutputSubdirectory;
 
-        _autoConnectOnStart.Checked =
-            _config.AutoConnectOnStart;
 
         _recoverySource.SelectedIndex =
             _config.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
@@ -3553,8 +3551,6 @@ public sealed partial class MainForm : DpiAwareForm
         _config.AdCredentialStorageMode =
             GetSelectedCredentialStorageMode();
 
-        _config.AutoConnectOnStart =
-            _autoConnectOnStart.Checked;
         _config.RecoverySearchSource =
             _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
             _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD";
@@ -3641,7 +3637,7 @@ public sealed partial class MainForm : DpiAwareForm
                 $"ExplicitCredentials={_config.AdUseExplicitCredentials}; " +
                 $"CredentialStorage={_config.AdCredentialStorageMode}; " +
                 $"LDAPS={_config.AdUseLdaps}; Port={_config.AdPort}; " +
-                $"AutoConnect={_config.AutoConnectOnStart}; " +
+
                 $"RecoverySource={_config.RecoverySearchSource}; " +
                 $"RecoveryScope={_config.LastRecoveryScopeSearchBase}");
 
