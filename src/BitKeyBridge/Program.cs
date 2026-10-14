@@ -1745,8 +1745,74 @@ internal static class Program
                     failures.Add("Updater SHA256SUMS parsing failed.");
 
                 var parsedVersion = UpdateService.ParseVersion("v0.4.0-beta.1");
-                if (parsedVersion.Major != 0 || parsedVersion.Minor != 4 || parsedVersion.Build != 0)
-                    failures.Add("Updater version normalization failed.");
+                if (parsedVersion.Major != 0 || parsedVersion.Minor != 4 ||
+                    parsedVersion.Build != 0 || parsedVersion.Prerelease != "beta.1")
+                    failures.Add("Updater version normalization must preserve prerelease identity.");
+
+                var precedence = new[]
+                {
+                    "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta",
+                    "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11",
+                    "1.0.0-rc.1", "1.0.0"
+                };
+                for (var versionIndex = 1; versionIndex < precedence.Length; versionIndex++)
+                {
+                    if (UpdateService.ParseVersion(precedence[versionIndex - 1]) >=
+                        UpdateService.ParseVersion(precedence[versionIndex]))
+                        failures.Add("SemVer precedence failed at " + precedence[versionIndex]);
+                }
+
+                if (!(UpdateService.ParseVersion("0.29.12") <
+                      UpdateService.ParseVersion("0.30.0-rc.1")) ||
+                    !(UpdateService.ParseVersion("0.30.0-rc.1") <
+                      UpdateService.ParseVersion("0.30.0-rc.2")) ||
+                    !(UpdateService.ParseVersion("0.30.0-rc.2") <
+                      UpdateService.ParseVersion("0.30.0")) ||
+                    !UpdateService.ReleaseVersionsMatch(
+                        "v0.30.0-rc.1+ci.123", "0.30.0-rc.1") ||
+                    UpdateService.ReleaseVersionsMatch(
+                        "0.30.0-rc.1", "0.30.0"))
+                    failures.Add("SemVer rc-to-rc and rc-to-stable precedence failed.");
+
+                if (!UpdateService.ReleaseExecutableMatches(
+                        "0.30.0.0", "0.30.0-rc.1+build.123", "v0.30.0-rc.1") ||
+                    UpdateService.ReleaseExecutableMatches(
+                        "0.30.0.0", "0.30.0-rc.2", "v0.30.0-rc.1") ||
+                    UpdateService.ReleaseExecutableMatches(
+                        "0.30.0.0", "0.30.0", "v0.30.0-rc.1") ||
+                    !UpdateService.ReleaseExecutableMatches(
+                        "0.30.0.0", "0.30.0+sha.123", "v0.30.0") ||
+                    UpdateService.ReleaseExecutableMatches(
+                        "0.30.0.0", "0.30.0-rc.1", "v0.30.0"))
+                    failures.Add("Updater staged prerelease FileVersion/ProductVersion identity failed.");
+
+                // Verify the actual PE ProductVersion in the published one-file
+                // executable: numeric FileVersion alone cannot prove RC identity.
+                if (OperatingSystem.IsWindows() &&
+                    !string.IsNullOrWhiteSpace(Environment.ProcessPath))
+                {
+                    var executingVersion = FileVersionInfo.GetVersionInfo(Environment.ProcessPath);
+                    if (!UpdateService.ReleaseExecutableMatches(
+                            executingVersion.FileVersion,
+                            executingVersion.ProductVersion,
+                            UpdateService.GetCurrentVersion().ToString()))
+                        failures.Add("Published EXE ProductVersion does not match the build's semantic version.");
+                }
+
+                foreach (var invalid in new[]
+                         { "v0.30.0-rc.01", "0.30.0-01", "0.30.0.1",
+                           "0.30.0-", "0.30.0-rc.1.01" })
+                {
+                    try
+                    {
+                        _ = UpdateService.ParseVersion(invalid);
+                        failures.Add("Invalid SemVer accepted: " + invalid);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Expected: the updater must reject ambiguous prerelease identifiers.
+                    }
+                }
 
                 if (!UpdateService.ReleaseVersionsMatch(
                         "0.24.0.0",
@@ -1819,6 +1885,34 @@ internal static class Program
                     failures.Add(
                         "Updater GitHub asset-digest parsing failed.");
                 }
+
+                // Newest eligible published release is based on SemVer, not
+                // GitHub creation order, and must include our exact RID asset.
+                using var prereleaseFixture = JsonDocument.Parse(
+                    """
+                    [
+                      {"tag_name":"v0.29.12","draft":false,"prerelease":false,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.30.0-rc.1","draft":false,"prerelease":true,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.30.0-rc.3","draft":true,"prerelease":true,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]},
+                      {"tag_name":"v0.31.0-rc.1","draft":false,"prerelease":true,"assets":[{"name":"BitKeyBridge-win-arm64.zip"}]},
+                      {"tag_name":"v0.30.0-rc.2","draft":false,"prerelease":true,"assets":[{"name":"BitKeyBridge-win-x64.zip"}]}
+                    ]
+                    """);
+                var newestPrerelease = UpdateService.SelectLatestRelease(
+                    prereleaseFixture.RootElement, "win-x64", true);
+                var newestStable = UpdateService.SelectLatestRelease(
+                    prereleaseFixture.RootElement, "win-x64", false);
+                var previousRc = UpdateService.SelectPreviousRelease(
+                    prereleaseFixture.RootElement,
+                    UpdateService.ParseVersion("v0.30.0-rc.2"), "win-x64", true);
+                var previousFromStable = UpdateService.SelectPreviousRelease(
+                    prereleaseFixture.RootElement,
+                    UpdateService.ParseVersion("v0.30.0"), "win-x64", true);
+                if (newestPrerelease.GetProperty("tag_name").GetString() != "v0.30.0-rc.2" ||
+                    newestStable.GetProperty("tag_name").GetString() != "v0.29.12" ||
+                    previousRc.GetProperty("tag_name").GetString() != "v0.30.0-rc.1" ||
+                    previousFromStable.GetProperty("tag_name").GetString() != "v0.30.0-rc.2")
+                    failures.Add("Updater latest/rollback SemVer release selection failed.");
 
                 // Online rollback selection is deterministic, architecture-bound,
                 // and must not select the installed/current/newer build.
