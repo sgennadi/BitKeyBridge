@@ -103,15 +103,15 @@ try {
 
     $readerSid = (Get-LocalUser -Name $readerName).SID.Value
 
-    Invoke-ElevatedTestCommand @('--install-service', '--no-elevation')
+    Invoke-ElevatedTestCommand -Arguments @('--install-service', '--no-elevation')
     $installed = $true
-    Invoke-ElevatedTestCommand @(
+    Invoke-ElevatedTestCommand -Arguments @(
         '--rbac-enable', '--rbac-admin-bypass', 'off',
         '--rbac-reader-add', $readerSid, '--no-elevation'
     )
-    Invoke-ElevatedTestCommand @('--audit-broker-provision', '--no-elevation')
-    Invoke-ElevatedTestCommand @('--stop-service', '--no-elevation')
-    Invoke-ElevatedTestCommand @('--start-service', '--no-elevation')
+    Invoke-ElevatedTestCommand -Arguments @('--audit-broker-provision', '--no-elevation')
+    Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')
+    Invoke-ElevatedTestCommand -Arguments @('--start-service', '--no-elevation')
 
     $reader = ($accounts | Where-Object Name -eq $readerName).Credential
     $denied = ($accounts | Where-Object Name -eq $deniedName).Credential
@@ -142,10 +142,10 @@ try {
     if ($audit -notmatch 'AuditBrokerHealthProbe') {
         throw 'Protected journal is missing the synthetic health event.'
     }
-    Invoke-ElevatedTestCommand @('--audit-broker-verify', '--no-elevation')
+    Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
 
     # Verify stopped service cannot satisfy strict audit. No fallback is allowed.
-    Invoke-ElevatedTestCommand @('--stop-service', '--no-elevation')
+    Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')
     Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3
 
     Write-Host 'Protected audit standard-user integration checks PASSED.'
