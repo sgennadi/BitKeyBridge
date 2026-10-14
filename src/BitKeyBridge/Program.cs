@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,7 +22,7 @@ internal static class Program
         if (args.Any(x => x.Equals("--version", StringComparison.OrdinalIgnoreCase)))
         {
             ConsoleHelper.EnsureConsole();
-            Console.WriteLine(typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown");
+            Console.WriteLine(UpdateService.GetCurrentVersion().ToString());
             return 0;
         }
 
