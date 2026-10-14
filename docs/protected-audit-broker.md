@@ -1,0 +1,104 @@
+# BitKeyBridge protected audit broker — 0.30.0-rc.2 TEST BUILD
+
+This preview is deliberately **disabled by default**. It exists for an
+enterprise requirement: ordinary Helpdesk users must be able to read only
+their delegated LAPS/BitLocker secrets without local Administrator/UAC,
+while a SYSTEM-owned local Windows Service records a protected pre-read
+audit event. It does not itself grant AD, Entra, Graph or LAPS access.
+
+## Preconditions (test computer first)
+
+- Windows 10/11 or Windows Server with a compatible .NET 10 BitKeyBridge
+  **0.30.0-rc.2** service binary installed; service identity must be
+  **LocalSystem**. The broker currently rejects gMSA/domain identities.
+- A Windows administrator controls the machine configuration under
+  `%ProgramData%\BitKeyBridge` and can configure RBAC.
+- Enable BitKeyBridge RBAC and explicitly add a **narrow helpdesk group** or
+  individual test SID under `RbacRecoveryReaders`. Local Windows
+  Administrators do *not* automatically bypass the broker allowlist.
+- Do not configure Everyone, Authenticated Users, BUILTIN Users, Guests or
+  Network/Interactive logon SIDs as recovery readers.
+- Validate AD's BitLocker/LAPS ACLs or Entra's delegated permissions
+  separately: broker authorization is only permission to record an audit.
+- Back up the existing `appsettings.json` and NTFS ACLs before provisioning.
+
+## First-time setup on the managed test machine
+
+1. In an elevated CMD/PowerShell window, install/update the service as
+   usual with `BitKeyBridge.exe --install-service`. Confirm its identity:
+   `BitKeyBridge.exe --service-status`.
+2. Configure `--rbac-enable` and `--rbac-reader-add "DOMAIN\YourHelpdeskGroup"`
+   as an administrator, then verify with `--rbac-status`.
+3. Run `BitKeyBridge.exe --audit-broker-provision --no-elevation` from the
+   same *already elevated* console. This operation intentionally adjusts
+   NTFS security:
+   - `%ProgramData%\BitKeyBridge`: SYSTEM/Admin FullControl;
+     authenticated users may traverse the directory but do not receive write
+     or directory-listing permissions.
+   - `appsettings.json`: SYSTEM/Admin FullControl and authenticated
+     users **read-only** so an ordinary GUI can load the connection policy.
+   - `ProtectedAudit\audit.jsonl`: separate journal, owned and writable
+     only by SYSTEM/Administrators. No ordinary user read/write privileges.
+   - Existing legacy `audit.jsonl` remains in place and is not overwritten.
+4. Restart the service from an elevated console: `BitKeyBridge.exe --stop-service`,
+   then `BitKeyBridge.exe --start-service`. Inspect Windows Event Log for
+   `Protected local-only recovery audit broker is active.`
+5. Verify `BitKeyBridge.exe --audit-broker-status`. No workstation
+   user needs to run the main GUI as Administrator.
+6. Launch the GUI as a standard Helpdesk account. Connect to AD or Entra
+   as that account, perform an authorized LAPS/BitLocker read, and confirm
+   the **SYSTEM-owned** broker journal received a matching, hash-chained
+   pre-read event attributed to the actual Windows caller.
+7. Remove the user's AD/Graph permission or RBAC group membership and
+   confirm access is denied. Stop the service and verify that *strict audit*
+   causes a fail-closed refusal, **not** user-profile journal fallback.
+8. Confirm `--audit-verify` for the legacy journal remains independent.
+   Verify the separate `ProtectedAudit\audit.jsonl` hash chain from an
+   administrator context with AuditIntegrityService or the supported
+   diagnostics. Do not grant users write access to make tests pass.
+
+## Authentication & IPC boundaries
+
+The endpoint is a LOCAL Windows named pipe; its ACL grants individual
+ReadData/WriteData rights to explicit RecoveryReaders, without the
+CreateNewInstance right. The service denies NETWORK logons and impersonates
+each connecting client to inspect its Windows SID and enabled groups.
+The client's pipe-owner check requires LocalSystem ownership before any
+metadata is transmitted. No caller-provided user SID or "authorized" flag is
+accepted. All request fields have fixed length limits and the only operations
+allowed are pre-read auditing for LAPS and BitLocker. Replay/request-ID
+filtering and per-SID rate limiting are enforced in memory.
+
+The service records the real Windows identity, requested target, session,
+ticket/reference, source and operation. It does **not** receive passwords,
+BitLocker recovery keys, AD credentials or Graph tokens. A commit
+acknowledgement is emitted only after the protected file is append-written,
+its hash chain checked and the data flushed to disk. Missing service, failed
+identity/ACL validation, damaged hash chain, malformed requests or an absent
+ACK block recovery. No UAC popup is triggered in the ordinary GUI.
+
+**Limitation:** This is a test preview; the service does not independently
+re-evaluate Entra, ticket approvals, AD ACLs or JIT grants on every request.
+The GUI still evaluates those and the remote backend enforces its own
+permissions. Authorized group members can submit additional *audit-only*
+events; they cannot retrieve secrets through this pipe. Do not interpret
+the server's event as proof the external secret read actually succeeded.
+SIEM delivery is asynchronous and is not guaranteed by the local ACK.
+
+## Rollback / troubleshooting
+
+- If provisioning fails, do not loosen NTFS ACLs. Correct group membership,
+  LocalSystem service identity, journal owner or pre-existing audit corruption.
+- If the protected journal is damaged, restore a trusted backup. Do not
+  overwrite, truncate or silently reset the hash chain to unblock an operator.
+- Disable `AuditBrokerEnabled` only through an authorized admin change to
+  the machine policy; keep `RequireProtectedAuditForRecovery` enabled unless
+  security administrators explicitly approve reverting strict mode. Disabling
+  the broker without a protected writer causes normal users to fail closed.
+- The broker and its ACLs are local to each workstation where the service
+  is installed. No inbound TCP listener or firewall opening is necessary.
+- Test 100–200% HiDPI/RDP, AD/Entra delegated identity, service restarts,
+  offline behavior and signed update/rollback before enterprise deployment.
+
+This test build does not alter the stable `v0.29.12` or published
+`v0.30.0-rc.1` GitHub Releases.
