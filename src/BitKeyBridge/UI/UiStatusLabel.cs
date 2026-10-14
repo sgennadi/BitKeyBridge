@@ -21,6 +21,9 @@ public sealed class UiStatusLabel : Label
             if (next == _glyphColumnInset)
                 return;
             _glyphColumnInset = next;
+            // The status may wrap one line earlier after indentation.
+            // Ask its layout container to remeasure before repainting.
+            Parent?.PerformLayout(this, nameof(GlyphColumnInset));
             Invalidate();
         }
     }
