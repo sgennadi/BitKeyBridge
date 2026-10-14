@@ -160,6 +160,20 @@ try {
     }
     Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
 
+    # An administrator-induced corruption must be refused immediately. The
+    # SYSTEM service must never append to a damaged journal or ACK access.
+    $originalJournalBytes = [IO.File]::ReadAllBytes($journal)
+    try {
+        [IO.File]::AppendAllText($journal,
+            '{"forged":true}' + [Environment]::NewLine)
+        Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3
+    }
+    finally {
+        [IO.File]::WriteAllBytes($journal, $originalJournalBytes)
+    }
+    Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
+    Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 0
+
     # Verify stopped service cannot satisfy strict audit. No fallback is allowed.
     Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')
     Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3
