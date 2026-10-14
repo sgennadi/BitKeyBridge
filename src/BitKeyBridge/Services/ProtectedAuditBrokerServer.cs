@@ -113,6 +113,11 @@ internal sealed class ProtectedAuditBrokerServer
         var security = new PipeSecurity();
         security.SetOwner(SystemSid);
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        // Remote SMB named-pipe clients must not be treated as local Helpdesk
+        // sessions, even when their domain account belongs to a reader group.
+        security.AddAccessRule(new PipeAccessRule(
+            new SecurityIdentifier(WellKnownSidType.NetworkSid, null),
+            PipeAccessRights.FullControl, AccessControlType.Deny));
         security.AddAccessRule(new PipeAccessRule(
             SystemSid, PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
