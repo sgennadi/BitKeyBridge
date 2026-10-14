@@ -1,3 +1,15 @@
+## 0.30.0-rc.1
+
+**Prerelease update channel and SemVer-safe RC rollout**
+
+- Add full SemVer 2.0 precedence including `alpha`, `beta`, `rc` and numeric prerelease identifiers, with build metadata excluded from ordering. `0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`.
+- Keep both Windows FileVersion (`0.30.0.0`) and full prerelease ProductVersion (`0.30.0-rc.1`) and validate both before executing or applying any downloaded EXE, including after updater elevation.
+- Correct RC-aware detection of installed version, online rollback, version-bound rollback hold and the CLI `--version` display.
+- Select the highest eligible release by SemVer rather than GitHub API listing order when prereleases are enabled. Skip drafts, malformed tags and releases missing the required architecture package.
+- Add offline regression tests for RC-to-RC, RC-to-stable, incorrect/missing product identity, invalid SemVer identifiers and release selection across x64/x86/ARM64.
+- Use an explicitly marked GitHub prerelease package with x64/x86/ARM64 build artifacts, SHA256SUMS, CycloneDX SBOM and provenance attestations. Stable 0.29.12 remains unchanged.
+- Carry forward the 0.30.0 least-privilege launch, audit, diagnostics and UI consolidation described below.
+
 ## 0.30.0
 
 **Least-privilege Helpdesk, accountable recovery and simpler administration**
