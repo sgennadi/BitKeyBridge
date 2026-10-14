@@ -32,7 +32,7 @@ public sealed partial class MainForm
                 _config.AdConnectionMode = "Explicit";
                 _config.AdServer = dc;
                 _advancedConnectionGroup.Visible = true;
-                _homeAdvancedButton.Text = "Hide Advanced";
+                _homeAdvancedConnectionMenuItem.Text = "Hide advanced AD settings";
                 try
                 {
                     ConfigService.SaveAppConfig(_config);
