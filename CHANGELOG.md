@@ -1,3 +1,15 @@
+## 0.30.0-rc.2
+
+**Experimental managed audit broker (requires administrator provisioning)**
+
+- Add an opt-in local Windows Service named-pipe broker so delegated non-admin Helpdesk sessions can commit strict, hash-chained recovery audit events without UAC or machine journal write permissions.
+- Authenticate the caller using the impersonated Windows token and an explicit RBAC RecoveryReaders SID/group allowlist; reject Everyone/Authenticated Users/BUILTIN Users and all empty/broad broker policies. The pipe DACL grants narrow ReadData/WriteData rights but never CreateNewInstance.
+- Verify the pipe is SYSTEM-owned before the client sends any recovery metadata. Use a bounded versioned protocol with a one-time request ID, fixed recovery operations, replay tracking, per-SID rate limiting and short timeouts. The protocol does **not** accept passwords, keys or client-supplied actor SIDs.
+- Journal a server-generated event using the token-authenticated actor identity in an isolated protected `%ProgramData%\\BitKeyBridge\\ProtectedAudit` directory. Enforce trusted owner/write ACL and hash-chain integrity; flush protected writes to disk before acknowledging success.
+- Introduce administrator-only `--audit-broker-provision` (provisions NTFS ACLs, enables strict audit and broker policy) and `--audit-broker-status`. Broker is disabled by default and currently supports **LocalSystem service identity only**.
+- Integrate the existing GUI authorization preflight: strict broker failures deny recovery without a per-user fallback, while the previous direct protected auditing remains unchanged if the broker has not been enabled.
+- Add protocol/operation/size/broad-principal regression tests. Existing 0.30.0-rc.1 remains the published prerelease; rc.2 is an isolated test build pending managed Windows domain/Entra non-admin acceptance tests.
+
 ## 0.30.0-rc.1
 
 **Prerelease update channel and SemVer-safe RC rollout**
