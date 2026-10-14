@@ -10,6 +10,14 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## Prerelease update channel (0.30.0-rc.1)
+
+The 0.30.0 release candidate is published as a GitHub **prerelease**, never as the stable Latest release. Select **Allow prerelease versions** under Settings → Updates on a test workstation to opt in. GitHub Actions artifacts alone are **not** updatable releases; the updater requires published GitHub Release assets, matching architecture, `SHA256SUMS.txt`, an exact matching EXE and its self-test.
+
+Release precedence follows SemVer: `0.29.12 < 0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`. The updater uses **ProductVersion** for the prerelease identifier and numeric FileVersion for Windows compatibility, rejecting RC/tag mismatches before executing staged code. Prereleases and unsigned updates must not be installed automatically on managed Helpdesk endpoints without organization-approved Authenticode publisher policy. Old 0.29.x installations may retain older unattended update settings: review them before enabling the prerelease channel.
+
+Detailed release candidate changes are in the `0.30.0-rc.1` section of [CHANGELOG.md](CHANGELOG.md).
+
 ## Least-privilege and audit defaults (0.30.0)
 
 **Normal GUI launches without UAC.** A Helpdesk user connects to AD, Microsoft Entra or both through the startup wizard and can search only the metadata their AD/Graph permissions permit. `SearchDevices` is separate from `RecoveryRead`; reading any recovery secret still requires full authorization, and local recovery caches retain stricter permissions.
