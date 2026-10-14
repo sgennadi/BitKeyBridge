@@ -22,6 +22,33 @@ audit event. It does not itself grant AD, Entra, Graph or LAPS access.
   separately: broker authorization is only permission to record an audit.
 - Back up the existing `appsettings.json` and NTFS ACLs before provisioning.
 
+## Automated standard-user integration (ephemeral GitHub runner)
+
+PR #57 has a Windows-hosted integration job in `.github/workflows/build.yml`
+that runs only for `feature/protected-audit-broker-20261014` after the tested
+x64/x86/ARM64 builds complete. On a **fresh GitHub-hosted Windows runner**
+it uses `tests/windows/ProtectedAuditBrokerIntegration.ps1` to:
+
+- Create two temporary local **non-admin** Windows accounts.
+- Install the test-only SYSTEM service, register just one user's SID as an
+  RBAC RecoveryReader, harden NTFS and restart the broker.
+- Prove the authorized account gets a `BrokerProbe=Committed` event while an
+  unlisted account receives exit code 3, without a local UAC prompt.
+- Verify the protected journal and hash chain as an administrator.
+- Stop the service and require the previously authorized user to receive
+  exit code 3 (strict fail-closed, never portable fallback).
+- Remove the test service and accounts in `finally`.
+
+The script **refuses** to run when a service or machine configuration
+already exists, on a self-hosted/non-GitHub runner, or without its explicit
+`-EphemeralHostedRunner` switch. It changes Windows Service/NTFS settings
+on that disposable CI virtual machine: do not run it on a DC, managed
+workstation, production server or persistent CI host.
+
+This checks local Windows account impersonation and the Named Pipe; it does
+not substitute for the separate domain-connected AD/LAPS/Entra acceptance
+tests below.
+
 ## First-time setup on the managed test machine
 
 1. In an elevated CMD/PowerShell window, install/update the service as
