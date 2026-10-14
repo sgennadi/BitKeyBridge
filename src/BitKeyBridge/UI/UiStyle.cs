@@ -20,6 +20,9 @@ public static class UiStyle
     public const int PagePadding = 18;
     public const int SectionGap = 12;
     public const int ControlGap = 8;
+    // Align top-level Start status checkmarks when their layout columns are nearby.
+    // Distinct draggable panes farther apart keep independent glyph columns.
+    public const int HomeStatusGlyphGroupingDistance = 56;
     public const int MinimumButtonHeight = 32;
     public const int MinimumButtonWidth = 88;
     // Start's BitLocker/LAPS tab body, with room for wrapped actions at high DPI.
