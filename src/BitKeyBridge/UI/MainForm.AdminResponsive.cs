@@ -16,8 +16,8 @@ public sealed partial class MainForm
         root.Controls.Add(
             CreateSectionTitle(
                 "Verified Updater",
-                "By default BitKeyBridge checks for a newer verified release before the normal startup workflow, installs it automatically, and restarts. " +
-                "Manual check/install controls remain available. Downloaded packages must match SHA-256 metadata and the staged EXE must pass --self-test before replacement."));
+                "Updates are checked against GitHub Releases, verified by SHA-256 and self-tested before installation. " +
+                "Use the controls below for manual updates or rollback; the release link is also under Tools."));
 
         var updateGrid =
             CreateTwoColumnGrid();
@@ -112,29 +112,17 @@ public sealed partial class MainForm
                 "Retry Update");
         retry.Name =
             "RetryUpdateButton";
-        var toggleAutomatic =
-            NewActionButton(
-                "Disable Automatic Checks");
-        toggleAutomatic.Name =
-            "ToggleAutomaticUpdateChecksButton";
-        var openRelease =
-            NewActionButton(
-                "Open Release Page");
         var resumeAutoInstall =
             NewActionButton(
                 "Resume Auto-Install");
         resumeAutoInstall.Name =
             "ResumeAutoInstallAfterRollbackButton";
-        openRelease.Name =
-            "OpenUpdateReleaseButton";
 
         updateActions.Controls.AddRange([
             saveUpdate,
             check,
             install,
             retry,
-            toggleAutomatic,
-            openRelease,
             resumeAutoInstall
         ]);
         updateGrid.Controls.Add(
@@ -262,11 +250,6 @@ public sealed partial class MainForm
 
         void RefreshAutomaticControls()
         {
-            toggleAutomatic.Text =
-                _checkUpdatesOnStart.Checked
-                    ? "Disable Startup Checks"
-                    : "Enable Startup Checks";
-
             _autoInstallUpdatesOnStart.Enabled =
                 _checkUpdatesOnStart.Checked;
 
@@ -275,7 +258,9 @@ public sealed partial class MainForm
                 !string.IsNullOrWhiteSpace(
                     _trustedUpdatePublisher.Text);
 
-            resumeAutoInstall.Enabled =
+            // Resume is only relevant after a verified rollback hold.
+            // The startup-check checkbox plus Save already controls updates.
+            resumeAutoInstall.Visible =
                 UpdateRollbackHoldService.HasRecordedHold();
         }
 
@@ -321,15 +306,6 @@ public sealed partial class MainForm
                     null;
                 await InstallLatestUpdateGuiAsync();
             };
-
-        toggleAutomatic.Click +=
-            (_, _) =>
-                SetAutomaticUpdateChecksGui(
-                    !_checkUpdatesOnStart.Checked);
-
-        openRelease.Click +=
-            (_, _) =>
-                OpenLatestRelease();
 
         RefreshAutomaticControls();
         return page;

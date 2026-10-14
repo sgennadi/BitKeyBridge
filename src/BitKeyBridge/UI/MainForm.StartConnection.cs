@@ -187,8 +187,17 @@ public sealed partial class MainForm
         _homeUseOtherAccount.Visible = ad;
         if (_startAdIdentityPanel is not null)
             _startAdIdentityPanel.Visible = ad;
-        _homeAdvancedButton.Visible = ad;
-        _homeEnvironmentCheckButton.Visible = ad;
+        // Diagnostic tools remain available while disconnected or using
+        // Microsoft 365. Only the AD-specific advanced settings are scoped.
+        _homeConnectionToolsButton.Visible = true;
+        _homeAdvancedConnectionMenuItem.Visible = ad;
+        // Never leave AD credential and server fields visible while
+        // browsing a cloud-only recovery session.
+        if (!ad && _advancedConnectionGroup.Visible)
+        {
+            _advancedConnectionGroup.Visible = false;
+            _homeAdvancedConnectionMenuItem.Text = "Advanced AD settings...";
+        }
         _homeConnectionStatus.Visible = ad;
         _homeAdAccountStatus.Visible = ad;
 

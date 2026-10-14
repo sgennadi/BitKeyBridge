@@ -960,8 +960,7 @@ public static class UiLayoutSelfTest
                     "HomeAdAccountStatus",
                     "HomeConnectAdButton",
                     "HomeDisconnectAdButton",
-                    "HomeEnvironmentCheckButton",
-                    "HomeAdvancedDiagnosticsButton",
+                    "HomeConnectionToolsButton",
                     "HomeServiceCards",
                     "HomeBitLockerDiagnosticLink",
                     "HomeBitLockerCard",
@@ -983,7 +982,7 @@ public static class UiLayoutSelfTest
                     "HomeRecentComputers",
                     "HomeUseWindowsIdentity",
                     "HomeUseOtherAccount",
-                    "HomeConnectionSettingsButton",
+
                     "AdvancedConnectionGroup"
                 };
 
@@ -1004,6 +1003,21 @@ public static class UiLayoutSelfTest
                 {
                     failures.Add(
                         $"{formName}/{scenario.Name}: Start cannot reveal or copy LAPS without a selected computer and explicit action.");
+                }
+            }
+
+            if (FindByName(startPage, "HomeConnectionToolsButton") is Button toolsButton)
+            {
+                var actions = toolsButton.ContextMenuStrip?.Items
+                    .OfType<ToolStripMenuItem>()
+                    .Select(item => item.Name)
+                    .ToHashSet(StringComparer.Ordinal) ?? [];
+                if (!actions.Contains("HomeEnvironmentCheckMenuItem") ||
+                    !actions.Contains("HomeDeviceDiagnosticsMenuItem") ||
+                    !actions.Contains("HomeAdvancedConnectionMenuItem"))
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: the consolidated Connection tools menu must keep Environment Check, Device Diagnostics and Advanced settings available.");
                 }
             }
 
