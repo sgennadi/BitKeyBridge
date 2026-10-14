@@ -12,6 +12,7 @@ public sealed partial class MainForm
     private void InitializeMainViewport()
     {
         AutoScroll = false;
+        InitializeHomeStatusGlyphAlignment();
         ClientSizeChanged += (_, _) => QueueMainViewportReflow();
         Shown += (_, _) => QueueMainViewportReflow();
     }
@@ -241,6 +242,7 @@ public sealed partial class MainForm
             }
 
             UiModernTheme.Refresh(shell);
+            AlignHomeStatusGlyphs();
         }
         finally
         {
