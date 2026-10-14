@@ -8,6 +8,7 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly bool _layoutSelfTest;
     private readonly ActiveDirectoryService _ad;
     private readonly AuditService _audit = new();
+    private bool _userAuditFallbackWarningShown;
     private readonly CheckedListBox _scopes = new();
     private readonly RichTextBox _exportLog = new();
     private readonly Label _lastSuccess = new();
@@ -6415,7 +6416,51 @@ public sealed partial class MainForm : DpiAwareForm
         }
 
         if (decision.Allowed)
+        {
+            // Record the authorization decision BEFORE reading any AD/Entra
+            // secret. A lost audit write must never silently expose a password.
+            // The central protected audit is mandatory in enterprise mode.
+            var authorizationEntry = _audit.Write(
+                "AuthorizeRecoveryAccess",
+                result: "Authorized",
+                computerName: computerName,
+                recoveryId: recoveryId,
+                source: source,
+                details: "Action=" + action,
+                reference: context.Reference,
+                reason: context.Reason,
+                correlationId: context.SessionId,
+                requireProtectedStorage: _config.RequireProtectedAuditForRecovery);
+
+            if (authorizationEntry is null)
+            {
+                ShowAppMessage(
+                    "Recovery access blocked: audit is unavailable",
+                    "The authorization event could not be saved. No recovery secret will be read. " +
+                    "Check write access to the protected BitKeyBridge audit directory. " +
+                    "For portable clients, verify that the current-user audit journal is available. " +
+                    "Do not weaken AD/Entra permissions or launch the entire GUI elevated.");
+                WindowsEventLogService.TryWrite(
+                    "Recovery access denied because required audit storage failed. " +
+                    "Action=" + action + "; Computer=" + computerName +
+                    "; RecoveryId=" + recoveryId + "; Source=" + source,
+                    EventLogSeverity.Error, 4682, "RecoveryAudit");
+                return false;
+            }
+
+            if (_audit.LastWriteUsedUserFallback && !_userAuditFallbackWarningShown)
+            {
+                _userAuditFallbackWarningShown = true;
+                ShowAppMessage(
+                    "Portable audit journal in use",
+                    "The machine-protected audit journal is unavailable to your account. " +
+                    "Access events are being saved under your user profile. This fallback is " +
+                    "not tamper-proof: use a managed service or enable 'Require protected audit' " +
+                    "for centrally enforced enterprise audit policy.");
+            }
+
             return true;
+        }
 
         WriteRecoveryAudit(
             action,
