@@ -16,8 +16,8 @@ public sealed partial class MainForm
         root.Controls.Add(
             CreateSectionTitle(
                 "Verified Updater",
-                "By default BitKeyBridge checks for a newer verified release before the normal startup workflow, installs it automatically, and restarts. " +
-                "Manual check/install controls remain available. Downloaded packages must match SHA-256 metadata and the staged EXE must pass --self-test before replacement."));
+                "Updates are checked against GitHub Releases, verified by SHA-256 and self-tested before installation. " +
+                "Use the controls below for manual updates or rollback; the release link is also under Tools."));
 
         var updateGrid =
             CreateTwoColumnGrid();
@@ -112,23 +112,17 @@ public sealed partial class MainForm
                 "Retry Update");
         retry.Name =
             "RetryUpdateButton";
-        var openRelease =
-            NewActionButton(
-                "Open Release Page");
         var resumeAutoInstall =
             NewActionButton(
                 "Resume Auto-Install");
         resumeAutoInstall.Name =
             "ResumeAutoInstallAfterRollbackButton";
-        openRelease.Name =
-            "OpenUpdateReleaseButton";
 
         updateActions.Controls.AddRange([
             saveUpdate,
             check,
             install,
             retry,
-            openRelease,
             resumeAutoInstall
         ]);
         updateGrid.Controls.Add(
@@ -312,10 +306,6 @@ public sealed partial class MainForm
                     null;
                 await InstallLatestUpdateGuiAsync();
             };
-
-        openRelease.Click +=
-            (_, _) =>
-                OpenLatestRelease();
 
         RefreshAutomaticControls();
         return page;
