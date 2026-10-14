@@ -10,6 +10,8 @@ public sealed class UiStatusLabel : Label
     // without relocating their borders, backgrounds or other controls.
     private int _glyphColumnInset;
 
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int GlyphColumnInset
     {
         get => _glyphColumnInset;
