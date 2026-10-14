@@ -33,6 +33,11 @@ internal sealed class ProtectedAuditBrokerResponse
 internal static class ProtectedAuditBrokerProtocol
 {
     internal const string PipeName = "BitKeyBridge.ProtectedAudit.v1";
+    // Reserved metadata-only operation to prove the SYSTEM service actually
+    // persisted an event for the caller; never reads any recovery secret.
+    internal const string ProbeOperation = "AuditBrokerProbe";
+    internal const string ProbeComputer = "BITKEYBRIDGE-AUDIT-PROBE";
+    internal const string ProbeSource = "BrokerLocalHealth";
     internal const int MaxRequestBytes = 8192;
     internal const int MaxResponseBytes = 1024;
 
@@ -43,7 +48,8 @@ internal static class ProtectedAuditBrokerProtocol
             "RevealLapsPassword",
             "CopyLapsPassword",
             "RevealRecoveryKey",
-            "CopyRecoveryKey"
+            "CopyRecoveryKey",
+            ProbeOperation
         };
 
     internal static bool IsAllowedOperation(string? value) =>
@@ -54,6 +60,15 @@ internal static class ProtectedAuditBrokerProtocol
         if (request is null || request.Version != 1 ||
             !Guid.TryParseExact(request.RequestId, "N", out _) ||
             !IsAllowedOperation(request.Operation))
+            return false;
+
+        if (request.Operation == ProbeOperation &&
+            (!string.Equals(request.Computer, ProbeComputer, StringComparison.Ordinal) ||
+             !string.Equals(request.Source, ProbeSource, StringComparison.Ordinal) ||
+             !string.IsNullOrEmpty(request.RecoveryId) ||
+             !string.IsNullOrEmpty(request.Reference) ||
+             !string.IsNullOrEmpty(request.Reason) ||
+             !Guid.TryParseExact(request.SessionId, "N", out _)))
             return false;
 
         return SafeField(request.Computer, 260, required: true) &&
