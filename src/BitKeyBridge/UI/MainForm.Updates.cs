@@ -87,16 +87,32 @@ public sealed partial class MainForm
             return false;
         }
 
+        var untrustedLegacyAutoinstall =
+            _config.AutoInstallUpdatesOnStart &&
+            !UpdateTrustPolicy.CanInstallUnattended(_config);
+        var downgradedLegacyAutoinstall = false;
+
         if (_autoInstallUpdatesOnStart.Checked &&
             !UpdateTrustPolicy.CanEnableUnattended(
                 _requireTrustedUpdateSignature.Checked,
                 _trustedUpdatePublisher.Text))
         {
-            UiStyle.SetStatus(_updateStatus,
-                "Cannot enable unattended installation without both a required " +
-                "trusted Authenticode signature and a non-empty expected publisher.",
-                UiStatusKind.Warning);
-            return false;
+            if (untrustedLegacyAutoinstall)
+            {
+                // Existing 0.29.x installations may remember an unsafe
+                // auto-install flag. Safely migrate it to checks-only so that
+                // Check for Updates and manual installs remain usable.
+                _autoInstallUpdatesOnStart.Checked = false;
+                downgradedLegacyAutoinstall = true;
+            }
+            else
+            {
+                UiStyle.SetStatus(_updateStatus,
+                    "Cannot enable unattended installation without both a required " +
+                    "trusted Authenticode signature and a non-empty expected publisher.",
+                    UiStatusKind.Warning);
+                return false;
+            }
         }
 
         try
@@ -133,7 +149,10 @@ public sealed partial class MainForm
             {
                 UiStyle.SetStatus(
                     _updateStatus,
-                    _config.CheckForUpdatesOnStart
+                    downgradedLegacyAutoinstall
+                        ? "Previous unsigned/unpinned auto-install setting was safely disabled. " +
+                          "Startup checks and manual updates remain available."
+                        : _config.CheckForUpdatesOnStart
                         ? _config.AutoInstallUpdatesOnStart
                             ? "Update settings saved. Automatic startup installation is enabled."
                             : "Update settings saved. Startup checks are enabled; installation remains manual."
