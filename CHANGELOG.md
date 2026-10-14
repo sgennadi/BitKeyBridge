@@ -1,3 +1,13 @@
+## 0.29.11
+
+**Visually aligned Start status checkmarks**
+
+- Align the circular status glyphs for Active Directory connection, signed-in account, Microsoft 365 status, setup state, computer search, selected computer and recovery secret lifetime along consistent vertical columns.
+- Correct the difference between inline **Connected as** and bordered status labels without shifting their original rounded surfaces, borders or controls.
+- Recalculate glyph positions when windows resize, source visibility changes or DPI/font scaling changes. Statuses in physically distant, draggable columns retain independent icon alignment.
+- Centralize the visual alignment grouping distance in `UiStyle` and extend WinForms status measurement, paint-offset and UI layout regression tests.
+- No change to BitLocker/LAPS access, passwords, authentication, history or cloud permissions.
+
 ## 0.29.10
 
 **Three equally sized, freely rearrangeable Start panes**
