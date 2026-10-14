@@ -1869,22 +1869,24 @@ public static class UiLayoutSelfTest
             Math.Max(main.DeviceDpi / (double)UiStyle.BaselineDpi,
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size)));
 
-        for (var i = 0; i < visible.Length; i++)
+        var sorted = visible.OrderBy(item =>
+            item.Painted!.Value - item.Label.GlyphColumnInset).ToArray();
+        for (var first = 0; first < sorted.Length;)
         {
-            for (var j = i + 1; j < visible.Length; j++)
+            var start = sorted[first].Painted!.Value -
+                sorted[first].Label.GlyphColumnInset;
+            var end = first + 1;
+            while (end < sorted.Length &&
+                   sorted[end].Painted!.Value -
+                   sorted[end].Label.GlyphColumnInset - start <= tolerance)
+                end++;
+            for (var i = first + 1; i < end; i++)
             {
-                var first = visible[i];
-                var second = visible[j];
-                var baseDistance = Math.Abs(
-                    first.Painted!.Value - first.Label.GlyphColumnInset -
-                    (second.Painted!.Value - second.Label.GlyphColumnInset));
-                if (baseDistance <= tolerance &&
-                    Math.Abs(first.Painted.Value - second.Painted.Value) > 1)
-                {
-                    failures.Add(
-                        $"{formName}/{scenario.Name}: the Start status checkmarks '{first.Label.Name}' and '{second.Label.Name}' are not in one vertical column.");
-                }
+                if (Math.Abs(sorted[i].Painted!.Value -
+                             sorted[first].Painted!.Value) > 1)
+                    failures.Add($"{formName}/{scenario.Name}: Start status icons are not in a vertical column.");
             }
+            first = end;
         }
     }
 
