@@ -34,6 +34,10 @@ and the GUI displays a warning. This fallback **does not provide tamper
 resistance** against its owner even though events are hash-chained. IT-managed
 endpoints that require integrity must provision a protected journal/service
 and enable `RequireProtectedAuditForRecovery` in Helpdesk settings.
+Strict mode also checks the machine audit file and directory owners and NTFS
+Allow write rules. An ordinary user-writable `ProgramData` file does not
+count as protected. Provision a protected writer/service before requiring this
+policy for non-admin operators.
 
 A machine-wide audit file must **not** be made writable by all ordinary
 users to make portable Helpdesk access work. Centralized log collection,
