@@ -2078,6 +2078,34 @@ internal static class Program
                             requireProtectedStorage: true,
                             preferBroker: true) is not null)
                         failures.Add("Broker allowed a non-canonical journal path.");
+
+                    if (!WindowsServiceHost.GetInfo().Installed)
+                    {
+                        // A user-owned fake server must not be able to forge a
+                        // successful protected audit acknowledgement. Only run
+                        // this when the real BitKeyBridge service is absent.
+                        using var fake = new System.IO.Pipes.NamedPipeServerStream(
+                            ProtectedAuditBrokerProtocol.PipeName,
+                            System.IO.Pipes.PipeDirection.InOut,
+                            1,
+                            System.IO.Pipes.PipeTransmissionMode.Byte,
+                            System.IO.Pipes.PipeOptions.Asynchronous);
+                        using var fakeTimeout =
+                            new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                        var connected = fake.WaitForConnectionAsync(fakeTimeout.Token);
+                        var fakeEntry = new AuditEntry
+                        {
+                            Action = "AuthorizeRecoveryAccess",
+                            Result = "Authorized",
+                            Details = "Action=ReadLapsPasswords",
+                            ComputerName = "LAB-PC",
+                            Source = "LAPS-AD"
+                        };
+                        var fakeAck = ProtectedAuditBrokerClient.TryCommit(fakeEntry);
+                        connected.GetAwaiter().GetResult();
+                        if (fakeAck is not null)
+                            failures.Add("Broker accepted a non-SYSTEM owned named pipe.");
+                    }
                 }
             }
             catch (Exception ex)
