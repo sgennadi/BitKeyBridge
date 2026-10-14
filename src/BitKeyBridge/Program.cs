@@ -2014,6 +2014,76 @@ internal static class Program
 
             try
             {
+                var request = new ProtectedAuditBrokerRequest
+                {
+                    Operation = "ReadLapsPasswords",
+                    Computer = "LAB-HELPDESK-01",
+                    Source = "LAPS-AD",
+                    Reference = "INC-12345",
+                    SessionId = Guid.NewGuid().ToString("N")
+                };
+                if (!ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker rejected bounded audit metadata.");
+
+                request.Operation = "InstallService";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a privileged operation outside its pre-read allowlist.");
+                request.Operation = "ReadLapsPasswords";
+                request.Reason = "x" + new string('y', 600);
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted oversized metadata.");
+                request.Reason = "password=verysecret\n";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted multiline metadata.");
+                request.Reason = "Approved by Helpdesk";
+                request.RequestId = "not-a-guid";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted an invalid nonce.");
+
+                request.RequestId = Guid.NewGuid().ToString("N");
+                await using (var wire = new MemoryStream())
+                {
+                    await ProtectedAuditBrokerProtocol.WriteAsync(
+                        wire, request, ProtectedAuditBrokerProtocol.MaxRequestBytes,
+                        CancellationToken.None);
+                    wire.Position = 0;
+                    var decoded = await ProtectedAuditBrokerProtocol.ReadAsync<
+                        ProtectedAuditBrokerRequest>(
+                            wire, ProtectedAuditBrokerProtocol.MaxRequestBytes,
+                            CancellationToken.None);
+                    if (decoded.RequestId != request.RequestId ||
+                        decoded.Operation != "ReadLapsPasswords")
+                        failures.Add("Broker framed request roundtrip mismatch.");
+                }
+
+                if (OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        _ = ProtectedAuditBrokerServer.ResolveExplicitReaders(["S-1-1-0"]);
+                        failures.Add("Broker allowed Everyone principal in recovery readers.");
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Broad, unscoped access must fail closed.
+                    }
+
+                    if (new AuditService(
+                            Path.Combine(tempDirectory, "not-protected.jsonl"))
+                        .Write("AuthorizeRecoveryAccess",
+                            requireProtectedStorage: true,
+                            preferBroker: true) is not null)
+                        failures.Add("Broker allowed a non-canonical journal path.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Protected audit broker protocol: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
+            try
+            {
                 if (OperatingSystem.IsWindows())
                 {
                     var plain = Encoding.UTF8.GetBytes("BitKeyBridge-DPAPI-self-test-" + Guid.NewGuid().ToString("N"));
