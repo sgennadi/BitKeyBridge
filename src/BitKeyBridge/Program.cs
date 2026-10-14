@@ -74,6 +74,7 @@ internal static class Program
             x.Equals("--stop-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-provision", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
@@ -404,6 +405,38 @@ internal static class Program
             {
                 Console.Error.WriteLine(
                     "Protected audit broker provisioning failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-verify", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!SecurityContext.IsAdministrator())
+            {
+                Console.Error.WriteLine(
+                    "Local administrator access is required to inspect the protected audit chain.");
+                return 5;
+            }
+
+            try
+            {
+                if (!ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile))
+                {
+                    Console.Error.WriteLine(
+                        "The protected audit file or its containing directory has unsafe NTFS ACLs.");
+                    return 1;
+                }
+
+                var integrity = AuditIntegrityService.Verify(AppPaths.BrokerAuditLogFile);
+                Console.WriteLine(JsonSerializer.Serialize(integrity,
+                    new JsonSerializerOptions { WriteIndented = true }));
+                return integrity.Valid ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    "Protected audit verification failed: " +
                     DiagnosticRedaction.Sanitize(ex.Message));
                 return 1;
             }
@@ -3918,6 +3951,7 @@ internal static class Program
         Console.WriteLine("  --service-status      Show installed service state and identity");
         Console.WriteLine("  --audit-broker-provision  Admin only: protect journal/config ACL and enable audit broker");
         Console.WriteLine("  --audit-broker-status     Show broker/service status without secrets");
+        Console.WriteLine("  --audit-broker-verify     Admin only: verify protected NTFS ACL + audit chain");
         Console.WriteLine("  --vault-status        Show AD credential vault metadata (never plaintext)");
         Console.WriteLine("  --vault-save-user     Save AD credential in current-user Credential Manager");
         Console.WriteLine("  --vault-save-machine  Save AD credential with machine DPAPI + restricted ACL");
