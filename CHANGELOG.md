@@ -1,3 +1,19 @@
+## 0.30.0
+
+**Least-privilege Helpdesk, accountable recovery and simpler administration**
+
+- Remove unconditional UAC relaunch for an ordinary GUI session. Helpdesk runs with its own Windows identity; privileged CLI maintenance still checks local administrator membership, including when `--no-elevation` suppresses UAC prompting.
+- Show the Active Directory / Microsoft 365 startup connection wizard before any network updater check; non-admin Helpdesk sign-in remains delegated to AD ACLs and Microsoft Graph roles.
+- Separate metadata-only `SearchDevices` access from `RecoveryRead`. Reading LAPS/BitLocker secrets and cached recovery keys still requires explicit authorization and backend permissions.
+- Pre-write an authorization audit event before any privileged recovery read. Block secret disclosure if neither audit store can record the event. Portable non-admin sessions may fall back from protected `%ProgramData%` to current-user `%LocalAppData%` journal, with a visible warning that this fallback is not tamper-resistant. Administrators can enable **Require protected machine audit** to fail closed unless the protected machine journal is writable.
+- Keep update checks on by default while turning unattended installation off by default. Unattended installation requires a trusted Authenticode signature and configured expected publisher. Existing update settings are preserved.
+- Move selected recovery source and OU into non-secret per-user preferences with backward-compatible read-only fallback from legacy machine settings.
+- Put read-only **Access Health** diagnostics in a top-level **Diagnostics** tab available to non-admin Helpdesk, while keeping privileged audit, service and domain-controller operations restricted. Consolidate advanced administrator settings and export into **Settings → Enterprise**.
+- Extract updater handlers from the large MainForm into a focused partial class, remove unused/duplicate UI code, and extend Windows CI tests for least-privilege startup, audit write failure and updated navigation.
+- Improve self-test failure reporting in Windows GitHub Actions. Preserve BitLocker/LAPS history, clipboard protection, connection retry, advanced diagnostics, recovery approval, rollback and x64/x86/ARM64 builds.
+
+**Rollout:** The per-user portable audit fallback cannot substitute for a centrally protected security audit. Enable strict protected auditing only after provisioning the required protected writer/service or ACL. Test actual non-admin AD/Entra role delegation before broad deployment.
+
 ## 0.29.12
 
 **Simplified connections, updater options and UI audit**
