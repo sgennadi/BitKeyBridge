@@ -36,6 +36,8 @@ internal sealed class ProtectedAuditBrokerServer
     internal const PipeAccessRights ClientRights =
         PipeAccessRights.ReadData |
         PipeAccessRights.WriteData |
+        PipeAccessRights.ReadAttributes |
+        PipeAccessRights.ReadExtendedAttributes |
         PipeAccessRights.ReadPermissions |
         PipeAccessRights.Synchronize;
 
