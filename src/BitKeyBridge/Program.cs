@@ -303,24 +303,26 @@ internal static class Program
             x.Equals("--approval-approve", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--approval-deny", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--siem-flush", StringComparison.OrdinalIgnoreCase));
-        if (!noElevation &&
+        // Ordinary GUI sessions must keep the helpdesk user's Windows identity.
+        // Only privileged CLI maintenance is eligible for UAC. Suppressing the
+        // prompt with --no-elevation never bypasses the administrator check.
+        if (isCli &&
             !readOnlyStatusCommand &&
             !currentUserVaultCommand &&
             !identityBoundCommand &&
             !SecurityContext.IsAdministrator())
         {
-            if (!Environment.UserInteractive)
+            if (noElevation || !Environment.UserInteractive)
             {
-                if (isCli) Console.Error.WriteLine("Administrative rights are required. Configure the scheduled task to run with highest privileges.");
+                Console.Error.WriteLine("Administrative rights are required for this CLI command.");
                 return 5;
             }
 
-            if (SecurityContext.RelaunchElevated(args.Concat(["--no-elevation"]).ToArray())) return 0;
-            if (isCli)
-            {
-                Console.Error.WriteLine("Administrative rights are required.");
-                return 5;
-            }
+            if (SecurityContext.RelaunchElevated(args.Concat(["--no-elevation"]).ToArray()))
+                return 0;
+
+            Console.Error.WriteLine("Administrator elevation was canceled or failed.");
+            return 5;
         }
 
         ApplySessionCommandLine(config, args);
