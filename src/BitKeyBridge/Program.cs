@@ -3995,7 +3995,7 @@ internal static class Program
         Console.WriteLine("  --stop-service        Stop the installed BitKeyBridge service");
         Console.WriteLine("  --service-status      Show installed service state and identity");
         Console.WriteLine("  --audit-broker-provision  Admin only: protect journal/config ACL and enable audit broker");
-        Console.WriteLine("  --audit-broker-status     Show broker/service status without secrets");
+        Console.WriteLine("  --audit-broker-status     Check authenticated protected audit ACK as current reader (writes safe health event)");
         Console.WriteLine("  --audit-broker-verify     Admin only: verify protected NTFS ACL + audit chain");
         Console.WriteLine("  --vault-status        Show AD credential vault metadata (never plaintext)");
         Console.WriteLine("  --vault-save-user     Save AD credential in current-user Credential Manager");
