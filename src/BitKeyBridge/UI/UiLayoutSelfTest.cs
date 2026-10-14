@@ -1222,12 +1222,18 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: Administration is missing the Helpdesk basics workspace.");
         }
 
-        if (FindByName(
-                form,
-                "AccessHealthTab") is null)
+        if (FindByName(form, "EnterpriseSettingsTab") is null ||
+            FindByName(form, "EnterpriseSettingsSections") is null)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Health & Audit is missing the Access Health workspace.");
+                $"{formName}/{scenario.Name}: advanced enterprise features must remain accessible from Settings.");
+        }
+
+        if (!tabs.TabPages.Cast<TabPage>().Any(page => page.Text == "Diagnostics") ||
+            FindByName(form, "AccessHealthTab") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Diagnostics must contain the metadata-only Access Health workspace.");
         }
 
         if (FindByName(
