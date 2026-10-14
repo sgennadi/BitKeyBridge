@@ -116,7 +116,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - Native Windows Service for scheduled export / coverage.
 - Metadata-only AD + Entra + Intune BitLocker Coverage reporting.
 - Metadata-only AD LAPS Coverage with stable GUID-based snapshot comparisons and optional, explicitly authorized expiration requests.
-- Machine-protected hash-chained JSONL recovery audit, optional signed checkpoints, and a clearly marked (user-editable) portable fallback. Strict enterprise mode can reject recovery reads when protected audit storage is unavailable.
+- Machine-protected hash-chained JSONL recovery audit, optional signed checkpoints, and a clearly marked (user-editable) portable fallback. Strict enterprise mode can reject recovery reads when protected audit storage is unavailable (the machine journal's owner and write ACL are checked, not just its path).
 - Optional RBAC, mandatory ticket/reference, JIT recovery, two-person approval, SIEM forwarding, audit signing and Remote API — all disabled by default.
 - Optional TLS Remote API with scoped bearer tokens.
 - Credential storage using Current User Credential Manager or machine-scope DPAPI with restricted ACL.
