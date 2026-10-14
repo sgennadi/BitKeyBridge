@@ -112,11 +112,6 @@ public sealed partial class MainForm
                 "Retry Update");
         retry.Name =
             "RetryUpdateButton";
-        var toggleAutomatic =
-            NewActionButton(
-                "Disable Automatic Checks");
-        toggleAutomatic.Name =
-            "ToggleAutomaticUpdateChecksButton";
         var openRelease =
             NewActionButton(
                 "Open Release Page");
@@ -133,7 +128,6 @@ public sealed partial class MainForm
             check,
             install,
             retry,
-            toggleAutomatic,
             openRelease,
             resumeAutoInstall
         ]);
@@ -262,11 +256,6 @@ public sealed partial class MainForm
 
         void RefreshAutomaticControls()
         {
-            toggleAutomatic.Text =
-                _checkUpdatesOnStart.Checked
-                    ? "Disable Startup Checks"
-                    : "Enable Startup Checks";
-
             _autoInstallUpdatesOnStart.Enabled =
                 _checkUpdatesOnStart.Checked;
 
@@ -275,7 +264,9 @@ public sealed partial class MainForm
                 !string.IsNullOrWhiteSpace(
                     _trustedUpdatePublisher.Text);
 
-            resumeAutoInstall.Enabled =
+            // Resume is only relevant after a verified rollback hold.
+            // The startup-check checkbox plus Save already controls updates.
+            resumeAutoInstall.Visible =
                 UpdateRollbackHoldService.HasRecordedHold();
         }
 
@@ -321,11 +312,6 @@ public sealed partial class MainForm
                     null;
                 await InstallLatestUpdateGuiAsync();
             };
-
-        toggleAutomatic.Click +=
-            (_, _) =>
-                SetAutomaticUpdateChecksGui(
-                    !_checkUpdatesOnStart.Checked);
 
         openRelease.Click +=
             (_, _) =>
