@@ -47,8 +47,18 @@ audit event. It does not itself grant AD, Entra, Graph or LAPS access.
 4. Restart the service from an elevated console: `BitKeyBridge.exe --stop-service`,
    then `BitKeyBridge.exe --start-service`. Inspect Windows Event Log for
    `Protected local-only recovery audit broker is active.`
-5. Verify `BitKeyBridge.exe --audit-broker-status`. No workstation
-   user needs to run the main GUI as Administrator.
+5. From a **standard** Windows account in the explicit RBAC
+   `RecoveryReaders` group, run
+   `BitKeyBridge.exe --audit-broker-status --no-elevation`.
+   **Exit 0 now means an authenticated Named Pipe health event was committed
+   and acknowledged by the SYSTEM-owned journal**, not merely that the
+   Windows Service is running. The output contains
+   `BrokerProbe=Committed`. Exit 3 / `DeniedOrUnavailable` means the
+   request was denied or could not obtain a durable audit ACK.
+   Each successful health probe writes a synthetic
+   `AuditBrokerHealthProbe` event. An administrator not included in the
+   explicit RecoveryReaders allowlist will also receive exit 3; use
+   `--service-status` and `--audit-broker-verify` for admin-only checks.
 6. Launch the GUI as a standard Helpdesk account. Connect to AD or Entra
    as that account, perform an authorized LAPS/BitLocker read, and confirm
    the **SYSTEM-owned** broker journal received a matching, hash-chained
@@ -76,7 +86,9 @@ allowed are pre-read auditing for LAPS and BitLocker. Replay/request-ID
 filtering and per-SID rate limiting are enforced in memory.
 
 The service records the real Windows identity, requested target, session,
-ticket/reference, source and operation. It does **not** receive passwords,
+ticket/reference, source and operation. The status command uses a reserved
+synthetic target and source, rejects arbitrary reason, ticket and recovery
+fields, and cannot count as an authorization for real secret retrieval. It does **not** receive passwords,
 BitLocker recovery keys, AD credentials or Graph tokens. A commit
 acknowledgement is emitted only after the protected file is append-written,
 its hash chain checked and the data flushed to disk. Missing service, failed
