@@ -32,6 +32,7 @@ public sealed partial class MainForm
     private readonly TextBox _recoveryReferenceExampleSetting = new();
     private readonly NumericUpDown _secretDisplaySecondsSetting = new();
     private readonly NumericUpDown _clipboardSecondsSetting = new();
+    private readonly CheckBox _requireProtectedRecoveryAuditSetting = new();
     private readonly TextBox _accessHealthComputer = new();
     private readonly DateTimePicker _auditFrom = new();
     private readonly DateTimePicker _auditTo = new();
@@ -387,11 +388,18 @@ public sealed partial class MainForm
             1,
             1);
 
+        _requireProtectedRecoveryAuditSetting.Text =
+            "Require protected machine audit before access (blocks when unavailable)";
+        _requireProtectedRecoveryAuditSetting.AutoSize = true;
+        _requireProtectedRecoveryAuditSetting.AccessibleName =
+            "Reject recovery secret retrieval unless the machine-protected audit event is saved";
+        recoveryGrid.Controls.Add(_requireProtectedRecoveryAuditSetting, 1, 2);
+
         _recoveryReferencePatternSetting.PlaceholderText =
             "Optional regex, e.g. ^INC-[0-9]+$";
         AddGridField(
             recoveryGrid,
-            2,
+            3,
             "Ticket format:",
             _recoveryReferencePatternSetting);
 
@@ -399,7 +407,7 @@ public sealed partial class MainForm
             "INC-12345";
         AddGridField(
             recoveryGrid,
-            3,
+            4,
             "Ticket example:",
             _recoveryReferenceExampleSetting);
 
@@ -409,7 +417,7 @@ public sealed partial class MainForm
             3600;
         AddGridField(
             recoveryGrid,
-            4,
+            5,
             "Secret lifetime (sec):",
             _secretDisplaySecondsSetting);
 
@@ -419,7 +427,7 @@ public sealed partial class MainForm
             600;
         AddGridField(
             recoveryGrid,
-            5,
+            6,
             "Clipboard lifetime (sec):",
             _clipboardSecondsSetting);
 
@@ -429,7 +437,7 @@ public sealed partial class MainForm
         recoveryGrid.Controls.Add(
             save,
             1,
-            6);
+            7);
         root.Controls.Add(
             recoveryGrid);
 
@@ -1202,6 +1210,8 @@ public sealed partial class MainForm
             _requireRecoveryReference.Checked;
         _config.SuggestRotationAfterCloudKeyRetrieval =
             _suggestRotationAfterRecovery.Checked;
+        _config.RequireProtectedAuditForRecovery =
+            _requireProtectedRecoveryAuditSetting.Checked;
         _config.RecoveryReferencePattern =
             _recoveryReferencePatternSetting.Text.Trim();
         _config.RecoveryReferenceExample =
@@ -1222,6 +1232,7 @@ public sealed partial class MainForm
                 "Local",
             details:
                 $"RequireReference={_config.RequireRecoveryAccessReference}; " +
+                $"RequireProtectedAudit={_config.RequireProtectedAuditForRecovery}; " +
                 $"SuggestRotation={_config.SuggestRotationAfterCloudKeyRetrieval}; " +
                 $"SecretSeconds={_config.SecretDisplaySeconds}; " +
                 $"ClipboardSeconds={_config.SensitiveClipboardSeconds}");
@@ -1231,6 +1242,8 @@ public sealed partial class MainForm
 
     private void LoadHelpdeskBasics()
     {
+        _requireProtectedRecoveryAuditSetting.Checked =
+            _config.RequireProtectedAuditForRecovery;
         _recoveryReferencePatternSetting.Text =
             _config.RecoveryReferencePattern;
         _recoveryReferenceExampleSetting.Text =
