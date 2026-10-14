@@ -2650,63 +2650,6 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
-    private void SetAutomaticUpdateChecksGui(
-        bool enabled)
-    {
-        var previous =
-            _config.CheckForUpdatesOnStart;
-
-        try
-        {
-            _config.CheckForUpdatesOnStart =
-                enabled;
-            _config.AutoInstallUpdatesOnStart =
-                _autoInstallUpdatesOnStart.Checked;
-            _checkUpdatesOnStart.Checked =
-                enabled;
-
-            ConfigService.SaveAppConfig(
-                _config);
-
-            _audit.Write(
-                enabled
-                    ? "EnableAutomaticUpdateChecks"
-                    : "DisableAutomaticUpdateChecks",
-                source: "Local",
-                details:
-                    $"CheckOnStart={enabled}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}");
-
-            UiStyle.SetStatus(
-                _updateStatus,
-                enabled
-                    ? _config.AutoInstallUpdatesOnStart
-                        ? "Automatic startup updates are enabled."
-                        : "Automatic startup update checks are enabled; installation remains manual."
-                    : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
-                enabled
-                    ? UiStatusKind.Success
-                    : UiStatusKind.Warning);
-        }
-        catch (Exception ex)
-        {
-            _config.CheckForUpdatesOnStart =
-                previous;
-            _checkUpdatesOnStart.Checked =
-                previous;
-
-            UiStyle.SetStatus(
-                _updateStatus,
-                "Could not change automatic update checks: " +
-                ex.Message,
-                UiStatusKind.Error);
-
-            ShowAppError(
-                "Changing automatic update checks failed.",
-                "SetAutomaticUpdateChecks",
-                ex);
-        }
-    }
-
     private void SaveOperationsSettings()
     {
         _config.RemoteApiPort =
