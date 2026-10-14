@@ -60,11 +60,25 @@ public sealed class AuditService
             // A writable file is not necessarily a protected audit store.
             // Strict enterprise recovery requires both a canonical machine
             // path and a trusted NTFS owner/write ACL for the directory/file.
-            if (requireProtectedStorage &&
-                (!string.Equals(_path, AppPaths.AuditLogFile,
-                    StringComparison.OrdinalIgnoreCase) ||
-                 !ProtectedAuditStoragePolicy.IsTrusted(_path)))
-                return null;
+            if (requireProtectedStorage)
+            {
+                if (!string.Equals(_path, AppPaths.AuditLogFile,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !ProtectedAuditStoragePolicy.IsTrusted(_path))
+                    return null;
+
+                try
+                {
+                    // Fail closed on an already damaged hash chain before
+                    // recording authorization for a new recovery secret.
+                    if (!AuditIntegrityService.Verify(_path).Valid)
+                        return null;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
 
             if (TryAppend(_path, entry))
                 return entry;
