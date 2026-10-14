@@ -9,10 +9,11 @@ and audit continue to apply.
 
 Start > Connect using:
 
-- **Active Directory**: Windows integrated identity is preferred. The app
-  attempts an automatic connection only when AD is selected and the
-  administrator-configured AutoConnectOnStart setting permits it. Failure
-  does not automatically prompt for administrator credentials.
+- **Active Directory**: Windows integrated identity is preferred. The
+  connection wizard opens first, and the operator explicitly selects the
+  source/account. The GUI keeps the current Windows token and does not
+  request UAC merely to connect, search, or reveal delegated recovery data.
+  Failed AD login offers a bounded password retry, not an administrator prompt.
 - **Microsoft Entra / Intune (Microsoft 365)**: connect with **Device Code
   and MFA** using an approved tenant/app registration; AD connection and
   AD credential prompts are never required.
@@ -101,3 +102,37 @@ and MFA, then check the explicit Graph status. If metadata lists but
 Reveal fails, check both Graph delegated permission and the operator's
 Entra role on that device (for LAPS: password/read). Never bypass
 role checks or silently fall back to app-only privileges.
+
+## Recovery audit on ordinary workstations (0.30.0)
+
+Every privileged LAPS/BitLocker access attempt first records an **Authorized**
+audit event with operator identity, device/recovery ID, source and session ID,
+before reading any secret. If no journal can accept the event, disclosure is
+denied (fail closed).
+
+- **Protected machine audit**: `%ProgramData%\BitKeyBridge\audit.jsonl`.
+  This is the preferred tamper-evident chain for managed workstations.
+  Provision its protected ACL/service identity before assigning Helpdesk staff.
+- **Portable current-user fallback**: `%LocalAppData%\BitKeyBridge\audit.user.jsonl`.
+  It is used only when the normal machine journal cannot be written and the
+  administrator has not required protected storage. This fallback is explicitly
+  warned about, remains hash-chained, but is **not tamper-proof**: its owner
+  can delete or replace it. It does not replace centralized enterprise logging.
+- **Strict enterprise mode**: in **Settings → Helpdesk → Recovery Access**,
+  enable **Require protected machine audit before access**. This rejects
+  recovery requests if the protected machine journal is unavailable. An
+  administrator must deploy a usable protected journal/service first. Never
+  grant ordinary users broad write/modify access to a protected audit folder
+  just to suppress this warning.
+
+LAPS/BitLocker secret read permissions are separate from metadata search.
+BitKeyBridge permits `SearchDevices` for metadata-only AD/Entra search, but
+Windows AD ACLs and Microsoft Graph delegated scopes/roles still enforce what
+devices each caller can see. Encrypted or cached local recovery secrets retain
+the stricter `RecoveryRead` check.
+
+Auto-update checks remain enabled by default; **automatic installation is
+opt-in** for new configurations and requires an explicitly trusted
+Authenticode signature and publisher. Existing installations should review
+saved auto-install policy before rollout. CLI privileged maintenance cannot
+use `--no-elevation` to bypass Windows administrator checks.
