@@ -76,7 +76,9 @@ public sealed class AuditService
             TimestampUtc = DateTime.UtcNow,
             User = Sanitize(actorName),
             Host = Environment.MachineName,
-            Action = "RecoveryPreReadRequested",
+            Action = request.Operation == ProtectedAuditBrokerProtocol.ProbeOperation
+                ? "AuditBrokerHealthProbe"
+                : "RecoveryPreReadRequested",
             Result = "Committed",
             ComputerName = Sanitize(request.Computer),
             RecoveryId = Sanitize(request.RecoveryId),
