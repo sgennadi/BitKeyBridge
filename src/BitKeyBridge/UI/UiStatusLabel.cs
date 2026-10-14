@@ -5,6 +5,29 @@ public sealed class UiStatusLabel : Label
     internal UiStatusKind StatusKind =
         UiStatusKind.Neutral;
 
+    // Extra space between the label's existing left chrome and its glyph.
+    // Controls in different nested panels can share one visible icon column
+    // without relocating their borders, backgrounds or other controls.
+    private int _glyphColumnInset;
+
+    internal int GlyphColumnInset
+    {
+        get => _glyphColumnInset;
+        set
+        {
+            var next = Math.Max(0, value);
+            if (next == _glyphColumnInset)
+                return;
+            _glyphColumnInset = next;
+            Invalidate();
+        }
+    }
+
+    internal int GlyphBaseLeftInset =>
+        (BorderStyle == BorderStyle.None ? 0 : 1) + Padding.Left;
+
+    internal int GlyphLeftInset => GlyphBaseLeftInset + GlyphColumnInset;
+
     public override Size GetPreferredSize(
         Size proposedSize)
     {
@@ -25,6 +48,7 @@ public sealed class UiStatusLabel : Label
         var horizontalChrome =
             Padding.Horizontal +
             border +
+            _glyphColumnInset +
             (icon?.Width ?? 0) +
             gap;
 
@@ -112,13 +136,15 @@ public sealed class UiStatusLabel : Label
         content =
             new Rectangle(
                 content.X +
-                Padding.Left,
+                Padding.Left +
+                _glyphColumnInset,
                 content.Y +
                 Padding.Top,
                 Math.Max(
                     0,
                     content.Width -
-                    Padding.Horizontal),
+                    Padding.Horizontal -
+                    _glyphColumnInset),
                 Math.Max(
                     0,
                     content.Height -
