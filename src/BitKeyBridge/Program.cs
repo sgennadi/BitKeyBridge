@@ -73,6 +73,8 @@ internal static class Program
             x.Equals("--start-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--stop-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-provision", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
@@ -270,6 +272,7 @@ internal static class Program
         var readOnlyStatusCommand = args.Any(x =>
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
@@ -386,6 +389,47 @@ internal static class Program
             catch (Exception ex)
             {
                 Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-provision", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                Console.WriteLine(ProtectedAuditBrokerProvisioning.Provision());
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    "Protected audit broker provisioning failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                var info = WindowsServiceHost.GetInfo();
+                Console.WriteLine(
+                    "BrokerEnabled=" + config.AuditBrokerEnabled +
+                    "; StrictAudit=" + config.RequireProtectedAuditForRecovery +
+                    "; ExplicitRbac=" + (config.RbacEnabled &&
+                        config.RbacRecoveryReaders.Count > 0) +
+                    "; ServiceInstalled=" + info.Installed +
+                    "; ServiceState=" + info.State);
+                if (SecurityContext.IsAdministrator())
+                    Console.WriteLine(
+                        "ProtectedJournal=" +
+                        ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile));
+                return info.Installed && config.AuditBrokerEnabled ? 0 : 3;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(DiagnosticRedaction.Sanitize(ex.Message));
                 return 1;
             }
         }
@@ -3764,6 +3808,8 @@ internal static class Program
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
         Console.WriteLine("  --stop-service        Stop the installed BitKeyBridge service");
         Console.WriteLine("  --service-status      Show installed service state and identity");
+        Console.WriteLine("  --audit-broker-provision  Admin only: protect journal/config ACL and enable audit broker");
+        Console.WriteLine("  --audit-broker-status     Show broker/service status without secrets");
         Console.WriteLine("  --vault-status        Show AD credential vault metadata (never plaintext)");
         Console.WriteLine("  --vault-save-user     Save AD credential in current-user Credential Manager");
         Console.WriteLine("  --vault-save-machine  Save AD credential with machine DPAPI + restricted ACL");
