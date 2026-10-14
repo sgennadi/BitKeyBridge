@@ -425,7 +425,11 @@ internal static class Program
                     Console.WriteLine(
                         "ProtectedJournal=" +
                         ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile));
-                return info.Installed && config.AuditBrokerEnabled ? 0 : 3;
+                // Service existence alone does not prove the IPC listener is up.
+                // Real recovery performs a separate authenticated ACK check.
+                return info.Installed && config.AuditBrokerEnabled &&
+                    string.Equals(info.State, "Running", StringComparison.OrdinalIgnoreCase)
+                    ? 0 : 3;
             }
             catch (Exception ex)
             {
