@@ -1257,7 +1257,8 @@ public static class UiLayoutSelfTest
             FindByName(form, "RunEnvironmentCheckButton") is null ||
             FindByName(form, "RunAdvancedDeviceDiagnosticsButton") is null ||
             FindByName(form, "RunBitLockerCommandsButton") is null ||
-            FindByName(form, "RunLapsCommandsButton") is null)
+            FindByName(form, "RunLapsCommandsButton") is null ||
+            FindByName(form, "RunProtectedAuditCheckButton") is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Diagnostics must provide Access Health and the existing recovery runbooks.");
