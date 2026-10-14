@@ -38,9 +38,19 @@ internal static class ProtectedAuditBrokerProvisioning
 
         _ = ProtectedAuditBrokerServer.ResolveExplicitReaders(config.RbacRecoveryReaders);
 
-        Directory.CreateDirectory(AppPaths.MachineConfigDirectory);
-        Directory.CreateDirectory(AppPaths.BrokerAuditDirectory);
+        // Validate each ancestor BEFORE creating anything underneath it.
+        // Creating the child first would follow a malicious pre-existing
+        // ProgramData junction or symlink in an elevated provisioning process.
+        if (Directory.Exists(AppPaths.MachineConfigDirectory))
+            RejectReparsePoint(AppPaths.MachineConfigDirectory);
+        else
+            Directory.CreateDirectory(AppPaths.MachineConfigDirectory);
         RejectReparsePoint(AppPaths.MachineConfigDirectory);
+
+        if (Directory.Exists(AppPaths.BrokerAuditDirectory))
+            RejectReparsePoint(AppPaths.BrokerAuditDirectory);
+        else
+            Directory.CreateDirectory(AppPaths.BrokerAuditDirectory);
         RejectReparsePoint(AppPaths.BrokerAuditDirectory);
         RejectReparsePoint(AppPaths.AppSettingsFile);
 
