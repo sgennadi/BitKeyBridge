@@ -18,9 +18,7 @@ public static class UpdateRollbackHoldService
         File.Exists(AppPaths.UpdateRollbackHoldFile);
 
     public static bool IsActiveForCurrentBuild() =>
-        IsActiveForVersion(
-            typeof(UpdateService).Assembly.GetName().Version?.ToString(3) ??
-            string.Empty);
+        IsActiveForVersion(UpdateService.GetCurrentVersion().ToString());
 
     internal static bool IsActiveForVersion(
         string installedVersion,

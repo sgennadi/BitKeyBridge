@@ -27,6 +27,9 @@ public static class AppPaths
     public static string RecentComputersFile => Path.Combine(LocalConfigDirectory, "recent_computers.json");
     public static string HelpdeskProfilesFile => Path.Combine(LocalConfigDirectory, "helpdesk_profiles.json");
     public static string SupportBundlesDirectory => Path.Combine(LocalConfigDirectory, "SupportBundles");
+    // Per-user audit fallback for portable/non-admin clients. Unlike the machine
+    // journal, this is NOT a centrally protected or tamper-proof audit store.
+    public static string UserAuditLogFile => Path.Combine(LocalConfigDirectory, "audit.user.jsonl");
     public static string MachineCloudConfigFile => Path.Combine(MachineConfigDirectory, "cloud_auth_machine.json");
     public static string CoverageStatusFile => Path.Combine(MachineConfigDirectory, "coverage_status.json");
     public static string AuditLogFile => Path.Combine(MachineConfigDirectory, "audit.jsonl");

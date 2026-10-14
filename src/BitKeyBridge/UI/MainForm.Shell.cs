@@ -117,13 +117,12 @@ public sealed partial class MainForm
         _mainTabs.TabPages.Add(
             _lapsWorkspaceTab);
 
+        // Read-only access diagnostics are useful to non-admin Helpdesk staff.
+        // Privileged service, DC and signed-audit controls remain gated.
+        _mainTabs.TabPages.Add(
+            BuildHealthAuditWorkspaceTab());
         if (AdministrationAllowed)
-        {
-            _mainTabs.TabPages.Add(
-                BuildAdministrationWorkspaceTab());
-            _mainTabs.TabPages.Add(
-                BuildHealthAuditWorkspaceTab());
-        }
+            _mainTabs.TabPages.Add(BuildAdministrationWorkspaceTab());
 
         foreach (TabPage page in
                  _mainTabs.TabPages)
@@ -2357,17 +2356,31 @@ public sealed partial class MainForm
 
     private TabPage BuildAdministrationWorkspaceTab()
     {
-        var tab = new TabPage("Administration");
+        var tab = new TabPage("Settings");
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
 
+        // Everyday settings are immediately visible; enterprise features live
+        // under a single explicit group instead of competing at the top level.
         nested.TabPages.Add(BuildHelpdeskBasicsResponsiveTab());
         nested.TabPages.Add(BuildCloudAdministrationTab());
         nested.TabPages.Add(BuildUpdatesResponsiveTab());
-        nested.TabPages.Add(BuildSecuritySettingsResponsiveTab());
-        nested.TabPages.Add(BuildExportAutomationResponsiveTab());
+
+        var enterprise = new TabPage("Enterprise")
+        {
+            Name = "EnterpriseSettingsTab"
+        };
+        var enterpriseSections = new TabControl
+        {
+            Name = "EnterpriseSettingsSections",
+            Dock = DockStyle.Fill
+        };
+        enterpriseSections.TabPages.Add(BuildSecuritySettingsResponsiveTab());
+        enterpriseSections.TabPages.Add(BuildExportAutomationResponsiveTab());
+        enterprise.Controls.Add(enterpriseSections);
+        nested.TabPages.Add(enterprise);
 
         tab.Controls.Add(nested);
         return tab;
@@ -2375,16 +2388,20 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Health & Audit");
+        var tab = new TabPage("Diagnostics");
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
 
+        nested.TabPages.Add(BuildDiagnosticToolsPage());
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());
-        nested.TabPages.Add(BuildServiceHealthResponsiveTab());
-        nested.TabPages.Add(BuildDomainControllersResponsiveTab());
-        nested.TabPages.Add(BuildAuditResponsiveTab());
+        if (AdministrationAllowed)
+        {
+            nested.TabPages.Add(BuildServiceHealthResponsiveTab());
+            nested.TabPages.Add(BuildDomainControllersResponsiveTab());
+            nested.TabPages.Add(BuildAuditResponsiveTab());
+        }
 
         tab.Controls.Add(nested);
         return tab;
@@ -2552,43 +2569,28 @@ public sealed partial class MainForm
         grid.Controls.Add(control, 1, row);
     }
 
-    private static void HideToolButtons(
-        Control root,
-        params string[] labels)
-    {
-        foreach (Control child in root.Controls)
-        {
-            if (child is Button button &&
-                labels.Contains(
-                    button.Text,
-                    StringComparer.OrdinalIgnoreCase))
-            {
-                button.Visible = false;
-            }
-
-            if (child.HasChildren)
-                HideToolButtons(child, labels);
-        }
-    }
-
     private void RestoreRecoveryUiState()
     {
+        var recoverySource = string.IsNullOrWhiteSpace(_startConnectionPreferences.RecoverySearchSource)
+            ? _config.RecoverySearchSource
+            : _startConnectionPreferences.RecoverySearchSource;
         _recoverySource.SelectedIndex =
-            _config.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
+            recoverySource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
                 ? 2
-                : _config.RecoverySearchSource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
+                : recoverySource.Equals("LocalCache", StringComparison.OrdinalIgnoreCase)
                     ? 1 : 0;
 
-        if (!string.IsNullOrWhiteSpace(
-                _config.LastRecoveryScopeSearchBase))
+        var scopeDn = string.IsNullOrWhiteSpace(_startConnectionPreferences.LastRecoveryScopeSearchBase)
+            ? _config.LastRecoveryScopeSearchBase
+            : _startConnectionPreferences.LastRecoveryScopeSearchBase;
+        var scopeName = string.IsNullOrWhiteSpace(_startConnectionPreferences.LastRecoveryScopeSearchBase)
+            ? _config.LastRecoveryScopeName
+            : _startConnectionPreferences.LastRecoveryScopeName;
+        if (!string.IsNullOrWhiteSpace(scopeDn))
         {
-            _startScope =
-                new BitLockerScope(
-                    string.IsNullOrWhiteSpace(
-                        _config.LastRecoveryScopeName)
-                        ? "Last OU"
-                        : _config.LastRecoveryScopeName,
-                    _config.LastRecoveryScopeSearchBase);
+            _startScope = new BitLockerScope(
+                string.IsNullOrWhiteSpace(scopeName) ? "Last OU" : scopeName,
+                scopeDn);
 
             UiStyle.SetStatus(
                 _startOuStatus,
@@ -2650,19 +2652,15 @@ public sealed partial class MainForm
     {
         try
         {
-            _config.RecoverySearchSource =
+            _startConnectionPreferences.RecoverySearchSource =
                 _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
                 _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD";
-
             if (_startScope is not null)
             {
-                _config.LastRecoveryScopeName =
-                    _startScope.Name;
-                _config.LastRecoveryScopeSearchBase =
-                    _startScope.SearchBase;
+                _startConnectionPreferences.LastRecoveryScopeName = _startScope.Name;
+                _startConnectionPreferences.LastRecoveryScopeSearchBase = _startScope.SearchBase;
             }
-
-            ConfigService.SaveAppConfig(_config);
+            ConfigService.SaveStartConnectionPreferences(_startConnectionPreferences);
         }
         catch
         {
