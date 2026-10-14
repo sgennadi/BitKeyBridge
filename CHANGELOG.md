@@ -1,3 +1,14 @@
+## 0.29.12
+
+**Simplified connections, updater options and UI audit**
+
+- Replace the crowded Start connection toolbar with **Connect / Disconnect / Connection tools...**. The new tools menu preserves Environment Check, Device Diagnostics and advanced AD settings, without duplicate top-level buttons. The Reconnect / Change connection wizard remains directly accessible.
+- Remove the obsolete GUI **Auto-connect to AD when the GUI starts** checkbox and the unreachable older startup handler. Interactive launch continues through the explicit AD/365 wizard. Keep the legacy `AutoConnectOnStart` configuration property for backward compatibility; never drop user credentials or overwrite old settings as part of UI cleanup.
+- Collapse cloud-only advanced AD fields when switching source, while preserving diagnostic access.
+- In Updates, remove redundant **Enable/Disable Startup Checks** (the existing checkbox plus Save is canonical) and the duplicate Release Page button (still in Tools). Show **Resume Auto-Install** only when rollback is holding automatic updates.
+- Extend UI regression tests for the consolidated Connection tools menu.
+- Add `docs/ui-options-project-audit-2026-10.md` documenting retained security features, stale PRs and further staged cleanup opportunities.
+
 ## 0.29.11
 
 **Visually aligned Start status checkmarks**
