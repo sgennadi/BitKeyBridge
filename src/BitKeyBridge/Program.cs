@@ -2041,16 +2041,16 @@ internal static class Program
                     failures.Add("Broker accepted an invalid nonce.");
 
                 request.RequestId = Guid.NewGuid().ToString("N");
-                await using (var wire = new MemoryStream())
+                using (var wire = new MemoryStream())
                 {
-                    await ProtectedAuditBrokerProtocol.WriteAsync(
+                    ProtectedAuditBrokerProtocol.WriteAsync(
                         wire, request, ProtectedAuditBrokerProtocol.MaxRequestBytes,
-                        CancellationToken.None);
+                        CancellationToken.None).GetAwaiter().GetResult();
                     wire.Position = 0;
-                    var decoded = await ProtectedAuditBrokerProtocol.ReadAsync<
+                    var decoded = ProtectedAuditBrokerProtocol.ReadAsync<
                         ProtectedAuditBrokerRequest>(
                             wire, ProtectedAuditBrokerProtocol.MaxRequestBytes,
-                            CancellationToken.None);
+                            CancellationToken.None).GetAwaiter().GetResult();
                     if (decoded.RequestId != request.RequestId ||
                         decoded.Operation != "ReadLapsPasswords")
                         failures.Add("Broker framed request roundtrip mismatch.");
