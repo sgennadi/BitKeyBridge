@@ -2101,6 +2101,34 @@ internal static class Program
                     failures.Add("Broker accepted an invalid nonce.");
 
                 request.RequestId = Guid.NewGuid().ToString("N");
+
+                // Probe cannot masquerade as an actual secret access, carry
+                // arbitrary ticket text or use a user-chosen target.
+                var probe = new ProtectedAuditBrokerRequest
+                {
+                    Operation = ProtectedAuditBrokerProtocol.ProbeOperation,
+                    Computer = ProtectedAuditBrokerProtocol.ProbeComputer,
+                    Source = ProtectedAuditBrokerProtocol.ProbeSource,
+                    SessionId = Guid.NewGuid().ToString("N")
+                };
+                if (!ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Protected broker rejected safe health probe metadata.");
+                probe.Reason = "Approved access";
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe accepted arbitrary caller text.");
+                probe.Reason = string.Empty;
+                probe.Computer = "REAL-WORKSTATION";
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe allowed a real computer target.");
+                probe.Computer = ProtectedAuditBrokerProtocol.ProbeComputer;
+                probe.Source = "LAPS-AD";
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe accepted a recovery source.");
+                probe.Source = ProtectedAuditBrokerProtocol.ProbeSource;
+                probe.SessionId = string.Empty;
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe accepted missing session correlation.");
+
                 using (var wire = new MemoryStream())
                 {
                     ProtectedAuditBrokerProtocol.WriteAsync(
