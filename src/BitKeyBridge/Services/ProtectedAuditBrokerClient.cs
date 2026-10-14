@@ -51,6 +51,40 @@ internal static class ProtectedAuditBrokerClient
         }
     }
 
+    /// <summary>
+    /// Test a real SYSTEM-owned pipe, caller RBAC and a durable protected
+    /// journal ACK. This writes only a bounded synthetic health event, not
+    /// a secret or recovery pre-read authorization. An unprivileged caller
+    /// can use this only if it belongs to the configured RecoveryReaders.
+    /// </summary>
+    internal static bool TryProbe()
+    {
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        var request = new ProtectedAuditBrokerRequest
+        {
+            Operation = ProtectedAuditBrokerProtocol.ProbeOperation,
+            Computer = ProtectedAuditBrokerProtocol.ProbeComputer,
+            Source = ProtectedAuditBrokerProtocol.ProbeSource,
+            SessionId = Guid.NewGuid().ToString("N")
+        };
+        if (!ProtectedAuditBrokerProtocol.Validate(request))
+            return false;
+
+        try
+        {
+            return CommitAsync(request).GetAwaiter().GetResult() is not null;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Protected broker probe denied or unavailable: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+            return false;
+        }
+    }
+
     private static async Task<AuditEntry?> CommitAsync(
         ProtectedAuditBrokerRequest request)
     {
@@ -89,7 +123,9 @@ internal static class ProtectedAuditBrokerClient
 
         return new AuditEntry
         {
-            Action = "RecoveryPreReadCommitted",
+            Action = request.Operation == ProtectedAuditBrokerProtocol.ProbeOperation
+                ? "AuditBrokerHealthProbeCommitted"
+                : "RecoveryPreReadCommitted",
             Result = "Committed",
             ComputerName = request.Computer,
             RecoveryId = request.RecoveryId,
