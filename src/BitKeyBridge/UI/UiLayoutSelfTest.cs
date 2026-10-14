@@ -861,6 +861,13 @@ public static class UiLayoutSelfTest
     {
         // A Helpdesk GUI must never auto-elevate, and disabling the CLI UAC
         // prompt must not allow privileged maintenance without admin rights.
+        if (UpdateTrustPolicy.CanEnableUnattended(false, "Example Publisher") ||
+            UpdateTrustPolicy.CanEnableUnattended(true, " ") ||
+            !UpdateTrustPolicy.CanEnableUnattended(true, "Example Publisher"))
+        {
+            failures.Add("Unattended updater requires both trusted signature policy and publisher.");
+        }
+
         if (StartupPrivilegePolicy.NeedsElevation(
                 false, false, false, false, false) ||
             !StartupPrivilegePolicy.NeedsElevation(
@@ -1217,7 +1224,7 @@ public static class UiLayoutSelfTest
 
         if (FindByName(
                 form,
-                "RetryUpdateButton") is null ||
+                "UpdateNowButton") is null ||
             FindByName(
                 form,
                 "RequireTrustedUpdateSignature") is null ||
