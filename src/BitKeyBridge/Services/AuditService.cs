@@ -224,13 +224,8 @@ public sealed class AuditService
         }
     }
 
-    private static string Sanitize(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-        // Never accept a 48-digit BitLocker recovery password into the audit trail.
-        return System.Text.RegularExpressions.Regex.Replace(
-            value,
-            @"\b\d{6}(?:-\d{6}){7}\b",
-            "[REDACTED-BITLOCKER-KEY]");
-    }
+    private static string Sanitize(string? value) =>
+        // Share the centralized scrubbing of BitLocker keys, password fields,
+        // token/JWT strings and LAPS JSON before anything reaches audit storage.
+        DiagnosticRedaction.Sanitize(value);
 }
