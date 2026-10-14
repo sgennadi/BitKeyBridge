@@ -34,7 +34,8 @@ public sealed class AuditService
         string? reference = null,
         string? reason = null,
         string? correlationId = null,
-        bool requireProtectedStorage = false)
+        bool requireProtectedStorage = false,
+        bool preferBroker = false)
     {
         var entry = new AuditEntry
         {
@@ -53,24 +54,75 @@ public sealed class AuditService
             CorrelationId = Sanitize(correlationId)
         };
 
+        return WriteEntry(entry, requireProtectedStorage, preferBroker);
+    }
+
+    // Only the privileged Windows Service calls this after RunAsClient
+    // authenticated the real token against the explicit RBAC allowlist.
+    // Caller identity, timestamp, action and result are SERVICE generated;
+    // no user-supplied "authorized" claim is stored as a trusted decision.
+    internal AuditEntry? WriteBrokerAuthorizedRequest(
+        ProtectedAuditBrokerRequest request, string actorName, string actorSid)
+    {
+        if (!string.Equals(_path, AppPaths.BrokerAuditLogFile,
+                StringComparison.OrdinalIgnoreCase) ||
+            !ProtectedAuditBrokerProtocol.Validate(request) ||
+            string.IsNullOrWhiteSpace(actorName) ||
+            !actorSid.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var entry = new AuditEntry
+        {
+            TimestampUtc = DateTime.UtcNow,
+            User = Sanitize(actorName),
+            Host = Environment.MachineName,
+            Action = "RecoveryPreReadRequested",
+            Result = "Committed",
+            ComputerName = Sanitize(request.Computer),
+            RecoveryId = Sanitize(request.RecoveryId),
+            Source = Sanitize(request.Source),
+            AuthMode = "WindowsNamedPipe",
+            Reference = Sanitize(request.Reference),
+            Reason = Sanitize(request.Reason),
+            Details = Sanitize("Operation=" + request.Operation + "; SID=" + actorSid),
+            CorrelationId = Sanitize(request.SessionId)
+        };
+        return WriteEntry(entry, requireProtectedStorage: true, preferBroker: false);
+    }
+
+    private AuditEntry? WriteEntry(
+        AuditEntry entry,
+        bool requireProtectedStorage,
+        bool preferBroker)
+    {
         lock (Sync)
         {
             LastWriteUsedUserFallback = false;
 
-            // A writable file is not necessarily a protected audit store.
-            // Strict enterprise recovery requires both a canonical machine
-            // path and a trusted NTFS owner/write ACL for the directory/file.
-            if (requireProtectedStorage)
+            if (requireProtectedStorage && preferBroker)
             {
                 if (!string.Equals(_path, AppPaths.AuditLogFile,
+                        StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                // An unavailable, spoofed or rejecting service must NEVER
+                // downgrade strict audit to local or per-user storage.
+                return ProtectedAuditBrokerClient.TryCommit(entry);
+            }
+
+            if (requireProtectedStorage)
+            {
+                var canonicalMachineJournal =
+                    string.Equals(_path, AppPaths.AuditLogFile,
                         StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(_path, AppPaths.BrokerAuditLogFile,
+                        StringComparison.OrdinalIgnoreCase);
+                if (!canonicalMachineJournal ||
                     !ProtectedAuditStoragePolicy.IsTrusted(_path))
                     return null;
 
                 try
                 {
-                    // Fail closed on an already damaged hash chain before
-                    // recording authorization for a new recovery secret.
                     if (!AuditIntegrityService.Verify(_path).Valid)
                         return null;
                 }
@@ -83,16 +135,15 @@ public sealed class AuditService
             if (TryAppend(_path, entry))
                 return entry;
 
-            // Only the standard machine audit can use this portable fallback.
-            // Never silently downgrade explicitly configured/custom audit paths.
             if (!requireProtectedStorage &&
-                string.Equals(_path, AppPaths.AuditLogFile, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(_path, AppPaths.AuditLogFile,
+                    StringComparison.OrdinalIgnoreCase) &&
                 TryAppend(AppPaths.UserAuditLogFile, entry))
             {
                 LastWriteUsedUserFallback = true;
                 WindowsEventLogService.TryWrite(
-                    "Protected audit journal unavailable; audit event was saved only " +
-                    "to current-user storage. Action=" + Sanitize(action),
+                    "Protected audit journal unavailable; event stored under " +
+                    "current-user profile only. Action=" + Sanitize(entry.Action),
                     EventLogSeverity.Warning, 4681, "RecoveryAudit");
                 return entry;
             }
@@ -142,7 +193,10 @@ public sealed class AuditService
         {
             var entries = ReadRecentFromPath(_path, maximum);
             if (string.Equals(_path, AppPaths.AuditLogFile, StringComparison.OrdinalIgnoreCase))
+            {
                 entries.AddRange(ReadRecentFromPath(AppPaths.UserAuditLogFile, maximum));
+                entries.AddRange(ReadRecentFromPath(AppPaths.BrokerAuditLogFile, maximum));
+            }
 
             return entries
                 .OrderByDescending(x => x.TimestampUtc)
