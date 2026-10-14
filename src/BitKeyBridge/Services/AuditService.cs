@@ -56,6 +56,16 @@ public sealed class AuditService
         lock (Sync)
         {
             LastWriteUsedUserFallback = false;
+
+            // A writable file is not necessarily a protected audit store.
+            // Strict enterprise recovery requires both a canonical machine
+            // path and a trusted NTFS owner/write ACL for the directory/file.
+            if (requireProtectedStorage &&
+                (!string.Equals(_path, AppPaths.AuditLogFile,
+                    StringComparison.OrdinalIgnoreCase) ||
+                 !ProtectedAuditStoragePolicy.IsTrusted(_path)))
+                return null;
+
             if (TryAppend(_path, entry))
                 return entry;
 
