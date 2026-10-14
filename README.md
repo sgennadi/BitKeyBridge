@@ -10,6 +10,30 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## Experimental protected audit broker (0.30.0-rc.2)
+
+Test build for [issue #56](https://github.com/sgennadi/BitKeyBridge/issues/56).
+A preinstalled LocalSystem BitKeyBridge Windows Service can now accept a
+restricted, Windows-token-authenticated **audit-only** named-pipe request and
+append a hash-chained, disk-flushed pre-read event to a separate SYSTEM-owned
+journal. The ordinary Helpdesk GUI does not request UAC or obtain local
+Administrator privileges. The broker is disabled by default, and is never an
+authorization mechanism for AD/Entra recovery secrets.
+
+An administrator must configure explicit RBAC RecoveryReaders, install the
+Windows Service and run `--audit-broker-provision` from an **already elevated**
+console. This operation intentionally hardens machine NTFS configuration and
+creates a protected journal. Only then can a non-admin Helpdesk operator use
+strict protected auditing. On denied identity, absent service or damaged
+journal, no secret is disclosed. The optional portable user-profile fallback
+is never used in strict mode.
+
+**[Step-by-step setup, limitations and threat model](docs/protected-audit-broker.md)**.
+This candidate is not yet production approved: a domain workstation test,
+token impersonation checks, SIEM delivery and Entra permission tests are
+required before enterprise rollout. Published rc.1 and stable 0.29.12 are
+unchanged.
+
 ## Prerelease update channel (0.30.0-rc.1)
 
 The 0.30.0 release candidate is published as a GitHub **prerelease**, never as the stable Latest release. Select **Allow prerelease versions** under Settings → Updates on a test workstation to opt in. GitHub Actions artifacts alone are **not** updatable releases; the updater requires published GitHub Release assets, matching architecture, `SHA256SUMS.txt`, an exact matching EXE and its self-test.
