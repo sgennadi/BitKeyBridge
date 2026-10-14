@@ -5,7 +5,6 @@ public sealed partial class MainForm
     private readonly TabControl _mainTabs = new();
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
-    private readonly CheckBox _autoConnectOnStart = new();
     private readonly Button _connectAdButton = new();
     private readonly Button _connectAdCancelButton = new();
     private readonly Button _disconnectAdButton = new();
@@ -29,8 +28,9 @@ public sealed partial class MainForm
     private readonly UiStatusLabel _homeAdAccountStatus = new();
     private readonly Button _homeConnectAdButton = new();
     private readonly Button _homeDisconnectAdButton = new();
-    private readonly Button _homeEnvironmentCheckButton = new();
-    private readonly Button _homeAdvancedDiagnosticsButton = new();
+    private readonly Button _homeConnectionToolsButton = new();
+    private readonly ContextMenuStrip _homeConnectionToolsMenu = new();
+    private readonly ToolStripMenuItem _homeAdvancedConnectionMenuItem = new();
     private readonly ProgressBar _homeConnectionProgress = new();
     private readonly TextBox _homeQuery = new();
     private readonly Button _homeSearchButton = new();
@@ -45,7 +45,6 @@ public sealed partial class MainForm
     private readonly DataGridView _homeRecentResults = new();
     private readonly RadioButton _homeUseWindowsIdentity = new();
     private readonly RadioButton _homeUseOtherAccount = new();
-    private readonly Button _homeAdvancedButton = new();
     private readonly ToolStripStatusLabel _globalConnectionStatus = new();
     private readonly ToolStripStatusLabel _globalAdAccountStatus = new();
     private readonly ToolStripStatusLabel _globalVersionStatus = new();
@@ -221,8 +220,8 @@ public sealed partial class MainForm
                         _homeWorkspaceTab;
                     _advancedConnectionGroup.Visible =
                         true;
-                    _homeAdvancedButton.Text =
-                        "Hide Advanced";
+                    _homeAdvancedConnectionMenuItem.Text =
+                        "Hide advanced AD settings";
                 }
             };
 
@@ -537,29 +536,51 @@ public sealed partial class MainForm
         _homeDisconnectAdButton.Enabled =
             false;
 
-        _homeEnvironmentCheckButton.Name =
-            "HomeEnvironmentCheckButton";
-        _homeEnvironmentCheckButton.Text =
-            "Environment Check...";
-        UiStyle.ConfigureActionButton(_homeEnvironmentCheckButton);
+        // Common connection actions remain visible. Secondary tasks share
+        // one discoverable menu instead of three competing toolbar buttons.
+        _homeConnectionToolsButton.Name = "HomeConnectionToolsButton";
+        _homeConnectionToolsButton.Text = "Connection tools...";
+        _homeConnectionToolsButton.AccessibleName =
+            "Open environment checks, device diagnostics and advanced AD settings";
+        UiStyle.ConfigureActionButton(_homeConnectionToolsButton);
+        _homeConnectionToolsButton.ContextMenuStrip = _homeConnectionToolsMenu;
+        _homeConnectionToolsButton.Click += (_, _) =>
+            _homeConnectionToolsMenu.Show(
+                _homeConnectionToolsButton, 0, _homeConnectionToolsButton.Height);
+        _homeConnectionToolsButton.Disposed +=
+            (_, _) => _homeConnectionToolsMenu.Dispose();
 
-        _homeAdvancedDiagnosticsButton.Name = "HomeAdvancedDiagnosticsButton";
-        _homeAdvancedDiagnosticsButton.Text = "Device Diagnostics...";
-        UiStyle.ConfigureActionButton(_homeAdvancedDiagnosticsButton);
+        var environmentCheck = new ToolStripMenuItem("Environment Check...")
+        {
+            Name = "HomeEnvironmentCheckMenuItem"
+        };
+        environmentCheck.Click += (_, _) => ShowEnvironmentDiagnosticDialog();
+        var deviceDiagnostics = new ToolStripMenuItem("Device Diagnostics...")
+        {
+            Name = "HomeDeviceDiagnosticsMenuItem"
+        };
+        deviceDiagnostics.Click += (_, _) => ShowAdvancedDiagnosticCenter();
 
-        _homeAdvancedButton.Text =
-            "Advanced...";
-        _homeAdvancedButton.Name =
-            "HomeConnectionSettingsButton";
-        UiStyle.ConfigureActionButton(
-            _homeAdvancedButton);
+        _homeAdvancedConnectionMenuItem.Name = "HomeAdvancedConnectionMenuItem";
+        _homeAdvancedConnectionMenuItem.Text = "Advanced AD settings...";
+        _homeAdvancedConnectionMenuItem.Click += (_, _) =>
+        {
+            _advancedConnectionGroup.Visible = !_advancedConnectionGroup.Visible;
+            _homeAdvancedConnectionMenuItem.Text = _advancedConnectionGroup.Visible
+                ? "Hide advanced AD settings"
+                : "Advanced AD settings...";
+        };
 
+        _homeConnectionToolsMenu.Items.AddRange([
+            environmentCheck,
+            deviceDiagnostics,
+            new ToolStripSeparator(),
+            _homeAdvancedConnectionMenuItem
+        ]);
         connectionActions.Controls.AddRange([
             _homeConnectAdButton,
             _homeDisconnectAdButton,
-            _homeEnvironmentCheckButton,
-            _homeAdvancedDiagnosticsButton,
-            _homeAdvancedButton
+            _homeConnectionToolsButton
         ]);
         connection.Controls.Add(
             connectionActions,
@@ -570,7 +591,7 @@ public sealed partial class MainForm
             new Label
             {
                 Text =
-                    "Most users only need the two account choices above. DC, port, LDAPS and credential storage remain under Advanced.",
+                    "Sign in with your Windows account or choose another AD account. Advanced connection settings are under Connection tools.",
                 AutoSize =
                     true,
                 MaximumSize =
@@ -1047,13 +1068,6 @@ public sealed partial class MainForm
             (_, _) =>
                 DisconnectDirectorySession();
 
-        _homeEnvironmentCheckButton.Click +=
-            (_, _) =>
-                ShowEnvironmentDiagnosticDialog();
-
-        _homeAdvancedDiagnosticsButton.Click +=
-            (_, _) => ShowAdvancedDiagnosticCenter();
-
         _homeUseWindowsIdentity.CheckedChanged +=
             (_, _) =>
             {
@@ -1074,17 +1088,6 @@ public sealed partial class MainForm
                 _adExplicitCredentials.Checked =
                     true;
                 UpdateDirectoryConnectionUi();
-            };
-
-        _homeAdvancedButton.Click +=
-            (_, _) =>
-            {
-                _advancedConnectionGroup.Visible =
-                    !_advancedConnectionGroup.Visible;
-                _homeAdvancedButton.Text =
-                    _advancedConnectionGroup.Visible
-                        ? "Hide Advanced"
-                        : "Advanced...";
             };
 
         _homeSearchButton.Click +=
@@ -1931,11 +1934,6 @@ public sealed partial class MainForm
         _adExplicitCredentials.AutoSize = true;
         grid.Controls.Add(_adExplicitCredentials, 3, 3);
 
-        _autoConnectOnStart.Text = "Auto-connect to AD when the GUI starts";
-        _autoConnectOnStart.AutoSize = true;
-        grid.Controls.Add(_autoConnectOnStart, 1, 4);
-        grid.SetColumnSpan(_autoConnectOnStart, 3);
-
         var actions = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -2573,99 +2571,8 @@ public sealed partial class MainForm
         }
     }
 
-    private async Task InitializeRecoveryWorkspaceAsync()
-    {
-        RestoreRecoveryUiState();
-        RefreshHomeConnectionUi();
-        UpdateStartConnectionSourceControls();
-
-        var source = SelectedStartSource;
-        if (source == StartConnectionPolicy.Choose)
-        {
-            SetDirectoryConnectionStatus(
-                "Choose Active Directory, Microsoft Entra / Intune, or both on Start.",
-                UiStatusKind.Neutral);
-            return;
-        }
-
-        if (StartConnectionPolicy.NeedsMicrosoftCloud(source))
-        {
-            if (!StartCloudAppConfigured())
-            {
-                await ShowStartCloudWizardAsync(connectAfterSave: true);
-                if (IsDisposed)
-                    return;
-            }
-            else
-            {
-                UiStyle.SetStatus(_homeCloudConnectionStatus,
-                    "Cloud is configured. Click Connect to Microsoft 365 to sign in with MFA.",
-                    UiStatusKind.Neutral);
-            }
-        }
-
-        // Cloud-only sessions must NEVER trigger an AD credentials dialog.
-        if (!StartConnectionPolicy.NeedsActiveDirectory(source))
-            return;
-
-        if (!_config.AutoConnectOnStart)
-        {
-            SetDirectoryConnectionStatus(
-                "AD auto-connect is off. Click Connect to AD to use your Windows account.",
-                UiStatusKind.Neutral);
-            return;
-        }
-
-        if (!CanAttemptAutomaticDirectoryConnection())
-        {
-            SetDirectoryConnectionStatus(
-                "AD requires explicit session credentials. Click Connect to AD.",
-                UiStatusKind.Warning);
-            return;
-        }
-
-        // Noninteractive integrated authentication first. A failed bind shows
-        // a warning and never silently asks for administrator credentials.
-        await TestDirectoryConnectionAsync(
-            promptForOu: false,
-            promptForSessionCredentials: false);
-
-        if (!_directoryConnected && !IsDisposed)
-        {
-            SetDirectoryConnectionStatus(
-                "Automatic AD connection failed. Click Connect to AD to retry.",
-                UiStatusKind.Warning);
-        }
-    }
-
-    private bool CanAttemptAutomaticDirectoryConnection()
-    {
-        if (!_config.AdUseExplicitCredentials)
-            return true;
-
-        var mode =
-            string.IsNullOrWhiteSpace(
-                _config.AdCredentialStorageMode)
-                ? "Session"
-                : _config.AdCredentialStorageMode.Trim();
-
-        if (!mode.Equals(
-                "Session",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return AdSessionCredentials.HasPassword ||
-               !string.IsNullOrEmpty(
-                   _adPassword.Text);
-    }
-
     private void RestoreRecoveryUiState()
     {
-        _autoConnectOnStart.Checked =
-            _config.AutoConnectOnStart;
-
         _recoverySource.SelectedIndex =
             _config.RecoverySearchSource.Equals("ProtectedCache", StringComparison.OrdinalIgnoreCase)
                 ? 2
@@ -2743,8 +2650,6 @@ public sealed partial class MainForm
     {
         try
         {
-            _config.AutoConnectOnStart =
-                _autoConnectOnStart.Checked;
             _config.RecoverySearchSource =
                 _recoverySource.SelectedIndex == 2 ? "ProtectedCache" :
                 _recoverySource.SelectedIndex == 1 ? "LocalCache" : "LiveAD";
