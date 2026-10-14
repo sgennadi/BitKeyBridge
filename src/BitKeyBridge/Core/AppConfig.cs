@@ -72,6 +72,11 @@ public sealed class AppConfig
     // Helpdesk policy defaults stay friction-free. Enterprise controls remain
     // explicit opt-ins and are never enabled by a fresh configuration.
     public bool RequireRecoveryAccessReference { get; set; } = false;
+    // Enterprise policy: if enabled, a recovery secret is never released unless
+    // an authorization event is committed to the protected machine audit store.
+    // Portable non-admin clients otherwise use a clearly marked per-user journal
+    // when the protected store is not writable.
+    public bool RequireProtectedAuditForRecovery { get; set; } = false;
     public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = false;
     public string RecoveryReferencePattern { get; set; } = string.Empty;
     public string RecoveryReferenceExample { get; set; } = "INC-12345";
