@@ -57,6 +57,9 @@ try {
         throw 'SECURITY REGRESSION: invalid signing certificate thumbprint was accepted.'
     }
 
+    # Expected child-process failures must not make the outer pwsh step fail.
+    # Release approval was correctly denied above; this CI regression PASSES.
+    $global:LASTEXITCODE = 0
     Write-Host 'Release signing gate negative regressions passed.'
 }
 finally {
