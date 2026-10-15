@@ -99,6 +99,55 @@ function Invoke-StandardUserProbe {
     }
 }
 
+function Invoke-StandardUserPreflight {
+    param(
+        [Parameter(Mandatory)][pscredential]$Credential,
+        [Parameter(Mandatory)][int]$ExpectedExitCode,
+        [Parameter(Mandatory)][string]$ExpectedReaderStatus,
+        [switch]$WithProbe
+    )
+    $nonce = [guid]::NewGuid().ToString('N')
+    $stdoutPath = Join-Path $env:RUNNER_TEMP ("broker-preflight-" + $nonce + ".json")
+    $stderrPath = Join-Path $env:RUNNER_TEMP ("broker-preflight-" + $nonce + ".err")
+    try {
+        $args = @('--audit-broker-preflight', '--no-elevation')
+        if ($WithProbe) { $args += '--probe' }
+        $process = Start-Process -FilePath $standardExecutable -ArgumentList $args -WorkingDirectory (Join-Path $env:WINDIR 'System32') -Credential $Credential -LoadUserProfile -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+        if ($process.ExitCode -ne $ExpectedExitCode) {
+            $stderr = if (Test-Path $stderrPath) {
+                Get-Content -LiteralPath $stderrPath -Raw
+            } else { '' }
+            throw "Readiness CLI returned $($process.ExitCode) expected $ExpectedExitCode. $stderr"
+        }
+        $report = Get-Content -LiteralPath $stdoutPath -Raw | ConvertFrom-Json
+        if ($report.IsLocalAdministrator) {
+            throw 'Standard-user broker preflight unexpectedly reports local admin.'
+        }
+        if ($report.ProbeRequested -ne [bool]$WithProbe) {
+            throw 'Readiness CLI ignored the explicit --probe switch.'
+        }
+        $role = @($report.Checks | Where-Object Check -eq 'CallerEnabledRecoveryReader')
+        if ($role.Count -ne 1 -or $role[0].Status -ne $ExpectedReaderStatus) {
+            throw 'Readiness CLI reported an incorrect enabled-token reader role.'
+        }
+        $audit = @($report.Checks | Where-Object Check -eq 'AuthenticatedDurableAuditProbe')
+        $expectedProbeStatus = if (-not $WithProbe) {
+            'NotTested'
+        } elseif ($ExpectedExitCode -eq 0) {
+            'Pass'
+        } else {
+            'Fail'
+        }
+        if ($audit.Count -ne 1 -or $audit[0].Status -ne $expectedProbeStatus) {
+            throw 'Readiness CLI reported an unexpected durable ACK status.'
+        }
+        Write-Host "Readiness CLI passed (role=$ExpectedReaderStatus, probe=$expectedProbeStatus)."
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Assert-UnsafeAclFailsClosed {
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -242,6 +291,21 @@ try {
         $_.Details -match [regex]::Escape("SID=$deniedSid")
     }).Count -ne 0) {
         throw 'Unauthorized SID appeared in the protected journal.'
+    }
+    Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
+
+    # Read-only diagnostics must not touch the protected journal.
+    $beforePreflight = (Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash
+    Invoke-StandardUserPreflight -Credential $reader -ExpectedExitCode 0 -ExpectedReaderStatus Pass
+    Invoke-StandardUserPreflight -Credential $denied -ExpectedExitCode 3 -ExpectedReaderStatus Fail
+    if ((Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash -ne $beforePreflight) {
+        throw 'Read-only broker preflight unexpectedly modified the journal.'
+    }
+
+    # Only the explicit --probe switch may write a harmless health event.
+    Invoke-StandardUserPreflight -Credential $reader -ExpectedExitCode 0 -ExpectedReaderStatus Pass -WithProbe
+    if ((Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash -eq $beforePreflight) {
+        throw 'The explicit broker preflight probe did not commit a health event.'
     }
     Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
 
