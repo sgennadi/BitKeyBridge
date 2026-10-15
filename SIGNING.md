@@ -5,7 +5,14 @@ Windows GitHub Actions build matrix. The repository does not contain an
 organization code-signing certificate or its private key.
 
 The step is skipped unless repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT
-is configured. The corresponding trusted Code Signing certificate and private
+is configured AND the workflow is processing an explicitly qualifying
+**release push** (trusted version tag, main/master `Release v...`, or
+the narrowly scoped historical rc.1 publication). It never signs Pull
+Requests, arbitrary main commits or manual workflow_dispatch branches.
+PR workflows only receive read-only GitHub repository permissions;
+contents/write and attestation permissions are granted only to the release
+job. The temporary CI signer is used only for positive/negative validation,
+not artifact publication. The corresponding trusted Code Signing certificate and private
 key must also be available to the Windows runner from an authorized signing
 provider or protected certificate store. EV hardware tokens, HSM/cloud signing
 or restricted self-hosted runners may be required. Never commit a PFX,

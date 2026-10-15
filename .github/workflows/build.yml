@@ -9,11 +9,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Compiling untrusted pull request code must never receive write/release
+# credentials. Only the explicitly gated release job may publish or attest.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
-  artifact-metadata: write
+  contents: read
 
 concurrency:
   # Bind concurrency to the exact commit. GitHub can deliver rapid PR
@@ -240,7 +239,22 @@ jobs:
       # the trusted code-signing certificate AND its private key.
       # Set repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT only after provisioning.
       - name: Optional Authenticode sign and verify
-        if: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT != '' }}
+        # Organizational signing credentials are never used on PR or
+        # workflow_dispatch: only an explicitly qualified release push.
+        if: >-
+          vars.BITKEYBRIDGE_SIGNING_THUMBPRINT != '' &&
+          github.event_name == 'push' &&
+          (
+            startsWith(github.ref, 'refs/tags/v') ||
+            (
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+              startsWith(github.event.head_commit.message, 'Release v')
+            ) ||
+            (
+              github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
+              startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1')
+            )
+          )
         shell: pwsh
         env:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
@@ -410,8 +424,7 @@ jobs:
     # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
-      github.head_ref == 'feature/protected-audit-broker-20261014' &&
-      vars.BITKEYBRIDGE_SIGNING_THUMBPRINT == ''
+      github.head_ref == 'feature/protected-audit-broker-20261014'
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 15
@@ -459,6 +472,12 @@ jobs:
        startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))
     needs: [build, laps-regression]
     runs-on: windows-latest
+    # Least-privilege token; these scopes are never granted to PR builds.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Checkout
