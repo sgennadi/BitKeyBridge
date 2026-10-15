@@ -2186,6 +2186,17 @@ internal static class Program
                             preferBroker: true) is not null)
                         failures.Add("Broker allowed a non-canonical journal path.");
 
+                    if (!AuditService.RejectProtectedArchiveOverwrite(
+                            AppPaths.BrokerAuditLogFile, previousArchiveExists: true))
+                        failures.Add("Protected journal rotation could discard its existing archive.");
+                    if (AuditService.RejectProtectedArchiveOverwrite(
+                            AppPaths.BrokerAuditLogFile, previousArchiveExists: false))
+                        failures.Add("Protected journal incorrectly blocked first archive creation.");
+                    if (AuditService.RejectProtectedArchiveOverwrite(
+                            Path.Combine(tempDirectory, "portable-audit.jsonl"),
+                            previousArchiveExists: true))
+                        failures.Add("Protected journal rotation policy affected portable storage.");
+
                     if (!WindowsServiceHost.GetInfo().Installed)
                     {
                         // A user-owned fake server must not be able to forge a

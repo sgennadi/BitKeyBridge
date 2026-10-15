@@ -168,6 +168,11 @@ SIEM delivery is asynchronous and is not guaranteed by the local ACK.
   LocalSystem service identity, journal owner or pre-existing audit corruption.
   Existing rotated or lock files with unsafe ACLs are rejected instead of
   being silently re-trusted.
+- Protected archive retention fails closed: when the active protected journal
+  reaches its size threshold and audit.jsonl.old already exists, automatic
+  rotation refuses to delete/overwrite the old archive. Recovery then remains
+  blocked until an administrator implements an approved externally anchored
+  archive/checkpoint process. This is intentional, not a storage-cleanup bug.
 - If the protected journal is damaged, restore a trusted backup. Do not
   overwrite, truncate or silently reset the hash chain to unblock an operator.
 - Disable `AuditBrokerEnabled` only through an authorized admin change to

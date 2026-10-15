@@ -292,10 +292,27 @@ public sealed class AuditService
         return null;
     }
 
+    // Never silently destroy already retained SYSTEM-owned protected audit
+    // history. Such loss would invalidate incident evidence and cannot be
+    // authorized by ordinary readers or an automatic rotation worker.
+    internal static bool RejectProtectedArchiveOverwrite(
+        string path, bool previousArchiveExists) =>
+        previousArchiveExists &&
+        string.Equals(Path.GetFullPath(path),
+            Path.GetFullPath(AppPaths.BrokerAuditLogFile),
+            StringComparison.OrdinalIgnoreCase);
+
     private void RotateIfNeeded(string path)
     {
         if (!File.Exists(path) || new FileInfo(path).Length < _maxBytes) return;
         var old = path + ".old";
+        if (RejectProtectedArchiveOverwrite(path, File.Exists(old)))
+            throw new IOException(
+                "Protected audit capacity reached. Refusing to delete the existing " +
+                "rotated archive. A security-approved archival/checkpoint policy " +
+                "is required before more protected recovery operations.");
+
+        // Existing legacy/non-protected audit rotation behavior is unchanged.
         if (File.Exists(old)) File.Delete(old);
         File.Move(path, old);
     }

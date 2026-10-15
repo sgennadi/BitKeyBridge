@@ -2,6 +2,8 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Stop destructive protected journal rotation: when a protected .old archive is present at the next size threshold, deny the append instead of deleting the prior audit history. Add regression checks; legacy portable audit rotation remains unchanged.
+
 - Add `--audit-broker-preflight [--probe]` for secret-free local Windows join/token/RBAC/service/signing/NTFS diagnostics. The passive default never writes a journal event; an explicit probe writes one synthetic committed health event. Add real standard-user CI assertions and an optional CMD-only per-user report wrapper, plus enterprise AD/Entra acceptance steps. Correct outdated Russian README release-version guidance.
 
 - Reject stale RBAC machine policy after startup: pin the trusted appsettings fingerprint and deny audit requests until restart whenever it changes. Require GUID recovery session correlation for every broker operation, and evaluate only enabled Windows group memberships for GUI RBAC, matching broker impersonation. Add offline and Windows service integration regression checks.

@@ -164,7 +164,10 @@ unverified until your security team approves a retention strategy.
 
 The protected journal can have both `audit.jsonl` and a rotated
 `audit.jsonl.old`. Both, plus the `.lock` file and ancestors, are
-checked for unsafe write ACLs. Retention, external sealing and off-host
+checked for unsafe write ACLs. A second automatic protected rotation
+cannot delete the old archive: strict recovery intentionally fails
+closed at that point, pending an administrator-approved off-host sealing
+and archival process. Retention, external sealing and off-host
 archival require a security-approved policy; do not truncate/delete
 these files to make a failed audit check pass.
 
