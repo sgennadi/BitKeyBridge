@@ -57,6 +57,15 @@ already exists, on a self-hosted/non-GitHub runner, or without its explicit
 on that disposable CI virtual machine: do not run it on a DC, managed
 workstation, production server or persistent CI host.
 
+The standard-user integration also runs the native
+`--audit-broker-preflight` JSON command as allowed and denied accounts,
+asserts that passive preflight leaves the journal unchanged, and verifies
+`--probe` alone records an explicit synthetic event.
+
+[Manual managed-domain and Entra acceptance runbook](managed-domain-acceptance-0.30.0-rc.2.md)
+includes the CMD-only report wrapper
+[`tests/windows/BitKeyBridge-DomainPreflight.cmd`](../tests/windows/BitKeyBridge-DomainPreflight.cmd).
+
 This checks local Windows account impersonation and the Named Pipe; it does
 not substitute for the separate domain-connected AD/LAPS/Entra acceptance
 tests below.

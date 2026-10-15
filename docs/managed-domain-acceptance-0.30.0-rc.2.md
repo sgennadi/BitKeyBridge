@@ -39,6 +39,15 @@ No RSAT or PowerShell is required for the first preflight.
     BitKeyBridge.exe --version
     BitKeyBridge.exe --audit-broker-preflight --no-elevation
 
+For a locally saved report, run the optional CMD-only helper from the
+repository's `tests/windows` directory:
+
+    BitKeyBridge-DomainPreflight.cmd "C:\Path\To\BitKeyBridge.exe"
+
+Add `/probe` as the second argument only when you intentionally want to
+write a synthetic protected audit event. The report stays in the current
+user's `%LOCALAPPDATA%\BitKeyBridge\Acceptance` folder.
+
 The preflight prints JSON showing join status, actual Windows identity,
 configured RecoveryReaders, service/LocalSystem, signing and optional
 ACL checks. With no `--probe` it DOES NOT write a health event or read

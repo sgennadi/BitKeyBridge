@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.30.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable: v0.29.12 · published prerelease: v0.30.0-rc.1 · test-only Draft PR: v0.30.0-rc.2.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -28,7 +28,9 @@ strict protected auditing. On denied identity, absent service or damaged
 journal, no secret is disclosed. The optional portable user-profile fallback
 is never used in strict mode.
 
-**[Step-by-step setup, limitations and threat model](docs/protected-audit-broker.md)**.
+**[Protected audit broker guide](docs/protected-audit-broker.md)** · **[Managed-domain/Entra acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md)**.
+
+New non-elevated `--audit-broker-preflight` prints a secret-free JSON report of local policy, caller token, service, NTFS (when admin), and executable signing. `--audit-broker-preflight --probe` explicitly performs a synthetic committed audit check. The test-only [CMD acceptance wrapper](tests/windows/BitKeyBridge-DomainPreflight.cmd) saves this report locally without PowerShell.
 This candidate is not yet production approved: a domain workstation test,
 token impersonation checks, SIEM delivery and Entra permission tests are
 required before enterprise rollout. Published rc.1 and stable 0.29.12 are
