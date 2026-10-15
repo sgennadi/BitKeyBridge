@@ -2195,7 +2195,11 @@ internal static class Program
                             Result = "Authorized",
                             Details = "Action=ReadLapsPasswords",
                             ComputerName = "LAB-PC",
-                            Source = "LAPS-AD"
+                            Source = "LAPS-AD",
+                            // Fake-pipe ownership must be tested with a
+                            // VALID request, or protocol validation blocks
+                            // before connecting and WaitForConnection times out.
+                            CorrelationId = Guid.NewGuid().ToString("N")
                         };
                         var fakeAck = ProtectedAuditBrokerClient.TryCommit(fakeEntry);
                         connected.GetAwaiter().GetResult();
