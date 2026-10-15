@@ -76,6 +76,7 @@ internal static class Program
             x.Equals("--audit-broker-provision", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
@@ -274,6 +275,7 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
@@ -443,6 +445,15 @@ internal static class Program
                     DiagnosticRedaction.Sanitize(ex.Message));
                 return 1;
             }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase)))
+        {
+            // Read-only local checks, unless --probe explicitly asks for a
+            // harmless, committed health event. Never reads recovery secrets.
+            return BrokerReadinessDiagnosticService.Run(
+                config,
+                probe: args.Any(x => x.Equals("--probe", StringComparison.OrdinalIgnoreCase)));
         }
 
         if (args.Any(x => x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase)))
@@ -4012,6 +4023,7 @@ internal static class Program
         Console.WriteLine("  --service-status      Show installed service state and identity");
         Console.WriteLine("  --audit-broker-provision  Admin only: protect journal/config ACL and enable audit broker");
         Console.WriteLine("  --audit-broker-status     Check authenticated protected audit ACK as current reader (writes safe health event)");
+        Console.WriteLine("  --audit-broker-preflight [--probe]  JSON local/token/service/ACL/signing checks (no secrets; probe is opt-in)");
         Console.WriteLine("  --audit-broker-verify     Admin only: verify protected NTFS ACL + audit chain");
         Console.WriteLine("  --vault-status        Show AD credential vault metadata (never plaintext)");
         Console.WriteLine("  --vault-save-user     Save AD credential in current-user Credential Manager");
