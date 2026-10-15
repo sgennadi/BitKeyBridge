@@ -403,6 +403,51 @@ jobs:
             -Executable (Join-Path $root 'BitKeyBridge.exe') `
             -EphemeralHostedRunner
 
+  release-signing-positive:
+    # Ephemeral PKI tests are not an organization signing approval.
+    # Sign COPIES of all 3 tested architectures with a temporary certificate
+    # trusted only in CurrentUser on a disposable GitHub-hosted Windows runner.
+    # Never upload the signed test binaries, certificate or private key.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/protected-audit-broker-20261014' &&
+      vars.BITKEYBRIDGE_SIGNING_THUMBPRINT == ''
+    needs: [build]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout signing verification harness
+        uses: actions/checkout@v7
+
+      - name: Download verified x64 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: signing-integration/win-x64
+
+      - name: Download verified x86 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: signing-integration/win-x86
+
+      - name: Download verified ARM64 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: signing-integration/win-arm64
+
+      - name: Positive signed release and tamper rejection (ephemeral cert)
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or
+              $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Signature integration is allowed only on an ephemeral GitHub-hosted runner.'
+          }
+          ./tests/windows/ReleaseSigningPositiveIntegration.ps1 -ArtifactRoot signing-integration -EphemeralHostedRunner
+
   release:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||

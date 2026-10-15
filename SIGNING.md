@@ -30,6 +30,24 @@ signed release in staging.
 Use Start > Device Diagnostics... > Verify EXE signature to check the running
 EXE with Windows WinVerifyTrust. This is verification, NOT self-signing.
 
+## Release signing: positive CI integration test
+
+PR #57 runs a separate Windows-hosted test after all three architecture builds.
+It generates a **non-exportable, ephemeral** CurrentUser test Code Signing
+certificate with Windows APIs, signs **COPIES** of the three binaries, and
+verifies the exact certificate thumbprint, trusted Authenticode, exact product
+version, and PE machine type in `Verify-ReleaseSigning.ps1`. It then changes
+only test ZIP contents or expected values and asserts rejection of incorrect
+signer, version, architecture and unsigned executables. Certificate trust and
+files are removed in `finally`. The test deliberately never uploads any
+signed test artifacts.
+
+This is **not** an enterprise-trusted signed release. It does not configure
+BITKEYBRIDGE_SIGNING_THUMBPRINT, install an organizational private key,
+authorize GitHub Release publication, or test actual domain trust chains.
+The job skips when actual organizational signing is configured: real signing
+requires its own controlled runner/provider and manual field acceptance.
+
 ## Protected audit broker: mandatory signing policy
 
 When the managed `AuditBrokerEnabled` and

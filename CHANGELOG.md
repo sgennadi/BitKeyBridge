@@ -2,6 +2,9 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Add an ephemeral Windows CI positive Authenticode acceptance job: generate a non-exportable CurrentUser test signing certificate, sign copies of x64/x86/ARM64 EXEs, require all three exact trusted signer/product version/PE architecture matches, and reject wrong signer, version, architecture and unsigned binaries. Clean up CurrentUser test trust and temporary files; never upload test certificates or sign production releases.
+
+
 - Prevent unsigned managed-broker upgrade/rollback and elevated updater plan policy bypass. Strict audit mode now requires a trusted Authenticode signature and an exact configured publisher; the elevated apply helper independently reloads machine signing settings and validates the staged executable before replacement, refusing unattended apply when its current policy is disabled. Add offline publisher-spoofing regression checks.
 
 - Require verified Authenticode on all three release EXEs before publishing a protected-audit 0.30.x version: exact signing certificate thumbprint, trusted chain, matching x64/x86/ARM64 PE architecture and ProductVersion. Include signing evidence in SHA256SUMS and GitHub attestations, with fail-closed CI regression tests.
