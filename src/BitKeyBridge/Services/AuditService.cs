@@ -298,8 +298,8 @@ public sealed class AuditService
     internal static bool RejectProtectedArchiveOverwrite(
         string path, bool previousArchiveExists) =>
         previousArchiveExists &&
-        string.Equals(Path.GetFullPath(path),
-            Path.GetFullPath(AppPaths.BrokerAuditLogFile),
+        string.Equals(System.IO.Path.GetFullPath(path),
+            System.IO.Path.GetFullPath(AppPaths.BrokerAuditLogFile),
             StringComparison.OrdinalIgnoreCase);
 
     private void RotateIfNeeded(string path)
