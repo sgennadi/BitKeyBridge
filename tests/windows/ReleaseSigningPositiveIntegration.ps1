@@ -25,9 +25,18 @@ if ($tool) {
     $signtool = $tool.Source
 } else {
     $kitRoot = 'C:\Program Files (x86)\Windows Kits\10\bin'
-    $candidate = Get-ChildItem -LiteralPath $kitRoot -Filter signtool.exe -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*\x64\signtool.exe' } | Sort-Object FullName -Descending | Select-Object -First 1
-    if (-not $candidate) { throw 'Windows SDK SignTool is missing.' }
-    $signtool = $candidate.FullName
+    # Inspect only version/x64/signTool.exe slots; recursive SDK scans
+    # can be unexpectedly slow on some GitHub-hosted Windows images.
+    $candidate = $null
+    foreach ($versionFolder in (Get-ChildItem -LiteralPath $kitRoot -Directory -ErrorAction Stop | Sort-Object Name -Descending)) {
+        $candidatePath = Join-Path (Join-Path $versionFolder.FullName 'x64') 'signtool.exe'
+        if (Test-Path -LiteralPath $candidatePath -PathType Leaf) {
+            $candidate = $candidatePath
+            break
+        }
+    }
+    if (-not $candidate) { throw 'Windows SDK x64 SignTool is missing.' }
+    $signtool = $candidate
 }
 
 $root = Join-Path $env:RUNNER_TEMP ('bkb-signing-positive-' + [guid]::NewGuid().ToString('N'))
@@ -50,8 +59,15 @@ function Require-Rejection {
     $report = "$base.json"
     try {
         $arguments = @('-NoProfile', '-NonInteractive', '-File', $validator, '-ReleaseDirectory', $release, '-Tag', $Version, '-ExpectedThumbprint', $Pin, '-OutputPath', $report)
-        $p = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
-        if ($p.ExitCode -eq 0) { throw "SECURITY FAILURE: $Case was accepted." }
+        $p = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
+        try {
+            if (-not $p.WaitForExit(120000)) {
+                $p.Kill($true)
+                throw "Negative signing case timed out rather than correctly rejected: $Case"
+            }
+            if ($p.ExitCode -eq 0) { throw "SECURITY FAILURE: $Case was accepted." }
+        }
+        finally { $p.Dispose() }
         if (Test-Path -LiteralPath $report) { throw "SECURITY FAILURE: $Case generated approval evidence." }
         Write-Host "Correctly refused $Case"
     } finally {
@@ -65,12 +81,31 @@ try {
         if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw "Missing test artifact $rid" }
         $original[$rid] = [IO.Path]::GetFullPath($zip)
         $folder = Join-Path $root ("stage-" + $rid)
+        Write-Host "Extracting $rid for isolated signature verification..."
         [IO.Compression.ZipFile]::ExtractToDirectory([IO.Path]::GetFullPath($zip), $folder)
         if (-not (Test-Path -LiteralPath (Join-Path $folder 'BitKeyBridge.exe') -PathType Leaf)) { throw "No executable inside $rid" }
     }
 
-    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=BitKeyBridge Ephemeral CI Code Signing' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyExportPolicy NonExportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(3)
-    if (-not $cert -or -not $cert.HasPrivateKey) { throw 'Could not create non-exportable CI signing key.' }
+    Write-Host 'Creating ephemeral, non-exportable signing key (bounded to 120 seconds)...'
+    $certJob = Start-Job -ScriptBlock {
+        $ErrorActionPreference = 'Stop'
+        $newCert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=BitKeyBridge Ephemeral CI Code Signing' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyExportPolicy NonExportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(3)
+        if (-not $newCert -or -not $newCert.HasPrivateKey) { throw 'Ephemeral certificate creation failed.' }
+        Write-Output $newCert.Thumbprint
+    }
+    try {
+        if (-not (Wait-Job -Job $certJob -Timeout 120)) {
+            Stop-Job -Job $certJob -ErrorAction SilentlyContinue
+            throw 'Ephemeral signing certificate creation timed out after 120 seconds.'
+        }
+        $generated = @(Receive-Job -Job $certJob -ErrorAction Stop | Where-Object { $_ })
+        if ($generated.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$generated[0])) {
+            throw 'Ephemeral signing certificate did not return one thumbprint.'
+        }
+        $cert = Get-Item -LiteralPath ("Cert:\CurrentUser\My\" + [string]$generated[0]) -ErrorAction Stop
+        if (-not $cert.HasPrivateKey) { throw 'Ephemeral signing certificate has no usable private key.' }
+    }
+    finally { Remove-Job -Job $certJob -Force -ErrorAction SilentlyContinue }
     $thumbprint = $cert.Thumbprint.ToUpperInvariant()
     $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
     $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new([Security.Cryptography.X509Certificates.StoreName]::Root, [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
@@ -80,8 +115,22 @@ try {
     foreach ($rid in $rids) {
         $folder = Join-Path $root ("stage-" + $rid)
         $exe = Join-Path $folder 'BitKeyBridge.exe'
-        & $signtool sign /s My /sha1 $thumbprint /fd SHA256 "$exe"
-        if ($LASTEXITCODE -ne 0) { throw "Ephemeral signer could not sign $rid." }
+        Write-Host "Signing $rid using temporary Windows certificate..."
+        $signOut = Join-Path $root ("sign-" + $rid + ".stdout")
+        $signErr = Join-Path $root ("sign-" + $rid + ".stderr")
+        $signArgs = @('sign', '/s', 'My', '/sha1', $thumbprint, '/fd', 'SHA256', $exe)
+        $signProcess = Start-Process -FilePath $signtool -ArgumentList $signArgs -NoNewWindow -PassThru -RedirectStandardOutput $signOut -RedirectStandardError $signErr
+        try {
+            if (-not $signProcess.WaitForExit(120000)) {
+                $signProcess.Kill($true)
+                throw "Ephemeral SignTool timed out for $rid after 120 seconds."
+            }
+            if ($signProcess.ExitCode -ne 0) {
+                $signError = if (Test-Path -LiteralPath $signErr) { Get-Content -LiteralPath $signErr -Raw } else { '' }
+                throw "Ephemeral SignTool failed for $rid (exit $($signProcess.ExitCode)): $signError"
+            }
+        }
+        finally { $signProcess.Dispose() }
         # Avoid a redundant SignTool network/trust lookup. The actual
         # release validator performs Authenticode validation below.
         # Store-only ZIP is sufficient to exercise archive verification and
@@ -90,8 +139,23 @@ try {
         [IO.Compression.ZipFile]::CreateFromDirectory($folder, (Join-Path $release ("BitKeyBridge-" + $rid + ".zip")), [IO.Compression.CompressionLevel]::NoCompression, $false)
     }
 
+    Write-Host 'Verifying signed x64, x86 and ARM64 release packages (bounded to 240 seconds)...'
     $reportPath = Join-Path $root 'approved-signing.json'
-    & $validator -ReleaseDirectory $release -Tag $tag -ExpectedThumbprint $thumbprint -OutputPath $reportPath
+    $positiveOut = Join-Path $root 'positive-signature.stdout'
+    $positiveErr = Join-Path $root 'positive-signature.stderr'
+    $positiveArgs = @('-NoProfile', '-NonInteractive', '-File', $validator, '-ReleaseDirectory', $release, '-Tag', $tag, '-ExpectedThumbprint', $thumbprint, '-OutputPath', $reportPath)
+    $positive = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $positiveArgs -NoNewWindow -PassThru -RedirectStandardOutput $positiveOut -RedirectStandardError $positiveErr
+    try {
+        if (-not $positive.WaitForExit(240000)) {
+            $positive.Kill($true)
+            throw 'Full signed release verification timed out after 240 seconds.'
+        }
+        if ($positive.ExitCode -ne 0) {
+            $diagnostic = if (Test-Path -LiteralPath $positiveErr) { Get-Content -LiteralPath $positiveErr -Raw } else { '' }
+            throw "Full signed release verification failed (exit $($positive.ExitCode)): $diagnostic"
+        }
+    }
+    finally { $positive.Dispose() }
     if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) { throw 'Signed release failed to generate evidence.' }
     $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
     if ($report.ReleaseTag -ne $tag -or @($report.Executables).Count -ne 3) {
