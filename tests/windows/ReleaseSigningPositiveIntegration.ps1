@@ -86,31 +86,93 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $folder 'BitKeyBridge.exe') -PathType Leaf)) { throw "No executable inside $rid" }
     }
 
-    Write-Host 'Creating ephemeral, non-exportable signing key (bounded to 120 seconds)...'
-    $certJob = Start-Job -ScriptBlock {
-        $ErrorActionPreference = 'Stop'
-        $newCert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=BitKeyBridge Ephemeral CI Code Signing' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyExportPolicy NonExportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(3)
-        if (-not $newCert -or -not $newCert.HasPrivateKey) { throw 'Ephemeral certificate creation failed.' }
-        Write-Output $newCert.Thumbprint
-    }
+    # New-SelfSignedCertificate can hang inside a hosted PowerShell job.
+    # Create a short-lived test CA + leaf using pure .NET APIs, then import
+    # only the leaf's private key in CURRENT-USER My for SignTool.
+    # PFX bytes/password never touch disk or repository artifacts.
+    Write-Host 'Creating ephemeral signing CA and leaf through .NET CertificateRequest...'
+    $rootKey = $null
+    $leafKey = $null
+    $caCertificate = $null
+    $issuedCertificate = $null
+    $signedLeaf = $null
+    $pfxBytes = $null
+    $password = [Guid]::NewGuid().ToString('N')
+    $begin = [DateTimeOffset]::UtcNow.AddMinutes(-5)
+    $endTime = [DateTimeOffset]::UtcNow.AddDays(2)
     try {
-        if (-not (Wait-Job -Job $certJob -Timeout 120)) {
-            Stop-Job -Job $certJob -ErrorAction SilentlyContinue
-            throw 'Ephemeral signing certificate creation timed out after 120 seconds.'
-        }
-        $generated = @(Receive-Job -Job $certJob -ErrorAction Stop | Where-Object { $_ })
-        if ($generated.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$generated[0])) {
-            throw 'Ephemeral signing certificate did not return one thumbprint.'
-        }
-        $cert = Get-Item -LiteralPath ("Cert:\CurrentUser\My\" + [string]$generated[0]) -ErrorAction Stop
-        if (-not $cert.HasPrivateKey) { throw 'Ephemeral signing certificate has no usable private key.' }
+        $rootKey = [Security.Cryptography.RSA]::Create(2048)
+        $caRequest = [Security.Cryptography.X509Certificates.CertificateRequest]::new(
+            'CN=BitKeyBridge Ephemeral CI Root', $rootKey,
+            [Security.Cryptography.HashAlgorithmName]::SHA256,
+            [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+        $caRequest.CertificateExtensions.Add(
+            [Security.Cryptography.X509Certificates.X509BasicConstraintsExtension]::new(
+                $true, $false, 0, $true))
+        $caRequest.CertificateExtensions.Add(
+            [Security.Cryptography.X509Certificates.X509KeyUsageExtension]::new(
+                [Security.Cryptography.X509Certificates.X509KeyUsageFlags]::KeyCertSign -bor
+                [Security.Cryptography.X509Certificates.X509KeyUsageFlags]::CrlSign, $true))
+        $caCertificate = $caRequest.CreateSelfSigned($begin, $endTime)
+
+        $leafKey = [Security.Cryptography.RSA]::Create(2048)
+        $leafRequest = [Security.Cryptography.X509Certificates.CertificateRequest]::new(
+            'CN=BitKeyBridge Ephemeral CI Code Signing', $leafKey,
+            [Security.Cryptography.HashAlgorithmName]::SHA256,
+            [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+        $leafRequest.CertificateExtensions.Add(
+            [Security.Cryptography.X509Certificates.X509BasicConstraintsExtension]::new(
+                $false, $false, 0, $true))
+        $leafRequest.CertificateExtensions.Add(
+            [Security.Cryptography.X509Certificates.X509KeyUsageExtension]::new(
+                [Security.Cryptography.X509Certificates.X509KeyUsageFlags]::DigitalSignature,
+                $true))
+        $eku = [Security.Cryptography.OidCollection]::new()
+        [void]$eku.Add([Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
+        $leafRequest.CertificateExtensions.Add(
+            [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new(
+                $eku, $true))
+        $serial = [byte[]]::new(16)
+        [Security.Cryptography.RandomNumberGenerator]::Fill($serial)
+        $serial[0] = $serial[0] -band 0x7f
+        $issuedCertificate = $leafRequest.Create($caCertificate, $begin, $endTime, $serial)
+        $signedLeaf = $issuedCertificate.CopyWithPrivateKey($leafKey)
+        $pfxBytes = $signedLeaf.Export(
+            [Security.Cryptography.X509Certificates.X509ContentType]::Pfx,
+            $password)
+        $importFlags =
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::UserKeySet -bor
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet
+        $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfxBytes, $password, $importFlags)
+        if (-not $cert.HasPrivateKey) { throw 'No private key in ephemeral signing leaf.' }
+        $personal = [Security.Cryptography.X509Certificates.X509Store]::new(
+            [Security.Cryptography.X509Certificates.StoreName]::My,
+            [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
+        $personal.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+        try { $personal.Add($cert) }
+        finally { $personal.Close() }
+        $thumbprint = $cert.Thumbprint.ToUpperInvariant()
+        $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $caCertificate.Export(
+                [Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+        $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new(
+            [Security.Cryptography.X509Certificates.StoreName]::Root,
+            [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
+        $rootStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+        $rootStore.Add($public)
     }
-    finally { Remove-Job -Job $certJob -Force -ErrorAction SilentlyContinue }
-    $thumbprint = $cert.Thumbprint.ToUpperInvariant()
-    $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-    $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new([Security.Cryptography.X509Certificates.StoreName]::Root, [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
-    $rootStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-    $rootStore.Add($public)
+    finally {
+        if ($pfxBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($pfxBytes)
+        }
+        if ($signedLeaf) { $signedLeaf.Dispose() }
+        if ($issuedCertificate) { $issuedCertificate.Dispose() }
+        if ($caCertificate) { $caCertificate.Dispose() }
+        if ($leafKey) { $leafKey.Dispose() }
+        if ($rootKey) { $rootKey.Dispose() }
+        $password = ''
+    }
 
     foreach ($rid in $rids) {
         $folder = Join-Path $root ("stage-" + $rid)
