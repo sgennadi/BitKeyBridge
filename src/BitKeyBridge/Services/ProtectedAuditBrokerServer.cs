@@ -71,7 +71,7 @@ internal sealed class ProtectedAuditBrokerServer
             throw new InvalidOperationException(
                 "Machine policy owner/ACL is not protected; broker will not start.");
 
-        if (!ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile))
+        if (!ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(AppPaths.BrokerAuditLogFile))
             throw new InvalidOperationException(
                 "Protected audit journal was not provisioned with secure NTFS ACLs.");
 
@@ -221,6 +221,8 @@ internal sealed class ProtectedAuditBrokerServer
             // service startup. Every ACK is conditioned on current NTFS trust.
             if (allowed &&
                 ProtectedAuditStoragePolicy.IsTrusted(AppPaths.AppSettingsFile) &&
+                ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(
+                    AppPaths.BrokerAuditLogFile) &&
                 AcceptRequest(actorSid, request.RequestId))
             {
                 var entry = _journal.WriteBrokerAuthorizedRequest(

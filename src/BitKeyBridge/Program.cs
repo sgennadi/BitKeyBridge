@@ -421,10 +421,13 @@ internal static class Program
 
             try
             {
-                if (!ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile))
+                if (!ProtectedAuditStoragePolicy.IsTrusted(AppPaths.AppSettingsFile) ||
+                    !ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(
+                        AppPaths.BrokerAuditLogFile))
                 {
                     Console.Error.WriteLine(
-                        "The protected audit file or its containing directory has unsafe NTFS ACLs.");
+                        "Protected audit verification failed: machine policy, journal, " +
+                        "rotated archive, lock file, or parent-directory ACL is unsafe.");
                     return 1;
                 }
 
@@ -457,7 +460,7 @@ internal static class Program
                 if (SecurityContext.IsAdministrator())
                     Console.WriteLine(
                         "ProtectedJournal=" +
-                        ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile));
+                        ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(AppPaths.BrokerAuditLogFile));
                 // Service SCM status is not proof that the protected
                 // local pipe is listening or that this account can write.
                 // A synthetic event receives an ACK only after the SYSTEM

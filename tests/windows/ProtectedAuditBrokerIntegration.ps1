@@ -137,6 +137,12 @@ function Assert-UnsafeAclFailsClosed {
         }
 
         Invoke-StandardUserProbe -Credential $ReaderCredential -ExpectedExitCode 3
+
+        # Administrative diagnostics must reject the same unsafe ACL.
+        $verification = Start-Process -FilePath $Executable -ArgumentList @('--audit-broker-verify', '--no-elevation') -Wait -PassThru
+        if ($verification.ExitCode -eq 0) {
+            throw "Admin verifier accepted unsafe audit ACL: $Path"
+        }
         if ((Get-FileHash -LiteralPath $Journal -Algorithm SHA256).Hash -ne
             $beforeJournalHash) {
             throw "Protected journal changed during ACL rejection: $Path"
@@ -267,6 +273,26 @@ try {
     Assert-UnsafeAclFailsClosed -Path $protectedDirectory -Journal $journal -ReaderCredential $reader
     Assert-UnsafeAclFailsClosed -Path $machineConfig -Journal $journal -ReaderCredential $reader
     Assert-UnsafeAclFailsClosed -Path $journal -Journal $journal -ReaderCredential $reader
+
+    # The interprocess lock and optional rotated archive are also protected.
+    $journalLock = "$journal.lock"
+    if (-not (Test-Path -LiteralPath $journalLock -PathType Leaf)) {
+        throw 'Protected journal lock file is missing.'
+    }
+    Assert-UnsafeAclFailsClosed -Path $journalLock -Journal $journal -ReaderCredential $reader
+
+    $rotatedJournal = "$journal.old"
+    if (Test-Path -LiteralPath $rotatedJournal) {
+        throw 'Unexpected journal archive on a disposable CI runner.'
+    }
+    try {
+        [IO.File]::WriteAllText($rotatedJournal, '')
+        Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
+        Assert-UnsafeAclFailsClosed -Path $rotatedJournal -Journal $journal -ReaderCredential $reader
+    }
+    finally {
+        Remove-Item -LiteralPath $rotatedJournal -Force -ErrorAction SilentlyContinue
+    }
 
     # Verify stopped service cannot satisfy strict audit. No fallback is allowed.
     Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')

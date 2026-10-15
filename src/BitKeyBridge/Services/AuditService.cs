@@ -119,8 +119,12 @@ public sealed class AuditService
                         StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(_path, AppPaths.BrokerAuditLogFile,
                         StringComparison.OrdinalIgnoreCase);
-                if (!canonicalMachineJournal ||
-                    !ProtectedAuditStoragePolicy.IsTrusted(_path))
+                var trustedJournal = string.Equals(
+                        _path, AppPaths.BrokerAuditLogFile,
+                        StringComparison.OrdinalIgnoreCase)
+                    ? ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(_path)
+                    : ProtectedAuditStoragePolicy.IsTrusted(_path);
+                if (!canonicalMachineJournal || !trustedJournal)
                     return null;
 
                 try

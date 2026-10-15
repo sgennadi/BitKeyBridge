@@ -91,6 +91,37 @@ internal static class ProtectedAuditStoragePolicy
         }
     }
 
+    /// <summary>
+    /// Protect the current journal and its rotated/locking companion files.
+    /// An unsafe archive or lock must block privileged audit acknowledgements.
+    /// </summary>
+    internal static bool IsTrustedBrokerJournal(string path)
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows() ||
+                !string.Equals(Path.GetFullPath(path),
+                    Path.GetFullPath(AppPaths.BrokerAuditLogFile),
+                    StringComparison.OrdinalIgnoreCase) ||
+                !IsTrusted(path))
+                return false;
+
+            foreach (var suffix in new[] { ".old", ".lock" })
+            {
+                var companion = path + suffix;
+                if (Directory.Exists(companion) ||
+                    (File.Exists(companion) && !IsTrusted(companion)))
+                    return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static SecurityIdentifier? ResolveServiceSid()
     {
         try

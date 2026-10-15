@@ -2,6 +2,8 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Validate archive and lock-file ACLs alongside the protected journal. Administrative --audit-broker-verify also checks appsettings machine-policy ACL, with fail-closed standard-user Windows integration tests for both companion files and administrator diagnostics.
+
 - Add an opt-in local Windows Service named-pipe broker so delegated non-admin Helpdesk sessions can commit strict, hash-chained recovery audit events without UAC or machine journal write permissions.
 - Authenticate the caller using the impersonated Windows token and an explicit RBAC RecoveryReaders SID/group allowlist; reject Everyone/Authenticated Users/BUILTIN Users and all empty/broad broker policies. The pipe DACL grants narrow ReadData/WriteData rights but never CreateNewInstance.
 - Verify the pipe is SYSTEM-owned before the client sends any recovery metadata. Use a bounded versioned protocol with a one-time request ID, fixed recovery operations, replay tracking, per-SID rate limiting and short timeouts. The protocol does **not** accept passwords, keys or client-supplied actor SIDs.

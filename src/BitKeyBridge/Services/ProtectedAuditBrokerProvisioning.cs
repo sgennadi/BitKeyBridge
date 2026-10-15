@@ -109,7 +109,7 @@ internal static class ProtectedAuditBrokerProvisioning
         SecureFile(AppPaths.AppSettingsFile, allowUsersRead: true);
 
         if (!ProtectedAuditStoragePolicy.IsTrusted(AppPaths.AppSettingsFile) ||
-            !ProtectedAuditStoragePolicy.IsTrusted(AppPaths.BrokerAuditLogFile))
+            !ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(AppPaths.BrokerAuditLogFile))
             throw new InvalidOperationException(
                 "Cannot verify machine configuration and protected journal owner/ACL.");
 

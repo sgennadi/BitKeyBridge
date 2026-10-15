@@ -38,9 +38,10 @@ it uses `tests/windows/ProtectedAuditBrokerIntegration.ps1` to:
   confirm health events contain the real caller SID, not the denied user's SID.
 - Corrupt the hash chain and prove no new entry is appended while access is denied.
 - Temporarily grant BUILTIN Users write access to the machine policy root,
-  protected directory, appsettings file and journal one at a time. Each must
-  fail closed; restore the original ACL owner/DACL in a finally block and
-  confirm a valid authenticated probe succeeds after each restoration.
+  protected directory, appsettings file, journal, journal lock and rotated
+  archive one at a time. Both broker and admin verification must reject
+  each unsafe ACL. Restore original owner/DACL in a finally block and confirm
+  the authenticated recovery-reader probe succeeds after restoration.
 - Stop the service and require the previously authorized user to receive
   exit code 3 (strict fail-closed, never portable fallback).
 - Remove the test service and accounts in `finally`.
@@ -131,7 +132,9 @@ its hash chain checked and the data flushed to disk. Missing service, failed
 identity/ACL validation, damaged hash chain, malformed requests or an absent
 ACK block recovery. The journal trust check covers every directory down to
 the machine configuration root, rejects NTFS junctions/symlinks, and checks
-the machine policy ACL on every broker request. No UAC popup is triggered in the ordinary GUI.
+the machine policy plus journal, rotated archive and lock file ACLs on
+every broker request. Administrator --audit-broker-verify checks the machine
+policy ACL too, not just the active journal. No UAC popup is triggered in the ordinary GUI.
 
 **Limitation:** This is a test preview; the service does not independently
 re-evaluate Entra, ticket approvals, AD ACLs or JIT grants on every request.
@@ -145,6 +148,8 @@ SIEM delivery is asynchronous and is not guaranteed by the local ACK.
 
 - If provisioning fails, do not loosen NTFS ACLs. Correct group membership,
   LocalSystem service identity, journal owner or pre-existing audit corruption.
+  Existing rotated or lock files with unsafe ACLs are rejected instead of
+  being silently re-trusted.
 - If the protected journal is damaged, restore a trusted backup. Do not
   overwrite, truncate or silently reset the hash chain to unblock an operator.
 - Disable `AuditBrokerEnabled` only through an authorized admin change to
