@@ -99,6 +99,61 @@ function Invoke-StandardUserProbe {
     }
 }
 
+function Assert-UnsafeAclFailsClosed {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Journal,
+        [Parameter(Mandatory)][pscredential]$ReaderCredential
+    )
+    $sections = [System.Security.AccessControl.AccessControlSections]::Owner -bor
+        [System.Security.AccessControl.AccessControlSections]::Access
+    $originalSddl = (Get-Acl -LiteralPath $Path).GetSecurityDescriptorSddlForm(
+        $sections)
+    $beforeJournalHash = (Get-FileHash -LiteralPath $Journal -Algorithm SHA256).Hash
+
+    try {
+        # TEMPORARY on a disposable GitHub-hosted runner ONLY. Simulate a
+        # user-writable ancestor or file and demand strict rejection.
+        $unsafeAcl = Get-Acl -LiteralPath $Path
+        $usersSid = [System.Security.Principal.SecurityIdentifier]::new(
+            'S-1-5-32-545')
+        $writeRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+            $usersSid,
+            [System.Security.AccessControl.FileSystemRights]::WriteData,
+            [System.Security.AccessControl.AccessControlType]::Allow)
+        $unsafeAcl.AddAccessRule($writeRule)
+        Set-Acl -LiteralPath $Path -AclObject $unsafeAcl
+
+        $rules = (Get-Acl -LiteralPath $Path).GetAccessRules(
+            $true, $true, [System.Security.Principal.SecurityIdentifier])
+        $unsafeRuleExists = @($rules | Where-Object {
+            $_.IdentityReference.Value -eq $usersSid.Value -and
+            $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            ($_.FileSystemRights -band
+                [System.Security.AccessControl.FileSystemRights]::WriteData) -ne 0
+        }).Count -gt 0
+        if (-not $unsafeRuleExists) {
+            throw "Unsafe ACL simulation failed to apply: $Path"
+        }
+
+        Invoke-StandardUserProbe -Credential $ReaderCredential -ExpectedExitCode 3
+        if ((Get-FileHash -LiteralPath $Journal -Algorithm SHA256).Hash -ne
+            $beforeJournalHash) {
+            throw "Protected journal changed during ACL rejection: $Path"
+        }
+    }
+    finally {
+        # Always restore the *exact* pre-test owner and DACL. Never try this
+        # on production machines, domain controllers or persistent runners.
+        $restoredAcl = Get-Acl -LiteralPath $Path
+        $restoredAcl.SetSecurityDescriptorSddlForm($originalSddl, $sections)
+        Set-Acl -LiteralPath $Path -AclObject $restoredAcl
+    }
+
+    Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
+    Invoke-StandardUserProbe -Credential $ReaderCredential -ExpectedExitCode 0
+}
+
 try {
     $seclogon = Get-Service -Name seclogon -ErrorAction SilentlyContinue
     if ($seclogon -and $seclogon.Status -ne 'Running') {
@@ -165,6 +220,23 @@ try {
     if ($audit -notmatch 'AuditBrokerHealthProbe') {
         throw 'Protected journal is missing the synthetic health event.'
     }
+    $deniedSid = (Get-LocalUser -Name $deniedName).SID.Value
+    $journalEntries = @(
+        Get-Content -LiteralPath $journal |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $_ | ConvertFrom-Json }
+    )
+    if (@($journalEntries | Where-Object {
+        $_.Action -eq 'AuditBrokerHealthProbe' -and
+        $_.Details -match [regex]::Escape("SID=$readerSid")
+    }).Count -eq 0) {
+        throw 'Protected journal does not contain the authenticated reader SID.'
+    }
+    if (@($journalEntries | Where-Object {
+        $_.Details -match [regex]::Escape("SID=$deniedSid")
+    }).Count -ne 0) {
+        throw 'Unauthorized SID appeared in the protected journal.'
+    }
     Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
 
     # An administrator-induced corruption must be refused immediately. The
@@ -173,13 +245,28 @@ try {
     try {
         [IO.File]::AppendAllText($journal,
             '{"forged":true}' + [Environment]::NewLine)
+        $corruptHash = (Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash
         Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3
+        if ((Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash -ne
+            $corruptHash) {
+            throw 'The corrupted journal was modified during a denied request.'
+        }
     }
     finally {
         [IO.File]::WriteAllBytes($journal, $originalJournalBytes)
     }
     Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
     Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 0
+
+    # The ACL chain matters all the way back to the machine policy root.
+    # Run these invasive simulations on this disposable runner only.
+    $machineRoot = Join-Path $env:ProgramData 'BitKeyBridge'
+    $protectedDirectory = Join-Path $machineRoot 'ProtectedAudit'
+    $machineConfig = Join-Path $machineRoot 'appsettings.json'
+    Assert-UnsafeAclFailsClosed -Path $machineRoot -Journal $journal -ReaderCredential $reader
+    Assert-UnsafeAclFailsClosed -Path $protectedDirectory -Journal $journal -ReaderCredential $reader
+    Assert-UnsafeAclFailsClosed -Path $machineConfig -Journal $journal -ReaderCredential $reader
+    Assert-UnsafeAclFailsClosed -Path $journal -Journal $journal -ReaderCredential $reader
 
     # Verify stopped service cannot satisfy strict audit. No fallback is allowed.
     Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')

@@ -31,24 +31,62 @@ internal static class ProtectedAuditStoragePolicy
 
         try
         {
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            var fullPath = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(fullPath);
+            var machineRoot = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(AppPaths.MachineConfigDirectory));
+
+            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory) ||
+                (File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
                 return false;
 
-            var dirSecurity = new DirectoryInfo(directory)
-                .GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access);
-            var fileSecurity = new FileInfo(path)
-                .GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access);
+            // A protected file can be replaced when any of its parent
+            // directories is writable by an untrusted principal.
+            var normalizedDirectory = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(directory));
+            if (!string.Equals(normalizedDirectory, machineRoot,
+                    StringComparison.OrdinalIgnoreCase) &&
+                !normalizedDirectory.StartsWith(
+                    machineRoot + Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase))
+                return false;
 
             var serviceSid = ResolveServiceSid();
-            return IsTrustedOwner(dirSecurity, serviceSid) &&
-                   IsTrustedOwner(fileSecurity, serviceSid) &&
-                   HasNoUntrustedWriter(dirSecurity, serviceSid) &&
+            var reachedMachineRoot = false;
+            for (DirectoryInfo? current = new(normalizedDirectory);
+                 current is not null; current = current.Parent)
+            {
+                // Never follow a user-controllable junction or symbolic link,
+                // even if the target has apparently trusted ACLs.
+                if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
+                    return false;
+
+                var security = current.GetAccessControl(
+                    AccessControlSections.Owner | AccessControlSections.Access);
+                if (!IsTrustedOwner(security, serviceSid) ||
+                    !HasNoUntrustedWriter(security, serviceSid))
+                    return false;
+
+                if (string.Equals(
+                        Path.TrimEndingDirectorySeparator(current.FullName),
+                        machineRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    reachedMachineRoot = true;
+                    break;
+                }
+            }
+
+            if (!reachedMachineRoot)
+                return false;
+
+            var fileSecurity = new FileInfo(fullPath).GetAccessControl(
+                AccessControlSections.Owner | AccessControlSections.Access);
+            return IsTrustedOwner(fileSecurity, serviceSid) &&
                    HasNoUntrustedWriter(fileSecurity, serviceSid);
         }
         catch
         {
-            // An uninspectable ACL cannot prove machine audit protection.
+            // Missing ACL visibility or uncertain file identity fails closed.
             return false;
         }
     }

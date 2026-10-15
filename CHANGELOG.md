@@ -8,7 +8,7 @@
 - Journal a server-generated event using the token-authenticated actor identity in an isolated protected `%ProgramData%\\BitKeyBridge\\ProtectedAudit` directory. Enforce trusted owner/write ACL and hash-chain integrity; flush protected writes to disk before acknowledging success.
 - Introduce administrator-only `--audit-broker-provision` (provisions NTFS ACLs, enables strict audit and broker policy) and `--audit-broker-status`. Broker is disabled by default and currently supports **LocalSystem service identity only**.
 - Integrate the existing GUI authorization preflight: strict broker failures deny recovery without a per-user fallback, while the previous direct protected auditing remains unchanged if the broker has not been enabled.
-- Add protocol/operation/size/broad-principal regression tests. Existing 0.30.0-rc.1 remains the published prerelease; rc.2 is an isolated test build pending managed Windows domain/Entra non-admin acceptance tests.
+- Add protocol/operation/size/broad-principal regression tests. Windows integration now checks impersonated actor SID, corrupt-journal no-write denial and refusal when any machine policy/journal parent or file becomes user-writable. Inspect every directory back to the machine root, reject reparse points, and recheck appsettings ACL for each broker request. Existing 0.30.0-rc.1 remains the published prerelease; rc.2 is an isolated test build pending managed Windows domain/Entra non-admin acceptance tests.
 
 ## 0.30.0-rc.1
 

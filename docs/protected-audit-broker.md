@@ -34,7 +34,13 @@ it uses `tests/windows/ProtectedAuditBrokerIntegration.ps1` to:
   RBAC RecoveryReader, harden NTFS and restart the broker.
 - Prove the authorized account gets a `BrokerProbe=Committed` event while an
   unlisted account receives exit code 3, without a local UAC prompt.
-- Verify the protected journal and hash chain as an administrator.
+- Verify the protected journal and hash chain as an administrator and
+  confirm health events contain the real caller SID, not the denied user's SID.
+- Corrupt the hash chain and prove no new entry is appended while access is denied.
+- Temporarily grant BUILTIN Users write access to the machine policy root,
+  protected directory, appsettings file and journal one at a time. Each must
+  fail closed; restore the original ACL owner/DACL in a finally block and
+  confirm a valid authenticated probe succeeds after each restoration.
 - Stop the service and require the previously authorized user to receive
   exit code 3 (strict fail-closed, never portable fallback).
 - Remove the test service and accounts in `finally`.
@@ -123,7 +129,9 @@ BitLocker recovery keys, AD credentials or Graph tokens. A commit
 acknowledgement is emitted only after the protected file is append-written,
 its hash chain checked and the data flushed to disk. Missing service, failed
 identity/ACL validation, damaged hash chain, malformed requests or an absent
-ACK block recovery. No UAC popup is triggered in the ordinary GUI.
+ACK block recovery. The journal trust check covers every directory down to
+the machine configuration root, rejects NTFS junctions/symlinks, and checks
+the machine policy ACL on every broker request. No UAC popup is triggered in the ordinary GUI.
 
 **Limitation:** This is a test preview; the service does not independently
 re-evaluate Entra, ticket approvals, AD ACLs or JIT grants on every request.

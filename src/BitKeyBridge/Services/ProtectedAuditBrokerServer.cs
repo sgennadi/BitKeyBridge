@@ -217,7 +217,11 @@ internal sealed class ProtectedAuditBrokerServer
                         principal.IsInRole(sid));
             });
 
-            if (allowed && AcceptRequest(actorSid, request.RequestId))
+            // Do not keep trusting a policy file that becomes writable after
+            // service startup. Every ACK is conditioned on current NTFS trust.
+            if (allowed &&
+                ProtectedAuditStoragePolicy.IsTrusted(AppPaths.AppSettingsFile) &&
+                AcceptRequest(actorSid, request.RequestId))
             {
                 var entry = _journal.WriteBrokerAuthorizedRequest(
                     request, actorName, actorSid);
