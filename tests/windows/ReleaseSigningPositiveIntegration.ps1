@@ -82,9 +82,12 @@ try {
         $exe = Join-Path $folder 'BitKeyBridge.exe'
         & $signtool sign /s My /sha1 $thumbprint /fd SHA256 "$exe"
         if ($LASTEXITCODE -ne 0) { throw "Ephemeral signer could not sign $rid." }
-        & $signtool verify /pa /v "$exe"
-        if ($LASTEXITCODE -ne 0) { throw "Temporary signature did not verify for $rid." }
-        [IO.Compression.ZipFile]::CreateFromDirectory($folder, (Join-Path $release ("BitKeyBridge-" + $rid + ".zip")), [IO.Compression.CompressionLevel]::Optimal, $false)
+        # Avoid a redundant SignTool network/trust lookup. The actual
+        # release validator performs Authenticode validation below.
+        # Store-only ZIP is sufficient to exercise archive verification and
+        # avoids CPU-heavy recompression of three large single-file EXEs.
+        Write-Host "Ephemeral signer prepared $rid; packaging without compression."
+        [IO.Compression.ZipFile]::CreateFromDirectory($folder, (Join-Path $release ("BitKeyBridge-" + $rid + ".zip")), [IO.Compression.CompressionLevel]::NoCompression, $false)
     }
 
     $reportPath = Join-Path $root 'approved-signing.json'
