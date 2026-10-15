@@ -154,7 +154,12 @@ signing certificate, a trusted publisher pinned in BitKeyBridge's update
 policy and a signed update/rollback test with a **staged** binary. Do not
 use this test RC to turn on unattended updates. A SHA256 checksum proves
 download integrity, not organizational authorization or Authenticode
-publisher trust.
+publisher trust. After managed protected audit is provisioned, **manual
+updates and local rollbacks also require a trusted Authenticode signature
+and an exact TrustedUpdatePublisher**, even if the legacy optional signature
+checkbox is disabled. The elevated apply helper verifies the current policy
+again after checking the file hash, before replacing binaries. Provision
+the approved signing policy first and keep a signed rollback candidate.
 
 Local `BrokerProbe=Committed` proves a durable LOCAL journal
 acknowledgement, **not** downstream SIEM receipt. Confirm SIEM outbox

@@ -1851,6 +1851,19 @@ internal static class Program
                         "Startup update checks should be enabled, but unattended installation must be opt-in.");
                 }
 
+                // Strict protected audit never permits substring signer spoofing.
+                if (!AuthenticodeVerificationService.PublisherMatches(
+                        "Ariel University", "Ariel University", exact: true) ||
+                    AuthenticodeVerificationService.PublisherMatches(
+                        "Fake Ariel University Signing", "Ariel University",
+                        exact: true) ||
+                    AuthenticodeVerificationService.PublisherMatches(
+                        "Signed", "Signed", exact: true) ||
+                    !AuthenticodeVerificationService.PublisherMatches(
+                        "Example Trusted Publisher Ltd", "Trusted Publisher",
+                        exact: false))
+                    failures.Add("Strict Authenticode publisher matching regression.");
+
                 var expectedHash = new string('a', 64);
                 var sums = expectedHash + "  BitKeyBridge-win-x64.zip" + Environment.NewLine;
                 var parsedHash = UpdateService.ParseChecksum(sums, "BitKeyBridge-win-x64.zip");

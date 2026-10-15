@@ -30,6 +30,25 @@ signed release in staging.
 Use Start > Device Diagnostics... > Verify EXE signature to check the running
 EXE with Windows WinVerifyTrust. This is verification, NOT self-signing.
 
+## Protected audit broker: mandatory signing policy
+
+When the managed `AuditBrokerEnabled` and
+`RequireProtectedAuditForRecovery` policies are both active, the application
+requires a genuinely trusted Authenticode signature **even for manual
+updates and rollbacks**. Configure `TrustedUpdatePublisher` with the
+signer's exact certificate Common Name (as reported by BitKeyBridge
+certificate diagnostics), not a partial or wildcard publisher string.
+The broker-mode comparison is exact and case-insensitive; legacy portable
+updater behavior is unchanged.
+
+The elevated update helper independently loads the current machine policy
+and rechecks Authenticode on the locked, SHA256-verified staged executable
+before replacing installed files. This closes a policy-bypass gap where
+an apply-plan checksum alone could otherwise have been treated as approval
+to install unsigned code. Signed enterprise rollout still requires
+organization-specific Windows trust, certificate authorization and field
+acceptance. No signing keys are included in this repository.
+
 Security cautions:
 - A Domain Controller LDAPS certificate is not necessarily a Code Signing cert.
 - The Entra App Registration authentication certificate is NOT the signing cert.

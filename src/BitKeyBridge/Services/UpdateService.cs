@@ -788,6 +788,20 @@ public sealed class UpdateService : IDisposable
                 OpenVerifiedStagedExecutable(
                     plan);
 
+            // The prepare/rollback path already enforces Authenticode, but
+            // elevated application must independently read CURRENT machine
+            // policy. A valid apply-plan checksum is not a signing exception.
+            // The verified stream stays open (FileShare.Read), preventing
+            // replacement while the helper validates and copies the bytes.
+            var activePolicy = ConfigService.LoadAppConfig();
+            if (plan.Automatic &&
+                !UpdateTrustPolicy.CanInstallUnattended(activePolicy))
+                throw new InvalidOperationException(
+                    "Automatic update apply refused: current machine " +
+                    "signature and publisher policy is not enabled.");
+            AuthenticodeVerificationService.EnforcePolicy(
+                activePolicy, plan.StagedExecutable);
+
             foreach (var target in plan.TargetExecutables
                          .Where(x => !string.IsNullOrWhiteSpace(x))
                          .Distinct(StringComparer.OrdinalIgnoreCase))
