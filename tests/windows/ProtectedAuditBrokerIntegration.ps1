@@ -294,6 +294,25 @@ try {
         Remove-Item -LiteralPath $rotatedJournal -Force -ErrorAction SilentlyContinue
     }
 
+    # A trusted administrator may edit machine policy without changing ACL.
+    # The running service must refuse *all* requests until a restart rather
+    # than continuing to use its cached RBAC reader list.
+    $configFile = Join-Path $env:ProgramData 'BitKeyBridge\appsettings.json'
+    $savedPolicy = [IO.File]::ReadAllBytes($configFile)
+    $savedJournalHash = (Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash
+    try {
+        [IO.File]::AppendAllText($configFile, [Environment]::NewLine)
+        Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3
+        if ((Get-FileHash -LiteralPath $journal -Algorithm SHA256).Hash -ne
+            $savedJournalHash) {
+            throw 'Policy drift was accepted and appended to protected audit.'
+        }
+    }
+    finally {
+        [IO.File]::WriteAllBytes($configFile, $savedPolicy)
+    }
+    Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 0
+
     # Verify stopped service cannot satisfy strict audit. No fallback is allowed.
     Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')
     Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3

@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Security.Cryptography;
 
 namespace BitKeyBridge;
 
@@ -43,6 +44,7 @@ internal sealed class ProtectedAuditBrokerServer
 
     private readonly IReadOnlyList<SecurityIdentifier> _readers;
     private readonly PipeSecurity _security;
+    private readonly byte[] _machinePolicyFingerprint;
     private readonly AuditService _journal = new(AppPaths.BrokerAuditLogFile);
     private readonly SemaphoreSlim _connections = new(MaximumSessions, MaximumSessions);
     private readonly object _rateLock = new();
@@ -79,7 +81,18 @@ internal sealed class ProtectedAuditBrokerServer
             throw new InvalidOperationException(
                 "Protected audit journal hash chain is invalid.");
 
-        _readers = ResolveExplicitReaders(config.RbacRecoveryReaders);
+        // Always resolve the policy currently persisted on disk. If it was
+        // modified after the service loaded the startup AppConfig, require a
+        // restart instead of accepting a stale RBAC snapshot.
+        var currentPolicy = ConfigService.LoadAppConfig();
+        if (!currentPolicy.AuditBrokerEnabled ||
+            !currentPolicy.RequireProtectedAuditForRecovery ||
+            !currentPolicy.RbacEnabled)
+            throw new InvalidOperationException(
+                "The persisted protected audit broker policy is disabled.");
+
+        _readers = ResolveExplicitReaders(currentPolicy.RbacRecoveryReaders);
+        _machinePolicyFingerprint = ReadMachinePolicyFingerprint();
         _security = CreatePipeSecurity(_readers);
     }
 
@@ -221,6 +234,7 @@ internal sealed class ProtectedAuditBrokerServer
             // service startup. Every ACK is conditioned on current NTFS trust.
             if (allowed &&
                 ProtectedAuditStoragePolicy.IsTrusted(AppPaths.AppSettingsFile) &&
+                MachinePolicyUnchanged() &&
                 ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(
                     AppPaths.BrokerAuditLogFile) &&
                 AcceptRequest(actorSid, request.RequestId))
@@ -240,6 +254,31 @@ internal sealed class ProtectedAuditBrokerServer
 
         await ProtectedAuditBrokerProtocol.WriteAsync(
             pipe, response, ProtectedAuditBrokerProtocol.MaxResponseBytes, ct);
+    }
+
+    private static byte[] ReadMachinePolicyFingerprint()
+    {
+        using var input = new FileStream(
+            AppPaths.AppSettingsFile, FileMode.Open, FileAccess.Read,
+            FileShare.Read);
+        return SHA256.HashData(input);
+    }
+
+    private bool MachinePolicyUnchanged()
+    {
+        try
+        {
+            var current = ReadMachinePolicyFingerprint();
+            return CryptographicOperations.FixedTimeEquals(
+                current, _machinePolicyFingerprint);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Protected audit policy change check failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+            return false; // Fail closed when the file cannot be re-read.
+        }
     }
 
     private bool AcceptRequest(string sid, string requestId)

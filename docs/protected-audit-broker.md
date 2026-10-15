@@ -42,6 +42,11 @@ it uses `tests/windows/ProtectedAuditBrokerIntegration.ps1` to:
   archive one at a time. Both broker and admin verification must reject
   each unsafe ACL. Restore original owner/DACL in a finally block and confirm
   the authenticated recovery-reader probe succeeds after restoration.
+- Change only the whitespace in administrator-protected appsettings.json:
+  even with the same trusted ACL, the running service must reject an existing
+  reader until the original file bytes are restored. Any legitimate RBAC or
+  other machine policy change requires a service restart to load the new
+  explicit recovery-reader allowlist.
 - Stop the service and require the previously authorized user to receive
   exit code 3 (strict fail-closed, never portable fallback).
 - Remove the test service and accounts in `finally`.
@@ -133,7 +138,11 @@ identity/ACL validation, damaged hash chain, malformed requests or an absent
 ACK block recovery. The journal trust check covers every directory down to
 the machine configuration root, rejects NTFS junctions/symlinks, and checks
 the machine policy plus journal, rotated archive and lock file ACLs on
-every broker request. Administrator --audit-broker-verify checks the machine
+every broker request. It pins the startup policy file fingerprint and
+fails closed after an administrator edits that file until the service
+restarts; this also prevents stale recovery-reader membership after a
+policy change. Disabled/dismissed Windows token groups are never counted
+as enabled recovery-reader roles. Administrator --audit-broker-verify checks the machine
 policy ACL too, not just the active journal. No UAC popup is triggered in the ordinary GUI.
 
 **Limitation:** This is a test preview; the service does not independently

@@ -2104,6 +2104,15 @@ internal static class Program
                     failures.Add("Broker accepted an invalid nonce.");
 
                 request.RequestId = Guid.NewGuid().ToString("N");
+                request.SessionId = string.Empty;
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a real recovery operation without session ID.");
+                request.SessionId = "non-guid-session";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted an invalid recovery session ID.");
+                request.SessionId = Guid.NewGuid().ToString("N");
+                if (!ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker rejected a valid recovery session ID.");
 
                 // Probe cannot masquerade as an actual secret access, carry
                 // arbitrary ticket text or use a user-chosen target.

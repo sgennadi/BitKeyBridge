@@ -2,6 +2,8 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Reject stale RBAC machine policy after startup: pin the trusted appsettings fingerprint and deny audit requests until restart whenever it changes. Require GUID recovery session correlation for every broker operation, and evaluate only enabled Windows group memberships for GUI RBAC, matching broker impersonation. Add offline and Windows service integration regression checks.
+
 - Validate archive and lock-file ACLs alongside the protected journal. Administrative --audit-broker-verify also checks appsettings machine-policy ACL, with fail-closed standard-user Windows integration tests for both companion files and administrator diagnostics.
 
 - Add an opt-in local Windows Service named-pipe broker so delegated non-admin Helpdesk sessions can commit strict, hash-chained recovery audit events without UAC or machine journal write permissions.

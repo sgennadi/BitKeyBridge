@@ -59,6 +59,7 @@ internal static class ProtectedAuditBrokerProtocol
     {
         if (request is null || request.Version != 1 ||
             !Guid.TryParseExact(request.RequestId, "N", out _) ||
+            !Guid.TryParseExact(request.SessionId, "N", out _) ||
             !IsAllowedOperation(request.Operation))
             return false;
 
