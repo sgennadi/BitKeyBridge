@@ -462,6 +462,29 @@ jobs:
           Write-Host "Release tag: $tag"
           Write-Host "Existing release: $exists"
 
+      # A Git tag alone must never publish the unapproved audit-broker
+      # preview, nor a later 0.30.x release carrying that sensitive feature.
+      # Admins can intentionally approve after completing managed-machine
+      # acceptance, configuring a real organizational signing identity and
+      # reviewing the signed update/rollback chain.
+      - name: Enforce protected audit release approval
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          PROTECTED_AUDIT_APPROVED: ${{ vars.BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED }}
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          if ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
+              $tag -ne "v0.30.0-rc.1") {
+            if ($env:PROTECTED_AUDIT_APPROVED -ne 'true') {
+              throw "Protected audit broker release is NOT approved: complete real-domain AD/Entra acceptance and set BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED=true intentionally."
+            }
+            if ([string]::IsNullOrWhiteSpace($env:SIGNING_THUMBPRINT)) {
+              throw "Protected audit broker release requires the organizational Authenticode signing thumbprint. Unsigned automatic rollout is forbidden."
+            }
+          }
+
       - name: Download x64
         if: steps.release_meta.outputs.exists != 'true'
         uses: actions/download-artifact@v8
