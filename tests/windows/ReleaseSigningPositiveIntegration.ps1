@@ -136,7 +136,10 @@ try {
         [Security.Cryptography.RandomNumberGenerator]::Fill($serial)
         $serial[0] = $serial[0] -band 0x7f
         $issuedCertificate = $leafRequest.Create($caCertificate, $begin, $endTime, $serial)
-        $signedLeaf = $issuedCertificate.CopyWithPrivateKey($leafKey)
+        # PowerShell does not bind C# extension methods as instance members.
+        # Invoke the RSA certificate extension statically instead.
+        $signedLeaf = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::CopyWithPrivateKey(
+            $issuedCertificate, $leafKey)
         $pfxBytes = $signedLeaf.Export(
             [Security.Cryptography.X509Certificates.X509ContentType]::Pfx,
             $password)
