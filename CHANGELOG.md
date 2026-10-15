@@ -2,6 +2,8 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Require verified Authenticode on all three release EXEs before publishing a protected-audit 0.30.x version: exact signing certificate thumbprint, trusted chain, matching x64/x86/ARM64 PE architecture and ProductVersion. Include signing evidence in SHA256SUMS and GitHub attestations, with fail-closed CI regression tests.
+
 - Stop destructive protected journal rotation: when a protected .old archive is present at the next size threshold, deny the append instead of deleting the prior audit history. Add regression checks; legacy portable audit rotation remains unchanged.
 
 - Add `--audit-broker-preflight [--probe]` for secret-free local Windows join/token/RBAC/service/signing/NTFS diagnostics. The passive default never writes a journal event; an explicit probe writes one synthetic committed health event. Add real standard-user CI assertions and an optional CMD-only per-user report wrapper, plus enterprise AD/Entra acceptance steps. Correct outdated Russian README release-version guidance.

@@ -171,6 +171,28 @@ and archival process. Retention, external sealing and off-host
 archival require a security-approved policy; do not truncate/delete
 these files to make a failed audit check pass.
 
+### Release signature verification gate
+
+The 0.30.x GitHub Release job requires explicit protected-audit approval
+and verifies Authenticode on **all three EXEs**, not just the existence
+of a signing thumbprint setting. The PowerShell 7 release validator at
+`tests/windows/Verify-ReleaseSigning.ps1` checks trusted Authenticode
+status, an exact 40-hex signing-certificate thumbprint, the PE x64/x86/ARM64
+machine code and the full `ProductVersion` against the proposed tag.
+It does not execute the release binaries.
+
+New, approved 0.30.x releases include `BitKeyBridge.signatures.json`
+as a release asset and in `SHA256SUMS.txt`. GitHub Actions attests that
+signature-verification report. A bad/unsigned/mismatched architecture or
+version fails before publication.
+
+The thumbprint variable names a certificate, but does **not** provide a
+signing certificate or approval on its own. A dedicated, trusted signing
+environment must be configured independently; the repository never
+contains private signing keys. Configure restricted reviewer approval
+and protected tags/branches before actual production publication.
+The verification gate does not substitute for AD/Entra or SIEM acceptance.
+
 ## 6. Evidence and rollback
 
 Record: test build commit/version and SHA256, OS/architecture,

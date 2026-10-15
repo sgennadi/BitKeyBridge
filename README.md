@@ -31,6 +31,12 @@ is never used in strict mode.
 **[Protected audit broker guide](docs/protected-audit-broker.md)** · **[Managed-domain/Entra acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md)**.
 
 New non-elevated `--audit-broker-preflight` prints a secret-free JSON report of local policy, caller token, service, NTFS (when admin), and executable signing. `--audit-broker-preflight --probe` explicitly performs a synthetic committed audit check. The test-only [CMD acceptance wrapper](tests/windows/BitKeyBridge-DomainPreflight.cmd) saves this report locally without PowerShell.
+A new protected-audit GitHub Release must pass the real, multi-architecture
+Authenticode signature gate: verified signer certificate, exact thumbprint,
+correct PE machine type and ProductVersion, before publishing. The
+signature report is attached to the release and included in checksums and
+provenance evidence. See the [managed-domain acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md).
+
 This candidate is not yet production approved: a domain workstation test,
 token impersonation checks, SIEM delivery and Entra permission tests are
 required before enterprise rollout. Published rc.1 and stable 0.29.12 are

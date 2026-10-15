@@ -354,6 +354,12 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
+      - name: Regression - reject invalid or unauthorized release signing
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable "artifacts/win-x64/BitKeyBridge.exe"
+
       - name: Package architecture
         shell: cmd
         run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
@@ -506,6 +512,25 @@ jobs:
           name: BitKeyBridge-win-arm64
           path: release
 
+      - name: Verify signatures and architectures before protected audit release
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+        shell: pwsh
+        env:
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./tests/windows/Verify-ReleaseSigning.ps1 `
+            -ReleaseDirectory release `
+            -Tag "${{ steps.release_meta.outputs.tag }}" `
+            -ExpectedThumbprint $env:SIGNING_THUMBPRINT `
+            -OutputPath release/BitKeyBridge.signatures.json
+          if (-not (Test-Path release/BitKeyBridge.signatures.json)) {
+            throw "Release signature verification evidence was not created."
+          }
+
       - name: Generate CycloneDX SBOM
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
@@ -519,7 +544,11 @@ jobs:
         shell: bash
         run: |
           cd release
-          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json > SHA256SUMS.txt
+          files=(BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json)
+          if [[ -f BitKeyBridge.signatures.json ]]; then
+            files+=(BitKeyBridge.signatures.json)
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS.txt
 
       - name: Attest release provenance
         if: steps.release_meta.outputs.exists != 'true'
@@ -531,6 +560,15 @@ jobs:
             release/BitKeyBridge-win-arm64.zip
             release/BitKeyBridge.cdx.json
             release/SHA256SUMS.txt
+
+      - name: Attest protected audit signature verification evidence
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+        uses: actions/attest@v4
+        with:
+          subject-path: release/BitKeyBridge.signatures.json
 
       - name: Attest release SBOM
         if: steps.release_meta.outputs.exists != 'true'
@@ -556,6 +594,9 @@ jobs:
             'release/BitKeyBridge.cdx.json',
             'release/SHA256SUMS.txt'
           )
+          if (Test-Path 'release/BitKeyBridge.signatures.json') {
+            $assets += 'release/BitKeyBridge.signatures.json'
+          }
           $args = @('release', 'create', $tag) + $assets + @(
             '--repo', '${{ github.repository }}',
             '--target', '${{ github.sha }}',
