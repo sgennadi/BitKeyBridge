@@ -463,6 +463,412 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  public-manual-stable:
+    # Public Stable Latest with manual-only UNSIGNED archives.
+    # The pre-0.30 auto-updater expects EXACTLY BitKeyBridge-win-<rid>.zip.
+    # We must not offer canonical asset names until signing is approved.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'sgennadi/BitKeyBridge' &&
+      startsWith(github.event.head_commit.message, 'Publish public stable v0.30.0')
+    needs: [build, laps-regression]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout approved source
+        uses: actions/checkout@v7
+
+      - name: Download x64 build
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: unsigned-packages
+
+      - name: Download x86 build
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: unsigned-packages
+
+      - name: Download ARM64 build
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: unsigned-packages
+
+      - name: Validate and rename for safe manual installation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          grep -q '<Version>0.30.0</Version>' src/BitKeyBridge/BitKeyBridge.csproj
+          grep -q '<InformationalVersion>0.30.0</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
+          test "$(cat .github/release-version.txt)" = "v0.30.0"
+          test ! -f src/BitKeyBridge/Services/ProtectedAuditBrokerServer.cs
+          if gh release view v0.30.0 --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing v0.30.0 release"
+            exit 1
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/v0.30.0" >/dev/null 2>&1; then
+            echo "Refusing to reuse existing v0.30.0 tag"
+            exit 1
+          fi
+          mkdir -p public-release
+          for rid in x64 x86 arm64; do
+            src="unsigned-packages/BitKeyBridge-win-$rid.zip"
+            dst="public-release/BitKeyBridge-v0.30.0-Windows-$rid-MANUAL-UNSIGNED.zip"
+            test -s "$src"
+            unzip -tq "$src" >/dev/null
+            unzip -Z -1 "$src" | grep -Eq '(^|/)BitKeyBridge[.]exe    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' &&
+       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+       startsWith(github.event.head_commit.message, 'Release v')) ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
+       startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))
+    needs: [build, laps-regression]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve release tag
+        id: release_meta
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+            $tag = "${{ github.ref_name }}"
+          }
+          else {
+            [xml]$project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
+            $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+            if (-not $version) { throw "Project version was not found." }
+            $tag = "v$version"
+          }
+
+          if ($tag -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+            throw "Resolved release tag is invalid: $tag"
+          }
+
+          [xml]$project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
+          $projectVersion = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+          if ($tag -ne "v$projectVersion") {
+            throw "Release $tag does not match the tested project version $projectVersion."
+          }
+          if ("${{ github.ref }}" -eq "refs/heads/improve/nonadmin-audit-ui-20261014" -and
+              $tag -ne "v0.30.0-rc.1") {
+            throw "Staging branch is authorized only for v0.30.0-rc.1."
+          }
+
+          $exists = $false
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          $releaseViewExitCode = $LASTEXITCODE
+          $global:LASTEXITCODE = 0
+
+          if ($releaseViewExitCode -eq 0) {
+            $exists = $true
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "Release tag: $tag"
+          Write-Host "Existing release: $exists"
+
+      # Old v0.29.x clients may auto-install unsigned stable updates.
+      - name: Require signed managed-workstation acceptance for stable v0.30.x
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          STABLE_APPROVED: ${{ vars.BITKEYBRIDGE_STABLE_030_APPROVED }}
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          if ($tag.StartsWith('v0.30.', [StringComparison]::OrdinalIgnoreCase) -and $tag -ne 'v0.30.0-rc.1') {
+            if ($env:STABLE_APPROVED -ne 'true') {
+              throw 'Public stable 0.30.x requires approved managed AD/Entra and update/rollback acceptance.'
+            }
+            if ($env:SIGNING_THUMBPRINT -notmatch '^[0-9a-fA-F]{40}$') {
+              throw 'Public stable 0.30.x requires the university Code Signing certificate thumbprint.'
+            }
+          }
+
+      - name: Download x64
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: release
+
+      - name: Download x86
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: release
+
+      - name: Download ARM64
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: release
+
+      - name: Verify trusted signed x64 x86 ARM64 executables
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+        shell: pwsh
+        env:
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./tests/windows/Verify-ReleaseSigning.ps1 `
+            -ReleaseDirectory release `
+            -Tag "${{ steps.release_meta.outputs.tag }}" `
+            -ExpectedThumbprint $env:SIGNING_THUMBPRINT `
+            -ExpectedSourceRevision "${{ github.sha }}" `
+            -OutputPath release/BitKeyBridge.signatures.json
+          if (-not (Test-Path release/BitKeyBridge.signatures.json)) {
+            throw 'Signed release verification evidence is missing.'
+          }
+
+      - name: Generate CycloneDX SBOM
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          dotnet tool install --tool-path .tools CycloneDX --version 6.2.0
+          $version = "${{ steps.release_meta.outputs.tag }}".TrimStart("v")
+          .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -spv 1.7 -sn BitKeyBridge -sv $version -st Application
+
+      - name: Generate SHA256SUMS
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: bash
+        run: |
+          cd release
+          files=(BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json)
+          if [[ -f BitKeyBridge.signatures.json ]]; then
+            files+=(BitKeyBridge.signatures.json)
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+
+      - name: Attest release provenance
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/BitKeyBridge-win-x64.zip
+            release/BitKeyBridge-win-x86.zip
+            release/BitKeyBridge-win-arm64.zip
+            release/BitKeyBridge.cdx.json
+            release/SHA256SUMS.txt
+
+      - name: Attest verified Authenticode release identity
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+        uses: actions/attest@v4
+        with:
+          subject-path: release/BitKeyBridge.signatures.json
+
+      - name: Attest release SBOM
+        if: steps.release_meta.outputs.exists != 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/BitKeyBridge-win-x64.zip
+            release/BitKeyBridge-win-x86.zip
+            release/BitKeyBridge-win-arm64.zip
+          sbom-path: release/BitKeyBridge.cdx.json
+
+      - name: Smoke-test staged updater preferences (no network install)
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "bitkeybridge-updater-smoke"
+          Remove-Item $smokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $smokeRoot | Out-Null
+          Expand-Archive -Path release\BitKeyBridge-win-x64.zip -DestinationPath $smokeRoot -Force
+          $exe = Join-Path $smokeRoot "BitKeyBridge.exe"
+
+          # Prepublication acceptance stays LOCAL: do not contact the public
+          # Releases API or apply new executable files in CI.
+          # Remote update/rollback needs a separate managed-machine test.
+
+          $disableOutput = & $exe --update-checks-disable --no-elevation 2>&1 | Out-String
+          $disableExit = $LASTEXITCODE
+          Write-Host $disableOutput
+          if ($disableExit -ne 0) {
+            throw "--update-checks-disable failed with exit code $disableExit."
+          }
+
+          $disabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
+          Write-Host $disabledStatus
+          if ($disabledStatus -notmatch 'AutomaticChecks=False') {
+            throw "Automatic update checks were not persisted as disabled."
+          }
+
+          $enableOutput = & $exe --update-checks-enable --no-elevation 2>&1 | Out-String
+          $enableExit = $LASTEXITCODE
+          Write-Host $enableOutput
+          if ($enableExit -ne 0) {
+            throw "--update-checks-enable failed with exit code $enableExit."
+          }
+
+          $enabledStatus = & $exe --update-checks-status --no-elevation 2>&1 | Out-String
+          Write-Host $enabledStatus
+          if ($enabledStatus -notmatch 'AutomaticChecks=True') {
+            throw "Automatic update checks were not persisted as enabled."
+          }
+
+          $autoDisableOutput = & $exe --auto-update-disable --no-elevation 2>&1 | Out-String
+          Write-Host $autoDisableOutput
+          if ($LASTEXITCODE -ne 0) {
+            throw "--auto-update-disable failed."
+          }
+
+          $autoDisabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
+          Write-Host $autoDisabledStatus
+          if ($autoDisabledStatus -notmatch 'AutomaticInstall=False') {
+            throw "Automatic update installation was not persisted as disabled."
+          }
+
+          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          Write-Host $autoEnableOutput
+          if ($LASTEXITCODE -ne 0) {
+            throw "--auto-update-enable failed."
+          }
+
+          $autoEnabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
+          Write-Host $autoEnabledStatus
+          if ($autoEnabledStatus -notmatch 'AutomaticInstall=True' -or
+              $autoEnabledStatus -notmatch 'AutomaticChecks=True') {
+            throw "Automatic update installation was not persisted as enabled."
+          }
+
+          Write-Host 'Staged updater controls passed. No installation attempted.'
+
+      - name: Create GitHub Release
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          $assets = @(
+            'release/BitKeyBridge-win-x64.zip',
+            'release/BitKeyBridge-win-x86.zip',
+            'release/BitKeyBridge-win-arm64.zip',
+            'release/BitKeyBridge.cdx.json',
+            'release/SHA256SUMS.txt'
+          )
+          if (Test-Path 'release/BitKeyBridge.signatures.json') {
+            $assets += 'release/BitKeyBridge.signatures.json'
+          }
+          $args = @('release', 'create', $tag) + $assets + @(
+            '--repo', '${{ github.repository }}',
+            '--target', '${{ github.sha }}',
+            '--generate-notes',
+            '--title', "BitKeyBridge $tag"
+          )
+          if ($tag.Contains('-')) {
+            # Mark RC/beta as prerelease. Never override GitHub stable Latest.
+            $args += '--prerelease'
+          }
+          & gh @args
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub release creation failed for $tag."
+          }
+
+
+            cp "$src" "$dst"
+          done
+          cd public-release
+          sha256sum BitKeyBridge-v0.30.0-Windows-*-MANUAL-UNSIGNED.zip > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          printf 'Version: v0.30.0\nSource SHA: %s\nBuild: GitHub Actions Windows x64/x86/ARM64\nSigning: UNSIGNED, MANUAL USE ONLY\n' "$SOURCE_SHA" > BUILD-INFO.txt
+          test "$(find . -maxdepth 1 -name 'BitKeyBridge-win-*.zip' | wc -l)" -eq 0
+
+      - name: Write public release notes
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          cat > public-release/RELEASE-NOTES.md <<'EOF'
+          ## BitKeyBridge v0.30.0 - Public Stable (manual testing)
+
+          This release is publicly available as Stable / Latest for technician
+          testing on Windows. The EXE binaries are UNSIGNED. Do not distribute
+          with GPO, Intune or unattended updates until institutional signing
+          and real AD/Entra permissions acceptance have been completed.
+
+          Changes from v0.29.12 include non-admin Helpdesk startup, the
+          AD/Microsoft 365 connection wizard, on-demand LAPS and BitLocker
+          recovery, improved access diagnostics, SemVer-aware updater
+          functionality and responsive HiDPI/RDP WinForms layouts.
+          Experimental Protected Audit Broker from Draft PR #57 is excluded.
+
+          Architecture ZIPs contain MANUAL-UNSIGNED in their filename.
+          These intentionally do NOT match the canonical file names required
+          by older v0.29.x automatic updaters; therefore those clients cannot
+          automatically install the unsigned release. Their update checks may
+          report a missing compatible download until signed assets exist.
+
+          Choose x64 for normal 64-bit Intel/AMD Windows, x86 for 32-bit
+          Windows, and ARM64 for Windows on ARM. Verify the ZIP against
+          SHA256SUMS.txt, extract it, and run BitKeyBridge.exe manually.
+
+          For CMD smoke tests:
+              BitKeyBridge.exe --version
+              BitKeyBridge.exe --self-test --no-elevation
+              BitKeyBridge.exe --ui-self-test --no-elevation
+              BitKeyBridge.exe --auto-update-status --no-elevation
+
+          GitHub CI validates Windows x64/x86/ARM64, LAPS, offline self-tests
+          and UI layout. Real delegated AD/Entra/Intune, audit retention,
+          organizational Authenticode and signed upgrade/rollback need
+          managed-workstation testing before unattended production rollout.
+          EOF
+          printf '\nSource commit: %s\n' "$SOURCE_SHA" >> public-release/RELEASE-NOTES.md
+
+      - name: Publish public Stable Latest v0.30.0
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh release create v0.30.0 \
+            public-release/BitKeyBridge-v0.30.0-Windows-x64-MANUAL-UNSIGNED.zip \
+            public-release/BitKeyBridge-v0.30.0-Windows-x86-MANUAL-UNSIGNED.zip \
+            public-release/BitKeyBridge-v0.30.0-Windows-arm64-MANUAL-UNSIGNED.zip \
+            public-release/SHA256SUMS.txt \
+            public-release/BUILD-INFO.txt \
+            --repo "$GH_REPO" --target "$SOURCE_SHA" --latest \
+            --title "BitKeyBridge v0.30.0 - Stable Manual Download" \
+            --notes-file public-release/RELEASE-NOTES.md
+
   release:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
