@@ -8,7 +8,6 @@ $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBri
 $config = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Core\AppConfig.cs') -Raw
 
 $required = @(
-  'permissions:' + [Environment]::NewLine + '  contents: read',
   'BITKEYBRIDGE_STABLE_030_APPROVED',
   'BITKEYBRIDGE_SIGNING_THUMBPRINT',
   'Verify-ReleaseSigning.ps1',
@@ -17,6 +16,9 @@ $required = @(
   'Smoke-test staged updater preferences (no network install)',
   'Create GitHub Release'
 )
+if ($workflow -notmatch '(?m)^permissions:\r?\n  contents: read(?:\r?\n|$)') {
+  throw 'CI jobs must have read-only default repository permissions.'
+}
 foreach ($token in $required) {
   if (-not $workflow.Contains($token)) { throw "Missing release safety requirement: $token" }
 }
