@@ -161,8 +161,31 @@ public sealed class UpdateService : IDisposable
             }
 
             if (selected.ValueKind == JsonValueKind.Undefined)
+            {
+                // Public v0.30.0 was intentionally distributed for manual
+                // testing only, under different filenames. Do not report
+                // this as a broken update or attempt unattended installation.
+                if (!forRollback &&
+                    HasManualOnlyPackage(assets, tag, info.Architecture))
+                {
+                    info.ManualReleaseAvailable = latest > current;
+                    info.UpdateAvailable = false;
+                    info.AssetName = string.Empty;
+                    try
+                    {
+                        JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info);
+                    }
+                    catch (Exception statusException)
+                    {
+                        Debug.WriteLine("Manual release status persistence failed: " +
+                            DiagnosticRedaction.Sanitize(statusException.Message));
+                    }
+                    return info;
+                }
+
                 throw new InvalidOperationException(
                     $"Release {tag} does not contain the required asset {assetName}.");
+            }
 
             info.DownloadUrl =
                 ValidateReleaseAssetUrl(
@@ -415,6 +438,10 @@ public sealed class UpdateService : IDisposable
             throw new InvalidOperationException(
                 $"GitHub asset digest mismatch for {info.AssetName}. Expected {info.AssetDigestSha256}, got {actual}.");
 
+        // An unsigned release ZIP must not be able to expand arbitrary files,
+        // executable sidecars or an unbounded payload into ProgramData.
+        UpdatePackageValidator.ValidateSingleExecutableArchive(zipPath);
+
         var extractDir = Path.Combine(versionDir, "extract");
         ZipFile.ExtractToDirectory(zipPath, extractDir, overwriteFiles: true);
 
@@ -457,6 +484,10 @@ public sealed class UpdateService : IDisposable
                 $"ProductVersion '{versionInfo.ProductVersion}' does not match " +
                 $"release {info.LatestVersion}.");
         }
+
+        // Repeat the CI PE-machine check on each technician workstation.
+        // FileVersion/ProductVersion alone cannot prove the executable RID.
+        UpdatePackageValidator.ValidateExecutableMachine(executable, info.Architecture);
 
         var stagedHashBeforeSelfTest =
             await ComputeSha256Async(
@@ -647,6 +678,8 @@ public sealed class UpdateService : IDisposable
                 "The rollback backup does not contain a valid file version.");
         }
 
+        UpdatePackageValidator.ValidateExecutableMachine(staged, GetRid());
+
         AuthenticodeVerificationService.EnforcePolicy(
             _config,
             staged);
@@ -788,11 +821,7 @@ public sealed class UpdateService : IDisposable
                 OpenVerifiedStagedExecutable(
                     plan);
 
-            // The prepare/rollback path already enforces Authenticode, but
-            // elevated application must independently read CURRENT machine
-            // policy. A valid apply-plan checksum is not a signing exception.
-            // The verified stream stays open (FileShare.Read), preventing
-            // replacement while the helper validates and copies the bytes.
+            // Recheck active signing policy in the elevated apply helper.
             var activePolicy = ConfigService.LoadAppConfig();
             if (plan.Automatic &&
                 !UpdateTrustPolicy.CanInstallUnattended(activePolicy))
@@ -1081,6 +1110,8 @@ public sealed class UpdateService : IDisposable
                 throw new InvalidDataException(
                     "Staged BitKeyBridge executable SHA-256 changed after verification.");
             }
+
+            UpdatePackageValidator.ValidateExecutableMachine(stream, GetRid());
 
             var versionInfo = FileVersionInfo.GetVersionInfo(fullPath);
             if (!ReleaseExecutableMatches(
@@ -1408,6 +1439,28 @@ public sealed class UpdateService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Recognize intentionally manual-only architecture packages, without
+    /// ever treating them as auto-updatable canonical release assets.
+    /// </summary>
+    internal static bool HasManualOnlyPackage(
+        JsonElement assets, string tag, string architecture)
+    {
+        if (assets.ValueKind != JsonValueKind.Array ||
+            !architecture.StartsWith("win-", StringComparison.Ordinal))
+            return false;
+
+        var arch = architecture["win-".Length..];
+        if (arch is not ("x64" or "x86" or "arm64"))
+            return false;
+
+        var expected = $"BitKeyBridge-{tag}-Windows-{arch}-MANUAL-UNSIGNED.zip";
+        return assets.EnumerateArray().Any(asset =>
+            asset.ValueKind == JsonValueKind.Object &&
+            string.Equals(GetString(asset, "name"), expected,
+                StringComparison.Ordinal));
+    }
+
     // GitHub's release-list ordering is based on creation time, not SemVer.
     // A newer RC can have an older creation timestamp than a stable release.
     internal static JsonElement SelectLatestRelease(
@@ -1660,17 +1713,49 @@ public sealed class UpdateService : IDisposable
                 RedirectStandardError = true
             }
         };
-        process.Start();
-        var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-        var errorTask = process.StandardError.ReadToEndAsync(ct);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(2));
-        await process.WaitForExitAsync(timeout.Token);
-        var output = await outputTask;
-        var error = await errorTask;
+        if (!process.Start())
+            throw new InvalidOperationException("The downloaded BitKeyBridge self-test could not start.");
+
+        // Read both streams concurrently so verbose self-tests cannot block
+        // the process on a full stdout/stderr pipe. Apply the SAME deadline
+        // to stream reads and process exit, and never leave a timed-out EXE running.
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            _ = await outputTask;
+            _ = await errorTask;
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The process may have exited between the check and Kill.
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Debug.WriteLine("Timed-out updater self-test cleanup: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
+            if (ct.IsCancellationRequested)
+                throw;
+            throw new TimeoutException(
+                "The downloaded BitKeyBridge self-test exceeded two minutes and was stopped.");
+        }
+
         if (process.ExitCode != 0)
             throw new InvalidOperationException(
-                $"Downloaded BitKeyBridge self-test failed with exit code {process.ExitCode}. {output} {error}".Trim());
+                $"Downloaded BitKeyBridge self-test failed with exit code {process.ExitCode}. " +
+                "Raw process output is not copied into logs because it could contain sensitive data.");
     }
 
     private static void AddUnique(ICollection<string> list, string value)

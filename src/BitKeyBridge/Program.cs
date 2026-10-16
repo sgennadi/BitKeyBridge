@@ -1744,6 +1744,7 @@ internal static class Program
             Directory.CreateDirectory(tempDirectory);
 
             failures.AddRange(LapsSelfTest.Run());
+            failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(

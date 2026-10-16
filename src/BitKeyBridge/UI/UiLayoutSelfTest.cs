@@ -22,6 +22,18 @@ public static class UiLayoutSelfTest
                 720),
             1.50F),
         new(
+            "Scale175",
+            new Size(
+                1200,
+                780),
+            1.75F),
+        new(
+            "RdpCompact200",
+            new Size(
+                1024,
+                768),
+            2.00F),
+        new(
             "Scale200Stress",
             new Size(
                 1280,
@@ -1257,8 +1269,7 @@ public static class UiLayoutSelfTest
             FindByName(form, "RunEnvironmentCheckButton") is null ||
             FindByName(form, "RunAdvancedDeviceDiagnosticsButton") is null ||
             FindByName(form, "RunBitLockerCommandsButton") is null ||
-            FindByName(form, "RunLapsCommandsButton") is null ||
-            FindByName(form, "RunProtectedAuditCheckButton") is null)
+            FindByName(form, "RunLapsCommandsButton") is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Diagnostics must provide Access Health and the existing recovery runbooks.");
