@@ -5,7 +5,14 @@ Windows GitHub Actions build matrix. The repository does not contain an
 organization code-signing certificate or its private key.
 
 The step is skipped unless repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT
-is configured. The corresponding trusted Code Signing certificate and private
+is configured AND the workflow is processing an explicitly qualifying
+**release push** (trusted version tag, main/master `Release v...`, or
+the narrowly scoped historical rc.1 publication). It never signs Pull
+Requests, arbitrary main commits or manual workflow_dispatch branches.
+PR workflows only receive read-only GitHub repository permissions;
+contents/write and attestation permissions are granted only to the release
+job. The temporary CI signer is used only for positive/negative validation,
+not artifact publication. The corresponding trusted Code Signing certificate and private
 key must also be available to the Windows runner from an authorized signing
 provider or protected certificate store. EV hardware tokens, HSM/cloud signing
 or restricted self-hosted runners may be required. Never commit a PFX,
@@ -30,6 +37,55 @@ signed release in staging.
 Use Start > Device Diagnostics... > Verify EXE signature to check the running
 EXE with Windows WinVerifyTrust. This is verification, NOT self-signing.
 
+## Release signing: positive CI integration test
+
+PR #57 runs a separate Windows-hosted test after all three architecture builds.
+It generates a short-lived ephemeral OpenSSL Code Signing certificate
+on a disposable GitHub-hosted Windows runner, signs **COPIES** of the three binaries, and
+verifies the exact certificate thumbprint, trusted Authenticode, exact product
+version, and PE machine type in `Verify-ReleaseSigning.ps1`. It then changes
+only test ZIP contents or expected values and asserts rejection of incorrect
+signer, version, architecture and unsigned executables. Certificate trust and
+files are removed in `finally`. The test deliberately never uploads any
+signed test artifacts.
+
+The current PR test creates short-lived PEM/PFX credentials only on a
+disposable GitHub-hosted Windows runner. It installs the temporary public
+test CA into the runner's Enterprise Root store, and removes all temporary
+trust during cleanup. The Windows CurrentUser Root store caused a
+noninteractive certificate-enrollment timeout, so this isolation is
+intentional. No ephemeral private keys or test-signed binaries are uploaded.
+
+The GitHub release job now tests local updater settings BEFORE
+publishing assets. It never performs a network update or executable
+replacement on CI. Automatic deletion of release/* branches is disabled:
+branch maintenance must be explicit and independently reviewed.
+
+This is **not** an enterprise-trusted signed release. It does not configure
+BITKEYBRIDGE_SIGNING_THUMBPRINT, install an organizational private key,
+authorize GitHub Release publication, or test actual domain trust chains.
+This PR test is separate from any organizational signing; real signing
+requires its own controlled runner/provider and manual field acceptance.
+
+## Protected audit broker: mandatory signing policy
+
+When the managed `AuditBrokerEnabled` and
+`RequireProtectedAuditForRecovery` policies are both active, the application
+requires a genuinely trusted Authenticode signature **even for manual
+updates and rollbacks**. Configure `TrustedUpdatePublisher` with the
+signer's exact certificate Common Name (as reported by BitKeyBridge
+certificate diagnostics), not a partial or wildcard publisher string.
+The broker-mode comparison is exact and case-insensitive; legacy portable
+updater behavior is unchanged.
+
+The elevated update helper independently loads the current machine policy
+and rechecks Authenticode on the locked, SHA256-verified staged executable
+before replacing installed files. This closes a policy-bypass gap where
+an apply-plan checksum alone could otherwise have been treated as approval
+to install unsigned code. Signed enterprise rollout still requires
+organization-specific Windows trust, certificate authorization and field
+acceptance. No signing keys are included in this repository.
+
 Security cautions:
 - A Domain Controller LDAPS certificate is not necessarily a Code Signing cert.
 - The Entra App Registration authentication certificate is NOT the signing cert.
@@ -42,45 +98,3 @@ organizational Code Signing certificate. Without a configured signing
 provider, CI correctly skips Authenticode and retains SHA-256 verification,
 provenance attestations and updater rollback. An LDAPS or Entra application
 certificate must not be repurposed as an executable signing certificate.
-
-## Public stable v0.30.x release gate
-
-The 0.30.0 Helpdesk candidate can be built and tested as unsigned artifacts in
-Pull Request CI. Do not publish it as stable Latest until a controlled
-managed-domain test and signed upgrade/rollback acceptance have completed.
-The repository variable BITKEYBRIDGE_STABLE_030_APPROVED must be explicitly
-set to true, and BITKEYBRIDGE_SIGNING_THUMBPRINT must select a real trusted
-organizational Code Signing certificate present on the release runner.
-Release CI verifies all three actual ZIP executables against that exact signer,
-version, Git source SHA, Windows PE machine type and trusted Authenticode chain.
-The verification manifest joins release SHA256SUMS and provenance attestations.
-
-This safeguard matters because the published v0.29.x defaults included
-AutoInstallUpdatesOnStart=true with RequireTrustedUpdateSignature=false.
-An unsigned non-prerelease v0.30.0 could therefore automatically install
-onto older endpoints before the intended acceptance tests.
-
-## Public manual v0.30.0 exception (does NOT waive enterprise signing)
-
-Public stable v0.30.0 is distributed only with MANUAL-UNSIGNED ZIP asset names
-for technician testing. The pre-0.30 updater expects canonical
-BitKeyBridge-win-<rid>.zip names and will not auto-install these assets.
-Existing clients may report no compatible download. This does NOT constitute
-Code Signing, managed-domain acceptance, or permission to roll out unattended
-via GPO or Intune. Standard auto-update-compatible assets remain signed-release
-gated until organizational PKI and workstation acceptance are completed.
-
-## Unsigned 0.30.1 public auto-update release
-
-At the owner's request, v0.30.1 restores canonical architecture ZIP names
-for compatibility with existing update checks/auto-install. This is NOT
-Authenticode signed and is NOT equivalent to verified institutional publisher
-identity. GitHub HTTPS, canonical repository/tag/asset URL checks, exact
-asset size, SHA-256 in SHA256SUMS.txt and GitHub digest, staged executable
-version check/self-test, and rollback remain enforced.
-
-CAUTION: pre-v0.30.0 machines that still have legacy unattended installation
-may install this update automatically on startup. From v0.30.1 onward, new
-installations default to check-only, and explicit unsigned opt-in is required.
-The official signed-release job remains restricted to approved identity and
-still requires organizational Authenticode; no signing gate has been relaxed.

@@ -56,8 +56,6 @@ public sealed class AppConfig
     public bool CheckForUpdatesOnStart { get; set; } = true;
     // Only check for updates on first launch; never auto-install by default.
     public bool AutoInstallUpdatesOnStart { get; set; } = false;
-    // Explicit opt-in: unsigned unattended updates trust release checksums, not a publisher.
-    public bool AllowUnsignedUnattendedUpdates { get; set; } = false;
     public bool AllowPrereleaseUpdates { get; set; } = false;
     public bool RequireTrustedUpdateSignature { get; set; } = false;
     public string TrustedUpdatePublisher { get; set; } = string.Empty;
@@ -79,6 +77,10 @@ public sealed class AppConfig
     // Portable non-admin clients otherwise use a clearly marked per-user journal
     // when the protected store is not writable.
     public bool RequireProtectedAuditForRecovery { get; set; } = false;
+    // The protected audit broker runs ONLY in the managed Windows Service.
+    // Opt-in; explicitly configured RBAC recovery readers are required.
+    // A local user must never be given NTFS write access to the journal.
+    public bool AuditBrokerEnabled { get; set; } = false;
     public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = false;
     public string RecoveryReferencePattern { get; set; } = string.Empty;
     public string RecoveryReferenceExample { get; set; } = "INC-12345";

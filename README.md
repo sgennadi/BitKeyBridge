@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Upcoming stable v0.30.1 (unsigned, canonical auto-update compatible ZIPs) · previous v0.30.0 manual-only · experimental Protected Audit Broker isolated in PR #57.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable: v0.29.12 · published prerelease: v0.30.0-rc.1 · test-only Draft PR: v0.30.0-rc.2.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,74 +10,46 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## Experimental protected audit broker (0.30.0-rc.2)
 
-## Unsigned auto-update v0.30.1
+**Single QA download:** in the latest successful PR #57 Windows Actions run,
+use **Artifacts → BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED**.
+It contains all three architecture ZIPs, `SHA256SUMS.txt`, the exact
+build-source commit and a CMD-only local diagnostic. The artifact is built
+only after Windows x64/x86/ARM64, LAPS, standard-user Audit Broker integration
+and positive/negative Authenticode tests pass. These developer binaries are
+**unsigned** and must not be installed on production workstations.
 
-The 0.30.1 stable release uses **canonical GitHub asset filenames**:
-`BitKeyBridge-win-x64.zip`, `BitKeyBridge-win-x86.zip`, and
-`BitKeyBridge-win-arm64.zip`. This restores compatibility with update
-checks and auto-install configured in older BitKeyBridge v0.29.x builds.
-**Some older clients may auto-install this UNSIGNED release automatically**
-if their existing configuration has automatic installation enabled.
-The packages are HTTPS+size+SHA256 verified and the extracted EXE is
-version-checked and self-tested, but are NOT Authenticode-signed.
 
-BitKeyBridge v0.30.1 itself defaults to check-only. Its GUI Updates page
-has an explicit **Allow unsigned auto-updates** opt-in with a risk warning;
-unsigned automatic installs are restricted to the official
-`sgennadi/BitKeyBridge` repository. For deliberate CLI enablement:
+Test build for [issue #56](https://github.com/sgennadi/BitKeyBridge/issues/56).
+A preinstalled LocalSystem BitKeyBridge Windows Service can now accept a
+restricted, Windows-token-authenticated **audit-only** named-pipe request and
+append a hash-chained, disk-flushed pre-read event to a separate SYSTEM-owned
+journal. The ordinary Helpdesk GUI does not request UAC or obtain local
+Administrator privileges. The broker is disabled by default, and is never an
+authorization mechanism for AD/Entra recovery secrets.
 
-    BitKeyBridge.exe --auto-update-enable --accept-unsigned-update-risk --no-elevation
-    BitKeyBridge.exe --auto-update-status --no-elevation
+An administrator must configure explicit RBAC RecoveryReaders, install the
+Windows Service and run `--audit-broker-provision` from an **already elevated**
+console. This operation intentionally hardens machine NTFS configuration and
+creates a protected journal. Only then can a non-admin Helpdesk operator use
+strict protected auditing. On denied identity, absent service or damaged
+journal, no secret is disclosed. The optional portable user-profile fallback
+is never used in strict mode.
 
-To disable automatic installation:
+**[Protected audit broker guide](docs/protected-audit-broker.md)** · **[Managed-domain/Entra acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md)**.
 
-    BitKeyBridge.exe --auto-update-disable --no-elevation
+New non-elevated `--audit-broker-preflight` prints a secret-free JSON report of local policy, caller token, service, NTFS (when admin), and executable signing. `--audit-broker-preflight --probe` explicitly performs a synthetic committed audit check. The test-only [CMD acceptance wrapper](tests/windows/BitKeyBridge-DomainPreflight.cmd) saves this report locally without PowerShell.
+A new protected-audit GitHub Release must pass the real, multi-architecture
+Authenticode signature gate: verified signer certificate, exact thumbprint,
+correct PE machine type and ProductVersion, before publishing. The
+signature report is attached to the release and included in checksums and
+provenance evidence. See the [managed-domain acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md).
 
-Signed publisher-pinned mode remains available. A GitHub account compromise
-can defeat same-account checksums; consider organizational signing in future.
-Rollback holds remain active until explicitly cleared.
-
-## Public stable v0.30.0 manual downloads
-
-GitHub Releases publishes v0.30.0 as Stable / Latest with three public Windows
-archives marked `MANUAL-UNSIGNED`. These are for technicians to download,
-verify against SHA256SUMS.txt and run explicitly on test machines. The
-v0.29.x unattended updater searches for names like
-`BitKeyBridge-win-x64.zip`; deliberately using different archive names
-prevents legacy unattended installation of unsigned binaries. Older clients
-may display a missing-compatible-asset message when checking updates.
-
-This is a PUBLIC stable download, but it is NOT institutionally signed and
-is not cleared for unattended enterprise deployment. The separate signed
-production lane still requires approved organizational Authenticode and
-real university-managed AD/Entra/LAPS/BitLocker, audit and rollback tests.
-The experimental audit broker in Draft PR #57 is excluded.
-
-## Stable v0.30.0 candidate (manual QA, 16 October 2026)
-
-This candidate promotes the already CI-verified v0.30.0-rc.1 code to the stable
-ProductVersion 0.30.0, but remains **an unsigned GitHub Actions test artifact,
-not a published GitHub Latest release**. It excludes the experimental SYSTEM
-Audit Broker in Draft PR #57.
-
-**Public-release safety:** Existing v0.29.x clients default to automatic update
-installation ON and trusted Authenticode enforcement OFF. Publishing an unsigned
-stable Latest before testing could cause existing clients to install it without
-manual approval. Stable v0.30.x publication therefore requires an explicitly
-set `BITKEYBRIDGE_STABLE_030_APPROVED=true` after managed-workstation acceptance,
-plus an actual approved university Code Signing certificate configured as
-`BITKEYBRIDGE_SIGNING_THUMBPRINT`. Release CI validates the signer, source SHA,
-version and CPU architecture for all three builds before publication.
-
-For manual test commands, AD/Entra read and deny scenarios, DPI/RDP checks and
-secure update/rollback acceptance, use the
-[stable candidate acceptance guide](docs/stable-0.30.0-acceptance.md).
-
-The release workflow now tests updater settings **before** any publication,
-never installs a remote binary on CI and never automatically removes Git
-branches. Standard non-admin portable audit storage is user-editable and not a
-substitute for protected SYSTEM journal storage.
+This candidate is not yet production approved: a domain workstation test,
+token impersonation checks, SIEM delivery and Entra permission tests are
+required before enterprise rollout. Published rc.1 and stable 0.29.12 are
+unchanged.
 
 ## Prerelease update channel (0.30.0-rc.1)
 

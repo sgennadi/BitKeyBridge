@@ -84,6 +84,13 @@ public static class BitLockerDiagnosticRunbook
             return string.Join(Environment.NewLine, lines);
         }
 
+        lines.AddRange([
+            "NO RECORDS / ACCESS DENIED: Verify the computer DN, recovery child objects and selected LDAP identity.",
+            "Computer-object read does not prove confidential msFVE-RecoveryPassword read permission.",
+            "Missing recovery objects, hidden passwords, wrong search scope and replication delay require different fixes.",
+            "Have AD administrators verify least-privilege delegated rights rather than granting Domain Admin.",
+        ]);
+
         var dc = string.IsNullOrWhiteSpace(context.DirectoryServer)
             ? string.IsNullOrWhiteSpace(context.Domain) ? "YOUR-WRITABLE-DC" : context.Domain
             : context.DirectoryServer;

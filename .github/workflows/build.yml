@@ -9,7 +9,8 @@ on:
   pull_request:
   workflow_dispatch:
 
-# PR jobs are read-only. Only the release job can publish.
+# Compiling untrusted pull request code must never receive write/release
+# credentials. Only the explicitly gated release job may publish or attest.
 permissions:
   contents: read
 
@@ -82,11 +83,6 @@ jobs:
             }
             throw "CHANGELOG.md contains duplicate version headings."
           }
-
-      - name: Verify stable 0.30 release safety invariants
-        if: matrix.rid == 'win-x64'
-        shell: pwsh
-        run: ./tests/windows/StableReleaseWorkflowSafety.ps1
 
       - name: Reject silent empty catch blocks
         shell: pwsh
@@ -356,7 +352,7 @@ jobs:
             throw "Automatic update installation was not persisted as disabled."
           }
 
-          $autoEnableOutput = & $exe --auto-update-enable --accept-unsigned-update-risk --no-elevation 2>&1 | Out-String
+          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
           $autoEnableExit = $LASTEXITCODE
           Write-Host $autoEnableOutput
           if ($autoEnableExit -ne 0) {
@@ -372,6 +368,18 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
+      - name: Guard release workflow ordering and branch safety
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/ReleaseWorkflowSafety.ps1
+
+      - name: Regression - reject invalid or unauthorized release signing
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable "artifacts/win-x64/BitKeyBridge.exe"
+
       - name: Package architecture
         shell: cmd
         run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
@@ -383,215 +391,170 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
-  stable-test-bundle:
-    # Test EXEs stay in Actions artifacts, never published as GitHub stable Latest.
+  audit-broker-integration:
+    # Must run only on GitHub-hosted ephemeral Windows. This isolated test
+    # creates temporary local accounts, installs an SCM service and adjusts
+    # ProgramData ACLs; it must never run on a persistent/self-hosted machine.
+    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+    needs: [build]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout integration harness
+        uses: actions/checkout@v7
+
+      - name: Download tested x64 executable package
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: broker-integration
+
+      - name: Verify strict audit with two genuine standard Windows tokens
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or
+              $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Protected audit integration must use an ephemeral GitHub-hosted Windows runner.'
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'bkb-broker-integration'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Expand-Archive -Path broker-integration/BitKeyBridge-win-x64.zip -DestinationPath $root -Force
+          ./tests/windows/ProtectedAuditBrokerIntegration.ps1 `
+            -Executable (Join-Path $root 'BitKeyBridge.exe') `
+            -EphemeralHostedRunner
+
+  release-signing-positive:
+    # Ephemeral PKI tests are not an organization signing approval.
+    # Sign COPIES of all 3 tested architectures with a temporary certificate
+    # trusted only in CurrentUser on a disposable GitHub-hosted Windows runner.
+    # Use 2022 deliberately: the 2025/VS2026 hosted image blocks indefinitely
+    # in certutil CurrentUser Root enrollment even with a bounded child process.
+    # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
-      github.head_ref == 'stable/v0.30.0-20261016'
-    needs: [build, laps-regression]
+      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+    needs: [build]
+    runs-on: windows-2022
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout signing verification harness
+        uses: actions/checkout@v7
+
+      - name: Download verified x64 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: signing-integration/win-x64
+
+      - name: Download verified x86 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: signing-integration/win-x86
+
+      - name: Download verified ARM64 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: signing-integration/win-arm64
+
+      - name: Positive signed release and tamper rejection (ephemeral cert)
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or
+              $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Signature integration is allowed only on an ephemeral GitHub-hosted runner.'
+          }
+          ./tests/windows/ReleaseSigningPositiveIntegration.ps1 -ArtifactRoot signing-integration -EphemeralHostedRunner
+
+  test-bundle:
+    # One-click QA download only after EVERY required broker and signer test
+    # passes. Never attach unsigned developer binaries to GitHub Releases.
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+    needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Checkout acceptance instructions
+      - name: Checkout QA instructions
         uses: actions/checkout@v7
 
-      - name: Download x64 build artifact
+      - name: Download x64 test binary
         uses: actions/download-artifact@v8
         with:
           name: BitKeyBridge-win-x64
           path: test-bundle
 
-      - name: Download x86 build artifact
+      - name: Download x86 test binary
         uses: actions/download-artifact@v8
         with:
           name: BitKeyBridge-win-x86
           path: test-bundle
 
-      - name: Download ARM64 build artifact
+      - name: Download ARM64 test binary
         uses: actions/download-artifact@v8
         with:
           name: BitKeyBridge-win-arm64
           path: test-bundle
 
-      - name: Generate SHA256 and staged-stable usage instructions
+      - name: Generate checksums and isolated-QA instructions
         shell: bash
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          cp docs/stable-0.30.0-acceptance.md test-bundle/ACCEPTANCE.md
+          cp tests/windows/BitKeyBridge-DomainPreflight.cmd test-bundle/
           cd test-bundle
           for rid in win-x64 win-x86 win-arm64; do
             test -s "BitKeyBridge-${rid}.zip"
           done
           sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
-          printf 'CI checkout SHA: %s\nPR head commit: %s\nProductVersion: 0.30.0\n' "$GITHUB_SHA" "$PR_HEAD_SHA" > BUILD-INFO.txt
+          printf 'Git commit: %s\nVersion: 0.30.2-rc.1 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
           cat > README-TEST.txt <<'EOF'
-          BitKeyBridge v0.30.0 - UNSIGNED STAGED-STABLE TEST BUNDLE
-          ========================================================
-          IMPORTANT: This is NOT a published GitHub stable Release.
-          Unsigned EXEs are for manual controlled QA, not production rollout.
-          Do not distribute through GPO, Intune or unattended updating.
-          The experimental SYSTEM Protected Audit Broker is NOT included.
+          BitKeyBridge 0.30.2-rc.1 -- UNSIGNED QA TEST BUNDLE
+          ==================================================
+          This archive is NOT a production release and NOT organization-signed.
+          Do not install on a domain controller or production Helpdesk workstation.
+          Do not distribute through Intune, GPO or automatic updates.
 
           Files:
-          BitKeyBridge-win-x64.zip     Windows x64 single-file EXE package
-          BitKeyBridge-win-x86.zip     Windows x86 single-file EXE package
-          BitKeyBridge-win-arm64.zip   Windows ARM64 single-file EXE package
-          SHA256SUMS.txt              SHA-256 checksums for all three ZIPs
-          BUILD-INFO.txt              Exact CI checkout and PR head source commits
-          ACCEPTANCE.md               Managed-domain workstation QA checklist
+          - BitKeyBridge-win-x64.zip   Windows x64
+          - BitKeyBridge-win-x86.zip   Windows x86
+          - BitKeyBridge-win-arm64.zip Windows ARM64
+          - SHA256SUMS.txt             SHA-256 checksums for all three ZIPs
+          - BUILD-INFO.txt             Source commit and test version
+          - BitKeyBridge-DomainPreflight.cmd  Optional read-only QA report
 
-          Extract only your architecture ZIP and run in a normal CMD:
-            BitKeyBridge.exe --version
-            BitKeyBridge.exe --self-test --no-elevation
-            BitKeyBridge.exe --ui-self-test --no-elevation
-            BitKeyBridge.exe --auto-update-status --no-elevation
+          Verify ZIP hashes against SHA256SUMS.txt. Extract ONLY the ZIP
+          matching your Windows architecture on a disposable test workstation.
+          From an ordinary, non-elevated CMD inside the EXE directory run:
 
-          Check 100%-200% DPI, RDP, non-admin AD/Entra/LAPS/BitLocker
-          allow/deny scenarios, secret lifetime and audit correctness.
-          A real university Code Signing certificate, signed update/rollback
-          and operator acceptance are required BEFORE public stable Latest.
+              BitKeyBridge.exe --version
+              BitKeyBridge.exe --self-test --no-elevation
+              BitKeyBridge.exe --audit-broker-preflight --no-elevation
+
+          Run the optional CMD report wrapper with the EXE absolute path:
+              BitKeyBridge-DomainPreflight.cmd "C:\QA\BitKeyBridge.exe"
+
+          To intentionally write one synthetic broker health event only:
+              BitKeyBridge.exe --audit-broker-preflight --probe --no-elevation
+
+          Real domain/Entra recovery, trusted signing, SIEM and rollback
+          require separate controlled acceptance. See repository docs:
+          docs/managed-domain-acceptance-0.30.0-rc.2.md
+
+          DO NOT MERGE/PUBLISH WITHOUT MANAGED-DOMAIN ACCEPTANCE.
           EOF
 
-      - name: Upload one-click unsigned staged stable bundle
+      - name: Publish one-click unsigned QA bundle (Actions only)
         uses: actions/upload-artifact@v7
         with:
-          name: BitKeyBridge-v0.30.0-STABLE-CANDIDATE-UNSIGNED
+          name: BitKeyBridge-v0.30.2-rc.1-TEST-BUNDLE-UNSIGNED
           path: test-bundle/
           if-no-files-found: error
           retention-days: 90
-
-  public-manual-stable:
-    # Public Stable Latest with manual-only UNSIGNED archives.
-    # The pre-0.30 auto-updater expects EXACTLY BitKeyBridge-win-<rid>.zip.
-    # We must not offer canonical asset names until signing is approved.
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.repository == 'sgennadi/BitKeyBridge' &&
-      startsWith(github.event.head_commit.message, 'Publish public stable v0.30.0')
-    needs: [build, laps-regression]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout approved source
-        uses: actions/checkout@v7
-
-      - name: Download x64 build
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-x64
-          path: unsigned-packages
-
-      - name: Download x86 build
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-x86
-          path: unsigned-packages
-
-      - name: Download ARM64 build
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-arm64
-          path: unsigned-packages
-
-      - name: Validate and rename for safe manual installation
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          grep -q '<Version>0.30.0</Version>' src/BitKeyBridge/BitKeyBridge.csproj
-          grep -q '<InformationalVersion>0.30.0</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
-          test "$(cat .github/release-version.txt)" = "v0.30.0"
-          test ! -f src/BitKeyBridge/Services/ProtectedAuditBrokerServer.cs
-          if gh release view v0.30.0 --repo "$GH_REPO" >/dev/null 2>&1; then
-            echo "Refusing to overwrite existing v0.30.0 release"
-            exit 1
-          fi
-          if gh api "repos/$GH_REPO/git/ref/tags/v0.30.0" >/dev/null 2>&1; then
-            echo "Refusing to reuse existing v0.30.0 tag"
-            exit 1
-          fi
-          mkdir -p public-release
-          for rid in x64 x86 arm64; do
-            src="unsigned-packages/BitKeyBridge-win-$rid.zip"
-            dst="public-release/BitKeyBridge-v0.30.0-Windows-$rid-MANUAL-UNSIGNED.zip"
-            test -s "$src"
-            unzip -tq "$src" >/dev/null
-            unzip -Z -1 "$src" | grep -Eq '(^|/)BitKeyBridge[.]exe$'
-          cp "$src" "$dst"
-          done
-          cd public-release
-          sha256sum BitKeyBridge-v0.30.0-Windows-*-MANUAL-UNSIGNED.zip > SHA256SUMS.txt
-          sha256sum -c SHA256SUMS.txt
-          printf 'Version: v0.30.0\nSource SHA: %s\nBuild: GitHub Actions Windows x64/x86/ARM64\nSigning: UNSIGNED, MANUAL USE ONLY\n' "$SOURCE_SHA" > BUILD-INFO.txt
-          test "$(find . -maxdepth 1 -name 'BitKeyBridge-win-*.zip' | wc -l)" -eq 0
-
-      - name: Write public release notes
-        shell: bash
-        env:
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          cat > public-release/RELEASE-NOTES.md <<'EOF'
-          ## BitKeyBridge v0.30.0 - Public Stable (manual testing)
-
-          This release is publicly available as Stable / Latest for technician
-          testing on Windows. The EXE binaries are UNSIGNED. Do not distribute
-          with GPO, Intune or unattended updates until institutional signing
-          and real AD/Entra permissions acceptance have been completed.
-
-          Changes from v0.29.12 include non-admin Helpdesk startup, the
-          AD/Microsoft 365 connection wizard, on-demand LAPS and BitLocker
-          recovery, improved access diagnostics, SemVer-aware updater
-          functionality and responsive HiDPI/RDP WinForms layouts.
-          Experimental Protected Audit Broker from Draft PR #57 is excluded.
-
-          Architecture ZIPs contain MANUAL-UNSIGNED in their filename.
-          These intentionally do NOT match the canonical file names required
-          by older v0.29.x automatic updaters; therefore those clients cannot
-          automatically install the unsigned release. Their update checks may
-          report a missing compatible download until signed assets exist.
-
-          Choose x64 for normal 64-bit Intel/AMD Windows, x86 for 32-bit
-          Windows, and ARM64 for Windows on ARM. Verify the ZIP against
-          SHA256SUMS.txt, extract it, and run BitKeyBridge.exe manually.
-
-          For CMD smoke tests:
-              BitKeyBridge.exe --version
-              BitKeyBridge.exe --self-test --no-elevation
-              BitKeyBridge.exe --ui-self-test --no-elevation
-              BitKeyBridge.exe --auto-update-status --no-elevation
-
-          GitHub CI validates Windows x64/x86/ARM64, LAPS, offline self-tests
-          and UI layout. Real delegated AD/Entra/Intune, audit retention,
-          organizational Authenticode and signed upgrade/rollback need
-          managed-workstation testing before unattended production rollout.
-          EOF
-          printf '\nSource commit: %s\n' "$SOURCE_SHA" >> public-release/RELEASE-NOTES.md
-
-      - name: Publish public Stable Latest v0.30.0
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          gh release create v0.30.0 \
-            public-release/BitKeyBridge-v0.30.0-Windows-x64-MANUAL-UNSIGNED.zip \
-            public-release/BitKeyBridge-v0.30.0-Windows-x86-MANUAL-UNSIGNED.zip \
-            public-release/BitKeyBridge-v0.30.0-Windows-arm64-MANUAL-UNSIGNED.zip \
-            public-release/SHA256SUMS.txt \
-            public-release/BUILD-INFO.txt \
-            --repo "$GH_REPO" --target "$SOURCE_SHA" --latest \
-            --title "BitKeyBridge v0.30.0 - Stable Manual Download" \
-            --notes-file public-release/RELEASE-NOTES.md
 
   release:
     if: >-
@@ -604,6 +567,7 @@ jobs:
        startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))
     needs: [build, laps-regression]
     runs-on: windows-latest
+    # Least-privilege token; these scopes are never granted to PR builds.
     permissions:
       contents: write
       id-token: write
@@ -663,21 +627,26 @@ jobs:
           Write-Host "Release tag: $tag"
           Write-Host "Existing release: $exists"
 
-      # Old v0.29.x clients may auto-install unsigned stable updates.
-      - name: Require signed managed-workstation acceptance for stable v0.30.x
+      # A Git tag alone must never publish the unapproved audit-broker
+      # preview, nor a later 0.30.x release carrying that sensitive feature.
+      # Admins can intentionally approve after completing managed-machine
+      # acceptance, configuring a real organizational signing identity and
+      # reviewing the signed update/rollback chain.
+      - name: Enforce protected audit release approval
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
         env:
-          STABLE_APPROVED: ${{ vars.BITKEYBRIDGE_STABLE_030_APPROVED }}
+          PROTECTED_AUDIT_APPROVED: ${{ vars.BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED }}
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag.StartsWith('v0.30.', [StringComparison]::OrdinalIgnoreCase) -and $tag -ne 'v0.30.0-rc.1') {
-            if ($env:STABLE_APPROVED -ne 'true') {
-              throw 'Public stable 0.30.x requires approved managed AD/Entra and update/rollback acceptance.'
+          if ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
+              $tag -ne "v0.30.0-rc.1") {
+            if ($env:PROTECTED_AUDIT_APPROVED -ne 'true') {
+              throw "Protected audit broker release is NOT approved: complete real-domain AD/Entra acceptance and set BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED=true intentionally."
             }
-            if ($env:SIGNING_THUMBPRINT -notmatch '^[0-9a-fA-F]{40}$') {
-              throw 'Public stable 0.30.x requires the university Code Signing certificate thumbprint.'
+            if ([string]::IsNullOrWhiteSpace($env:SIGNING_THUMBPRINT)) {
+              throw "Protected audit broker release requires the organizational Authenticode signing thumbprint. Unsigned automatic rollout is forbidden."
             }
           }
 
@@ -702,7 +671,7 @@ jobs:
           name: BitKeyBridge-win-arm64
           path: release
 
-      - name: Verify trusted signed x64 x86 ARM64 executables
+      - name: Verify signatures and architectures before protected audit release
         if: >-
           steps.release_meta.outputs.exists != 'true' &&
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
@@ -719,7 +688,7 @@ jobs:
             -ExpectedSourceRevision "${{ github.sha }}" `
             -OutputPath release/BitKeyBridge.signatures.json
           if (-not (Test-Path release/BitKeyBridge.signatures.json)) {
-            throw 'Signed release verification evidence is missing.'
+            throw "Release signature verification evidence was not created."
           }
 
       - name: Generate CycloneDX SBOM
@@ -752,7 +721,7 @@ jobs:
             release/BitKeyBridge.cdx.json
             release/SHA256SUMS.txt
 
-      - name: Attest verified Authenticode release identity
+      - name: Attest protected audit signature verification evidence
         if: >-
           steps.release_meta.outputs.exists != 'true' &&
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
@@ -823,7 +792,7 @@ jobs:
             throw "Automatic update installation was not persisted as disabled."
           }
 
-          $autoEnableOutput = & $exe --auto-update-enable --accept-unsigned-update-risk --no-elevation 2>&1 | Out-String
+          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
           Write-Host $autoEnableOutput
           if ($LASTEXITCODE -ne 0) {
             throw "--auto-update-enable failed."
@@ -870,232 +839,3 @@ jobs:
             throw "GitHub release creation failed for $tag."
           }
 
-
-  public-unsigned-auto:
-    # Owner-authorized, unsigned v0.30.1 public update using canonical names.
-    # Older v0.29.x machines with automatic install enabled may install it.
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.repository == 'sgennadi/BitKeyBridge' &&
-      startsWith(github.event.head_commit.message, 'Publish unsigned auto-update v0.30.1')
-    needs: [build, laps-regression]
-    runs-on: windows-latest
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    steps:
-      - name: Checkout exact release source
-        uses: actions/checkout@v7
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Download validated x64 ZIP
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-x64
-          path: release
-
-      - name: Download validated x86 ZIP
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-x86
-          path: release
-
-      - name: Download validated ARM64 ZIP
-        uses: actions/download-artifact@v8
-        with:
-          name: BitKeyBridge-win-arm64
-          path: release
-
-      - name: Verify version, architecture and exact ZIP identities
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          [xml]$proj = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
-          $v = @($proj.Project.PropertyGroup.Version | Where-Object { $_ })[0]
-          $informational = @($proj.Project.PropertyGroup.InformationalVersion | Where-Object { $_ })[0]
-          if ($v -ne '0.30.1' -or $informational -ne '0.30.1' -or
-              (Get-Content .github/release-version.txt -Raw).Trim() -ne 'v0.30.1') {
-            throw 'Wrong project version or release manifest for v0.30.1.'
-          }
-          if (Test-Path src\BitKeyBridge\Services\ProtectedAuditBrokerServer.cs) {
-            throw 'Experimental protected audit broker cannot enter stable v0.30.1.'
-          }
-          & gh release view v0.30.1 --repo "$env:GH_REPO" *> $null
-          $existingRelease = $LASTEXITCODE
-          $global:LASTEXITCODE = 0
-          if ($existingRelease -eq 0) {
-            throw 'v0.30.1 already published. Never overwrite a stable release.'
-          }
-          & gh api "repos/$env:GH_REPO/git/ref/tags/v0.30.1" *> $null
-          $existingTag = $LASTEXITCODE
-          $global:LASTEXITCODE = 0
-          if ($existingTag -eq 0) {
-            throw 'v0.30.1 tag already exists. Never retarget a stable tag.'
-          }
-          $machines = @{'win-x64'=0x8664; 'win-x86'=0x014c; 'win-arm64'=0xaa64}
-          foreach ($rid in @('win-x64','win-x86','win-arm64')) {
-            $zip = Join-Path release "BitKeyBridge-$rid.zip"
-            if (-not (Test-Path $zip) -or (Get-Item $zip).Length -lt 100000) {
-              throw "Missing or empty canonical release ZIP: $zip"
-            }
-            $dir = Join-Path $env:RUNNER_TEMP "check-$rid"
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            Expand-Archive -Path $zip -DestinationPath $dir -Force
-            $exe = Join-Path $dir 'BitKeyBridge.exe'
-            $exes = @(Get-ChildItem $dir -Filter BitKeyBridge.exe -File -Recurse)
-            if ($exes.Count -ne 1 -or -not (Test-Path $exe) -or
-                -not [string]::Equals($exes[0].FullName,$exe,[StringComparison]::OrdinalIgnoreCase)) {
-              throw "$rid must contain exactly one BitKeyBridge.exe at ZIP root."
-            }
-            $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
-            if ($info.FileVersion -ne '0.30.1.0' -or
-                $info.ProductVersion -notmatch '^0[.]30[.]1([+][0-9a-zA-Z.-]+)?$') {
-              throw "Incorrect $rid version: $($info.FileVersion)/$($info.ProductVersion)"
-            }
-            $stream = [IO.File]::OpenRead($exe)
-            $reader = [IO.BinaryReader]::new($stream)
-            try {
-              $stream.Position = 0x3c
-              $offset = $reader.ReadInt32()
-              if ($offset -lt 64 -or $offset -ge $stream.Length - 6) {
-                throw "$rid invalid PE offset."
-              }
-              $stream.Position = $offset
-              if ($reader.ReadUInt32() -ne 0x00004550) { throw "$rid invalid PE signature." }
-              $machine = [int]$reader.ReadUInt16()
-              if ($machine -ne $machines[$rid]) {
-                throw "$rid machine mismatch: 0x$($machine.ToString('X4'))."
-              }
-            }
-            finally {
-              $reader.Dispose()
-            }
-            Write-Host "Verified $rid PE architecture and ProductVersion 0.30.1"
-          }
-
-      - name: Smoke-test unsigned auto-update opt-in without network installation
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $dir = Join-Path $env:RUNNER_TEMP 'unsigned-update-smoke'
-          New-Item -ItemType Directory -Path $dir -Force | Out-Null
-          Expand-Archive release\BitKeyBridge-win-x64.zip -DestinationPath $dir -Force
-          $exe = Join-Path $dir 'BitKeyBridge.exe'
-          & $exe --auto-update-disable --no-elevation | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot disable automatic updates.' }
-          $noConsent = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
-          Write-Host $noConsent
-          if ($LASTEXITCODE -eq 0) { throw 'Unattended updates started without explicit consent.' }
-          $consented = & $exe --auto-update-enable --accept-unsigned-update-risk --no-elevation 2>&1 | Out-String
-          Write-Host $consented
-          if ($LASTEXITCODE -ne 0) { throw 'Explicit unsigned auto-update consent was rejected.' }
-          $status = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
-          Write-Host $status
-          if ($LASTEXITCODE -ne 0 -or $status -notmatch 'UnsignedConsent=True' -or
-              $status -notmatch 'AutomaticInstall=True' -or
-              $status -notmatch 'AutomaticChecks=True') {
-            throw 'Auto-update opt-in did not persist securely.'
-          }
-          & $exe --auto-update-disable --no-elevation | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw 'Auto-install cleanup failed.' }
-          Write-Host 'Local consent check passed; no network updater executed.'
-
-      - name: Generate CycloneDX SBOM
-        shell: pwsh
-        run: |
-          dotnet tool install --tool-path .tools CycloneDX --version 6.2.0
-          if ($LASTEXITCODE -ne 0) { throw 'CycloneDX install failed.' }
-          .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -spv 1.7 -sn BitKeyBridge -sv 0.30.1 -st Application
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path release\BitKeyBridge.cdx.json)) {
-            throw 'CycloneDX generation failed.'
-          }
-
-      - name: Prepare GitHub checksum metadata and unsigned release notes
-        shell: bash
-        env:
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          cat > release/RELEASE-NOTES.md <<'EOF'
-          ## BitKeyBridge v0.30.1 - Stable auto-update (UNSIGNED)
-
-          This public stable release provides standard BitKeyBridge-win-x64.zip,
-          BitKeyBridge-win-x86.zip and BitKeyBridge-win-arm64.zip archives.
-
-          WARNING: no Authenticode code signing certificate is configured.
-          Some older BitKeyBridge v0.29.x computers with automatic installation
-          already enabled MAY UPDATE AUTOMATICALLY on the next launch.
-          SHA-256 and GitHub provenance detect corruption but do NOT provide
-          independent publisher verification.
-
-          v0.30.1 defaults to update checks only. Explicit unsigned auto-install:
-              BitKeyBridge.exe --auto-update-enable --accept-unsigned-update-risk --no-elevation
-          Disable it:
-              BitKeyBridge.exe --auto-update-disable --no-elevation
-
-          The updated GUI also offers an unsigned opt-in with a risk warning.
-          The opt-in works only with the official sgennadi/BitKeyBridge GitHub
-          repository, and does not override an Authenticode publisher policy.
-
-          The updater validates HTTPS, repository/tag/architecture asset
-          identity, exact package size, GitHub SHA-256 digest, SHA256SUMS,
-          executable version, self-test and rollback consistency.
-          The experimental SYSTEM audit broker from PR #57 is excluded.
-          LAPS/BitLocker, AD/Entra connection, permission diagnostics and
-          HiDPI/RDP Helpdesk functions are retained. Live campus authorization
-          tests remain an on-site operations requirement.
-          EOF
-          printf '\nSource commit: %s\n' "$SOURCE_SHA" >> release/RELEASE-NOTES.md
-          printf 'Version: v0.30.1\nSource SHA: %s\nAuthenticode: UNSIGNED\nCanonical auto-update ZIPs: YES\n' "$SOURCE_SHA" > release/BUILD-INFO.txt
-          cd release
-          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json BUILD-INFO.txt > SHA256SUMS.txt
-          sha256sum -c SHA256SUMS.txt
-
-      - name: Attest release packages
-        uses: actions/attest@v4
-        with:
-          subject-path: |
-            release/BitKeyBridge-win-x64.zip
-            release/BitKeyBridge-win-x86.zip
-            release/BitKeyBridge-win-arm64.zip
-            release/BitKeyBridge.cdx.json
-            release/SHA256SUMS.txt
-            release/BUILD-INFO.txt
-
-      - name: Attest release SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: |
-            release/BitKeyBridge-win-x64.zip
-            release/BitKeyBridge-win-x86.zip
-            release/BitKeyBridge-win-arm64.zip
-          sbom-path: release/BitKeyBridge.cdx.json
-
-      - name: Publish unsigned stable auto-update v0.30.1
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          gh release create v0.30.1 \
-            release/BitKeyBridge-win-x64.zip \
-            release/BitKeyBridge-win-x86.zip \
-            release/BitKeyBridge-win-arm64.zip \
-            release/BitKeyBridge.cdx.json \
-            release/SHA256SUMS.txt \
-            release/BUILD-INFO.txt \
-            --repo "$GH_REPO" --target "$SOURCE_SHA" --latest \
-            --title "BitKeyBridge v0.30.1 - Stable Auto-Update (Unsigned)" \
-            --notes-file release/RELEASE-NOTES.md

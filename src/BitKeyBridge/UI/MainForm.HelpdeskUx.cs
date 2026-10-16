@@ -40,7 +40,6 @@ public sealed partial class MainForm
     private readonly Button _rollbackUpdateButton = new();
     private readonly Button _onlineRollbackButton = new();
     private readonly CheckBox _requireTrustedUpdateSignature = new();
-    private readonly CheckBox _allowUnsignedAutoUpdates = new();
     private readonly TextBox _trustedUpdatePublisher = new();
 
     private void RefreshUpdateHistory()
@@ -396,11 +395,24 @@ public sealed partial class MainForm
             "Reject recovery secret retrieval unless the machine-protected audit event is saved";
         recoveryGrid.Controls.Add(_requireProtectedRecoveryAuditSetting, 1, 2);
 
+        var brokerStatus = new UiStatusLabel
+        {
+            Name = "ProtectedAuditBrokerStatus",
+            AutoSize = true,
+            MaximumSize = new Size(1000, 0),
+            AccessibleName = "Protected Windows Service audit broker configuration",
+            Text = _config.AuditBrokerEnabled
+                ? "Managed protected writer is configured. Verify service with --audit-broker-status."
+                : "Managed protected writer is off. Administrators can prepare it with --audit-broker-provision."
+        };
+        UiStyle.ConfigureStatusLabel(brokerStatus);
+        recoveryGrid.Controls.Add(brokerStatus, 1, 3);
+
         _recoveryReferencePatternSetting.PlaceholderText =
             "Optional regex, e.g. ^INC-[0-9]+$";
         AddGridField(
             recoveryGrid,
-            3,
+            4,
             "Ticket format:",
             _recoveryReferencePatternSetting);
 
@@ -408,7 +420,7 @@ public sealed partial class MainForm
             "INC-12345";
         AddGridField(
             recoveryGrid,
-            4,
+            5,
             "Ticket example:",
             _recoveryReferenceExampleSetting);
 
@@ -418,7 +430,7 @@ public sealed partial class MainForm
             3600;
         AddGridField(
             recoveryGrid,
-            5,
+            6,
             "Secret lifetime (sec):",
             _secretDisplaySecondsSetting);
 
@@ -428,7 +440,7 @@ public sealed partial class MainForm
             600;
         AddGridField(
             recoveryGrid,
-            6,
+            7,
             "Clipboard lifetime (sec):",
             _clipboardSecondsSetting);
 
@@ -438,7 +450,7 @@ public sealed partial class MainForm
         recoveryGrid.Controls.Add(
             save,
             1,
-            7);
+            8);
         root.Controls.Add(
             recoveryGrid);
 

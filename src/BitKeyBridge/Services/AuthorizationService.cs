@@ -170,8 +170,11 @@ public sealed class AuthorizationService
             try
             {
                 var sid = ResolveSid(candidate);
+                // WindowsIdentity.Groups can contain deny-only/disabled groups.
+                // WindowsPrincipal.IsInRole checks the *enabled* token roles,
+                // matching the broker's impersonated-token authorization.
                 if (identity.User?.Equals(sid) == true ||
-                    identity.Groups?.Contains(sid) == true)
+                    principal.IsInRole(sid))
                 {
                     return new AuthorizationDecision
                     {

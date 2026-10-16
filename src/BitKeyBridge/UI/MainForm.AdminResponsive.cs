@@ -84,17 +84,9 @@ public sealed partial class MainForm
             "TrustedUpdatePublisher";
         _trustedUpdatePublisher.PlaceholderText =
             "Optional expected publisher name";
-        _allowUnsignedAutoUpdates.Name = "AllowUnsignedUnattendedUpdates";
-        _allowUnsignedAutoUpdates.AccessibleName =
-            "Explicitly allow unsigned automatic updates from the official BitKeyBridge GitHub repository";
-        _allowUnsignedAutoUpdates.Text =
-            "Allow unsigned auto-updates (official GitHub only; higher risk)";
-        _allowUnsignedAutoUpdates.AutoSize = true;
-        updateGrid.Controls.Add(_allowUnsignedAutoUpdates, 1, 5);
-
         AddGridField(
             updateGrid,
-            6,
+            5,
             "Trusted publisher:",
             _trustedUpdatePublisher);
 
@@ -130,7 +122,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             updateActions,
             1,
-            7);
+            6);
 
         UiStyle.ConfigureStatusLabel(
             _updateStatus);
@@ -148,7 +140,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _updateStatus,
             1,
-            8);
+            7);
 
         root.Controls.Add(
             updateGrid);
@@ -216,13 +208,11 @@ public sealed partial class MainForm
             {
                 if (!UpdateTrustPolicy.CanEnableUnattended(
                         _requireTrustedUpdateSignature.Checked,
-                        _trustedUpdatePublisher.Text,
-                        _allowUnsignedAutoUpdates.Checked,
-                        _updateRepository.Text))
+                        _trustedUpdatePublisher.Text))
                 {
                     UiStyle.SetStatus(_updateStatus,
-                        "Cannot resume auto-updates: use a trusted signing publisher " +
-                        "or explicitly opt into unsigned updates from the official GitHub repository.",
+                        "Cannot resume unattended updates until the expected " +
+                        "publisher and required Authenticode policy are configured.",
                         UiStatusKind.Warning);
                     return;
                 }
@@ -300,10 +290,6 @@ public sealed partial class MainForm
             };
 
         _requireTrustedUpdateSignature.CheckedChanged +=
-            (_, _) =>
-                RefreshAutomaticControls();
-
-        _allowUnsignedAutoUpdates.CheckedChanged +=
             (_, _) =>
                 RefreshAutomaticControls();
 

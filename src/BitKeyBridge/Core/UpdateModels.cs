@@ -6,8 +6,6 @@ public sealed class UpdateInfo
     public string LatestVersion { get; set; } = string.Empty;
     public string ReleaseTag { get; set; } = string.Empty;
     public bool UpdateAvailable { get; set; }
-    // Public release with manual-only ZIP names; never eligible for auto-install.
-    public bool ManualReleaseAvailable { get; set; }
     // Explicit downgrade target; never treated as an automatic update.
     public bool IsRollbackTarget { get; set; }
     public string Architecture { get; set; } = string.Empty;

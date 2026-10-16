@@ -4,7 +4,8 @@ on:
   push:
     branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main", "master" ]
+    # Review the protected-broker PR against the RC staging branch as well.
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014" ]
   schedule:
     - cron: "27 2 * * 1"
   workflow_dispatch:

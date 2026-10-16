@@ -73,6 +73,10 @@ internal static class Program
             x.Equals("--start-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--stop-service", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-provision", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
@@ -270,6 +274,8 @@ internal static class Program
         var readOnlyStatusCommand = args.Any(x =>
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
@@ -386,6 +392,112 @@ internal static class Program
             catch (Exception ex)
             {
                 Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-provision", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                Console.WriteLine(ProtectedAuditBrokerProvisioning.Provision());
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    "Protected audit broker provisioning failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-verify", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!SecurityContext.IsAdministrator())
+            {
+                Console.Error.WriteLine(
+                    "Local administrator access is required to inspect the protected audit chain.");
+                return 5;
+            }
+
+            try
+            {
+                if (!ProtectedAuditStoragePolicy.IsTrusted(AppPaths.AppSettingsFile) ||
+                    !ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(
+                        AppPaths.BrokerAuditLogFile))
+                {
+                    Console.Error.WriteLine(
+                        "Protected audit verification failed: machine policy, journal, " +
+                        "rotated archive, lock file, or parent-directory ACL is unsafe.");
+                    return 1;
+                }
+
+                var integrity = AuditIntegrityService.Verify(AppPaths.BrokerAuditLogFile);
+                Console.WriteLine(JsonSerializer.Serialize(integrity,
+                    new JsonSerializerOptions { WriteIndented = true }));
+                return integrity.Valid ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    "Protected audit verification failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+                return 1;
+            }
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase)))
+        {
+            // Read-only local checks, unless --probe explicitly asks for a
+            // harmless, committed health event. Never reads recovery secrets.
+            return BrokerReadinessDiagnosticService.Run(
+                config,
+                probe: args.Any(x => x.Equals("--probe", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (args.Any(x => x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                var info = WindowsServiceHost.GetInfo();
+                Console.WriteLine(
+                    "BrokerEnabled=" + config.AuditBrokerEnabled +
+                    "; StrictAudit=" + config.RequireProtectedAuditForRecovery +
+                    "; ExplicitRbac=" + (config.RbacEnabled &&
+                        config.RbacRecoveryReaders.Count > 0) +
+                    "; ServiceInstalled=" + info.Installed +
+                    "; ServiceState=" + info.State);
+                if (SecurityContext.IsAdministrator())
+                    Console.WriteLine(
+                        "ProtectedJournal=" +
+                        ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(AppPaths.BrokerAuditLogFile));
+                // Service SCM status is not proof that the protected
+                // local pipe is listening or that this account can write.
+                // A synthetic event receives an ACK only after the SYSTEM
+                // worker authenticates our token and flushes its journal.
+                var configured =
+                    info.Installed &&
+                    config.AuditBrokerEnabled &&
+                    config.RequireProtectedAuditForRecovery &&
+                    config.RbacEnabled &&
+                    config.RbacRecoveryReaders.Count > 0 &&
+                    string.Equals(info.State, "Running", StringComparison.OrdinalIgnoreCase);
+                var committed = configured && ProtectedAuditBrokerClient.TryProbe();
+                Console.WriteLine(
+                    "BrokerProbe=" + (committed ? "Committed" : "DeniedOrUnavailable") +
+                    "; CheckedIdentity=" + AuthorizationService.CurrentIdentityName());
+                if (!committed)
+                    Console.Error.WriteLine(
+                        "The current Windows identity did not receive a protected " +
+                        "audit ACK. Check explicit RecoveryReaders membership, " +
+                        "service startup, named-pipe access and protected journal. " +
+                        "This command writes a synthetic health event only when allowed.");
+                return committed ? 0 : 3;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(DiagnosticRedaction.Sanitize(ex.Message));
                 return 1;
             }
         }
@@ -949,10 +1061,10 @@ internal static class Program
             return ShowAutomaticUpdateSettings(config);
 
         if (args.Any(x => x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase)))
-            return SetAutomaticUpdateSettings(config, enabled: true, args);
+            return SetAutomaticUpdateSettings(config, enabled: true);
 
         if (args.Any(x => x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase)))
-            return SetAutomaticUpdateSettings(config, enabled: false, args);
+            return SetAutomaticUpdateSettings(config, enabled: false);
 
         if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
             return CheckUpdateAsync(config).GetAwaiter().GetResult();
@@ -1052,32 +1164,16 @@ internal static class Program
         AppConfig config)
     {
         Console.WriteLine(
-            $"AutomaticInstall={config.AutoInstallUpdatesOnStart}; AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}; UnsignedConsent={config.AllowUnsignedUnattendedUpdates}; TrustMode={UpdateTrustPolicy.DescribeMode(config)}");
+            $"AutomaticInstall={config.AutoInstallUpdatesOnStart}; AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}");
         return 0;
     }
 
     private static int SetAutomaticUpdateSettings(
         AppConfig config,
-        bool enabled,
-        string[] args)
+        bool enabled)
     {
         try
         {
-            if (enabled && args.Any(x => x.Equals(
-                    "--accept-unsigned-update-risk", StringComparison.OrdinalIgnoreCase)))
-            {
-                // Never infer consent from a legacy 0.29.x AutoInstall=true.
-                config.AllowUnsignedUnattendedUpdates = true;
-            }
-
-            if (enabled && !UpdateTrustPolicy.CanInstallUnattended(config))
-            {
-                Console.Error.WriteLine(
-                    "Automatic installation requires a trusted signing publisher, or explicit " +
-                    "--accept-unsigned-update-risk with the official sgennadi/BitKeyBridge repository.");
-                return 1;
-            }
-
             config.AutoInstallUpdatesOnStart =
                 enabled;
 
@@ -1095,7 +1191,7 @@ internal static class Program
 
             Console.WriteLine(
                 enabled
-                    ? "Automatic updates enabled: " + UpdateTrustPolicy.DescribeMode(config) + ". Startup checks enabled."
+                    ? "Automatic verified updates enabled. Startup checks were also enabled."
                     : "Automatic installation disabled. Startup checks keep their current setting.");
             return 0;
         }
@@ -1648,7 +1744,7 @@ internal static class Program
             Directory.CreateDirectory(tempDirectory);
 
             failures.AddRange(LapsSelfTest.Run());
-            failures.AddRange(UnsignedUpdateSelfTest.Run());
+            failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
@@ -1755,6 +1851,19 @@ internal static class Program
                     failures.Add(
                         "Startup update checks should be enabled, but unattended installation must be opt-in.");
                 }
+
+                // Strict protected audit never permits substring signer spoofing.
+                if (!AuthenticodeVerificationService.PublisherMatches(
+                        "Ariel University", "Ariel University", exact: true) ||
+                    AuthenticodeVerificationService.PublisherMatches(
+                        "Fake Ariel University Signing", "Ariel University",
+                        exact: true) ||
+                    AuthenticodeVerificationService.PublisherMatches(
+                        "Signed", "Signed", exact: true) ||
+                    !AuthenticodeVerificationService.PublisherMatches(
+                        "Example Trusted Publisher Ltd", "Trusted Publisher",
+                        exact: false))
+                    failures.Add("Strict Authenticode publisher matching regression.");
 
                 var expectedHash = new string('a', 64);
                 var sums = expectedHash + "  BitKeyBridge-win-x64.zip" + Environment.NewLine;
@@ -1984,6 +2093,162 @@ internal static class Program
 
             }
             catch (Exception ex) { failures.Add("Updater pure helpers: " + ex.Message); }
+
+            try
+            {
+                var request = new ProtectedAuditBrokerRequest
+                {
+                    Operation = "ReadLapsPasswords",
+                    Computer = "LAB-HELPDESK-01",
+                    Source = "LAPS-AD",
+                    Reference = "INC-12345",
+                    SessionId = Guid.NewGuid().ToString("N")
+                };
+                if (!ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker rejected bounded audit metadata.");
+
+                request.Operation = "InstallService";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a privileged operation outside its pre-read allowlist.");
+                request.Operation = "ReadLapsPasswords";
+                request.Reason = "x" + new string('y', 600);
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted oversized metadata.");
+                request.Reason = "password=verysecret\n";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted multiline metadata.");
+                request.Reason = "password=verysecret";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a password-bearing ticket field.");
+                request.Reason = "123456-123456-123456-123456-123456-123456-123456-123456";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a BitLocker recovery password in metadata.");
+                request.Reason = "Approved by Helpdesk";
+                request.RequestId = "not-a-guid";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted an invalid nonce.");
+
+                request.RequestId = Guid.NewGuid().ToString("N");
+                request.SessionId = string.Empty;
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted a real recovery operation without session ID.");
+                request.SessionId = "non-guid-session";
+                if (ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker accepted an invalid recovery session ID.");
+                request.SessionId = Guid.NewGuid().ToString("N");
+                if (!ProtectedAuditBrokerProtocol.Validate(request))
+                    failures.Add("Broker rejected a valid recovery session ID.");
+
+                // Probe cannot masquerade as an actual secret access, carry
+                // arbitrary ticket text or use a user-chosen target.
+                var probe = new ProtectedAuditBrokerRequest
+                {
+                    Operation = ProtectedAuditBrokerProtocol.ProbeOperation,
+                    Computer = ProtectedAuditBrokerProtocol.ProbeComputer,
+                    Source = ProtectedAuditBrokerProtocol.ProbeSource,
+                    SessionId = Guid.NewGuid().ToString("N")
+                };
+                if (!ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Protected broker rejected safe health probe metadata.");
+                probe.Reason = "Approved access";
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe accepted arbitrary caller text.");
+                probe.Reason = string.Empty;
+                probe.Computer = "REAL-WORKSTATION";
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe allowed a real computer target.");
+                probe.Computer = ProtectedAuditBrokerProtocol.ProbeComputer;
+                probe.Source = "LAPS-AD";
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe accepted a recovery source.");
+                probe.Source = ProtectedAuditBrokerProtocol.ProbeSource;
+                probe.SessionId = string.Empty;
+                if (ProtectedAuditBrokerProtocol.Validate(probe))
+                    failures.Add("Health probe accepted missing session correlation.");
+
+                using (var wire = new MemoryStream())
+                {
+                    ProtectedAuditBrokerProtocol.WriteAsync(
+                        wire, request, ProtectedAuditBrokerProtocol.MaxRequestBytes,
+                        CancellationToken.None).GetAwaiter().GetResult();
+                    wire.Position = 0;
+                    var decoded = ProtectedAuditBrokerProtocol.ReadAsync<
+                        ProtectedAuditBrokerRequest>(
+                            wire, ProtectedAuditBrokerProtocol.MaxRequestBytes,
+                            CancellationToken.None).GetAwaiter().GetResult();
+                    if (decoded.RequestId != request.RequestId ||
+                        decoded.Operation != "ReadLapsPasswords")
+                        failures.Add("Broker framed request roundtrip mismatch.");
+                }
+
+                if (OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        _ = ProtectedAuditBrokerServer.ResolveExplicitReaders(["S-1-1-0"]);
+                        failures.Add("Broker allowed Everyone principal in recovery readers.");
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Broad, unscoped access must fail closed.
+                    }
+
+                    if (new AuditService(
+                            Path.Combine(tempDirectory, "not-protected.jsonl"))
+                        .Write("AuthorizeRecoveryAccess",
+                            requireProtectedStorage: true,
+                            preferBroker: true) is not null)
+                        failures.Add("Broker allowed a non-canonical journal path.");
+
+                    if (!AuditService.RejectProtectedArchiveOverwrite(
+                            AppPaths.BrokerAuditLogFile, previousArchiveExists: true))
+                        failures.Add("Protected journal rotation could discard its existing archive.");
+                    if (AuditService.RejectProtectedArchiveOverwrite(
+                            AppPaths.BrokerAuditLogFile, previousArchiveExists: false))
+                        failures.Add("Protected journal incorrectly blocked first archive creation.");
+                    if (AuditService.RejectProtectedArchiveOverwrite(
+                            Path.Combine(tempDirectory, "portable-audit.jsonl"),
+                            previousArchiveExists: true))
+                        failures.Add("Protected journal rotation policy affected portable storage.");
+
+                    if (!WindowsServiceHost.GetInfo().Installed)
+                    {
+                        // A user-owned fake server must not be able to forge a
+                        // successful protected audit acknowledgement. Only run
+                        // this when the real BitKeyBridge service is absent.
+                        using var fake = new System.IO.Pipes.NamedPipeServerStream(
+                            ProtectedAuditBrokerProtocol.PipeName,
+                            System.IO.Pipes.PipeDirection.InOut,
+                            1,
+                            System.IO.Pipes.PipeTransmissionMode.Byte,
+                            System.IO.Pipes.PipeOptions.Asynchronous);
+                        using var fakeTimeout =
+                            new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                        var connected = fake.WaitForConnectionAsync(fakeTimeout.Token);
+                        var fakeEntry = new AuditEntry
+                        {
+                            Action = "AuthorizeRecoveryAccess",
+                            Result = "Authorized",
+                            Details = "Action=ReadLapsPasswords",
+                            ComputerName = "LAB-PC",
+                            Source = "LAPS-AD",
+                            // Fake-pipe ownership must be tested with a
+                            // VALID request, or protocol validation blocks
+                            // before connecting and WaitForConnection times out.
+                            CorrelationId = Guid.NewGuid().ToString("N")
+                        };
+                        var fakeAck = ProtectedAuditBrokerClient.TryCommit(fakeEntry);
+                        connected.GetAwaiter().GetResult();
+                        if (fakeAck is not null)
+                            failures.Add("Broker accepted a non-SYSTEM owned named pipe.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Protected audit broker protocol: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
 
             try
             {
@@ -2366,6 +2631,58 @@ internal static class Program
                     failures.Add(
                         "SIEM mode normalization failed.");
                 }
+
+                // An actual outbox error must deny protected recovery when
+                // SiemFailClosed is requested, even if earlier readiness
+                // checks raced with another writer filling the queue.
+                var siemTestDirectory = Path.Combine(
+                    tempDirectory, "siem-enqueue-regression");
+                Directory.CreateDirectory(siemTestDirectory);
+                var blockedOutbox = Path.Combine(
+                    siemTestDirectory, "not-a-directory");
+                File.WriteAllText(blockedOutbox, "blocked");
+                var healthyOutbox = Path.Combine(
+                    siemTestDirectory, "healthy-outbox");
+                var statusFile = Path.Combine(
+                    siemTestDirectory, "siem-status.json");
+                var siemConfig = new AppConfig
+                {
+                    SiemEnabled = true,
+                    SiemFailClosed = true,
+                    SiemMode = "FileJsonl"
+                };
+                var syntheticEvent = new AuditEntry
+                {
+                    User = "bkb-self-test",
+                    Host = "LOCAL-TEST",
+                    Action = "AuditBrokerHealthProbe",
+                    Result = "Committed",
+                    TimestampUtc = DateTime.UtcNow,
+                    EntryHash = new string('A', 64)
+                };
+
+                if (SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, true,
+                        blockedOutbox, statusFile))
+                    failures.Add("SIEM fail-closed accepted a failed protected event enqueue.");
+
+                if (!SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, false,
+                        blockedOutbox, statusFile))
+                    failures.Add("SIEM best-effort compatibility was broken.");
+
+                siemConfig.SiemFailClosed = false;
+                if (!SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, true,
+                        blockedOutbox, statusFile))
+                    failures.Add("SIEM fail-open mode incorrectly blocked recovery.");
+
+                siemConfig.SiemFailClosed = true;
+                if (!SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, true,
+                        healthyOutbox, statusFile) ||
+                    Directory.EnumerateFiles(healthyOutbox, "*.json").Count() != 1)
+                    failures.Add("SIEM fail-closed rejected a successful local enqueue.");
             }
             catch (Exception ex)
             {
@@ -3781,6 +4098,10 @@ internal static class Program
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
         Console.WriteLine("  --stop-service        Stop the installed BitKeyBridge service");
         Console.WriteLine("  --service-status      Show installed service state and identity");
+        Console.WriteLine("  --audit-broker-provision  Admin only: protect journal/config ACL and enable audit broker");
+        Console.WriteLine("  --audit-broker-status     Check authenticated protected audit ACK as current reader (writes safe health event)");
+        Console.WriteLine("  --audit-broker-preflight [--probe]  JSON local/token/service/ACL/signing checks (no secrets; probe is opt-in)");
+        Console.WriteLine("  --audit-broker-verify     Admin only: verify protected NTFS ACL + audit chain");
         Console.WriteLine("  --vault-status        Show AD credential vault metadata (never plaintext)");
         Console.WriteLine("  --vault-save-user     Save AD credential in current-user Credential Manager");
         Console.WriteLine("  --vault-save-machine  Save AD credential with machine DPAPI + restricted ACL");
@@ -3800,10 +4121,6 @@ internal static class Program
         Console.WriteLine("  --update-checks-status   Show automatic update-check setting");
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");
-        Console.WriteLine("  --auto-update-status   Show automatic installation mode and unsigned consent");
-        Console.WriteLine("  --auto-update-enable   Enable auto-install (requires signed publisher or explicit opt-in)");
-        Console.WriteLine("  --auto-update-disable  Disable automatic installation");
-        Console.WriteLine("  --accept-unsigned-update-risk  With --auto-update-enable: opt into unsigned official GitHub updates");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
         Console.WriteLine("  --no-elevation        Do not relaunch through UAC");
         Console.WriteLine("  --self-test           Run offline smoke tests and exit");

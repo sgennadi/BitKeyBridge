@@ -1,26 +1,66 @@
-## 0.30.1
+## 0.30.2-rc.1
 
-**Public stable, unsigned auto-update compatibility release (16 October 2026).**
+**Integrated unsigned QA candidate — not a production release**
 
-- Restore canonical `BitKeyBridge-win-{x64,x86,arm64}.zip` release assets so existing GitHub updaters can recognize the latest stable release. These packages remain UNSIGNED; publishing them to Latest can trigger auto-install on older v0.29.x computers that had it enabled.
-- Keep fresh installations in check-only mode; automatic installation of unsigned packages on v0.30.1+ requires an explicit GUI consent or CLI `--auto-update-enable --accept-unsigned-update-risk` with the official `sgennadi/BitKeyBridge` GitHub repository.
-- Retain HTTPS release URL validation, file-size and SHA-256 checks, executable version and self-test, rollback, and existing Authenticode-enforced update mode for future signed releases. SHA-256 from the same publishing account is not equivalent to independent publisher signing.
-- Improve manual-only release detection: link technicians to the manual GitHub download instead of showing a missing-asset failure.
-- Preserve protected-audit, least-privilege, startup connection and LAPS/BitLocker diagnostics; experimental SYSTEM Protected Audit Broker remains excluded.
-- Extend regression checks and Windows x64/x86/ARM64 release verification before public publication.
+- Integrate Protected Audit Broker for non-administrator Helpdesk with staged updater hardening.
+- Validate update ZIP structure, PE machine architecture and staged self-test timeout.
+- Improve least-privilege AD LAPS/BitLocker troubleshooting and rollback restoration counts.
+- Extend HiDPI layout regression scenarios to 175% and compact 200% RDP-like sizes.
+- Gate unsigned QA bundle on Windows x64/x86/ARM64, LAPS regression, broker integration and temporary signing integration; keep real managed-domain acceptance mandatory.
+
+## 0.30.0-rc.2
+
+**Experimental managed audit broker (requires administrator provisioning)**
+
+- Add a one-click QA-only GitHub Actions artifact bundling the three unsigned test EXE ZIPs, SHA-256 verification, exact Git source SHA, CMD-only safe diagnostics and explicit test/production warnings; publish only after every prerequisite build, LAPS, protected-audit and Authenticode test passes. Never attach this bundle to GitHub Releases.
+
+
+- Enforce `SiemFailClosed` at the actual audit-event outbox enqueue, not only during earlier readiness checks. When local SIEM queueing fails, strict protected recovery gets NO positive broker ACK; already-flushed journal evidence is retained. Keep fail-open/optional modes backward compatible. Add offline blocked-outbox tests and Windows SYSTEM/two-standard-user overflow integration.
+
+
+- Gate publication on a LOCAL staged updater smoke test (before GitHub Release creation). Remove the CI executable `--update` action and automatic `release/*` branch deletion. Add regression checks for publishing order, signer approval and unsafe branch manipulation.
+
+- Fix production Authenticode release verification for .NET auto-generated `ProductVersion` build metadata (`0.30.0-rc.2+<GitSHA>`): preserve exact SemVer release identity, permit only a hexadecimal source revision suffix, enforce identical build commits across architectures, and require the approved GitHub source SHA during Release creation. Positive and negative signing tests cover this strict comparison.
+
+- Restrict GitHub Actions default token to contents:read. Only the gated release job receives contents/attestation/id-token write privileges; organizational SignTool is never invoked for PRs, manually dispatched branches or normal main commits. Keep ephemeral signature verification active in PR CI independently of signing variables.
+
+
+- Add an ephemeral Windows CI positive Authenticode acceptance job: generate a non-exportable CurrentUser test signing certificate, sign copies of x64/x86/ARM64 EXEs, require all three exact trusted signer/product version/PE architecture matches, and reject wrong signer, version, architecture and unsigned binaries. Clean up CurrentUser test trust and temporary files; never upload test certificates or sign production releases.
+
+
+- Prevent unsigned managed-broker upgrade/rollback and elevated updater plan policy bypass. Strict audit mode now requires a trusted Authenticode signature and an exact configured publisher; the elevated apply helper independently reloads machine signing settings and validates the staged executable before replacement, refusing unattended apply when its current policy is disabled. Add offline publisher-spoofing regression checks.
+
+- Require verified Authenticode on all three release EXEs before publishing a protected-audit 0.30.x version: exact signing certificate thumbprint, trusted chain, matching x64/x86/ARM64 PE architecture and ProductVersion. Include signing evidence in SHA256SUMS and GitHub attestations, with fail-closed CI regression tests.
+
+- Stop destructive protected journal rotation: when a protected .old archive is present at the next size threshold, deny the append instead of deleting the prior audit history. Add regression checks; legacy portable audit rotation remains unchanged.
+
+- Add `--audit-broker-preflight [--probe]` for secret-free local Windows join/token/RBAC/service/signing/NTFS diagnostics. The passive default never writes a journal event; an explicit probe writes one synthetic committed health event. Add real standard-user CI assertions and an optional CMD-only per-user report wrapper, plus enterprise AD/Entra acceptance steps. Correct outdated Russian README release-version guidance.
+
+- Reject stale RBAC machine policy after startup: pin the trusted appsettings fingerprint and deny audit requests until restart whenever it changes. Require GUID recovery session correlation for every broker operation, and evaluate only enabled Windows group memberships for GUI RBAC, matching broker impersonation. Add offline and Windows service integration regression checks.
+
+- Validate archive and lock-file ACLs alongside the protected journal. Administrative --audit-broker-verify also checks appsettings machine-policy ACL, with fail-closed standard-user Windows integration tests for both companion files and administrator diagnostics.
+
+- Add an opt-in local Windows Service named-pipe broker so delegated non-admin Helpdesk sessions can commit strict, hash-chained recovery audit events without UAC or machine journal write permissions.
+- Authenticate the caller using the impersonated Windows token and an explicit RBAC RecoveryReaders SID/group allowlist; reject Everyone/Authenticated Users/BUILTIN Users and all empty/broad broker policies. The pipe DACL grants narrow ReadData/WriteData rights but never CreateNewInstance.
+- Verify the pipe is SYSTEM-owned before the client sends any recovery metadata. Use a bounded versioned protocol with a one-time request ID, fixed recovery operations, replay tracking, per-SID rate limiting and short timeouts. The protocol does **not** accept passwords, keys or client-supplied actor SIDs.
+- Journal a server-generated event using the token-authenticated actor identity in an isolated protected `%ProgramData%\\BitKeyBridge\\ProtectedAudit` directory. Enforce trusted owner/write ACL and hash-chain integrity; flush protected writes to disk before acknowledging success.
+- Introduce administrator-only `--audit-broker-provision` (provisions NTFS ACLs, enables strict audit and broker policy) and `--audit-broker-status`. Broker is disabled by default and currently supports **LocalSystem service identity only**.
+- Integrate the existing GUI authorization preflight: strict broker failures deny recovery without a per-user fallback, while the previous direct protected auditing remains unchanged if the broker has not been enabled.
+- Add protocol/operation/size/broad-principal regression tests. Windows integration now checks impersonated actor SID, corrupt-journal no-write denial and refusal when any machine policy/journal parent or file becomes user-writable. Inspect every directory back to the machine root, reject reparse points, and recheck appsettings ACL for each broker request. Existing 0.30.0-rc.1 remains the published prerelease; rc.2 is an isolated test build pending managed Windows domain/Entra non-admin acceptance tests.
+
+## 0.30.0-rc.1
+
+**Prerelease update channel and SemVer-safe RC rollout**
+
+- Add full SemVer 2.0 precedence including `alpha`, `beta`, `rc` and numeric prerelease identifiers, with build metadata excluded from ordering. `0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`.
+- Keep both Windows FileVersion (`0.30.0.0`) and full prerelease ProductVersion (`0.30.0-rc.1`) and validate both before executing or applying any downloaded EXE, including after updater elevation.
+- Correct RC-aware detection of installed version, online rollback, version-bound rollback hold and the CLI `--version` display.
+- Select the highest eligible release by SemVer rather than GitHub API listing order when prereleases are enabled. Skip drafts, malformed tags and releases missing the required architecture package.
+- Add offline regression tests for RC-to-RC, RC-to-stable, incorrect/missing product identity, invalid SemVer identifiers and release selection across x64/x86/ARM64.
+- Use an explicitly marked GitHub prerelease package with x64/x86/ARM64 build artifacts, SHA256SUMS, CycloneDX SBOM and provenance attestations. Stable 0.29.12 remains unchanged.
+- Carry forward the 0.30.0 least-privilege launch, audit, diagnostics and UI consolidation described below.
 
 ## 0.30.0
-
-- Publish public Stable/Latest v0.30.0 as manual-only unsigned x64/x86/ARM64 ZIPs with noncanonical filenames, preserving older v0.29.x clients against unexpected unattended installation. Enterprise signed automatic updates remain separately gated.
-
-**Staged stable candidate: public update is gated until signing and managed-domain acceptance.**
-
-- Promote the CI-tested 0.30.0-rc.1 least-privilege Helpdesk and SemVer updater code to stable 0.30.0 ProductVersion.
-- Keep experimental SYSTEM protected Audit Broker (#57) excluded from this build; retain published v0.29.12 while QA is performed.
-- Prevent PR jobs from receiving write/release permissions or calling organizational SignTool; sign only explicitly eligible release pushes.
-- Move local updater smoke testing before GitHub Release creation; remove CI remote update invocation and destructive release-branch deletion.
-- Require explicit managed-workstation acceptance and a university Code Signing thumbprint before public stable v0.30.x publication; validate Authenticode signature, PE architecture, ProductVersion and source revision for x64/x86/ARM64 and attest signing evidence.
-- Add a CI regression test that blocks unsafe publication-order, signature/approval and branch-deletion changes.
 
 **Least-privilege Helpdesk, accountable recovery and simpler administration**
 
@@ -35,18 +75,6 @@
 - Improve self-test failure reporting in Windows GitHub Actions. Preserve BitLocker/LAPS history, clipboard protection, connection retry, advanced diagnostics, recovery approval, rollback and x64/x86/ARM64 builds.
 
 **Rollout:** The per-user portable audit fallback cannot substitute for a centrally protected security audit. Enable strict protected auditing only after provisioning the required protected writer/service or ACL. Test actual non-admin AD/Entra role delegation before broad deployment.
-
-## 0.30.0-rc.1
-
-**Prerelease update channel and SemVer-safe RC rollout**
-
-- Add full SemVer 2.0 precedence including `alpha`, `beta`, `rc` and numeric prerelease identifiers, with build metadata excluded from ordering. `0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`.
-- Keep both Windows FileVersion (`0.30.0.0`) and full prerelease ProductVersion (`0.30.0-rc.1`) and validate both before executing or applying any downloaded EXE, including after updater elevation.
-- Correct RC-aware detection of installed version, online rollback, version-bound rollback hold and the CLI `--version` display.
-- Select the highest eligible release by SemVer rather than GitHub API listing order when prereleases are enabled. Skip drafts, malformed tags and releases missing the required architecture package.
-- Add offline regression tests for RC-to-RC, RC-to-stable, incorrect/missing product identity, invalid SemVer identifiers and release selection across x64/x86/ARM64.
-- Use an explicitly marked GitHub prerelease package with x64/x86/ARM64 build artifacts, SHA256SUMS, CycloneDX SBOM and provenance attestations. Stable 0.29.12 remains unchanged.
-- Carry forward the 0.30.0 least-privilege launch, audit, diagnostics and UI consolidation described below.
 
 ## 0.29.12
 
