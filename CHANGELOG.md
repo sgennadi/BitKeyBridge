@@ -2,6 +2,9 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Add a one-click QA-only GitHub Actions artifact bundling the three unsigned test EXE ZIPs, SHA-256 verification, exact Git source SHA, CMD-only safe diagnostics and explicit test/production warnings; publish only after every prerequisite build, LAPS, protected-audit and Authenticode test passes. Never attach this bundle to GitHub Releases.
+
+
 - Enforce `SiemFailClosed` at the actual audit-event outbox enqueue, not only during earlier readiness checks. When local SIEM queueing fails, strict protected recovery gets NO positive broker ACK; already-flushed journal evidence is retained. Keep fail-open/optional modes backward compatible. Add offline blocked-outbox tests and Windows SYSTEM/two-standard-user overflow integration.
 
 

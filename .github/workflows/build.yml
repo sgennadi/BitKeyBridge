@@ -469,6 +469,93 @@ jobs:
           }
           ./tests/windows/ReleaseSigningPositiveIntegration.ps1 -ArtifactRoot signing-integration -EphemeralHostedRunner
 
+  test-bundle:
+    # One-click QA download only after EVERY required broker and signer test
+    # passes. Never attach unsigned developer binaries to GitHub Releases.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/protected-audit-broker-20261014'
+    needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout QA instructions
+        uses: actions/checkout@v7
+
+      - name: Download x64 test binary
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: test-bundle
+
+      - name: Download x86 test binary
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: test-bundle
+
+      - name: Download ARM64 test binary
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: test-bundle
+
+      - name: Generate checksums and isolated-QA instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/windows/BitKeyBridge-DomainPreflight.cmd test-bundle/
+          cd test-bundle
+          for rid in win-x64 win-x86 win-arm64; do
+            test -s "BitKeyBridge-${rid}.zip"
+          done
+          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+          printf 'Git commit: %s\nVersion: 0.30.0-rc.2 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
+          cat > README-TEST.txt <<'EOF'
+          BitKeyBridge 0.30.0-rc.2 -- UNSIGNED QA TEST BUNDLE
+          ==================================================
+          This archive is NOT a production release and NOT organization-signed.
+          Do not install on a domain controller or production Helpdesk workstation.
+          Do not distribute through Intune, GPO or automatic updates.
+
+          Files:
+          - BitKeyBridge-win-x64.zip   Windows x64
+          - BitKeyBridge-win-x86.zip   Windows x86
+          - BitKeyBridge-win-arm64.zip Windows ARM64
+          - SHA256SUMS.txt             SHA-256 checksums for all three ZIPs
+          - BUILD-INFO.txt             Source commit and test version
+          - BitKeyBridge-DomainPreflight.cmd  Optional read-only QA report
+
+          Verify ZIP hashes against SHA256SUMS.txt. Extract ONLY the ZIP
+          matching your Windows architecture on a disposable test workstation.
+          From an ordinary, non-elevated CMD inside the EXE directory run:
+
+              BitKeyBridge.exe --version
+              BitKeyBridge.exe --self-test --no-elevation
+              BitKeyBridge.exe --audit-broker-preflight --no-elevation
+
+          Run the optional CMD report wrapper with the EXE absolute path:
+              BitKeyBridge-DomainPreflight.cmd "C:\QA\BitKeyBridge.exe"
+
+          To intentionally write one synthetic broker health event only:
+              BitKeyBridge.exe --audit-broker-preflight --probe --no-elevation
+
+          Real domain/Entra recovery, trusted signing, SIEM and rollback
+          require separate controlled acceptance. See repository docs:
+          docs/managed-domain-acceptance-0.30.0-rc.2.md
+
+          DO NOT MERGE/PUBLISH WITHOUT MANAGED-DOMAIN ACCEPTANCE.
+          EOF
+
+      - name: Publish one-click unsigned QA bundle (Actions only)
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED
+          path: test-bundle/
+          if-no-files-found: error
+          retention-days: 90
+
   release:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||

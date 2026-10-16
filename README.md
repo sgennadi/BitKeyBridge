@@ -12,6 +12,15 @@ Release packages are self-contained single-file Windows builds for **x64**, **x8
 
 ## Experimental protected audit broker (0.30.0-rc.2)
 
+**Single QA download:** in the latest successful PR #57 Windows Actions run,
+use **Artifacts → BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED**.
+It contains all three architecture ZIPs, `SHA256SUMS.txt`, the exact
+build-source commit and a CMD-only local diagnostic. The artifact is built
+only after Windows x64/x86/ARM64, LAPS, standard-user Audit Broker integration
+and positive/negative Authenticode tests pass. These developer binaries are
+**unsigned** and must not be installed on production workstations.
+
+
 Test build for [issue #56](https://github.com/sgennadi/BitKeyBridge/issues/56).
 A preinstalled LocalSystem BitKeyBridge Windows Service can now accept a
 restricted, Windows-token-authenticated **audit-only** named-pipe request and
