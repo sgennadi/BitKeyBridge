@@ -2,6 +2,8 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Gate publication on a LOCAL staged updater smoke test (before GitHub Release creation). Remove the CI executable `--update` action and automatic `release/*` branch deletion. Add regression checks for publishing order, signer approval and unsafe branch manipulation.
+
 - Fix production Authenticode release verification for .NET auto-generated `ProductVersion` build metadata (`0.30.0-rc.2+<GitSHA>`): preserve exact SemVer release identity, permit only a hexadecimal source revision suffix, enforce identical build commits across architectures, and require the approved GitHub source SHA during Release creation. Positive and negative signing tests cover this strict comparison.
 
 - Restrict GitHub Actions default token to contents:read. Only the gated release job receives contents/attestation/id-token write privileges; organizational SignTool is never invoked for PRs, manually dispatched branches or normal main commits. Keep ephemeral signature verification active in PR CI independently of signing variables.

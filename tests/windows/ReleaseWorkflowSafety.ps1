@@ -1,0 +1,56 @@
+#Requires -Version 7.0
+<#
+.SYNOPSIS
+Fail CI if release publication could precede staging tests or delete branches.
+.DESCRIPTION
+Read-only release-workflow regression. Does not contact GitHub or modify files.
+#>
+[CmdletBinding()]
+param(
+    [string]$WorkflowPath = (Join-Path $PSScriptRoot '../../.github/workflows/build.yml')
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$workflow = Get-Content -LiteralPath $WorkflowPath -Raw
+$releaseMatch = [regex]::Match($workflow, '(?m)^  release:\s*$')
+if (-not $releaseMatch.Success) {
+    throw 'Missing release job.'
+}
+$release = $workflow.Substring($releaseMatch.Index)
+
+$stageName = '      - name: Smoke-test staged updater preferences (no network install)'
+$publishName = '      - name: Create GitHub Release'
+$stageIndex = $release.IndexOf($stageName, [StringComparison]::Ordinal)
+$publishIndex = $release.IndexOf($publishName, [StringComparison]::Ordinal)
+if ($stageIndex -lt 0 -or $publishIndex -lt 0 -or
+    $stageIndex -ge $publishIndex) {
+    throw 'Release must test staged updater controls BEFORE publication.'
+}
+
+if ($release -notmatch 'Verify-ReleaseSigning\.ps1' -or
+    $release -notmatch 'PROTECTED_AUDIT_APPROVED' -or
+    $release -notmatch 'ExpectedSourceRevision') {
+    throw 'Missing protected audit signing, approval or source revision gate.'
+}
+
+# Never delete operator release branches or install online updates from CI.
+$forbidden = @(
+    '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',
+    '(?im)^\s*git\s+push\b[^\r\n]*:refs/heads/',
+    '(?im)^\s*- name:\s*Archive and remove stale release branches\b',
+    '(?im)^\s*\$updateOutput\s*=\s*&\s*\$exe\s+--update\b',
+    '(?im)^\s*gh\s+release\s+delete\b'
+)
+foreach ($pattern in $forbidden) {
+    if ($release -match $pattern) {
+        throw "Forbidden release workflow operation: $pattern"
+    }
+}
+
+$afterPublish = $release.Substring($publishIndex + $publishName.Length)
+if ($afterPublish -match '(?m)^\s*- name:') {
+    throw 'GitHub Release creation must be the FINAL workflow step.'
+}
+Write-Host 'Release workflow order, signing, approval and branch safety passed.'

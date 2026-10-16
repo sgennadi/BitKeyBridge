@@ -368,6 +368,12 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
+      - name: Guard release workflow ordering and branch safety
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/ReleaseWorkflowSafety.ps1
+
       - name: Regression - reject invalid or unauthorized release signing
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -647,39 +653,7 @@ jobs:
             release/BitKeyBridge-win-arm64.zip
           sbom-path: release/BitKeyBridge.cdx.json
 
-      - name: Create GitHub Release
-        if: steps.release_meta.outputs.exists != 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ steps.release_meta.outputs.tag }}"
-          $assets = @(
-            'release/BitKeyBridge-win-x64.zip',
-            'release/BitKeyBridge-win-x86.zip',
-            'release/BitKeyBridge-win-arm64.zip',
-            'release/BitKeyBridge.cdx.json',
-            'release/SHA256SUMS.txt'
-          )
-          if (Test-Path 'release/BitKeyBridge.signatures.json') {
-            $assets += 'release/BitKeyBridge.signatures.json'
-          }
-          $args = @('release', 'create', $tag) + $assets + @(
-            '--repo', '${{ github.repository }}',
-            '--target', '${{ github.sha }}',
-            '--generate-notes',
-            '--title', "BitKeyBridge $tag"
-          )
-          if ($tag.Contains('-')) {
-            # Mark RC/beta as prerelease. Never override GitHub stable Latest.
-            $args += '--prerelease'
-          }
-          & gh @args
-          if ($LASTEXITCODE -ne 0) {
-            throw "GitHub release creation failed for $tag."
-          }
-
-      - name: Smoke-test published updater controls
+      - name: Smoke-test staged updater preferences (no network install)
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
         run: |
@@ -689,12 +663,9 @@ jobs:
           Expand-Archive -Path release\BitKeyBridge-win-x64.zip -DestinationPath $smokeRoot -Force
           $exe = Join-Path $smokeRoot "BitKeyBridge.exe"
 
-          $checkOutput = & $exe --check-update --no-elevation 2>&1 | Out-String
-          $checkExit = $LASTEXITCODE
-          Write-Host $checkOutput
-          if ($checkExit -notin @(0, 10)) {
-            throw "--check-update failed with exit code $checkExit."
-          }
+          # Prepublication acceptance stays LOCAL: do not contact the public
+          # Releases API or apply new executable files in CI.
+          # Remote update/rollback needs a separate managed-machine test.
 
           $disableOutput = & $exe --update-checks-disable --no-elevation 2>&1 | Out-String
           $disableExit = $LASTEXITCODE
@@ -747,63 +718,37 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
-          if ($checkExit -eq 0) {
-            $updateOutput = & $exe --update --no-elevation 2>&1 | Out-String
-            $updateExit = $LASTEXITCODE
-            Write-Host $updateOutput
-            if ($updateExit -ne 0) {
-              throw "--update current-version/no-op path failed with exit code $updateExit."
-            }
-          }
-          else {
-            Write-Host "A newer release appeared during the smoke test; skipping --update to avoid applying a different release on the CI runner."
-          }
+          Write-Host 'Staged updater controls passed. No installation attempted.'
 
-      - name: Archive and remove stale release branches
+      - name: Create GitHub Release
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $repo = "${{ github.repository }}"
-          git fetch origin "+refs/heads/release/*:refs/remotes/origin/release/*" --prune
-
-          $refs = git for-each-ref --format="%(refname:short)|%(objectname)" refs/remotes/origin/release/
-          foreach ($line in $refs) {
-            if ([string]::IsNullOrWhiteSpace($line)) { continue }
-
-            $parts = $line.Split("|", 2)
-            $remoteName = $parts[0]
-            $sha = $parts[1]
-            $branch = $remoteName -replace "^origin/", ""
-
-            git merge-base --is-ancestor $sha "${{ github.sha }}" *> $null
-            $isMerged = ($LASTEXITCODE -eq 0)
-            $global:LASTEXITCODE = 0
-
-            if (-not $isMerged) {
-              $short = $sha.Substring(0, 12)
-              $safeBranch = $branch.Replace("/", "-")
-              $archiveTag = "archive/$safeBranch-$short"
-
-              gh api "repos/$repo/git/ref/tags/$archiveTag" *> $null
-              $tagExists = ($LASTEXITCODE -eq 0)
-              $global:LASTEXITCODE = 0
-
-              if (-not $tagExists) {
-                gh api --method POST "repos/$repo/git/refs" -f ref="refs/tags/$archiveTag" -f sha="$sha" *> $null
-                if ($LASTEXITCODE -ne 0) {
-                  throw "Could not archive unmerged release branch $branch at $sha"
-                }
-              }
-
-              Write-Host "Archived unmerged branch $branch as $archiveTag"
-            }
-
-            gh api --method DELETE "repos/$repo/git/refs/heads/$branch" *> $null
-            if ($LASTEXITCODE -ne 0) {
-              throw "Could not delete stale release branch $branch"
-            }
-
-            Write-Host "Deleted stale release branch $branch"
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          $assets = @(
+            'release/BitKeyBridge-win-x64.zip',
+            'release/BitKeyBridge-win-x86.zip',
+            'release/BitKeyBridge-win-arm64.zip',
+            'release/BitKeyBridge.cdx.json',
+            'release/SHA256SUMS.txt'
+          )
+          if (Test-Path 'release/BitKeyBridge.signatures.json') {
+            $assets += 'release/BitKeyBridge.signatures.json'
           }
+          $args = @('release', 'create', $tag) + $assets + @(
+            '--repo', '${{ github.repository }}',
+            '--target', '${{ github.sha }}',
+            '--generate-notes',
+            '--title', "BitKeyBridge $tag"
+          )
+          if ($tag.Contains('-')) {
+            # Mark RC/beta as prerelease. Never override GitHub stable Latest.
+            $args += '--prerelease'
+          }
+          & gh @args
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub release creation failed for $tag."
+          }
+
