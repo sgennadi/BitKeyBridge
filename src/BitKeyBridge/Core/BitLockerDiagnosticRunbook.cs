@@ -30,10 +30,6 @@ public static class BitLockerDiagnosticRunbook
             "BITLOCKER DIAGNOSTIC COMMANDS - MANUAL, READ-ONLY CHECKS",
             "Nothing is executed by BitKeyBridge. Default steps do not read recovery passwords.",
             "Do not share actual 48-digit recovery passwords, authorization tokens, or unredacted logs.",
-            "NO RECORDS / ACCESS DENIED: Verify the computer DN, recovery child objects and selected LDAP identity.",
-            "Computer-object read does not prove confidential msFVE-RecoveryPassword read permission.",
-            "Missing recovery objects, hidden passwords, wrong search scope and replication delay require different fixes.",
-            "Have AD administrators verify least-privilege delegated rights rather than granting Domain Admin.",
             "Recovery ID: " + (string.IsNullOrWhiteSpace(context.RecoveryId) ? "(not selected)" : context.RecoveryId),
             "Selected search scope: " + (string.IsNullOrWhiteSpace(context.ScopeDistinguishedName) ? "(none)" : context.ScopeDistinguishedName),
             "Returned recovery records: " + (context.RecordsReturned?.ToString() ?? "not tested"),
@@ -87,6 +83,13 @@ public static class BitLockerDiagnosticRunbook
             ]);
             return string.Join(Environment.NewLine, lines);
         }
+
+        lines.AddRange([
+            "NO RECORDS / ACCESS DENIED: Verify the computer DN, recovery child objects and selected LDAP identity.",
+            "Computer-object read does not prove confidential msFVE-RecoveryPassword read permission.",
+            "Missing recovery objects, hidden passwords, wrong search scope and replication delay require different fixes.",
+            "Have AD administrators verify least-privilege delegated rights rather than granting Domain Admin.",
+        ]);
 
         var dc = string.IsNullOrWhiteSpace(context.DirectoryServer)
             ? string.IsNullOrWhiteSpace(context.Domain) ? "YOUR-WRITABLE-DC" : context.Domain
