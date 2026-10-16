@@ -182,6 +182,34 @@ public sealed partial class MainForm
         });
         layout.Controls.Add(steps, 0, 1);
 
+        // Live, non-privileged checks: these never read recovery secrets or
+        // mutate service configuration. They do not replace Access Health.
+        var readiness = new Label
+        {
+            Name = "HelpdeskDeploymentReadiness",
+            AutoSize = true,
+            Dock = DockStyle.Top,
+            Text = "Readiness has not been checked."
+        };
+        void CheckReadiness()
+        {
+            try
+            {
+                var authorization = new AuthorizationService(_config)
+                    .Check(BitKeyBridgePermission.SearchDevices);
+                readiness.Text =
+                    $"Directory: {(_directoryConnected ? "connected" : "not connected")} | " +
+                    $"Search authorization: {(authorization.Allowed ? "allowed" : "denied")} | " +
+                    $"Protected audit policy: {(_config.RequireProtectedAuditForRecovery ? "required" : "optional")}. " +
+                    "Use Access Health for service and delegation checks.";
+            }
+            catch (Exception)
+            {
+                readiness.Text = "Readiness check failed. Open Access Health for diagnostics.";
+            }
+        }
+
+
         var progress = new Label
         {
             Name = "HelpdeskDeploymentProgress",
@@ -216,6 +244,9 @@ public sealed partial class MainForm
         notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         notes.Controls.Add(progress, 0, 0);
         notes.Controls.Add(guidance, 0, 1);
+        notes.RowCount = 3;
+        notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        notes.Controls.Add(readiness, 0, 2);
         layout.Controls.Add(notes, 0, 2);
 
         var actions = new FlowLayoutPanel
@@ -224,11 +255,15 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             WrapContents = true
         };
+        var check = NewActionButton("Check Readiness");
         var settings = NewActionButton("Open Admin Settings");
         var health = NewActionButton("Open Access Health");
         var close = NewActionButton("Close");
         settings.Enabled = AdministrationAllowed;
-        actions.Controls.AddRange([settings, health, close]);
+        actions.Controls.AddRange([check, settings, health, close]);
+        check.Click += (_, _) => CheckReadiness();
+        if (!_layoutSelfTest)
+            CheckReadiness();
         layout.Controls.Add(actions, 0, 3);
         settings.Click += (_, _) =>
         {
