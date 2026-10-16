@@ -168,7 +168,6 @@ public sealed class UpdateService : IDisposable
                 if (!forRollback &&
                     HasManualOnlyPackage(assets, tag, info.Architecture))
                 {
-                    info.ManualReleaseAvailable = latest > current;
                     info.UpdateAvailable = false;
                     info.AssetName = string.Empty;
                     try
