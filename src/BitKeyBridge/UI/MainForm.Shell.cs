@@ -108,6 +108,7 @@ public sealed partial class MainForm
         _lapsWorkspaceTab =
             BuildLapsWorkspaceTab();
 
+        _mainTabs.TabPages.Add(BuildHelpdeskDashboardTab());
         _mainTabs.TabPages.Add(
             _homeWorkspaceTab);
         _mainTabs.TabPages.Add(
