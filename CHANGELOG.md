@@ -1,3 +1,13 @@
+## 0.30.2-rc.1
+
+**Integrated unsigned QA candidate — not a production release**
+
+- Integrate Protected Audit Broker for non-administrator Helpdesk with staged updater hardening.
+- Validate update ZIP structure, PE machine architecture and staged self-test timeout.
+- Improve least-privilege AD LAPS/BitLocker troubleshooting and rollback restoration counts.
+- Extend HiDPI layout regression scenarios to 175% and compact 200% RDP-like sizes.
+- Gate unsigned QA bundle on Windows x64/x86/ARM64, LAPS regression, broker integration and temporary signing integration; keep real managed-domain acceptance mandatory.
+
 ## 0.30.0-rc.2
 
 **Experimental managed audit broker (requires administrator provisioning)**
