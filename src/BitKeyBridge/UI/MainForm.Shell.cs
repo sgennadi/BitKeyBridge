@@ -157,9 +157,16 @@ public sealed partial class MainForm
 
         // Keep Start as the first tab for compatibility and layout tests.
         // Launch Helpdesk for normal sessions without changing existing tab order.
-        _mainTabs.SelectedTab = _layoutSelfTest
-            ? _homeWorkspaceTab
-            : helpdeskDashboard;
+        _mainTabs.SelectedTab = _homeWorkspaceTab;
+        if (!_layoutSelfTest)
+        {
+            // Keep Start visible during its first layout pass; select Helpdesk afterwards.
+            Shown += (_, _) =>
+            {
+                if (!IsDisposed && _mainTabs.TabPages.Contains(helpdeskDashboard))
+                    _mainTabs.SelectedTab = helpdeskDashboard;
+            };
+        }
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
