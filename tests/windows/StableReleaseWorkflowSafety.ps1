@@ -32,8 +32,8 @@ if ($approval -lt 0 -or $verify -lt $approval -or $smoke -lt $verify -or $publis
 if ($workflow -match 'Archive and remove stale release branches|gh api --method DELETE|--update --no-elevation') {
   throw 'Release workflow must not install a remote update or delete repository branches.'
 }
-if ($project -notmatch '<Version>0\.30\.0</Version>' -or
-    $project -notmatch '<InformationalVersion>0\.30\.0</InformationalVersion>') {
+if ($project -notmatch '<Version>0\.30\.1</Version>' -or
+    $project -notmatch '<InformationalVersion>0\.30\.1</InformationalVersion>') {
   throw 'Stable release version identity mismatch.'
 }
 if ($config -notmatch 'AutoInstallUpdatesOnStart\s*\{\s*get;\s*set;\s*\}\s*=\s*false;') {
@@ -58,4 +58,33 @@ if ($manualJob.Contains('public-release/BitKeyBridge-win-x64.zip') -or
   throw 'Unsigned manual public release cannot expose canonical unattended-update assets.'
 }
 
-Write-Host 'Stable v0.30.0 publication safety invariants passed.'
+
+$unsignedStart = $workflow.IndexOf('  public-unsigned-auto:', [StringComparison]::Ordinal)
+if ($unsignedStart -le $signedJobStart) {
+  throw 'The unsigned auto-update job must follow and remain separate from the signed release job.'
+}
+$unsignedJob = $workflow.Substring($unsignedStart)
+foreach ($token in @(
+  "github.ref == 'refs/heads/main'",
+  "github.repository == 'sgennadi/BitKeyBridge'",
+  'Publish unsigned auto-update v0.30.1',
+  'needs: [build, laps-regression]',
+  'gh release create v0.30.1',
+  'release/BitKeyBridge-win-x64.zip',
+  'release/BitKeyBridge-win-x86.zip',
+  'release/BitKeyBridge-win-arm64.zip',
+  'sha256sum -c SHA256SUMS.txt',
+  'Attest release packages',
+  'Smoke-test unsigned auto-update opt-in without network installation',
+  '--accept-unsigned-update-risk',
+  '--latest'
+)) {
+  if (-not $unsignedJob.Contains($token)) {
+    throw "Unsigned release precondition missing: $token"
+  }
+}
+if ($unsignedJob -match '--update --no-elevation|gh api --method DELETE|BITKEYBRIDGE_STABLE_030_APPROVED\s*=\s*true') {
+  throw 'The unsigned job must not apply an update in CI, delete branches or spoof the signed approval gate.'
+}
+
+Write-Host 'Stable v0.30.1 publication safety invariants passed.'
