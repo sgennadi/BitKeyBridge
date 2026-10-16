@@ -52,7 +52,7 @@ $publisherPublic = $null
 $testPfx = ''
 $testPfxPassword = ''
 $thumbprint = ''
-$tag = 'v0.30.0-rc.2'
+$tag = 'v0.30.2-rc.1'
 $rids = @('win-x64', 'win-x86', 'win-arm64')
 $original = @{}
 $rootTrustAdded = $false
@@ -293,7 +293,7 @@ try {
     $wrongPin = '0' * 40
     if ($wrongPin -ceq $thumbprint) { $wrongPin = 'F' * 40 }
     Require-Rejection -Case 'wrong signer thumbprint' -Pin $wrongPin -Version $tag
-    Require-Rejection -Case 'wrong ProductVersion' -Pin $thumbprint -Version 'v0.30.0-rc.3'
+    Require-Rejection -Case 'wrong ProductVersion' -Pin $thumbprint -Version 'v0.30.2-rc.2'
 
     $arm = Join-Path $release 'BitKeyBridge-win-arm64.zip'
     $armBackup = Join-Path $root 'original-arm64.zip'
