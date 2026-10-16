@@ -154,8 +154,7 @@ public sealed partial class MainForm
                 }
             };
 
-        _mainTabs.SelectedTab =
-            _homeWorkspaceTab;
+        _mainTabs.SelectedIndex = 0;
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
