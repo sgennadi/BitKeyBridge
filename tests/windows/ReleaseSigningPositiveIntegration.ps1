@@ -272,9 +272,20 @@ try {
     if ($report.ReleaseTag -ne $tag -or @($report.Executables).Count -ne 3) {
         throw 'Signed release evidence is incomplete.'
     }
+    $versionPattern = '^(?i:' + [regex]::Escape($tag.Substring(1)) +
+        ')(?:\+[0-9a-fA-F]{7,40})?$'
+    $observedSource = $null
     foreach ($row in $report.Executables) {
-        if ($row.SignerThumbprint -cne $thumbprint -or $row.ProductVersion -ne $tag.Substring(1) -or $row.Authenticode -ne 'Valid') {
+        if ($row.SignerThumbprint -cne $thumbprint -or
+            $row.ProductVersion -notmatch $versionPattern -or
+            $row.Authenticode -ne 'Valid') {
             throw "Incorrect positive signing evidence for $($row.Architecture)"
+        }
+        if ($null -eq $observedSource) {
+            $observedSource = $row.SourceRevision
+        }
+        elseif ($row.SourceRevision -cne $observedSource) {
+            throw 'Architecture packages have inconsistent build source revisions.'
         }
     }
     Write-Host 'Positive signed x64/x86/ARM64 verification PASSED.'

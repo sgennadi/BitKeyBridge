@@ -592,6 +592,7 @@ jobs:
             -ReleaseDirectory release `
             -Tag "${{ steps.release_meta.outputs.tag }}" `
             -ExpectedThumbprint $env:SIGNING_THUMBPRINT `
+            -ExpectedSourceRevision "${{ github.sha }}" `
             -OutputPath release/BitKeyBridge.signatures.json
           if (-not (Test-Path release/BitKeyBridge.signatures.json)) {
             throw "Release signature verification evidence was not created."

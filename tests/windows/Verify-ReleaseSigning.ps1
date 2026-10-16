@@ -15,6 +15,7 @@ param(
     [Parameter(Mandatory)][string]$ReleaseDirectory,
     [Parameter(Mandatory)][string]$Tag,
     [Parameter(Mandatory)][string]$ExpectedThumbprint,
+    [string]$ExpectedSourceRevision,
     [string]$OutputPath
 )
 
@@ -35,6 +36,13 @@ if (-not [System.IO.Directory]::Exists($releaseRoot)) {
     throw "Release staging directory does not exist: $releaseRoot"
 }
 $expectedVersion = $Tag.Substring(1)
+$expectedVersionRegex = '^(?i:' + [regex]::Escape($expectedVersion) +
+    ')(?:\+(?<revision>[0-9a-fA-F]{7,40}))?$'
+$normalizedRevision = $ExpectedSourceRevision.Trim().ToUpperInvariant()
+if ($normalizedRevision -and $normalizedRevision -notmatch '^[0-9A-F]{40}$') {
+    throw 'ExpectedSourceRevision must be a 40-digit Git source commit SHA.'
+}
+$firstRevision = $null
 $arch = [ordered]@{
     'win-x64'   = [UInt16]0x8664
     'win-x86'   = [UInt16]0x014c
@@ -117,10 +125,27 @@ try {
         }
 
         $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($executable)
-        if (-not [string]::Equals(
-                $versionInfo.ProductVersion, $expectedVersion,
-                [StringComparison]::OrdinalIgnoreCase)) {
-            throw "$rid ProductVersion '$($versionInfo.ProductVersion)' does not match $Tag."
+
+        # The .NET SDK automatically appends +<source SHA> to
+        # AssemblyInformationalVersion. SemVer build metadata does not alter
+        # release precedence, but require hex Git identity, not arbitrary text.
+        $versionMatch = [regex]::Match(
+            ($versionInfo.ProductVersion ?? ''), $expectedVersionRegex)
+        if (-not $versionMatch.Success) {
+            throw "$rid ProductVersion '$($versionInfo.ProductVersion)' does not match $Tag (+optional Git SHA)."
+        }
+        $sourceRevision = $versionMatch.Groups['revision'].Value.ToUpperInvariant()
+        if ($null -eq $firstRevision) {
+            $firstRevision = $sourceRevision
+        }
+        elseif ($sourceRevision -cne $firstRevision) {
+            throw "$rid was compiled from a different source revision than the other release architectures."
+        }
+
+        # Tagged production releases must exactly match the source SHA of
+        # the GitHub workflow. A signed ZIP built from another commit is refused.
+        if ($normalizedRevision -and $sourceRevision -cne $normalizedRevision) {
+            throw "$rid source revision is not the approved GitHub release commit."
         }
 
         $signature = Get-AuthenticodeSignature -LiteralPath $executable
@@ -142,12 +167,13 @@ try {
             Architecture = $rid
             PeMachine = ('0x{0:X4}' -f $peMachine)
             ProductVersion = $versionInfo.ProductVersion
+            SourceRevision = $sourceRevision
             Sha256 = $hash
             SignerSubject = $signature.SignerCertificate.Subject
             SignerThumbprint = $actualThumbprint
             Authenticode = $signature.Status.ToString()
         })
-        Write-Host "Verified $rid; signed ProductVersion=$expectedVersion; SHA256=$hash"
+        Write-Host "Verified $rid; signed ProductVersion=$($versionInfo.ProductVersion); SHA256=$hash"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
@@ -156,6 +182,7 @@ try {
             ReleaseTag = $Tag
             VerifiedAtUtc = [DateTime]::UtcNow.ToString('O')
             ExpectedSignerThumbprint = $thumbprint
+            ExpectedSourceRevision = $normalizedRevision
             Executables = @($results.ToArray())
         }
         $outFile = [System.IO.Path]::GetFullPath($OutputPath)
