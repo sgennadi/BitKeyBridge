@@ -181,6 +181,25 @@ public sealed partial class MainForm
         });
         layout.Controls.Add(steps, 0, 1);
 
+        var progress = new Label
+        {
+            Name = "HelpdeskDeploymentProgress",
+            AutoSize = true,
+            AccessibleName = "Completed deployment preparation steps",
+            Text = "0 of 7 steps marked complete",
+            Margin = new Padding(0, 8, 0, 8)
+        };
+        // The checklist is a manual aid, not a security validation result.
+        steps.ItemCheck += (_, args) =>
+        {
+            var count = steps.CheckedItems.Count;
+            if (args.NewValue == CheckState.Checked && args.CurrentValue != CheckState.Checked)
+                count++;
+            else if (args.NewValue != CheckState.Checked && args.CurrentValue == CheckState.Checked)
+                count--;
+            progress.Text = $"{count} of {steps.Items.Count} steps marked complete";
+        };
+
         var guidance = new Label
         {
             AutoSize = true,
@@ -190,7 +209,10 @@ public sealed partial class MainForm
                    "or assert that a security check has passed.",
             Margin = new Padding(0, 12, 0, 12)
         };
-        layout.Controls.Add(guidance, 0, 2);
+        var notes = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        notes.Controls.Add(progress);
+        notes.Controls.Add(guidance);
+        layout.Controls.Add(notes, 0, 2);
 
         var actions = new FlowLayoutPanel
         {
