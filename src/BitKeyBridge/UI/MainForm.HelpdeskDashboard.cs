@@ -38,7 +38,7 @@ public sealed partial class MainForm
 
         var refresh = NewActionButton("Refresh Status");
         var setup = NewActionButton("Setup & Permissions");
-        var probe = NewActionButton("Check Protected Audit");
+        var probe = NewActionButton("Run Access Checks");
         var diagnostics = CreateActionFlow();
         diagnostics.Controls.AddRange([refresh, probe, setup]);
         root.Controls.Add(diagnostics);
@@ -91,10 +91,11 @@ public sealed partial class MainForm
         };
         refresh.Click += (_, _) => UpdateStatus();
         setup.Click += (_, _) => OpenHelpdeskSetup();
-        probe.Click += (_, _) =>
+        probe.Click += async (_, _) =>
         {
-            // Existing diagnostics own the authenticated, opt-in probe.
             OpenHelpdeskAccessHealth();
+            if (!_layoutSelfTest && _accessHealthRun.Enabled)
+                await RunAccessHealthAsync();
         };
         page.Enter += (_, _) => UpdateStatus();
         UpdateStatus();
@@ -116,7 +117,7 @@ public sealed partial class MainForm
 
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Administration")
+            if (page.Text != "Settings")
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)
