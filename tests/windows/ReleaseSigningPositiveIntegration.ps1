@@ -4,7 +4,8 @@ Ephemeral CI ONLY: positive Authenticode release-verifier integration.
 Builds a short-lived test-only signer (temporary PEM/PFX under RUNNER_TEMP),
 signs copies of all 3 architecture payloads, validates, and
 tests signer, ProductVersion, PE architecture and unsigned failure cases.
-Never uploads signing keys, changes LocalMachine trust, or publishes assets.
+Never uploads signing keys or publishes assets. Installs temporary public
+trust ONLY on an ephemeral GitHub-hosted worker, with explicit cleanup.
 #>
 [CmdletBinding()]
 param(
@@ -59,9 +60,10 @@ $publisherTrustAdded = $false
 
 function Invoke-BoundedCertUtil {
     param([Parameter(Mandatory)][string[]]$Arguments)
-    # X509Store.Add may invoke an invisible trust confirmation on a
-    # noninteractive hosted Windows session. Use a bounded native command
-    # instead, forcing noninteractive CURRENT-USER stores only.
+    # Windows CI can hang on the protected CurrentUser Root confirmation
+    # even with certutil. Test CA is short-lived and this script is restricted
+    # to a disposable GitHub-hosted runner. Use a bounded native process;
+    # test trust is reverted before the runner is discarded.
     $info = [Diagnostics.ProcessStartInfo]::new()
     $info.FileName = Join-Path $env:WINDIR 'System32\certutil.exe'
     $info.UseShellExecute = $false
@@ -210,13 +212,16 @@ try {
     $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($caDer)
     $publisherPublic = [Security.Cryptography.X509Certificates.X509Certificate2]::new($leafDer)
     $thumbprint = $publisherPublic.Thumbprint.ToUpperInvariant()
-    Write-Host 'Importing test CA into CurrentUser Root with bounded certutil...'
-    Invoke-BoundedCertUtil -Arguments @('-user', '-f', '-addstore', 'Root', $caDer)
+    # Enterprise Root is an alternate, unattended Windows trust store used
+    # ONLY on an ephemeral GitHub-hosted worker. CurrentUser Root hangs on
+    # this runner with a hidden UI prompt. This does not touch operator PCs.
+    Write-Host 'Importing temporary CA into ephemeral Enterprise Root...'
+    Invoke-BoundedCertUtil -Arguments @('-enterprise', '-f', '-addstore', 'Root', $caDer)
     $rootTrustAdded = $true
     Write-Host 'Importing code-signing leaf into CurrentUser TrustedPublisher...'
     Invoke-BoundedCertUtil -Arguments @('-user', '-f', '-addstore', 'TrustedPublisher', $leafDer)
     $publisherTrustAdded = $true
-    Write-Host 'Ephemeral CA and publisher trust imported only for this disposable runner.'
+    Write-Host 'Temporary Enterprise Root and CurrentUser publisher trust imported on disposable runner.'
 
     foreach ($rid in $rids) {
         $folder = Join-Path $root ("stage-" + $rid)
@@ -308,11 +313,13 @@ try {
         }
         catch { Write-Warning ('Could not remove ephemeral publisher trust: ' + $_.Exception.Message) }
     }
-    if ($rootTrustAdded -and $public) {
+    # Even a failed or timed-out import could have created the trust entry:
+    # always attempt cleanup by its unique ephemeral certificate thumbprint.
+    if ($public) {
         try {
-            Invoke-BoundedCertUtil -Arguments @('-user', '-delstore', 'Root', $public.Thumbprint)
+            Invoke-BoundedCertUtil -Arguments @('-enterprise', '-f', '-delstore', 'Root', $public.Thumbprint)
         }
-        catch { Write-Warning ('Could not remove ephemeral root trust: ' + $_.Exception.Message) }
+        catch { Write-Warning ('Could not remove ephemeral test enterprise root: ' + $_.Exception.Message) }
     }
     if ($publisherPublic) { $publisherPublic.Dispose() }
     $testPfxPassword = ''
