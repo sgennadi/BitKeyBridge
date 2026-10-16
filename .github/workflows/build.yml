@@ -421,13 +421,15 @@ jobs:
     # Ephemeral PKI tests are not an organization signing approval.
     # Sign COPIES of all 3 tested architectures with a temporary certificate
     # trusted only in CurrentUser on a disposable GitHub-hosted Windows runner.
+    # Use 2022 deliberately: the 2025/VS2026 hosted image blocks indefinitely
+    # in certutil CurrentUser Root enrollment even with a bounded child process.
     # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
       github.head_ref == 'feature/protected-audit-broker-20261014'
     needs: [build]
-    runs-on: windows-latest
-    timeout-minutes: 15
+    runs-on: windows-2022
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
