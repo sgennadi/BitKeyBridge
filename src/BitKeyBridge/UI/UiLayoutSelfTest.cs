@@ -22,6 +22,18 @@ public static class UiLayoutSelfTest
                 720),
             1.50F),
         new(
+            "Scale175",
+            new Size(
+                1200,
+                780),
+            1.75F),
+        new(
+            "RdpCompact200",
+            new Size(
+                1024,
+                768),
+            2.00F),
+        new(
             "Scale200Stress",
             new Size(
                 1280,

@@ -1649,6 +1649,7 @@ internal static class Program
 
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(UnsignedUpdateSelfTest.Run());
+            failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
