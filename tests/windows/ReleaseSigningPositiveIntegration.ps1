@@ -107,8 +107,11 @@ try {
         $info = [Diagnostics.ProcessStartInfo]::new()
         $info.FileName = $openssl
         $info.UseShellExecute = $false
-        $info.RedirectStandardOutput = $true
-        $info.RedirectStandardError = $true
+        # OpenSSL prints RSA-key generation progress to stderr. Waiting for
+        # process exit BEFORE reading the redirected pipe can deadlock when
+        # its bounded OS pipe buffer fills up. Keep console streams inherited.
+        $info.RedirectStandardOutput = $false
+        $info.RedirectStandardError = $false
         foreach ($arg in $Arguments) {
             [void]$info.ArgumentList.Add($arg)
         }
@@ -119,9 +122,8 @@ try {
                 $process.Kill($true)
                 throw 'Ephemeral OpenSSL certificate operation exceeded 30 seconds.'
             }
-            $stderrText = $process.StandardError.ReadToEnd()
             if ($process.ExitCode -ne 0) {
-                throw "Ephemeral OpenSSL failed with exit code $($process.ExitCode): $stderrText"
+                throw "Ephemeral OpenSSL failed with exit code $($process.ExitCode). See the preceding GitHub Actions console output."
             }
         }
         finally { $process.Dispose() }
@@ -158,11 +160,13 @@ try {
         '-keyout',$leafKey,'-out',$leafCsr,
         '-sha256','-subj','/CN=BitKeyBridge Ephemeral CI Code Signing'
     )
+    Write-Host 'Ephemeral leaf request finished; issuing test signer from local test CA...'
     Invoke-BoundedOpenSsl -Arguments @(
         'x509','-req','-in',$leafCsr,'-CA',$caPem,'-CAkey',$caKey,
         '-CAcreateserial','-out',$leafPem,'-days','2',
         '-sha256','-extfile',$leafExtensions
     )
+    Write-Host 'Ephemeral test certificate issued; bundling signer for SignTool...'
     Invoke-BoundedOpenSsl -Arguments @(
         'pkcs12','-export','-inkey',$leafKey,'-in',$leafPem,
         '-certfile',$caPem,'-out',$testPfx,
@@ -175,6 +179,7 @@ try {
         'x509','-in',$leafPem,'-outform','DER','-out',$leafDer
     )
 
+    Write-Host 'Ephemeral OpenSSL signing certificate created; importing PUBLIC trust for current user...'
     $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($caDer)
     $publisherPublic = [Security.Cryptography.X509Certificates.X509Certificate2]::new($leafDer)
     $thumbprint = $publisherPublic.Thumbprint.ToUpperInvariant()
@@ -183,6 +188,7 @@ try {
         [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
     $rootStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
     $rootStore.Add($public)
+    Write-Host 'CurrentUser test CA trust imported.'
     $publisherStore = [Security.Cryptography.X509Certificates.X509Store]::new(
         [Security.Cryptography.X509Certificates.StoreName]::TrustedPublisher,
         [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
