@@ -36,6 +36,23 @@ internal static class UnsignedUpdateSelfTest
         if (!UpdateTrustPolicy.CanInstallUnattended(config))
             failures.Add("Signed publisher-pinned auto-update must remain available.");
 
+        using (var document = System.Text.Json.JsonDocument.Parse(
+            """
+            [
+              { "name": "BitKeyBridge-v0.30.0-Windows-x64-MANUAL-UNSIGNED.zip" },
+              { "name": "BitKeyBridge-v0.30.0-Windows-arm64-MANUAL-UNSIGNED.zip" }
+            ]
+            """))
+        {
+            var assets = document.RootElement;
+            if (!UpdateService.HasManualOnlyPackage(assets, "v0.30.0", "win-x64") ||
+                !UpdateService.HasManualOnlyPackage(assets, "v0.30.0", "win-arm64") ||
+                UpdateService.HasManualOnlyPackage(assets, "v0.30.0", "win-x86") ||
+                UpdateService.HasManualOnlyPackage(assets, "v0.30.1", "win-x64") ||
+                UpdateService.HasManualOnlyPackage(assets, "v0.30.0", "windows-x64"))
+                failures.Add("Manual release fallback must match the exact tag and architecture.");
+        }
+
         return failures;
     }
 }
