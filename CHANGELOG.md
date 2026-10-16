@@ -1,5 +1,7 @@
 ## 0.30.0
 
+- Publish public Stable/Latest v0.30.0 as manual-only unsigned x64/x86/ARM64 ZIPs with noncanonical filenames, preserving older v0.29.x clients against unexpected unattended installation. Enterprise signed automatic updates remain separately gated.
+
 **Staged stable candidate: public update is gated until signing and managed-domain acceptance.**
 
 - Promote the CI-tested 0.30.0-rc.1 least-privilege Helpdesk and SemVer updater code to stable 0.30.0 ProductVersion.

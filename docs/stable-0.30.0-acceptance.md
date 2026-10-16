@@ -1,11 +1,11 @@
 # BitKeyBridge v0.30.0 staged stable — managed workstation acceptance
 
-This document is for manual testing of the **GitHub Actions CI build artifact**, before publishing a stable GitHub Latest release. The experimental SYSTEM Protected Audit Broker in Draft PR #57 is not present.
+This document is for manual testing of **public stable v0.30.0** on designated technician workstations. It uses MANUAL-UNSIGNED download filenames specifically to prevent unattended upgrades by v0.29.x. The experimental SYSTEM Protected Audit Broker in Draft PR #57 is not present.
 
 ## Package and commands
 
-1. Open the CI run for the stable-v0.30.0 PR. Confirm success for x64, x86, ARM64, LAPS regression, offline and UI tests, the workflow-safety regression and CodeQL. Download your architecture artifact and note the source commit.
-2. Verify ProductVersion `0.30.0` (with optional +source-SHA metadata), FileVersion `0.30.0.0`, correct CPU architecture and SHA256. Unsigned Actions executables are for controlled manual testing only, not unattended deployment.
+1. Open the CI run for the stable-v0.30.0 PR. Confirm success for x64, x86, ARM64, LAPS regression, offline and UI tests, the workflow-safety regression and CodeQL. Download the MANUAL-UNSIGNED architecture ZIP from GitHub Releases, verify SHA256SUMS.txt and note the source commit.
+2. Verify ProductVersion `0.30.0` (with optional +source-SHA metadata), FileVersion `0.30.0.0`, correct CPU architecture and SHA256. Public unsigned executables are for controlled manual testing only, not unattended deployment.
 3. In normal, unelevated CMD, from the extracted directory:
 
     BitKeyBridge.exe --version
@@ -25,4 +25,4 @@ This document is for manual testing of the **GitHub Actions CI build artifact**,
 
 ## Production gate
 
-Existing v0.29.x defaults may auto-install newly published stable updates without requiring Authenticode. Keep public Latest at v0.29.12 until the managed acceptance above is complete and `BITKEYBRIDGE_STABLE_030_APPROVED=true` and approved organizational signer are configured. GitHub CI cannot prove live campus permissions, SIEM receipt or operational approvals.
+Existing v0.29.x defaults may auto-install newly published stable updates without requiring Authenticode. Public v0.30.0 Stable/Latest uses manual-only noncanonical ZIP names to avoid auto-installing unsigned EXEs on older clients. Before offering canonical auto-update asset names, complete managed acceptance and configure an approved organizational signer. GitHub CI cannot prove live campus permissions, SIEM receipt or operational approvals.

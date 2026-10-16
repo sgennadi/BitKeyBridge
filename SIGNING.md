@@ -59,3 +59,13 @@ This safeguard matters because the published v0.29.x defaults included
 AutoInstallUpdatesOnStart=true with RequireTrustedUpdateSignature=false.
 An unsigned non-prerelease v0.30.0 could therefore automatically install
 onto older endpoints before the intended acceptance tests.
+
+## Public manual v0.30.0 exception (does NOT waive enterprise signing)
+
+Public stable v0.30.0 is distributed only with MANUAL-UNSIGNED ZIP asset names
+for technician testing. The pre-0.30 updater expects canonical
+BitKeyBridge-win-<rid>.zip names and will not auto-install these assets.
+Existing clients may report no compatible download. This does NOT constitute
+Code Signing, managed-domain acceptance, or permission to roll out unattended
+via GPO or Intune. Standard auto-update-compatible assets remain signed-release
+gated until organizational PKI and workstation acceptance are completed.

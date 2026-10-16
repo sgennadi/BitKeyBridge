@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Published stable: v0.29.12 · staged stable v0.30.0 candidate · experimental audit broker remains isolated in Draft PR #57.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Public stable v0.30.0 (manual-only unsigned downloads) · previous v0.29.12 · experimental Protected Audit Broker remains isolated in PR #57.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,23 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+
+## Public stable v0.30.0 manual downloads
+
+GitHub Releases publishes v0.30.0 as Stable / Latest with three public Windows
+archives marked `MANUAL-UNSIGNED`. These are for technicians to download,
+verify against SHA256SUMS.txt and run explicitly on test machines. The
+v0.29.x unattended updater searches for names like
+`BitKeyBridge-win-x64.zip`; deliberately using different archive names
+prevents legacy unattended installation of unsigned binaries. Older clients
+may display a missing-compatible-asset message when checking updates.
+
+This is a PUBLIC stable download, but it is NOT institutionally signed and
+is not cleared for unattended enterprise deployment. The separate signed
+production lane still requires approved organizational Authenticode and
+real university-managed AD/Entra/LAPS/BitLocker, audit and rollback tests.
+The experimental audit broker in Draft PR #57 is excluded.
 
 ## Stable v0.30.0 candidate (manual QA, 16 October 2026)
 
