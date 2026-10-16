@@ -26,6 +26,15 @@ public sealed partial class MainForm
         actions.Controls.AddRange([search, bitlocker, laps, access, support]);
         root.Controls.Add(actions);
 
+        var quickQuery = new TextBox
+        {
+            Name = "HelpdeskQuickSearch",
+            AccessibleName = "Find a computer or device",
+            PlaceholderText = "Computer name or device ID",
+            Dock = DockStyle.Top
+        };
+        root.Controls.Add(quickQuery);
+
         var status = new UiStatusLabel
         {
             Name = "HelpdeskDashboardStatus",
@@ -65,13 +74,22 @@ public sealed partial class MainForm
                 permission.Allowed ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
 
-        search.Click += (_, _) =>
+        void OpenSearch()
         {
-            if (_homeWorkspaceTab is not null)
-            {
-                _mainTabs.SelectedTab = _homeWorkspaceTab;
-                _homeQuery.Focus();
-            }
+            if (_homeWorkspaceTab is null)
+                return;
+            _mainTabs.SelectedTab = _homeWorkspaceTab;
+            if (!string.IsNullOrWhiteSpace(quickQuery.Text))
+                _homeQuery.Text = quickQuery.Text.Trim();
+            _homeQuery.Focus();
+        }
+        search.Click += (_, _) => OpenSearch();
+        quickQuery.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter)
+                return;
+            e.SuppressKeyPress = true;
+            OpenSearch();
         };
         bitlocker.Click += (_, _) =>
         {
