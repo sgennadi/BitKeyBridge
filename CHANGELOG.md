@@ -1,16 +1,13 @@
-## 0.30.0-rc.1
-
-**Prerelease update channel and SemVer-safe RC rollout**
-
-- Add full SemVer 2.0 precedence including `alpha`, `beta`, `rc` and numeric prerelease identifiers, with build metadata excluded from ordering. `0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`.
-- Keep both Windows FileVersion (`0.30.0.0`) and full prerelease ProductVersion (`0.30.0-rc.1`) and validate both before executing or applying any downloaded EXE, including after updater elevation.
-- Correct RC-aware detection of installed version, online rollback, version-bound rollback hold and the CLI `--version` display.
-- Select the highest eligible release by SemVer rather than GitHub API listing order when prereleases are enabled. Skip drafts, malformed tags and releases missing the required architecture package.
-- Add offline regression tests for RC-to-RC, RC-to-stable, incorrect/missing product identity, invalid SemVer identifiers and release selection across x64/x86/ARM64.
-- Use an explicitly marked GitHub prerelease package with x64/x86/ARM64 build artifacts, SHA256SUMS, CycloneDX SBOM and provenance attestations. Stable 0.29.12 remains unchanged.
-- Carry forward the 0.30.0 least-privilege launch, audit, diagnostics and UI consolidation described below.
-
 ## 0.30.0
+
+**Staged stable candidate: public update is gated until signing and managed-domain acceptance.**
+
+- Promote the CI-tested 0.30.0-rc.1 least-privilege Helpdesk and SemVer updater code to stable 0.30.0 ProductVersion.
+- Keep experimental SYSTEM protected Audit Broker (#57) excluded from this build; retain published v0.29.12 while QA is performed.
+- Prevent PR jobs from receiving write/release permissions or calling organizational SignTool; sign only explicitly eligible release pushes.
+- Move local updater smoke testing before GitHub Release creation; remove CI remote update invocation and destructive release-branch deletion.
+- Require explicit managed-workstation acceptance and a university Code Signing thumbprint before public stable v0.30.x publication; validate Authenticode signature, PE architecture, ProductVersion and source revision for x64/x86/ARM64 and attest signing evidence.
+- Add a CI regression test that blocks unsafe publication-order, signature/approval and branch-deletion changes.
 
 **Least-privilege Helpdesk, accountable recovery and simpler administration**
 
@@ -25,6 +22,18 @@
 - Improve self-test failure reporting in Windows GitHub Actions. Preserve BitLocker/LAPS history, clipboard protection, connection retry, advanced diagnostics, recovery approval, rollback and x64/x86/ARM64 builds.
 
 **Rollout:** The per-user portable audit fallback cannot substitute for a centrally protected security audit. Enable strict protected auditing only after provisioning the required protected writer/service or ACL. Test actual non-admin AD/Entra role delegation before broad deployment.
+
+## 0.30.0-rc.1
+
+**Prerelease update channel and SemVer-safe RC rollout**
+
+- Add full SemVer 2.0 precedence including `alpha`, `beta`, `rc` and numeric prerelease identifiers, with build metadata excluded from ordering. `0.30.0-rc.1 < 0.30.0-rc.2 < 0.30.0`.
+- Keep both Windows FileVersion (`0.30.0.0`) and full prerelease ProductVersion (`0.30.0-rc.1`) and validate both before executing or applying any downloaded EXE, including after updater elevation.
+- Correct RC-aware detection of installed version, online rollback, version-bound rollback hold and the CLI `--version` display.
+- Select the highest eligible release by SemVer rather than GitHub API listing order when prereleases are enabled. Skip drafts, malformed tags and releases missing the required architecture package.
+- Add offline regression tests for RC-to-RC, RC-to-stable, incorrect/missing product identity, invalid SemVer identifiers and release selection across x64/x86/ARM64.
+- Use an explicitly marked GitHub prerelease package with x64/x86/ARM64 build artifacts, SHA256SUMS, CycloneDX SBOM and provenance attestations. Stable 0.29.12 remains unchanged.
+- Carry forward the 0.30.0 least-privilege launch, audit, diagnostics and UI consolidation described below.
 
 ## 0.29.12
 

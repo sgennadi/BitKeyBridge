@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.30.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Published stable: v0.29.12 · staged stable v0.30.0 candidate · experimental audit broker remains isolated in Draft PR #57.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,31 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+## Stable v0.30.0 candidate (manual QA, 16 October 2026)
+
+This candidate promotes the already CI-verified v0.30.0-rc.1 code to the stable
+ProductVersion 0.30.0, but remains **an unsigned GitHub Actions test artifact,
+not a published GitHub Latest release**. It excludes the experimental SYSTEM
+Audit Broker in Draft PR #57.
+
+**Public-release safety:** Existing v0.29.x clients default to automatic update
+installation ON and trusted Authenticode enforcement OFF. Publishing an unsigned
+stable Latest before testing could cause existing clients to install it without
+manual approval. Stable v0.30.x publication therefore requires an explicitly
+set `BITKEYBRIDGE_STABLE_030_APPROVED=true` after managed-workstation acceptance,
+plus an actual approved university Code Signing certificate configured as
+`BITKEYBRIDGE_SIGNING_THUMBPRINT`. Release CI validates the signer, source SHA,
+version and CPU architecture for all three builds before publication.
+
+For manual test commands, AD/Entra read and deny scenarios, DPI/RDP checks and
+secure update/rollback acceptance, use the
+[stable candidate acceptance guide](docs/stable-0.30.0-acceptance.md).
+
+The release workflow now tests updater settings **before** any publication,
+never installs a remote binary on CI and never automatically removes Git
+branches. Standard non-admin portable audit storage is user-editable and not a
+substitute for protected SYSTEM journal storage.
 
 ## Prerelease update channel (0.30.0-rc.1)
 

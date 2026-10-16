@@ -83,6 +83,11 @@ jobs:
             throw "CHANGELOG.md contains duplicate version headings."
           }
 
+      - name: Verify stable 0.30 release safety invariants
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/StableReleaseWorkflowSafety.ps1
+
       - name: Reject silent empty catch blocks
         shell: pwsh
         run: |
