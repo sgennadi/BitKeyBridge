@@ -196,9 +196,12 @@ public sealed class AuditService
                 File.AppendAllText(path, serialized + Environment.NewLine);
             }
 
-            // The protected audit was flushed before optional SIEM queueing.
-            SiemForwardingService.TryQueueFromAudit(entry);
-            return true;
+            // The journal is durable, but fail-closed SIEM policy additionally
+            // requires the local outbox to accept this exact hash-anchored
+            // event before a caller receives an affirmative broker ACK.
+            // Remote SIEM delivery itself is asynchronous and NOT implied.
+            return SiemForwardingService.TryQueueFromAudit(
+                entry, requireProtectedStorage: durable);
         }
         catch (Exception ex)
         {

@@ -186,3 +186,21 @@ SIEM delivery is asynchronous and is not guaranteed by the local ACK.
 
 This test build does not alter the stable `v0.29.12` or published
 `v0.30.0-rc.1` GitHub Releases.
+
+## SIEM queue failure policy in strict recovery mode
+
+The protected broker **always** requires a durable local, SYSTEM-owned
+hash-chain write. If both `SiemEnabled` and `SiemFailClosed` are enabled,
+it also requires successful placement of that exact hash-anchored event
+into the local SIEM outbox **before** the recovery pre-read ACK is returned.
+An outbox-full, unwritable or otherwise failed enqueue denies the read,
+while retaining the already-flushed forensic audit entry. Recovery must
+not fall back to user-profile audit storage. The disposable Windows
+integration tests confirm the behavior with a full local outbox and
+two real standard Windows accounts.
+
+An outbox enqueue is **not remote SIEM delivery**. Delivery/receipt,
+off-host archival, replay/deduplication and organizational approval are
+separate production acceptance checks. When `SiemFailClosed` is disabled
+or the SIEM integration is off, existing best-effort behavior is kept.
+

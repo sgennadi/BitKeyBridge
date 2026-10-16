@@ -377,6 +377,53 @@ try {
     }
     Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 0
 
+    # Simulate an overflowing local SIEM outbox while strict protected audit
+    # remains on. The SYSTEM service must not ACK a recovery operation if
+    # the event cannot be enqueued, even though the hash-chained journal is
+    # durably appended. Runs ONLY on a disposable hosted Windows runner.
+    $savedBrokerConfig = [IO.File]::ReadAllBytes($configFile)
+    $outbox = Join-Path $env:ProgramData 'BitKeyBridge\SIEM\Outbox'
+    try {
+        Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')
+        $siemConfig = Get-Content -LiteralPath $configFile -Raw | ConvertFrom-Json
+        $siemConfig.SiemEnabled = $true
+        $siemConfig.SiemFailClosed = $true
+        $siemConfig.SiemMode = 'FileJsonl'
+        $siemConfig.SiemMaxOutboxEvents = 100
+        $siemConfig | ConvertTo-Json -Depth 40 |
+            Set-Content -LiteralPath $configFile -Encoding utf8
+        New-Item -ItemType Directory -Path $outbox -Force | Out-Null
+        if (@(Get-ChildItem -LiteralPath $outbox -File -Filter '*.json').Count -ne 0) {
+            throw 'Expected an empty SIEM outbox on the disposable runner.'
+        }
+        for ($i = 0; $i -lt 100; $i++) {
+            [IO.File]::WriteAllText(
+                (Join-Path $outbox ('ci-block-' + $i.ToString('D3') + '.json')),
+                '{}')
+        }
+        Invoke-ElevatedTestCommand -Arguments @('--start-service', '--no-elevation')
+        Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3
+
+        # The pre-read journal can retain a denied audit request; it must
+        # remain hash-valid and must NEVER imply that a key was revealed.
+        Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
+        Get-ChildItem -LiteralPath $outbox -Filter 'ci-block-*.json' -File |
+            Remove-Item -Force
+        Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 0
+        Invoke-ElevatedTestCommand -Arguments @('--audit-broker-verify', '--no-elevation')
+    }
+    finally {
+        try { Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation') }
+        catch { Write-Warning ('SIEM test service stop: ' + $_.Exception.Message) }
+        [IO.File]::WriteAllBytes($configFile, $savedBrokerConfig)
+        if (Test-Path -LiteralPath $outbox -PathType Container) {
+            Get-ChildItem -LiteralPath $outbox -Filter 'ci-block-*.json' -File |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+        }
+        Invoke-ElevatedTestCommand -Arguments @('--start-service', '--no-elevation')
+    }
+    Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 0
+
     # Verify stopped service cannot satisfy strict audit. No fallback is allowed.
     Invoke-ElevatedTestCommand -Arguments @('--stop-service', '--no-elevation')
     Invoke-StandardUserProbe -Credential $reader -ExpectedExitCode 3

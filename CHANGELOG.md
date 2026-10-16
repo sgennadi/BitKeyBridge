@@ -2,6 +2,9 @@
 
 **Experimental managed audit broker (requires administrator provisioning)**
 
+- Enforce `SiemFailClosed` at the actual audit-event outbox enqueue, not only during earlier readiness checks. When local SIEM queueing fails, strict protected recovery gets NO positive broker ACK; already-flushed journal evidence is retained. Keep fail-open/optional modes backward compatible. Add offline blocked-outbox tests and Windows SYSTEM/two-standard-user overflow integration.
+
+
 - Gate publication on a LOCAL staged updater smoke test (before GitHub Release creation). Remove the CI executable `--update` action and automatic `release/*` branch deletion. Add regression checks for publishing order, signer approval and unsafe branch manipulation.
 
 - Fix production Authenticode release verification for .NET auto-generated `ProductVersion` build metadata (`0.30.0-rc.2+<GitSHA>`): preserve exact SemVer release identity, permit only a hexadecimal source revision suffix, enforce identical build commits across architectures, and require the approved GitHub source SHA during Release creation. Positive and negative signing tests cover this strict comparison.

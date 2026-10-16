@@ -2630,6 +2630,58 @@ internal static class Program
                     failures.Add(
                         "SIEM mode normalization failed.");
                 }
+
+                // An actual outbox error must deny protected recovery when
+                // SiemFailClosed is requested, even if earlier readiness
+                // checks raced with another writer filling the queue.
+                var siemTestDirectory = Path.Combine(
+                    tempDirectory, "siem-enqueue-regression");
+                Directory.CreateDirectory(siemTestDirectory);
+                var blockedOutbox = Path.Combine(
+                    siemTestDirectory, "not-a-directory");
+                File.WriteAllText(blockedOutbox, "blocked");
+                var healthyOutbox = Path.Combine(
+                    siemTestDirectory, "healthy-outbox");
+                var statusFile = Path.Combine(
+                    siemTestDirectory, "siem-status.json");
+                var siemConfig = new AppConfig
+                {
+                    SiemEnabled = true,
+                    SiemFailClosed = true,
+                    SiemMode = "FileJsonl"
+                };
+                var syntheticEvent = new AuditEntry
+                {
+                    User = "bkb-self-test",
+                    Host = "LOCAL-TEST",
+                    Action = "AuditBrokerHealthProbe",
+                    Result = "Committed",
+                    TimestampUtc = DateTime.UtcNow,
+                    EntryHash = new string('A', 64)
+                };
+
+                if (SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, true,
+                        blockedOutbox, statusFile))
+                    failures.Add("SIEM fail-closed accepted a failed protected event enqueue.");
+
+                if (!SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, false,
+                        blockedOutbox, statusFile))
+                    failures.Add("SIEM best-effort compatibility was broken.");
+
+                siemConfig.SiemFailClosed = false;
+                if (!SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, true,
+                        blockedOutbox, statusFile))
+                    failures.Add("SIEM fail-open mode incorrectly blocked recovery.");
+
+                siemConfig.SiemFailClosed = true;
+                if (!SiemForwardingService.TryQueueWithPolicy(
+                        syntheticEvent, siemConfig, true,
+                        healthyOutbox, statusFile) ||
+                    Directory.EnumerateFiles(healthyOutbox, "*.json").Count() != 1)
+                    failures.Add("SIEM fail-closed rejected a successful local enqueue.");
             }
             catch (Exception ex)
             {
