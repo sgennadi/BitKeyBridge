@@ -188,7 +188,8 @@ public sealed partial class MainForm
         {
             Name = "HelpdeskDeploymentReadiness",
             AutoSize = true,
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
+            MaximumSize = new Size(0, 0),
             Text = "Readiness has not been checked."
         };
         void CheckReadiness()
@@ -238,13 +239,12 @@ public sealed partial class MainForm
                    "or assert that a security check has passed.",
             Margin = new Padding(0, 12, 0, 12)
         };
-        var notes = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        var notes = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
         notes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         notes.Controls.Add(progress, 0, 0);
         notes.Controls.Add(guidance, 0, 1);
-        notes.RowCount = 3;
         notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         notes.Controls.Add(readiness, 0, 2);
         layout.Controls.Add(notes, 0, 2);
