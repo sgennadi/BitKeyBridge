@@ -142,6 +142,7 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 4,
+            AutoScroll = true,
             Padding = new Padding(16)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -203,15 +204,18 @@ public sealed partial class MainForm
         var guidance = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(720, 0),
+            Dock = DockStyle.Top,
             Text = "Checking an item records progress in this window only. " +
                    "It does not install services, modify RBAC, grant directory access, " +
                    "or assert that a security check has passed.",
             Margin = new Padding(0, 12, 0, 12)
         };
-        var notes = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        notes.Controls.Add(progress);
-        notes.Controls.Add(guidance);
+        var notes = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        notes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        notes.Controls.Add(progress, 0, 0);
+        notes.Controls.Add(guidance, 0, 1);
         layout.Controls.Add(notes, 0, 2);
 
         var actions = new FlowLayoutPanel
