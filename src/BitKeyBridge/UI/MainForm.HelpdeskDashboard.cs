@@ -198,11 +198,25 @@ public sealed partial class MainForm
             {
                 var authorization = new AuthorizationService(_config)
                     .Check(BitKeyBridgePermission.SearchDevices);
+                string serviceStatus;
+                try
+                {
+                    var service = WindowsServiceHost.GetInfo();
+                    serviceStatus = !service.Installed
+                        ? "not installed"
+                        : $"{service.State} / {service.Identity}";
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception
+                    or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    serviceStatus = "unavailable (query failed)";
+                }
                 readiness.Text =
+                    $"Service: {serviceStatus} | " +
                     $"Directory: {(_directoryConnected ? "connected" : "not connected")} | " +
                     $"Search authorization: {(authorization.Allowed ? "allowed" : "denied")} | " +
                     $"Protected audit policy: {(_config.RequireProtectedAuditForRecovery ? "required" : "optional")}. " +
-                    "Use Access Health for service and delegation checks.";
+                    "Use Access Health for protected broker and delegation checks.";
             }
             catch (Exception)
             {
