@@ -511,9 +511,9 @@ jobs:
             test -s "BitKeyBridge-${rid}.zip"
           done
           sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
-          printf 'Git commit: %s\nVersion: 0.30.0-rc.2 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
+          printf 'Git commit: %s\nVersion: 0.30.2-rc.1 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
           cat > README-TEST.txt <<'EOF'
-          BitKeyBridge 0.30.0-rc.2 -- UNSIGNED QA TEST BUNDLE
+          BitKeyBridge 0.30.2-rc.1 -- UNSIGNED QA TEST BUNDLE
           ==================================================
           This archive is NOT a production release and NOT organization-signed.
           Do not install on a domain controller or production Helpdesk workstation.
@@ -551,7 +551,7 @@ jobs:
       - name: Publish one-click unsigned QA bundle (Actions only)
         uses: actions/upload-artifact@v7
         with:
-          name: BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED
+          name: BitKeyBridge-v0.30.2-rc.1-TEST-BUNDLE-UNSIGNED
           path: test-bundle/
           if-no-files-found: error
           retention-days: 90
