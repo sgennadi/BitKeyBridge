@@ -383,6 +383,86 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
+  stable-test-bundle:
+    # Test EXEs stay in Actions artifacts, never published as GitHub stable Latest.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'stable/v0.30.0-20261016'
+    needs: [build, laps-regression]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout acceptance instructions
+        uses: actions/checkout@v7
+
+      - name: Download x64 build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: test-bundle
+
+      - name: Download x86 build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: test-bundle
+
+      - name: Download ARM64 build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: test-bundle
+
+      - name: Generate SHA256 and staged-stable usage instructions
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          cp docs/stable-0.30.0-acceptance.md test-bundle/ACCEPTANCE.md
+          cd test-bundle
+          for rid in win-x64 win-x86 win-arm64; do
+            test -s "BitKeyBridge-${rid}.zip"
+          done
+          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+          printf 'CI checkout SHA: %s\nPR head commit: %s\nProductVersion: 0.30.0\n' "$GITHUB_SHA" "$PR_HEAD_SHA" > BUILD-INFO.txt
+          cat > README-TEST.txt <<'EOF'
+          BitKeyBridge v0.30.0 - UNSIGNED STAGED-STABLE TEST BUNDLE
+          ========================================================
+          IMPORTANT: This is NOT a published GitHub stable Release.
+          Unsigned EXEs are for manual controlled QA, not production rollout.
+          Do not distribute through GPO, Intune or unattended updating.
+          The experimental SYSTEM Protected Audit Broker is NOT included.
+
+          Files:
+          BitKeyBridge-win-x64.zip     Windows x64 single-file EXE package
+          BitKeyBridge-win-x86.zip     Windows x86 single-file EXE package
+          BitKeyBridge-win-arm64.zip   Windows ARM64 single-file EXE package
+          SHA256SUMS.txt              SHA-256 checksums for all three ZIPs
+          BUILD-INFO.txt              Exact CI checkout and PR head source commits
+          ACCEPTANCE.md               Managed-domain workstation QA checklist
+
+          Extract only your architecture ZIP and run in a normal CMD:
+            BitKeyBridge.exe --version
+            BitKeyBridge.exe --self-test --no-elevation
+            BitKeyBridge.exe --ui-self-test --no-elevation
+            BitKeyBridge.exe --auto-update-status --no-elevation
+
+          Check 100%-200% DPI, RDP, non-admin AD/Entra/LAPS/BitLocker
+          allow/deny scenarios, secret lifetime and audit correctness.
+          A real university Code Signing certificate, signed update/rollback
+          and operator acceptance are required BEFORE public stable Latest.
+          EOF
+
+      - name: Upload one-click unsigned staged stable bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-v0.30.0-STABLE-CANDIDATE-UNSIGNED
+          path: test-bundle/
+          if-no-files-found: error
+          retention-days: 90
+
   release:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
