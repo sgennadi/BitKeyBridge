@@ -1,8 +1,8 @@
 #Requires -Version 7.0
 <#
 Ephemeral CI ONLY: positive Authenticode release-verifier integration.
-Builds an intentionally short-lived, non-exportable CURRENT-USER test
-certificate, signs copies of all 3 architecture payloads, validates, and
+Builds a short-lived test-only signer (temporary PEM/PFX under RUNNER_TEMP),
+signs copies of all 3 architecture payloads, validates, and
 tests signer, ProductVersion, PE architecture and unsigned failure cases.
 Never uploads signing keys, changes LocalMachine trust, or publishes assets.
 #>
@@ -54,6 +54,33 @@ $thumbprint = ''
 $tag = 'v0.30.0-rc.2'
 $rids = @('win-x64', 'win-x86', 'win-arm64')
 $original = @{}
+$rootTrustAdded = $false
+$publisherTrustAdded = $false
+
+function Invoke-BoundedCertUtil {
+    param([Parameter(Mandatory)][string[]]$Arguments)
+    # X509Store.Add may invoke an invisible trust confirmation on a
+    # noninteractive hosted Windows session. Use a bounded native command
+    # instead, forcing noninteractive CURRENT-USER stores only.
+    $info = [Diagnostics.ProcessStartInfo]::new()
+    $info.FileName = Join-Path $env:WINDIR 'System32\certutil.exe'
+    $info.UseShellExecute = $false
+    $info.RedirectStandardOutput = $false
+    $info.RedirectStandardError = $false
+    foreach ($arg in $Arguments) { [void]$info.ArgumentList.Add($arg) }
+    $process = [Diagnostics.Process]::Start($info)
+    if (-not $process) { throw 'Could not start Windows certutil.' }
+    try {
+        if (-not $process.WaitForExit(30000)) {
+            $process.Kill($true)
+            throw "CurrentUser certutil operation timed out: $($Arguments -join ' ')"
+        }
+        if ($process.ExitCode -ne 0) {
+            throw "CurrentUser certutil operation failed (exit $($process.ExitCode)): $($Arguments -join ' ')"
+        }
+    }
+    finally { $process.Dispose() }
+}
 
 function Require-Rejection {
     param([string]$Case, [string]$Pin, [string]$Version)
@@ -183,18 +210,13 @@ try {
     $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($caDer)
     $publisherPublic = [Security.Cryptography.X509Certificates.X509Certificate2]::new($leafDer)
     $thumbprint = $publisherPublic.Thumbprint.ToUpperInvariant()
-    $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new(
-        [Security.Cryptography.X509Certificates.StoreName]::Root,
-        [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
-    $rootStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-    $rootStore.Add($public)
-    Write-Host 'CurrentUser test CA trust imported.'
-    $publisherStore = [Security.Cryptography.X509Certificates.X509Store]::new(
-        [Security.Cryptography.X509Certificates.StoreName]::TrustedPublisher,
-        [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
-    $publisherStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-    $publisherStore.Add($publisherPublic)
-    Write-Host 'Ephemeral CA and publisher are trusted only in CurrentUser on the disposable runner.'
+    Write-Host 'Importing test CA into CurrentUser Root with bounded certutil...'
+    Invoke-BoundedCertUtil -Arguments @('-user', '-f', '-addstore', 'Root', $caDer)
+    $rootTrustAdded = $true
+    Write-Host 'Importing code-signing leaf into CurrentUser TrustedPublisher...'
+    Invoke-BoundedCertUtil -Arguments @('-user', '-f', '-addstore', 'TrustedPublisher', $leafDer)
+    $publisherTrustAdded = $true
+    Write-Host 'Ephemeral CA and publisher trust imported only for this disposable runner.'
 
     foreach ($rid in $rids) {
         $folder = Join-Path $root ("stage-" + $rid)
@@ -280,17 +302,20 @@ try {
     Write-Host 'Ephemeral signature validation positive/negative integration PASSED.'
 } finally {
     # Remove ephemeral trust in reverse order; no signing key leaves CI.
-    if ($publisherStore) {
-        try { if ($publisherPublic) { $publisherStore.Remove($publisherPublic) } }
-        finally { $publisherStore.Close() }
+    if ($publisherTrustAdded -and $publisherPublic) {
+        try {
+            Invoke-BoundedCertUtil -Arguments @('-user', '-delstore', 'TrustedPublisher', $publisherPublic.Thumbprint)
+        }
+        catch { Write-Warning ('Could not remove ephemeral publisher trust: ' + $_.Exception.Message) }
+    }
+    if ($rootTrustAdded -and $public) {
+        try {
+            Invoke-BoundedCertUtil -Arguments @('-user', '-delstore', 'Root', $public.Thumbprint)
+        }
+        catch { Write-Warning ('Could not remove ephemeral root trust: ' + $_.Exception.Message) }
     }
     if ($publisherPublic) { $publisherPublic.Dispose() }
     $testPfxPassword = ''
-    if ($rootStore) {
-        try {
-            if ($public) { $rootStore.Remove($public) }
-        } finally { $rootStore.Close() }
-    }
     if ($cert) {
         $personal = [Security.Cryptography.X509Certificates.X509Store]::new([Security.Cryptography.X509Certificates.StoreName]::My, [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
         try {
