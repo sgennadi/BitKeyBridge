@@ -37,9 +37,10 @@ public sealed partial class MainForm
         root.Controls.Add(status);
 
         var refresh = NewActionButton("Refresh Status");
+        var setup = NewActionButton("Setup & Permissions");
         var probe = NewActionButton("Check Protected Audit");
         var diagnostics = CreateActionFlow();
-        diagnostics.Controls.AddRange([refresh, probe]);
+        diagnostics.Controls.AddRange([refresh, probe, setup]);
         root.Controls.Add(diagnostics);
 
         void UpdateStatus()
@@ -89,6 +90,7 @@ public sealed partial class MainForm
                 CreateQuickDiagnosticsBundleGui();
         };
         refresh.Click += (_, _) => UpdateStatus();
+        setup.Click += (_, _) => OpenHelpdeskSetup();
         probe.Click += (_, _) =>
         {
             // Existing diagnostics own the authenticated, opt-in probe.
@@ -97,6 +99,40 @@ public sealed partial class MainForm
         page.Enter += (_, _) => UpdateStatus();
         UpdateStatus();
         return page;
+    }
+
+    private void OpenHelpdeskSetup()
+    {
+        if (!AdministrationAllowed)
+        {
+            MessageBox.Show(this,
+                "Helpdesk setup requires administrator authorization. " +
+                "Ask an administrator to configure the protected audit broker and AD delegation. " +
+                "Use Access Health to verify your existing permissions.",
+                "Helpdesk setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            OpenHelpdeskAccessHealth();
+            return;
+        }
+
+        foreach (TabPage page in _mainTabs.TabPages)
+        {
+            if (page.Text != "Administration")
+                continue;
+            _mainTabs.SelectedTab = page;
+            foreach (Control control in page.Controls)
+            {
+                if (control is not TabControl nested)
+                    continue;
+                foreach (TabPage section in nested.TabPages)
+                {
+                    if (section.Name == "HelpdeskBasicsTab")
+                    {
+                        nested.SelectedTab = section;
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     private void OpenHelpdeskAccessHealth()
