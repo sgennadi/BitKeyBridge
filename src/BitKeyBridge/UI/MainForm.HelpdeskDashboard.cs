@@ -47,9 +47,10 @@ public sealed partial class MainForm
 
         var refresh = NewActionButton("Refresh Status");
         var setup = NewActionButton("Setup & Permissions");
+        var checklist = NewActionButton("Deployment Checklist");
         var probe = NewActionButton("Run Access Checks");
         var diagnostics = CreateActionFlow();
-        diagnostics.Controls.AddRange([refresh, probe, setup]);
+        diagnostics.Controls.AddRange([refresh, probe, setup, checklist]);
         root.Controls.Add(diagnostics);
 
         void UpdateStatus()
@@ -109,6 +110,7 @@ public sealed partial class MainForm
         };
         refresh.Click += (_, _) => UpdateStatus();
         setup.Click += (_, _) => OpenHelpdeskSetup();
+        checklist.Click += (_, _) => ShowHelpdeskDeploymentChecklist();
         probe.Click += async (_, _) =>
         {
             OpenHelpdeskAccessHealth();
@@ -118,6 +120,24 @@ public sealed partial class MainForm
         page.Enter += (_, _) => UpdateStatus();
         UpdateStatus();
         return page;
+    }
+
+    private void ShowHelpdeskDeploymentChecklist()
+    {
+        var steps = string.Join(Environment.NewLine, new[]
+        {
+            "1. Install the Windows service as administrator on a test workstation.",
+            "2. Configure a scoped AD RecoveryReaders group; keep admin bypass off.",
+            "3. Verify AD / Entra LAPS and BitLocker delegation separately.",
+            "4. Provision the protected audit broker as administrator and restart the service.",
+            "5. Sign in as an authorized non-admin Helpdesk user and run Access Health.",
+            "6. Verify an unauthorized user is denied and no secret appears in diagnostics.",
+            "7. Validate audit persistence, RDP, 100-200% DPI and update rollback.",
+            "",
+            "This checklist is informational. It does not change permissions, services or audit policy."
+        });
+        MessageBox.Show(this, steps, "Helpdesk deployment checklist",
+            MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void OpenHelpdeskSetup()
