@@ -9,11 +9,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Compiling untrusted pull request code must never receive write/release
+# credentials. Only the explicitly gated release job may publish or attest.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
-  artifact-metadata: write
+  contents: read
 
 concurrency:
   # Bind concurrency to the exact commit. GitHub can deliver rapid PR
@@ -240,7 +239,22 @@ jobs:
       # the trusted code-signing certificate AND its private key.
       # Set repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT only after provisioning.
       - name: Optional Authenticode sign and verify
-        if: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT != '' }}
+        # Organizational signing credentials are never used on PR or
+        # workflow_dispatch: only an explicitly qualified release push.
+        if: >-
+          vars.BITKEYBRIDGE_SIGNING_THUMBPRINT != '' &&
+          github.event_name == 'push' &&
+          (
+            startsWith(github.ref, 'refs/tags/v') ||
+            (
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+              startsWith(github.event.head_commit.message, 'Release v')
+            ) ||
+            (
+              github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
+              startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1')
+            )
+          )
         shell: pwsh
         env:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
@@ -354,6 +368,18 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
+      - name: Guard release workflow ordering and branch safety
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/ReleaseWorkflowSafety.ps1
+
+      - name: Regression - reject invalid or unauthorized release signing
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable "artifacts/win-x64/BitKeyBridge.exe"
+
       - name: Package architecture
         shell: cmd
         run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
@@ -364,6 +390,171 @@ jobs:
           name: BitKeyBridge-${{ matrix.rid }}
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
+
+  audit-broker-integration:
+    # Must run only on GitHub-hosted ephemeral Windows. This isolated test
+    # creates temporary local accounts, installs an SCM service and adjusts
+    # ProgramData ACLs; it must never run on a persistent/self-hosted machine.
+    if: github.event_name == 'pull_request' && github.head_ref == 'feature/protected-audit-broker-20261014'
+    needs: [build]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout integration harness
+        uses: actions/checkout@v7
+
+      - name: Download tested x64 executable package
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: broker-integration
+
+      - name: Verify strict audit with two genuine standard Windows tokens
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or
+              $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Protected audit integration must use an ephemeral GitHub-hosted Windows runner.'
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'bkb-broker-integration'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Expand-Archive -Path broker-integration/BitKeyBridge-win-x64.zip -DestinationPath $root -Force
+          ./tests/windows/ProtectedAuditBrokerIntegration.ps1 `
+            -Executable (Join-Path $root 'BitKeyBridge.exe') `
+            -EphemeralHostedRunner
+
+  release-signing-positive:
+    # Ephemeral PKI tests are not an organization signing approval.
+    # Sign COPIES of all 3 tested architectures with a temporary certificate
+    # trusted only in CurrentUser on a disposable GitHub-hosted Windows runner.
+    # Use 2022 deliberately: the 2025/VS2026 hosted image blocks indefinitely
+    # in certutil CurrentUser Root enrollment even with a bounded child process.
+    # Never upload the signed test binaries, certificate or private key.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/protected-audit-broker-20261014'
+    needs: [build]
+    runs-on: windows-2022
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout signing verification harness
+        uses: actions/checkout@v7
+
+      - name: Download verified x64 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: signing-integration/win-x64
+
+      - name: Download verified x86 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: signing-integration/win-x86
+
+      - name: Download verified ARM64 architecture
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: signing-integration/win-arm64
+
+      - name: Positive signed release and tamper rejection (ephemeral cert)
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or
+              $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Signature integration is allowed only on an ephemeral GitHub-hosted runner.'
+          }
+          ./tests/windows/ReleaseSigningPositiveIntegration.ps1 -ArtifactRoot signing-integration -EphemeralHostedRunner
+
+  test-bundle:
+    # One-click QA download only after EVERY required broker and signer test
+    # passes. Never attach unsigned developer binaries to GitHub Releases.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/protected-audit-broker-20261014'
+    needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout QA instructions
+        uses: actions/checkout@v7
+
+      - name: Download x64 test binary
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: test-bundle
+
+      - name: Download x86 test binary
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: test-bundle
+
+      - name: Download ARM64 test binary
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: test-bundle
+
+      - name: Generate checksums and isolated-QA instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tests/windows/BitKeyBridge-DomainPreflight.cmd test-bundle/
+          cd test-bundle
+          for rid in win-x64 win-x86 win-arm64; do
+            test -s "BitKeyBridge-${rid}.zip"
+          done
+          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+          printf 'Git commit: %s\nVersion: 0.30.0-rc.2 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
+          cat > README-TEST.txt <<'EOF'
+          BitKeyBridge 0.30.0-rc.2 -- UNSIGNED QA TEST BUNDLE
+          ==================================================
+          This archive is NOT a production release and NOT organization-signed.
+          Do not install on a domain controller or production Helpdesk workstation.
+          Do not distribute through Intune, GPO or automatic updates.
+
+          Files:
+          - BitKeyBridge-win-x64.zip   Windows x64
+          - BitKeyBridge-win-x86.zip   Windows x86
+          - BitKeyBridge-win-arm64.zip Windows ARM64
+          - SHA256SUMS.txt             SHA-256 checksums for all three ZIPs
+          - BUILD-INFO.txt             Source commit and test version
+          - BitKeyBridge-DomainPreflight.cmd  Optional read-only QA report
+
+          Verify ZIP hashes against SHA256SUMS.txt. Extract ONLY the ZIP
+          matching your Windows architecture on a disposable test workstation.
+          From an ordinary, non-elevated CMD inside the EXE directory run:
+
+              BitKeyBridge.exe --version
+              BitKeyBridge.exe --self-test --no-elevation
+              BitKeyBridge.exe --audit-broker-preflight --no-elevation
+
+          Run the optional CMD report wrapper with the EXE absolute path:
+              BitKeyBridge-DomainPreflight.cmd "C:\QA\BitKeyBridge.exe"
+
+          To intentionally write one synthetic broker health event only:
+              BitKeyBridge.exe --audit-broker-preflight --probe --no-elevation
+
+          Real domain/Entra recovery, trusted signing, SIEM and rollback
+          require separate controlled acceptance. See repository docs:
+          docs/managed-domain-acceptance-0.30.0-rc.2.md
+
+          DO NOT MERGE/PUBLISH WITHOUT MANAGED-DOMAIN ACCEPTANCE.
+          EOF
+
+      - name: Publish one-click unsigned QA bundle (Actions only)
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED
+          path: test-bundle/
+          if-no-files-found: error
+          retention-days: 90
 
   release:
     if: >-
@@ -376,6 +567,12 @@ jobs:
        startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))
     needs: [build, laps-regression]
     runs-on: windows-latest
+    # Least-privilege token; these scopes are never granted to PR builds.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Checkout
@@ -430,6 +627,29 @@ jobs:
           Write-Host "Release tag: $tag"
           Write-Host "Existing release: $exists"
 
+      # A Git tag alone must never publish the unapproved audit-broker
+      # preview, nor a later 0.30.x release carrying that sensitive feature.
+      # Admins can intentionally approve after completing managed-machine
+      # acceptance, configuring a real organizational signing identity and
+      # reviewing the signed update/rollback chain.
+      - name: Enforce protected audit release approval
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          PROTECTED_AUDIT_APPROVED: ${{ vars.BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED }}
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          if ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
+              $tag -ne "v0.30.0-rc.1") {
+            if ($env:PROTECTED_AUDIT_APPROVED -ne 'true') {
+              throw "Protected audit broker release is NOT approved: complete real-domain AD/Entra acceptance and set BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED=true intentionally."
+            }
+            if ([string]::IsNullOrWhiteSpace($env:SIGNING_THUMBPRINT)) {
+              throw "Protected audit broker release requires the organizational Authenticode signing thumbprint. Unsigned automatic rollout is forbidden."
+            }
+          }
+
       - name: Download x64
         if: steps.release_meta.outputs.exists != 'true'
         uses: actions/download-artifact@v8
@@ -451,6 +671,26 @@ jobs:
           name: BitKeyBridge-win-arm64
           path: release
 
+      - name: Verify signatures and architectures before protected audit release
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+        shell: pwsh
+        env:
+          SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./tests/windows/Verify-ReleaseSigning.ps1 `
+            -ReleaseDirectory release `
+            -Tag "${{ steps.release_meta.outputs.tag }}" `
+            -ExpectedThumbprint $env:SIGNING_THUMBPRINT `
+            -ExpectedSourceRevision "${{ github.sha }}" `
+            -OutputPath release/BitKeyBridge.signatures.json
+          if (-not (Test-Path release/BitKeyBridge.signatures.json)) {
+            throw "Release signature verification evidence was not created."
+          }
+
       - name: Generate CycloneDX SBOM
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
@@ -464,7 +704,11 @@ jobs:
         shell: bash
         run: |
           cd release
-          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json > SHA256SUMS.txt
+          files=(BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json)
+          if [[ -f BitKeyBridge.signatures.json ]]; then
+            files+=(BitKeyBridge.signatures.json)
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS.txt
 
       - name: Attest release provenance
         if: steps.release_meta.outputs.exists != 'true'
@@ -477,6 +721,15 @@ jobs:
             release/BitKeyBridge.cdx.json
             release/SHA256SUMS.txt
 
+      - name: Attest protected audit signature verification evidence
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+        uses: actions/attest@v4
+        with:
+          subject-path: release/BitKeyBridge.signatures.json
+
       - name: Attest release SBOM
         if: steps.release_meta.outputs.exists != 'true'
         uses: actions/attest@v4
@@ -487,36 +740,7 @@ jobs:
             release/BitKeyBridge-win-arm64.zip
           sbom-path: release/BitKeyBridge.cdx.json
 
-      - name: Create GitHub Release
-        if: steps.release_meta.outputs.exists != 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ steps.release_meta.outputs.tag }}"
-          $assets = @(
-            'release/BitKeyBridge-win-x64.zip',
-            'release/BitKeyBridge-win-x86.zip',
-            'release/BitKeyBridge-win-arm64.zip',
-            'release/BitKeyBridge.cdx.json',
-            'release/SHA256SUMS.txt'
-          )
-          $args = @('release', 'create', $tag) + $assets + @(
-            '--repo', '${{ github.repository }}',
-            '--target', '${{ github.sha }}',
-            '--generate-notes',
-            '--title', "BitKeyBridge $tag"
-          )
-          if ($tag.Contains('-')) {
-            # Mark RC/beta as prerelease. Never override GitHub stable Latest.
-            $args += '--prerelease'
-          }
-          & gh @args
-          if ($LASTEXITCODE -ne 0) {
-            throw "GitHub release creation failed for $tag."
-          }
-
-      - name: Smoke-test published updater controls
+      - name: Smoke-test staged updater preferences (no network install)
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
         run: |
@@ -526,12 +750,9 @@ jobs:
           Expand-Archive -Path release\BitKeyBridge-win-x64.zip -DestinationPath $smokeRoot -Force
           $exe = Join-Path $smokeRoot "BitKeyBridge.exe"
 
-          $checkOutput = & $exe --check-update --no-elevation 2>&1 | Out-String
-          $checkExit = $LASTEXITCODE
-          Write-Host $checkOutput
-          if ($checkExit -notin @(0, 10)) {
-            throw "--check-update failed with exit code $checkExit."
-          }
+          # Prepublication acceptance stays LOCAL: do not contact the public
+          # Releases API or apply new executable files in CI.
+          # Remote update/rollback needs a separate managed-machine test.
 
           $disableOutput = & $exe --update-checks-disable --no-elevation 2>&1 | Out-String
           $disableExit = $LASTEXITCODE
@@ -584,63 +805,37 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
-          if ($checkExit -eq 0) {
-            $updateOutput = & $exe --update --no-elevation 2>&1 | Out-String
-            $updateExit = $LASTEXITCODE
-            Write-Host $updateOutput
-            if ($updateExit -ne 0) {
-              throw "--update current-version/no-op path failed with exit code $updateExit."
-            }
-          }
-          else {
-            Write-Host "A newer release appeared during the smoke test; skipping --update to avoid applying a different release on the CI runner."
-          }
+          Write-Host 'Staged updater controls passed. No installation attempted.'
 
-      - name: Archive and remove stale release branches
+      - name: Create GitHub Release
         if: steps.release_meta.outputs.exists != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $repo = "${{ github.repository }}"
-          git fetch origin "+refs/heads/release/*:refs/remotes/origin/release/*" --prune
-
-          $refs = git for-each-ref --format="%(refname:short)|%(objectname)" refs/remotes/origin/release/
-          foreach ($line in $refs) {
-            if ([string]::IsNullOrWhiteSpace($line)) { continue }
-
-            $parts = $line.Split("|", 2)
-            $remoteName = $parts[0]
-            $sha = $parts[1]
-            $branch = $remoteName -replace "^origin/", ""
-
-            git merge-base --is-ancestor $sha "${{ github.sha }}" *> $null
-            $isMerged = ($LASTEXITCODE -eq 0)
-            $global:LASTEXITCODE = 0
-
-            if (-not $isMerged) {
-              $short = $sha.Substring(0, 12)
-              $safeBranch = $branch.Replace("/", "-")
-              $archiveTag = "archive/$safeBranch-$short"
-
-              gh api "repos/$repo/git/ref/tags/$archiveTag" *> $null
-              $tagExists = ($LASTEXITCODE -eq 0)
-              $global:LASTEXITCODE = 0
-
-              if (-not $tagExists) {
-                gh api --method POST "repos/$repo/git/refs" -f ref="refs/tags/$archiveTag" -f sha="$sha" *> $null
-                if ($LASTEXITCODE -ne 0) {
-                  throw "Could not archive unmerged release branch $branch at $sha"
-                }
-              }
-
-              Write-Host "Archived unmerged branch $branch as $archiveTag"
-            }
-
-            gh api --method DELETE "repos/$repo/git/refs/heads/$branch" *> $null
-            if ($LASTEXITCODE -ne 0) {
-              throw "Could not delete stale release branch $branch"
-            }
-
-            Write-Host "Deleted stale release branch $branch"
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          $assets = @(
+            'release/BitKeyBridge-win-x64.zip',
+            'release/BitKeyBridge-win-x86.zip',
+            'release/BitKeyBridge-win-arm64.zip',
+            'release/BitKeyBridge.cdx.json',
+            'release/SHA256SUMS.txt'
+          )
+          if (Test-Path 'release/BitKeyBridge.signatures.json') {
+            $assets += 'release/BitKeyBridge.signatures.json'
           }
+          $args = @('release', 'create', $tag) + $assets + @(
+            '--repo', '${{ github.repository }}',
+            '--target', '${{ github.sha }}',
+            '--generate-notes',
+            '--title', "BitKeyBridge $tag"
+          )
+          if ($tag.Contains('-')) {
+            # Mark RC/beta as prerelease. Never override GitHub stable Latest.
+            $args += '--prerelease'
+          }
+          & gh @args
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub release creation failed for $tag."
+          }
+

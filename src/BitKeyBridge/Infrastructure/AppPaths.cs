@@ -33,6 +33,10 @@ public static class AppPaths
     public static string MachineCloudConfigFile => Path.Combine(MachineConfigDirectory, "cloud_auth_machine.json");
     public static string CoverageStatusFile => Path.Combine(MachineConfigDirectory, "coverage_status.json");
     public static string AuditLogFile => Path.Combine(MachineConfigDirectory, "audit.jsonl");
+    // Dedicated ACL-isolated store; unlike ProgramData root it is writable
+    // only by SYSTEM and Administrators, never by the Helpdesk caller.
+    public static string BrokerAuditDirectory => Path.Combine(MachineConfigDirectory, "ProtectedAudit");
+    public static string BrokerAuditLogFile => Path.Combine(BrokerAuditDirectory, "audit.jsonl");
     public static string AuditIntegrityStatusFile => Path.Combine(MachineConfigDirectory, "audit_integrity_status.json");
     public static string AuditSigningCheckpointFile => Path.Combine(MachineConfigDirectory, "audit_signing_checkpoint.json");
     public static string AuditSigningTransitionFile => Path.Combine(MachineConfigDirectory, "audit_signing_transition.json");

@@ -18,6 +18,22 @@ Do not include real recovery passwords, production LDAP distinguished names, ten
 A dedicated restricted share is preferred over broadly readable SYSVOL/NETLOGON storage for recovery passwords.
 
 
+## Protected local audit broker (0.30.0-rc.2 test build)
+
+Issue #56 introduces an opt-in LocalSystem Windows Service named-pipe
+endpoint for **pre-read audit only**. The service uses real Windows token
+impersonation, explicit RBAC SID membership, a narrow pipe ACL with a
+NETWORK deny rule, and a protected journal outside the user profile. Its
+client rejects fake named pipes that are not SYSTEM-owned. The service
+never accepts claimed user identities, recovery keys, passwords or tokens.
+All writes require trusted config/journal ACLs, valid chain, bounded
+metadata and disk flush before an ACK; any failure blocks strict recovery.
+
+See [broker deployment](docs/protected-audit-broker.md). Do not enable the
+preview in production without real non-admin AD/Entra and service identity
+validation. It is not a substitute for backend access control or guaranteed
+SIEM delivery.
+
 ## Non-admin recovery and audit boundary
 
 The ordinary interactive GUI runs as its caller, without attempting a global

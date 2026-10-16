@@ -1,3 +1,43 @@
+## 0.30.0-rc.2
+
+**Experimental managed audit broker (requires administrator provisioning)**
+
+- Add a one-click QA-only GitHub Actions artifact bundling the three unsigned test EXE ZIPs, SHA-256 verification, exact Git source SHA, CMD-only safe diagnostics and explicit test/production warnings; publish only after every prerequisite build, LAPS, protected-audit and Authenticode test passes. Never attach this bundle to GitHub Releases.
+
+
+- Enforce `SiemFailClosed` at the actual audit-event outbox enqueue, not only during earlier readiness checks. When local SIEM queueing fails, strict protected recovery gets NO positive broker ACK; already-flushed journal evidence is retained. Keep fail-open/optional modes backward compatible. Add offline blocked-outbox tests and Windows SYSTEM/two-standard-user overflow integration.
+
+
+- Gate publication on a LOCAL staged updater smoke test (before GitHub Release creation). Remove the CI executable `--update` action and automatic `release/*` branch deletion. Add regression checks for publishing order, signer approval and unsafe branch manipulation.
+
+- Fix production Authenticode release verification for .NET auto-generated `ProductVersion` build metadata (`0.30.0-rc.2+<GitSHA>`): preserve exact SemVer release identity, permit only a hexadecimal source revision suffix, enforce identical build commits across architectures, and require the approved GitHub source SHA during Release creation. Positive and negative signing tests cover this strict comparison.
+
+- Restrict GitHub Actions default token to contents:read. Only the gated release job receives contents/attestation/id-token write privileges; organizational SignTool is never invoked for PRs, manually dispatched branches or normal main commits. Keep ephemeral signature verification active in PR CI independently of signing variables.
+
+
+- Add an ephemeral Windows CI positive Authenticode acceptance job: generate a non-exportable CurrentUser test signing certificate, sign copies of x64/x86/ARM64 EXEs, require all three exact trusted signer/product version/PE architecture matches, and reject wrong signer, version, architecture and unsigned binaries. Clean up CurrentUser test trust and temporary files; never upload test certificates or sign production releases.
+
+
+- Prevent unsigned managed-broker upgrade/rollback and elevated updater plan policy bypass. Strict audit mode now requires a trusted Authenticode signature and an exact configured publisher; the elevated apply helper independently reloads machine signing settings and validates the staged executable before replacement, refusing unattended apply when its current policy is disabled. Add offline publisher-spoofing regression checks.
+
+- Require verified Authenticode on all three release EXEs before publishing a protected-audit 0.30.x version: exact signing certificate thumbprint, trusted chain, matching x64/x86/ARM64 PE architecture and ProductVersion. Include signing evidence in SHA256SUMS and GitHub attestations, with fail-closed CI regression tests.
+
+- Stop destructive protected journal rotation: when a protected .old archive is present at the next size threshold, deny the append instead of deleting the prior audit history. Add regression checks; legacy portable audit rotation remains unchanged.
+
+- Add `--audit-broker-preflight [--probe]` for secret-free local Windows join/token/RBAC/service/signing/NTFS diagnostics. The passive default never writes a journal event; an explicit probe writes one synthetic committed health event. Add real standard-user CI assertions and an optional CMD-only per-user report wrapper, plus enterprise AD/Entra acceptance steps. Correct outdated Russian README release-version guidance.
+
+- Reject stale RBAC machine policy after startup: pin the trusted appsettings fingerprint and deny audit requests until restart whenever it changes. Require GUID recovery session correlation for every broker operation, and evaluate only enabled Windows group memberships for GUI RBAC, matching broker impersonation. Add offline and Windows service integration regression checks.
+
+- Validate archive and lock-file ACLs alongside the protected journal. Administrative --audit-broker-verify also checks appsettings machine-policy ACL, with fail-closed standard-user Windows integration tests for both companion files and administrator diagnostics.
+
+- Add an opt-in local Windows Service named-pipe broker so delegated non-admin Helpdesk sessions can commit strict, hash-chained recovery audit events without UAC or machine journal write permissions.
+- Authenticate the caller using the impersonated Windows token and an explicit RBAC RecoveryReaders SID/group allowlist; reject Everyone/Authenticated Users/BUILTIN Users and all empty/broad broker policies. The pipe DACL grants narrow ReadData/WriteData rights but never CreateNewInstance.
+- Verify the pipe is SYSTEM-owned before the client sends any recovery metadata. Use a bounded versioned protocol with a one-time request ID, fixed recovery operations, replay tracking, per-SID rate limiting and short timeouts. The protocol does **not** accept passwords, keys or client-supplied actor SIDs.
+- Journal a server-generated event using the token-authenticated actor identity in an isolated protected `%ProgramData%\\BitKeyBridge\\ProtectedAudit` directory. Enforce trusted owner/write ACL and hash-chain integrity; flush protected writes to disk before acknowledging success.
+- Introduce administrator-only `--audit-broker-provision` (provisions NTFS ACLs, enables strict audit and broker policy) and `--audit-broker-status`. Broker is disabled by default and currently supports **LocalSystem service identity only**.
+- Integrate the existing GUI authorization preflight: strict broker failures deny recovery without a per-user fallback, while the previous direct protected auditing remains unchanged if the broker has not been enabled.
+- Add protocol/operation/size/broad-principal regression tests. Windows integration now checks impersonated actor SID, corrupt-journal no-write denial and refusal when any machine policy/journal parent or file becomes user-writable. Inspect every directory back to the machine root, reject reparse points, and recheck appsettings ACL for each broker request. Existing 0.30.0-rc.1 remains the published prerelease; rc.2 is an isolated test build pending managed Windows domain/Entra non-admin acceptance tests.
+
 ## 0.30.0-rc.1
 
 **Prerelease update channel and SemVer-safe RC rollout**

@@ -218,7 +218,13 @@ public static class AuthenticodeVerificationService
             Verify(
                 path);
 
-        if (config.RequireTrustedUpdateSignature &&
+        // A managed SYSTEM-owned audit broker must not be downgraded to
+        // unsigned code, even if the optional legacy signature checkbox is off.
+        var managedAudit =
+            config.AuditBrokerEnabled &&
+            config.RequireProtectedAuditForRecovery;
+
+        if ((config.RequireTrustedUpdateSignature || managedAudit) &&
             !result.Trusted)
         {
             throw new InvalidOperationException(
@@ -230,11 +236,16 @@ public static class AuthenticodeVerificationService
             config.TrustedUpdatePublisher?.Trim() ??
             string.Empty;
 
-        if (string.IsNullOrWhiteSpace(
-                expectedPublisher))
+        if (managedAudit &&
+            string.IsNullOrWhiteSpace(expectedPublisher))
         {
-            return;
+            throw new InvalidOperationException(
+                "Managed protected audit updates require a pinned, exact " +
+                "TrustedUpdatePublisher in the machine policy.");
         }
+
+        if (string.IsNullOrWhiteSpace(expectedPublisher))
+            return;
 
         if (!result.Trusted)
         {
@@ -242,13 +253,32 @@ public static class AuthenticodeVerificationService
                 "TrustedUpdatePublisher is configured, but the staged executable does not have a trusted Authenticode signature.");
         }
 
-        if (!result.Publisher.Contains(
-                expectedPublisher,
-                StringComparison.OrdinalIgnoreCase))
+        if (!PublisherMatches(result.Publisher, expectedPublisher,
+                exact: managedAudit))
         {
             throw new InvalidOperationException(
                 $"The staged executable publisher '{result.Publisher}' does not match trusted publisher '{expectedPublisher}'.");
         }
+    }
+
+    /// <summary>
+    /// Managed broker updates demand a full publisher-name match. Prefix/
+    /// substring matching can accept a different trusted signer's name
+    /// containing the expected publisher as attacker-controlled text.
+    /// Legacy publisher matching is preserved outside managed audit mode.
+    /// </summary>
+    internal static bool PublisherMatches(
+        string? actual, string? expected, bool exact)
+    {
+        var publisher = actual?.Trim() ?? string.Empty;
+        var pin = expected?.Trim() ?? string.Empty;
+        if (publisher.Length == 0 || pin.Length == 0 ||
+            string.Equals(publisher, "Signed", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return exact
+            ? string.Equals(publisher, pin, StringComparison.OrdinalIgnoreCase)
+            : publisher.Contains(pin, StringComparison.OrdinalIgnoreCase);
     }
 
     [DllImport(

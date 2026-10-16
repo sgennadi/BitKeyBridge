@@ -77,6 +77,10 @@ public sealed class AppConfig
     // Portable non-admin clients otherwise use a clearly marked per-user journal
     // when the protected store is not writable.
     public bool RequireProtectedAuditForRecovery { get; set; } = false;
+    // The protected audit broker runs ONLY in the managed Windows Service.
+    // Opt-in; explicitly configured RBAC recovery readers are required.
+    // A local user must never be given NTFS write access to the journal.
+    public bool AuditBrokerEnabled { get; set; } = false;
     public bool SuggestRotationAfterCloudKeyRetrieval { get; set; } = false;
     public string RecoveryReferencePattern { get; set; } = string.Empty;
     public string RecoveryReferenceExample { get; set; } = "INC-12345";

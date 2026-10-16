@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Current release line: 0.30.x** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable: v0.29.12 · published prerelease: v0.30.0-rc.1 · test-only Draft PR: v0.30.0-rc.2.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,47 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+## Experimental protected audit broker (0.30.0-rc.2)
+
+**Single QA download:** in the latest successful PR #57 Windows Actions run,
+use **Artifacts → BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED**.
+It contains all three architecture ZIPs, `SHA256SUMS.txt`, the exact
+build-source commit and a CMD-only local diagnostic. The artifact is built
+only after Windows x64/x86/ARM64, LAPS, standard-user Audit Broker integration
+and positive/negative Authenticode tests pass. These developer binaries are
+**unsigned** and must not be installed on production workstations.
+
+
+Test build for [issue #56](https://github.com/sgennadi/BitKeyBridge/issues/56).
+A preinstalled LocalSystem BitKeyBridge Windows Service can now accept a
+restricted, Windows-token-authenticated **audit-only** named-pipe request and
+append a hash-chained, disk-flushed pre-read event to a separate SYSTEM-owned
+journal. The ordinary Helpdesk GUI does not request UAC or obtain local
+Administrator privileges. The broker is disabled by default, and is never an
+authorization mechanism for AD/Entra recovery secrets.
+
+An administrator must configure explicit RBAC RecoveryReaders, install the
+Windows Service and run `--audit-broker-provision` from an **already elevated**
+console. This operation intentionally hardens machine NTFS configuration and
+creates a protected journal. Only then can a non-admin Helpdesk operator use
+strict protected auditing. On denied identity, absent service or damaged
+journal, no secret is disclosed. The optional portable user-profile fallback
+is never used in strict mode.
+
+**[Protected audit broker guide](docs/protected-audit-broker.md)** · **[Managed-domain/Entra acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md)**.
+
+New non-elevated `--audit-broker-preflight` prints a secret-free JSON report of local policy, caller token, service, NTFS (when admin), and executable signing. `--audit-broker-preflight --probe` explicitly performs a synthetic committed audit check. The test-only [CMD acceptance wrapper](tests/windows/BitKeyBridge-DomainPreflight.cmd) saves this report locally without PowerShell.
+A new protected-audit GitHub Release must pass the real, multi-architecture
+Authenticode signature gate: verified signer certificate, exact thumbprint,
+correct PE machine type and ProductVersion, before publishing. The
+signature report is attached to the release and included in checksums and
+provenance evidence. See the [managed-domain acceptance checklist](docs/managed-domain-acceptance-0.30.0-rc.2.md).
+
+This candidate is not yet production approved: a domain workstation test,
+token impersonation checks, SIEM delivery and Entra permission tests are
+required before enterprise rollout. Published rc.1 and stable 0.29.12 are
+unchanged.
 
 ## Prerelease update channel (0.30.0-rc.1)
 
