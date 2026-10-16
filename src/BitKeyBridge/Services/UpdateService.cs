@@ -161,8 +161,31 @@ public sealed class UpdateService : IDisposable
             }
 
             if (selected.ValueKind == JsonValueKind.Undefined)
+            {
+                // Public v0.30.0 was intentionally distributed for manual
+                // testing only, under different filenames. Do not report
+                // this as a broken update or attempt unattended installation.
+                if (!forRollback &&
+                    HasManualOnlyPackage(assets, tag, info.Architecture))
+                {
+                    info.ManualReleaseAvailable = latest > current;
+                    info.UpdateAvailable = false;
+                    info.AssetName = string.Empty;
+                    try
+                    {
+                        JsonStore.WriteAtomic(AppPaths.UpdateStatusFile, info);
+                    }
+                    catch (Exception statusException)
+                    {
+                        Debug.WriteLine("Manual release status persistence failed: " +
+                            DiagnosticRedaction.Sanitize(statusException.Message));
+                    }
+                    return info;
+                }
+
                 throw new InvalidOperationException(
                     $"Release {tag} does not contain the required asset {assetName}.");
+            }
 
             info.DownloadUrl =
                 ValidateReleaseAssetUrl(
@@ -1392,6 +1415,28 @@ public sealed class UpdateService : IDisposable
             throw new InvalidOperationException(
                 $"Release download redirected to an untrusted host '{host}'.");
         }
+    }
+
+    /// <summary>
+    /// Recognize intentionally manual-only architecture packages, without
+    /// ever treating them as auto-updatable canonical release assets.
+    /// </summary>
+    internal static bool HasManualOnlyPackage(
+        JsonElement assets, string tag, string architecture)
+    {
+        if (assets.ValueKind != JsonValueKind.Array ||
+            !architecture.StartsWith("win-", StringComparison.Ordinal))
+            return false;
+
+        var arch = architecture["win-".Length..];
+        if (arch is not ("x64" or "x86" or "arm64"))
+            return false;
+
+        var expected = $"BitKeyBridge-{tag}-Windows-{arch}-MANUAL-UNSIGNED.zip";
+        return assets.EnumerateArray().Any(asset =>
+            asset.ValueKind == JsonValueKind.Object &&
+            string.Equals(GetString(asset, "name"), expected,
+                StringComparison.Ordinal));
     }
 
     // GitHub's release-list ordering is based on creation time, not SemVer.

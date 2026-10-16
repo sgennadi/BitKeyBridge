@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Public stable v0.30.0 (manual-only unsigned downloads) · previous v0.29.12 · experimental Protected Audit Broker remains isolated in PR #57.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Upcoming stable v0.30.1 (unsigned, canonical auto-update compatible ZIPs) · previous v0.30.0 manual-only · experimental Protected Audit Broker isolated in PR #57.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,6 +10,33 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+
+## Unsigned auto-update v0.30.1
+
+The 0.30.1 stable release uses **canonical GitHub asset filenames**:
+`BitKeyBridge-win-x64.zip`, `BitKeyBridge-win-x86.zip`, and
+`BitKeyBridge-win-arm64.zip`. This restores compatibility with update
+checks and auto-install configured in older BitKeyBridge v0.29.x builds.
+**Some older clients may auto-install this UNSIGNED release automatically**
+if their existing configuration has automatic installation enabled.
+The packages are HTTPS+size+SHA256 verified and the extracted EXE is
+version-checked and self-tested, but are NOT Authenticode-signed.
+
+BitKeyBridge v0.30.1 itself defaults to check-only. Its GUI Updates page
+has an explicit **Allow unsigned auto-updates** opt-in with a risk warning;
+unsigned automatic installs are restricted to the official
+`sgennadi/BitKeyBridge` repository. For deliberate CLI enablement:
+
+    BitKeyBridge.exe --auto-update-enable --accept-unsigned-update-risk --no-elevation
+    BitKeyBridge.exe --auto-update-status --no-elevation
+
+To disable automatic installation:
+
+    BitKeyBridge.exe --auto-update-disable --no-elevation
+
+Signed publisher-pinned mode remains available. A GitHub account compromise
+can defeat same-account checksums; consider organizational signing in future.
+Rollback holds remain active until explicitly cleared.
 
 ## Public stable v0.30.0 manual downloads
 

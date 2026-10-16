@@ -69,3 +69,18 @@ Existing clients may report no compatible download. This does NOT constitute
 Code Signing, managed-domain acceptance, or permission to roll out unattended
 via GPO or Intune. Standard auto-update-compatible assets remain signed-release
 gated until organizational PKI and workstation acceptance are completed.
+
+## Unsigned 0.30.1 public auto-update release
+
+At the owner's request, v0.30.1 restores canonical architecture ZIP names
+for compatibility with existing update checks/auto-install. This is NOT
+Authenticode signed and is NOT equivalent to verified institutional publisher
+identity. GitHub HTTPS, canonical repository/tag/asset URL checks, exact
+asset size, SHA-256 in SHA256SUMS.txt and GitHub digest, staged executable
+version check/self-test, and rollback remain enforced.
+
+CAUTION: pre-v0.30.0 machines that still have legacy unattended installation
+may install this update automatically on startup. From v0.30.1 onward, new
+installations default to check-only, and explicit unsigned opt-in is required.
+The official signed-release job remains restricted to approved identity and
+still requires organizational Authenticode; no signing gate has been relaxed.

@@ -1,3 +1,14 @@
+## 0.30.1
+
+**Public stable, unsigned auto-update compatibility release (16 October 2026).**
+
+- Restore canonical `BitKeyBridge-win-{x64,x86,arm64}.zip` release assets so existing GitHub updaters can recognize the latest stable release. These packages remain UNSIGNED; publishing them to Latest can trigger auto-install on older v0.29.x computers that had it enabled.
+- Keep fresh installations in check-only mode; automatic installation of unsigned packages on v0.30.1+ requires an explicit GUI consent or CLI `--auto-update-enable --accept-unsigned-update-risk` with the official `sgennadi/BitKeyBridge` GitHub repository.
+- Retain HTTPS release URL validation, file-size and SHA-256 checks, executable version and self-test, rollback, and existing Authenticode-enforced update mode for future signed releases. SHA-256 from the same publishing account is not equivalent to independent publisher signing.
+- Improve manual-only release detection: link technicians to the manual GitHub download instead of showing a missing-asset failure.
+- Preserve protected-audit, least-privilege, startup connection and LAPS/BitLocker diagnostics; experimental SYSTEM Protected Audit Broker remains excluded.
+- Extend regression checks and Windows x64/x86/ARM64 release verification before public publication.
+
 ## 0.30.0
 
 - Publish public Stable/Latest v0.30.0 as manual-only unsigned x64/x86/ARM64 ZIPs with noncanonical filenames, preserving older v0.29.x clients against unexpected unattended installation. Enterprise signed automatic updates remain separately gated.

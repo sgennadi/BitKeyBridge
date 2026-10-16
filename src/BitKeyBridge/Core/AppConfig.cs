@@ -56,6 +56,8 @@ public sealed class AppConfig
     public bool CheckForUpdatesOnStart { get; set; } = true;
     // Only check for updates on first launch; never auto-install by default.
     public bool AutoInstallUpdatesOnStart { get; set; } = false;
+    // Explicit opt-in: unsigned unattended updates trust release checksums, not a publisher.
+    public bool AllowUnsignedUnattendedUpdates { get; set; } = false;
     public bool AllowPrereleaseUpdates { get; set; } = false;
     public bool RequireTrustedUpdateSignature { get; set; } = false;
     public string TrustedUpdatePublisher { get; set; } = string.Empty;
