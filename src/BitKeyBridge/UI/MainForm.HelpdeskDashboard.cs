@@ -124,20 +124,99 @@ public sealed partial class MainForm
 
     private void ShowHelpdeskDeploymentChecklist()
     {
-        var steps = string.Join(Environment.NewLine, new[]
+        // Read-only guided preparation. All privileged changes remain in the
+        // existing administrator UI / CLI with their own authorization gates.
+        using var wizard = new Form
         {
-            "1. Install the Windows service as administrator on a test workstation.",
-            "2. Configure a scoped AD RecoveryReaders group; keep admin bypass off.",
-            "3. Verify AD / Entra LAPS and BitLocker delegation separately.",
-            "4. Provision the protected audit broker as administrator and restart the service.",
-            "5. Sign in as an authorized non-admin Helpdesk user and run Access Health.",
-            "6. Verify an unauthorized user is denied and no secret appears in diagnostics.",
-            "7. Validate audit persistence, RDP, 100-200% DPI and update rollback.",
-            "",
-            "This checklist is informational. It does not change permissions, services or audit policy."
+            Text = "Helpdesk deployment - preparation",
+            Name = "HelpdeskDeploymentWizard",
+            StartPosition = FormStartPosition.CenterParent,
+            MinimumSize = new Size(570, 460),
+            Size = new Size(780, 590),
+            AutoScaleMode = AutoScaleMode.Dpi,
+            FormBorderStyle = FormBorderStyle.Sizable,
+            ShowInTaskbar = false
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(16)
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        wizard.Controls.Add(layout);
+
+        var heading = new Label
+        {
+            Text = "Prepare a Helpdesk workstation",
+            AutoSize = true,
+            Font = UiStyle.CreateEmphasisFont(15F),
+            Margin = new Padding(0, 0, 0, 12)
+        };
+        layout.Controls.Add(heading, 0, 0);
+
+        var steps = new CheckedListBox
+        {
+            Name = "HelpdeskDeploymentSteps",
+            Dock = DockStyle.Fill,
+            CheckOnClick = true,
+            IntegralHeight = false,
+            HorizontalScrollbar = true,
+            AccessibleName = "Helpdesk deployment preparation checklist"
+        };
+        steps.Items.AddRange(new object[]
+        {
+            "Install the Windows service on a test workstation (administrator)",
+            "Configure a scoped RecoveryReaders group; disable admin bypass",
+            "Verify AD and Entra / Intune delegation independently",
+            "Provision protected audit and restart the service (administrator)",
+            "Sign in as an authorized non-admin and run Access Health",
+            "Verify unauthorized access is denied and secrets are never logged",
+            "Validate protected journal, RDP, 100-200% DPI and rollback"
         });
-        MessageBox.Show(this, steps, "Helpdesk deployment checklist",
-            MessageBoxButtons.OK, MessageBoxIcon.Information);
+        layout.Controls.Add(steps, 0, 1);
+
+        var guidance = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(720, 0),
+            Text = "Checking an item records progress in this window only. " +
+                   "It does not install services, modify RBAC, grant directory access, " +
+                   "or assert that a security check has passed.",
+            Margin = new Padding(0, 12, 0, 12)
+        };
+        layout.Controls.Add(guidance, 0, 2);
+
+        var actions = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            WrapContents = true
+        };
+        var settings = NewActionButton("Open Admin Settings");
+        var health = NewActionButton("Open Access Health");
+        var close = NewActionButton("Close");
+        settings.Enabled = AdministrationAllowed;
+        actions.Controls.AddRange([settings, health, close]);
+        layout.Controls.Add(actions, 0, 3);
+        settings.Click += (_, _) =>
+        {
+            wizard.Close();
+            OpenHelpdeskSetup();
+        };
+        health.Click += (_, _) =>
+        {
+            wizard.Close();
+            OpenHelpdeskAccessHealth();
+        };
+        close.Click += (_, _) => wizard.Close();
+        wizard.CancelButton = close;
+        wizard.ShowDialog(this);
     }
 
     private void OpenHelpdeskSetup()
