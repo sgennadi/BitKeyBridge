@@ -940,15 +940,30 @@ public sealed class UpdateService : IDisposable
         }
         catch (Exception ex)
         {
+            var restoreAttempted = 0;
+            var restoreSucceeded = 0;
+            var restoreFailed = 0;
             foreach (var (target, backup) in backups.AsEnumerable().Reverse())
             {
                 try
                 {
+                    restoreAttempted++;
                     if (File.Exists(backup))
+                    {
                         File.Copy(backup, target, true);
+                        restoreSucceeded++;
+                    }
+                    else
+                    {
+                        restoreFailed++;
+                        WindowsEventLogService.TryWrite(
+                            "Updater rollback backup is missing for " + target,
+                            EventLogSeverity.Error, 4592, "Update");
+                    }
                 }
                 catch (Exception rollbackException)
                 {
+                    restoreFailed++;
                     WindowsEventLogService.TryWrite(
                         "Updater file rollback failed for " +
                         target +
@@ -980,6 +995,9 @@ public sealed class UpdateService : IDisposable
                             plan.AuthenticodePublisher,
                         Details =
                             $"Source={(plan.Rollback ? plan.RollbackSource : "Update")}; " +
+                            $"RestoreAttempted={restoreAttempted}; " +
+                            $"RestoreSucceeded={restoreSucceeded}; " +
+                            $"RestoreFailed={restoreFailed}; " +
                             DiagnosticRedaction.Sanitize(ex.Message)
                     });
 
