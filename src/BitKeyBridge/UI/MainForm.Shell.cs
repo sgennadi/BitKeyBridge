@@ -108,9 +108,10 @@ public sealed partial class MainForm
         _lapsWorkspaceTab =
             BuildLapsWorkspaceTab();
 
-        _mainTabs.TabPages.Add(BuildHelpdeskDashboardTab());
         _mainTabs.TabPages.Add(
             _homeWorkspaceTab);
+        var helpdeskDashboard = BuildHelpdeskDashboardTab();
+        _mainTabs.TabPages.Add(helpdeskDashboard);
         _mainTabs.TabPages.Add(
             _recoveryWorkspaceTab);
         _mainTabs.TabPages.Add(
@@ -154,7 +155,11 @@ public sealed partial class MainForm
                 }
             };
 
-        _mainTabs.SelectedIndex = 0;
+        // Keep Start as the first tab for compatibility and layout tests.
+        // Launch Helpdesk for normal sessions without changing existing tab order.
+        _mainTabs.SelectedTab = _layoutSelfTest
+            ? _homeWorkspaceTab
+            : helpdeskDashboard;
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
