@@ -509,7 +509,8 @@ public sealed partial class MainForm
                 (automatic
                     ? "Automatic update failed: "
                     : "Update preparation failed: ") +
-                ex.Message,
+                DiagnosticRedaction.Sanitize(ex.Message) +
+                " Open Update History for the previous attempt.",
                 UiStatusKind.Error);
 
             _audit.Write(
