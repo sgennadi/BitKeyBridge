@@ -107,11 +107,6 @@ public sealed partial class MainForm
                 "Update Now");
         install.Name =
             "UpdateNowButton";
-        var retry =
-            NewActionButton(
-                "Retry Update");
-        retry.Name =
-            "RetryUpdateButton";
         var resumeAutoInstall =
             NewActionButton(
                 "Resume Auto-Install");
@@ -122,7 +117,6 @@ public sealed partial class MainForm
             saveUpdate,
             check,
             install,
-            retry,
             resumeAutoInstall
         ]);
         updateGrid.Controls.Add(
@@ -212,6 +206,20 @@ public sealed partial class MainForm
         resumeAutoInstall.Click +=
             (_, _) =>
             {
+                if (!UpdateTrustPolicy.CanEnableUnattended(
+                        _requireTrustedUpdateSignature.Checked,
+                        _trustedUpdatePublisher.Text))
+                {
+                    UiStyle.SetStatus(_updateStatus,
+                        "Cannot resume unattended updates until the expected " +
+                        "publisher and required Authenticode policy are configured.",
+                        UiStatusKind.Warning);
+                    return;
+                }
+
+                if (!SaveUpdateSettings(showConfirmation: false))
+                    return;
+
                 try
                 {
                     _config.CheckForUpdatesOnStart = true;
@@ -298,14 +306,6 @@ public sealed partial class MainForm
         install.Click +=
             async (_, _) =>
                 await InstallLatestUpdateGuiAsync();
-
-        retry.Click +=
-            async (_, _) =>
-            {
-                _lastUpdateInfo =
-                    null;
-                await InstallLatestUpdateGuiAsync();
-            };
 
         RefreshAutomaticControls();
         return page;

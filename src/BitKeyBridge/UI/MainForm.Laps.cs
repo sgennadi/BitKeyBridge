@@ -1089,7 +1089,7 @@ public sealed partial class MainForm
         }
 
         if (!AuthorizeAction(
-                BitKeyBridgePermission.RecoveryRead,
+                BitKeyBridgePermission.SearchDevices,
                 "SearchLapsMetadata",
                 computerName: query,
                 source:

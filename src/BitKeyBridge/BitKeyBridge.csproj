@@ -8,7 +8,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>BitKeyBridge</AssemblyName>
     <RootNamespace>BitKeyBridge</RootNamespace>
-    <Version>0.29.12</Version>
+    <Version>0.30.0</Version>
+    <!-- Stable ProductVersion; numeric FileVersion remains 0.30.0.0. -->
+    <AssemblyVersion>0.30.0.0</AssemblyVersion>
+    <FileVersion>0.30.0.0</FileVersion>
+    <InformationalVersion>0.30.0</InformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RuntimeIdentifiers>win-x64;win-x86;win-arm64</RuntimeIdentifiers>

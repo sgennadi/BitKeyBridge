@@ -14,6 +14,12 @@ public sealed class StartConnectionPreferences
     // Three draggable equal-size panes; contains only their IDs, never secrets.
     // Empty indicates migration from the earlier two-pane left/right choice.
     public string HomePaneOrder { get; set; } = string.Empty;
+
+    // Non-secret per-user recovery workspace choices. Legacy machine-wide
+    // preferences remain readable until a user saves their own selection.
+    public string RecoverySearchSource { get; set; } = string.Empty;
+    public string LastRecoveryScopeName { get; set; } = string.Empty;
+    public string LastRecoveryScopeSearchBase { get; set; } = string.Empty;
 }
 
 public static class StartConnectionPolicy

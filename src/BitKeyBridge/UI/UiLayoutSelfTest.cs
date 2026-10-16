@@ -859,6 +859,62 @@ public static class UiLayoutSelfTest
 
     private static void VerifyStartSourcePolicies(List<string> failures)
     {
+        // A Helpdesk GUI must never auto-elevate, and disabling the CLI UAC
+        // prompt must not allow privileged maintenance without admin rights.
+        if (UpdateTrustPolicy.CanEnableUnattended(false, "Example Publisher") ||
+            UpdateTrustPolicy.CanEnableUnattended(true, " ") ||
+            !UpdateTrustPolicy.CanEnableUnattended(true, "Example Publisher"))
+        {
+            failures.Add("Unattended updater requires both trusted signature policy and publisher.");
+        }
+
+        if (StartupPrivilegePolicy.NeedsElevation(
+                false, false, false, false, false) ||
+            !StartupPrivilegePolicy.NeedsElevation(
+                true, false, false, false, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, true, false, false, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, false, true, false, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, false, false, true, false) ||
+            StartupPrivilegePolicy.NeedsElevation(
+                true, false, false, false, true))
+        {
+            failures.Add("Least-privilege startup policy regression: GUI must not request UAC.");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var metadataOnlyPolicy = new AppConfig
+            {
+                RbacEnabled = true,
+                RbacAllowLocalAdministrators = false
+            };
+            var metadataAuthorization = new AuthorizationService(metadataOnlyPolicy);
+            if (!metadataAuthorization.Check(BitKeyBridgePermission.SearchDevices).Allowed ||
+                metadataAuthorization.Check(BitKeyBridgePermission.RecoveryRead).Allowed)
+            {
+                failures.Add("Metadata-only search must not grant secret RecoveryRead access.");
+            }
+        }
+
+        // Simulate an unwritable audit destination; the audit service must
+        // report failure, never claim that an access event was recorded.
+        var invalidDirectory = System.IO.Path.GetTempFileName();
+        try
+        {
+            var audit = new AuditService(
+                System.IO.Path.Combine(invalidDirectory, "audit.jsonl"));
+            if (audit.Write("AuditStorageRegression") is not null)
+                failures.Add("Mandatory audit preflight must detect unwritable destinations.");
+        }
+        finally
+        {
+            try { File.Delete(invalidDirectory); }
+            catch (IOException) { /* Only temporary test cleanup. */ }
+            catch (UnauthorizedAccessException) { /* Only temporary test cleanup. */ }
+        }
         if (StartConnectionPolicy.Normalize("unknown") != StartConnectionPolicy.Choose ||
             StartConnectionPolicy.NeedsActiveDirectory(StartConnectionPolicy.MicrosoftCloud) ||
             StartConnectionPolicy.NeedsMicrosoftCloud(StartConnectionPolicy.ActiveDirectory) ||
@@ -1168,7 +1224,7 @@ public static class UiLayoutSelfTest
 
         if (FindByName(
                 form,
-                "RetryUpdateButton") is null ||
+                "UpdateNowButton") is null ||
             FindByName(
                 form,
                 "RequireTrustedUpdateSignature") is null ||
@@ -1188,12 +1244,23 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: Administration is missing the Helpdesk basics workspace.");
         }
 
-        if (FindByName(
-                form,
-                "AccessHealthTab") is null)
+        if (FindByName(form, "EnterpriseSettingsTab") is null ||
+            FindByName(form, "EnterpriseSettingsSections") is null)
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Health & Audit is missing the Access Health workspace.");
+                $"{formName}/{scenario.Name}: advanced enterprise features must remain accessible from Settings.");
+        }
+
+        if (!tabs.TabPages.Cast<TabPage>().Any(page => page.Text == "Diagnostics") ||
+            FindByName(form, "AccessHealthTab") is null ||
+            FindByName(form, "DiagnosticToolsTab") is null ||
+            FindByName(form, "RunEnvironmentCheckButton") is null ||
+            FindByName(form, "RunAdvancedDeviceDiagnosticsButton") is null ||
+            FindByName(form, "RunBitLockerCommandsButton") is null ||
+            FindByName(form, "RunLapsCommandsButton") is null)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Diagnostics must provide Access Health and the existing recovery runbooks.");
         }
 
         if (FindByName(
