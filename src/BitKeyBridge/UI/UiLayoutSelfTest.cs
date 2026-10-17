@@ -718,6 +718,9 @@ public static class UiLayoutSelfTest
 
             VerifyMainViewportFill(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
+            if (FindByName(main, "HomeRecoverySteps") is not Button contextSteps ||
+                contextSteps.Enabled)
+                failures.Add($"{formName}/{scenario.Name}: Start Recovery Steps button should exist but remain disabled without a selected device.");
             VerifySelectedHomeRecoveryLayout(main, formName, scenario, failures);
             VerifyHomeStatusGlyphColumn(main, formName, scenario, failures);
         }
@@ -727,6 +730,17 @@ public static class UiLayoutSelfTest
             {
                 failures.Add(
                     $"{formName}/{scenario.Name}: dialog scrolling is disabled.");
+            }
+        }
+        if (form is RecoveryWorkflowDialog)
+        {
+            if (FindByName(form, "RecoveryRouteBitLocker") is not Button adBitlocker ||
+                !adBitlocker.Enabled ||
+                FindByName(form, "RecoveryRouteLaps") is not Button adLaps ||
+                !adLaps.Enabled ||
+                FindByName(form, "RecoveryRouteDevices") is not null)
+            {
+                failures.Add($"{formName}/{scenario.Name}: guided AD recovery dialog has missing/incorrect metadata navigation choices.");
             }
         }
         if (form is not MainForm)

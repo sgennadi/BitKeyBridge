@@ -17,6 +17,25 @@ internal enum RecoveryWorkflowRoute
 
 internal static class RecoveryWorkflowNavigationPolicy
 {
+    /// <summary>
+    /// "INTUNE:UNRESOLVED" and "ENTRA:KEY" are useful search metadata but
+    /// do not identify a single physical Entra/Intune device. They must
+    /// never be advertised as a verified device in a recovery shortcut.
+    /// </summary>
+    internal static bool HasAuthoritativeCloudDeviceId(HomeSearchResult? row)
+    {
+        if (row is null || !row.IsCloudRecord || row.IdentityAmbiguous)
+            return false;
+        var identity = row.SourceIdentity?.Trim() ?? string.Empty;
+        return HasId(identity, "INTUNE:MANAGED:") ||
+               HasId(identity, "INTUNE:DEVICE:") ||
+               HasId(identity, "ENTRA:DEVICE:");
+
+        static bool HasId(string value, string prefix) =>
+            value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(value[prefix.Length..]);
+    }
+
     internal static bool CanOpen(
         HomeSearchResult? initial, HomeSearchResult? current,
         RecoveryWorkflowRoute route,
@@ -30,11 +49,9 @@ internal static class RecoveryWorkflowNavigationPolicy
 
         if (initial.IsCloudRecord)
         {
-            var name = initial.SourceIdentity;
             return route == RecoveryWorkflowRoute.Devices &&
                    cloudConnected &&
-                   (name.StartsWith("INTUNE:", StringComparison.OrdinalIgnoreCase) ||
-                    name.StartsWith("ENTRA:", StringComparison.OrdinalIgnoreCase));
+                   HasAuthoritativeCloudDeviceId(initial);
         }
 
         return adConnected &&
@@ -81,6 +98,22 @@ internal static class RecoveryWorkflowNavigationPolicy
         cloud.SourceIdentity = "UNRESOLVED:name-only";
         if (CanOpen(cloud, cloud, RecoveryWorkflowRoute.Devices, false, true, true))
             failures.Add("Guided recovery accepted an unverified cloud hostname.");
+        foreach (var notADevice in new[]
+        {
+            "INTUNE:UNRESOLVED:1",
+            "ENTRA:UNRESOLVED:2",
+            "ENTRA:KEY:recovery-id",
+            "INTUNE:MANAGED:",
+            "ENTRA:DEVICE:"
+        })
+        {
+            cloud.SourceIdentity = notADevice;
+            if (HasAuthoritativeCloudDeviceId(cloud) ||
+                CanOpen(cloud, cloud, RecoveryWorkflowRoute.Devices,
+                    false, true, true))
+                failures.Add("Cloud identity without a unique device ID was accepted: " +
+                    notADevice);
+        }
         cloud.SourceIdentity = "ENTRA:DEVICE:device-id";
         cloud.IdentityAmbiguous = true;
         if (CanOpen(cloud, cloud, RecoveryWorkflowRoute.Devices, true, true, true))

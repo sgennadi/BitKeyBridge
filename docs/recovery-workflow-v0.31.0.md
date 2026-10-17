@@ -38,3 +38,10 @@ navigate through a guided recovery shortcut. The real individual recovery
 handlers remain responsible for ticket validation, approval, durable audit
 ACK and secret retrieval. Windows offline tests exercise all negative routes;
 the existing UI DPI test covers the buttons.
+
+### Confirmed cloud device identity
+Guided Devices navigation additionally rejects Intune/Entra `UNRESOLVED`
+search rows and Entra recovery-ID-only metadata (`ENTRA:KEY:`). Only
+nonempty, source-qualified `INTUNE:MANAGED:`, `INTUNE:DEVICE:` or
+`ENTRA:DEVICE:` device identifiers are eligible. The operator still
+needs to verify the exact managedDeviceId before any later rotation.

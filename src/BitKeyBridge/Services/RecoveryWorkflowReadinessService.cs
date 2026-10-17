@@ -18,10 +18,8 @@ internal static class RecoveryWorkflowReadinessService
         var known = selected is not null &&
                     !string.IsNullOrWhiteSpace(selected.ComputerName);
         var cloud = selected?.IsCloudRecord == true;
-        var identifier = selected?.SourceIdentity ?? string.Empty;
-        var qualifiedCloudId = identifier.StartsWith("ENTRA:", StringComparison.OrdinalIgnoreCase) ||
-                               identifier.StartsWith("INTUNE:", StringComparison.OrdinalIgnoreCase);
-        var identitySafe = known && !selected!.IdentityAmbiguous && (!cloud || qualifiedCloudId);
+        var identitySafe = known && !selected!.IdentityAmbiguous &&
+            (!cloud || RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(selected));
         var sourceReady = known && (cloud ? cloudConnected : adConnected);
         var rbacAllowed = authorization?.Allowed == true;
         var invalidBroker = config.AuditBrokerEnabled &&
@@ -118,6 +116,9 @@ internal static class RecoveryWorkflowReadinessService
         if (!Build(config, cloud, false, true, allow).CanNavigateToRecoveryScreen ||
             Build(config, cloud, true, false, allow).CanNavigateToRecoveryScreen)
             errors.Add("Cloud preflight used AD connection instead of Graph session.");
+        cloud.SourceIdentity = "ENTRA:KEY:recovery-id-only";
+        if (Build(config, cloud, false, true, allow).CanNavigateToRecoveryScreen)
+            errors.Add("Cloud recovery-key metadata was confused with an authoritative device ID.");
         config.RbacRecoveryReaders.Clear();
         if (Build(config, ad, true, false, allow).CanNavigateToRecoveryScreen)
             errors.Add("Incomplete broker policy was accepted.");
