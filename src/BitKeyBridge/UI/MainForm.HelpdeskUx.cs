@@ -667,7 +667,8 @@ public sealed partial class MainForm
         item.SubItems.Add(
             state);
         item.SubItems.Add(
-            detail);
+            AccessHealthGuidanceService.Enrich(
+                source, check, state, detail));
         _accessHealthResults.Items.Add(
             item);
     }
