@@ -304,9 +304,9 @@ jobs:
             throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
           }
 
-      # Unlike the normal CLI, this diagnostic must execute before machine
-      # configuration loading and without any elevation prompt.
-      - name: Startup diagnostic smoke (no UAC)
+      # Basic JSON contract smoke on a CI runner. The broker integration job
+      # separately launches this mode under TWO genuine non-admin accounts.
+      - name: Startup diagnostics JSON smoke
         if: matrix.rid == 'win-x64'
         shell: pwsh
         run: |

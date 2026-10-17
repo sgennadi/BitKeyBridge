@@ -7,6 +7,7 @@
 - Run CodeQL on stacked pull requests targeting integration branches, not only main/staging.
 - Reject unreadable, disappearing, directory-backed, and JSON-null machine security configurations instead of treating them as first-run defaults; add offline regression cases.
 - Run two-standard-user protected-audit integration, ephemeral signing checks and gated unsigned QA bundle for the stacked Helpdesk PR; make Find Device actually launch metadata search through existing authorization.
+- Exercise startup diagnostics under both authorized and unauthorized non-admin Windows identities in the protected-audit integration harness.
 
 ## 0.30.2-rc.1
 
