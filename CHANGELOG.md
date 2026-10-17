@@ -1,5 +1,6 @@
 ## Unreleased - v0.30.4
 
+- Require two genuine non-admin Windows-token Audit Broker integration on the v0.30.4 feature PR and future release branch; its CI does not substitute the privileged runner for standard-user access.
 - CI now registers, inspects and removes an actual daily LocalSystem Task Scheduler job on disposable Windows runners without triggering installation; verifies fixed Program Files action, system principal, and denial when an ordinary elevated administrator attempts the SYSTEM-only update.
 - Harden the SYSTEM scheduled updater: enforce real LocalSystem identity, machine executable-only apply targets and a noninteracting helper.
 - Abort a replacement when the original GUI process fails to exit or the Windows Service cannot stop. Verify policy and staged PE before interrupting the service.
