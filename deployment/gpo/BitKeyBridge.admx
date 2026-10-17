@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitions revision="1.0" schemaVersion="1.0">
+  <policyNamespaces>
+    <target prefix="bkb" namespace="BitKeyBridge.Policies" />
+    <using prefix="windows" namespace="Microsoft.Policies.Windows" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <categories>
+    <category name="BitKeyBridge" displayName="$(string.BitKeyBridgeCategory)">
+      <parentCategory ref="windows:WindowsComponents" />
+    </category>
+  </categories>
+  <policies>
+    <policy name="DisableAutomaticUpdates" class="Machine"
+            displayName="$(string.DisableAutomaticUpdates)"
+            explainText="$(string.ExplainDisableAutomaticUpdates)"
+            key="SOFTWARE\Policies\BitKeyBridge" valueName="DisableAutomaticUpdates">
+      <parentCategory ref="bkb:BitKeyBridge" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="DisableUnsignedAutomaticUpdates" class="Machine"
+            displayName="$(string.DisableUnsignedAutomaticUpdates)"
+            explainText="$(string.ExplainDisableUnsignedAutomaticUpdates)"
+            key="SOFTWARE\Policies\BitKeyBridge" valueName="DisableUnsignedAutomaticUpdates">
+      <parentCategory ref="bkb:BitKeyBridge" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="RequireSignedAutomaticUpdates" class="Machine"
+            displayName="$(string.RequireSignedAutomaticUpdates)"
+            explainText="$(string.ExplainRequireSignedAutomaticUpdates)"
+            key="SOFTWARE\Policies\BitKeyBridge" valueName="RequireSignedAutomaticUpdates">
+      <parentCategory ref="bkb:BitKeyBridge" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+  </policies>
+</policyDefinitions>
