@@ -79,6 +79,13 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
     throw 'Stable unsigned v0.30.4 lacks exact commit, broker, legacy upgrade, or checksum gates.'
 }
 
+# The v0.30.4 reliability PR must run the TWO-identity protected audit
+# broker integration test, not just compile the broker code.
+if ($workflow -notmatch
+    "github\.head_ref == 'feature/v0\.30\.4-reliability-20261017'") {
+    throw 'Reliability PR must execute the protected audit broker integration.'
+}
+
 # Never delete operator release branches or install online updates from CI.
 $forbidden = @(
     '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',

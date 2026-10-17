@@ -584,7 +584,8 @@ jobs:
        (github.head_ref == 'feature/protected-audit-broker-20261014' ||
         github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
         github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
-        github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017')) ||
+        github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017' ||
+         github.head_ref == 'feature/v0.30.4-reliability-20261017')) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4'))
