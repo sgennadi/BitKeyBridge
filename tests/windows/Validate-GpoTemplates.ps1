@@ -20,31 +20,37 @@ if (-not (Test-Path -LiteralPath $admxPath -PathType Leaf)) {
 
 $raw = Get-Content -LiteralPath $admxPath -Raw -Encoding UTF8
 [xml]$admx = $raw
-if ($admx.DocumentElement.LocalName -ne 'policyDefinitions') {
-    throw 'Unexpected ADMX XML document root.'
+$policyNamespace = 'http://www.microsoft.com/GroupPolicy/PolicyDefinitions'
+if ($admx.DocumentElement.LocalName -ne 'policyDefinitions' -or
+    $admx.DocumentElement.NamespaceURI -cne $policyNamespace) {
+    throw 'ADMX root is missing the required Microsoft PolicyDefinitions namespace.'
 }
+$ns = [Xml.XmlNamespaceManager]::new($admx.NameTable)
+$ns.AddNamespace('pd', $policyNamespace)
 
 $policyNames = @(
     'DisableAutomaticUpdates',
     'DisableUnsignedAutomaticUpdates',
     'RequireSignedAutomaticUpdates'
 )
-$policies = @($admx.policyDefinitions.policies.policy)
+$policies = @($admx.SelectNodes('/pd:policyDefinitions/pd:policies/pd:policy', $ns))
 if ($policies.Count -ne $policyNames.Count) {
     throw 'Unexpected number of GPO machine restriction policies.'
 }
 
 foreach ($name in $policyNames) {
-    $matched = @($policies | Where-Object { $_.name -ceq $name })
+    $matched = @($policies | Where-Object { $_.GetAttribute('name') -ceq $name })
     if ($matched.Count -ne 1) {
         throw "GPO policy '$name' is missing or duplicated."
     }
     $policy = $matched[0]
-    if ($policy.class -ne 'Machine' -or
-        $policy.key -cne 'SOFTWARE\Policies\BitKeyBridge' -or
-        $policy.valueName -cne $name -or
-        $policy.enabledValue.decimal.value -ne '1' -or
-        $policy.disabledValue.decimal.value -ne '0') {
+    $enabled = $policy.SelectSingleNode('./pd:enabledValue/pd:decimal', $ns)
+    $disabled = $policy.SelectSingleNode('./pd:disabledValue/pd:decimal', $ns)
+    if ($policy.GetAttribute('class') -ne 'Machine' -or
+        $policy.GetAttribute('key') -cne 'SOFTWARE\Policies\BitKeyBridge' -or
+        $policy.GetAttribute('valueName') -cne $name -or
+        $null -eq $enabled -or $enabled.GetAttribute('value') -ne '1' -or
+        $null -eq $disabled -or $disabled.GetAttribute('value') -ne '0') {
         throw "GPO policy '$name' is not an exact fail-closed machine restriction."
     }
 }
@@ -65,14 +71,19 @@ foreach ($language in @('en-US', 'ru-RU', 'he-IL')) {
     }
 
     [xml]$adml = Get-Content -LiteralPath $resourceFile -Raw -Encoding UTF8
-    if ($adml.DocumentElement.LocalName -ne 'policyDefinitionResources') {
-        throw "Unexpected ADML document root for $language."
+    if ($adml.DocumentElement.LocalName -ne 'policyDefinitionResources' -or
+        $adml.DocumentElement.NamespaceURI -cne $policyNamespace) {
+        throw "Invalid ADML PolicyDefinitions namespace for $language."
     }
-    $strings = @($adml.policyDefinitionResources.resources.stringTable.string)
+    $admlNs = [Xml.XmlNamespaceManager]::new($adml.NameTable)
+    $admlNs.AddNamespace('pd', $policyNamespace)
+    $strings = @($adml.SelectNodes(
+        '/pd:policyDefinitionResources/pd:resources/pd:stringTable/pd:string',
+        $admlNs))
     $seen = [Collections.Generic.HashSet[string]]::new(
         [StringComparer]::OrdinalIgnoreCase)
     foreach ($entry in $strings) {
-        if (-not $seen.Add($entry.id) -or
+        if (-not $seen.Add($entry.GetAttribute('id')) -or
             [string]::IsNullOrWhiteSpace($entry.InnerText)) {
             throw "Empty or repeated ADML string in $language."
         }
