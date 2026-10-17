@@ -112,6 +112,7 @@ public static class AuditIntegrityService
 
         string? previousHash = null;
         var chainStarted = false;
+        var strictGenesis = ProtectedAuditArchiveService.IsBrokerJournal(path);
 
         foreach (var file in paths)
         {
@@ -191,6 +192,14 @@ public static class AuditIntegrityService
                         $"{Path.GetFileName(file)}:{lineNumber}: entry hash mismatch.");
                 }
 
+                if (IsMissingProtectedGenesis(strictGenesis, chainStarted,
+                        entry.PreviousHash))
+                {
+                    return Fail(
+                        result,
+                        $"{Path.GetFileName(file)}:{lineNumber}: protected audit history starts without the original genesis entry. Missing archive prefix.");
+                }
+
                 if (chainStarted &&
                     !string.Equals(
                         entry.PreviousHash,
@@ -212,6 +221,14 @@ public static class AuditIntegrityService
 
         return result;
     }
+
+    // A protected log must preserve its first chained entry and the empty
+    // genesis pointer. Otherwise a missing archived prefix could be hidden
+    // simply by renumbering the remaining segments from 00000001.
+    // Legacy non-protected journals may intentionally rotate away history.
+    internal static bool IsMissingProtectedGenesis(
+        bool protectedJournal, bool chainStarted, string? previousHash) =>
+        protectedJournal && !chainStarted && !string.IsNullOrEmpty(previousHash);
 
     public static Dictionary<string, AuditEntry> ReadEntriesByHash(
         string path,

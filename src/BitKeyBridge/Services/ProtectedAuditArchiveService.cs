@@ -244,6 +244,12 @@ internal static class ProtectedAuditArchiveService
                 JsonSerializer.Serialize(rows[3]) + Environment.NewLine);
 
             if (!AuditIntegrityService.Verify(journal).Valid ||
+                AuditIntegrityService.IsMissingProtectedGenesis(true, false,
+                    rows[0].PreviousHash) ||
+                !AuditIntegrityService.IsMissingProtectedGenesis(true, false,
+                    rows[1].PreviousHash) ||
+                AuditIntegrityService.IsMissingProtectedGenesis(false, false,
+                    rows[1].PreviousHash) ||
                 !string.Equals(AuditIntegrityService.GetLastHash(journal),
                     rows[3].EntryHash, StringComparison.OrdinalIgnoreCase) ||
                 !AuditIntegrityService.ContainsEntryHash(journal, rows[0].EntryHash))
