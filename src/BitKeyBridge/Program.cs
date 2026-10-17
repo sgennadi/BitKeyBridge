@@ -65,6 +65,15 @@ internal static class Program
             return StartupDiagnosticService.Run();
         }
 
+        // Offline central inventory aggregation runs before any machine policy
+        // or AD/Graph credential load. Only operator-provided JSON files
+        // are read; this command does not contact or control endpoints.
+        if (args.Any(x => x.Equals("--fleet-aggregate", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConsoleHelper.EnsureConsole();
+            return FleetAggregateService.Run(args);
+        }
+
         if (args.Any(x => x.Equals("--ui-self-test", StringComparison.OrdinalIgnoreCase)))
         {
             ConsoleHelper.EnsureConsole();
@@ -1840,6 +1849,7 @@ internal static class Program
 
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(FleetInventoryService.RunOfflineTests());
+            failures.AddRange(FleetAggregateService.RunOfflineTests(tempDirectory));
             failures.AddRange(ManagedUpdatePolicy.RunOfflineTests());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
@@ -4294,6 +4304,7 @@ internal static class Program
         Console.WriteLine("  --output-subdirectory <name>  Export subdirectory for this run");
         Console.WriteLine("  --health              Print the local health snapshot as JSON");
         Console.WriteLine("  --fleet-status        Print secret-free machine, version, broker and update metadata for managed collection");
+        Console.WriteLine("  --fleet-aggregate <input-folder> <output.csv>  Combine approved fleet-status JSON files offline (no remote access)");
         Console.WriteLine("  --install-service     Install/update and start the native Windows Service");
         Console.WriteLine("  --uninstall-service   Stop and remove the native Windows Service");
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
