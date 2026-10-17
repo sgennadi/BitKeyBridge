@@ -25,7 +25,7 @@ if ($admx.DocumentElement.LocalName -ne 'policyDefinitions' -or
     $admx.DocumentElement.NamespaceURI -cne $policyNamespace) {
     throw 'ADMX root is missing the required Microsoft PolicyDefinitions namespace.'
 }
-$ns = [Xml.XmlNamespaceManager]::new($admx.NameTable)
+$ns = [System.Xml.XmlNamespaceManager]::new($admx.NameTable)
 $ns.AddNamespace('pd', $policyNamespace)
 
 $policyNames = @(
@@ -75,7 +75,7 @@ foreach ($language in @('en-US', 'ru-RU', 'he-IL')) {
         $adml.DocumentElement.NamespaceURI -cne $policyNamespace) {
         throw "Invalid ADML PolicyDefinitions namespace for $language."
     }
-    $admlNs = [Xml.XmlNamespaceManager]::new($adml.NameTable)
+    $admlNs = [System.Xml.XmlNamespaceManager]::new($adml.NameTable)
     $admlNs.AddNamespace('pd', $policyNamespace)
     $strings = @($adml.SelectNodes(
         '/pd:policyDefinitionResources/pd:resources/pd:stringTable/pd:string',
