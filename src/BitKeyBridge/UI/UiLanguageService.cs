@@ -43,6 +43,14 @@ internal static class UiLanguageService
             // New recovery guide: first translate navigation and step titles.
             // Long directory-provider diagnostic descriptions remain technical
             // English until the complete localized resource rollout.
+            ["RecoveryStepsShortcut"] =
+                ["Recovery Steps (Ctrl+Shift+R)",
+                 "Этапы восстановления (Ctrl+Shift+R)",
+                 "שלבי שחזור (Ctrl+Shift+R)"],
+            ["AccessHealthShortcut"] =
+                ["Access Health (Ctrl+Shift+H)",
+                 "Проверка доступа (Ctrl+Shift+H)",
+                 "בדיקת הרשאות (Ctrl+Shift+H)"],
             ["RecoveryDialogTitle"] =
                 ["Recovery Steps - Read-only Preflight", "Восстановление — проверка",
                  "שחזור — בדיקה מקדימה"],
@@ -160,6 +168,7 @@ internal static class UiLanguageService
                     "Start", "BitLocker", "LAPS", "Devices",
                     "Helpdesk", "Diagnostics", "Settings", "Tools",
                     "Language", "Search", "Cancel", "ConnectionSettings",
+                    "RecoveryStepsShortcut", "AccessHealthShortcut",
                     "RecoveryDialogTitle", "RecoveryDialogHeading",
                     "RecoveryDeviceLabel", "RecoverySourceLabel",
                     "RecoveryOpenStart", "RecoveryAccessHealth",

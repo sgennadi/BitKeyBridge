@@ -37,3 +37,8 @@ Access Health diagnostics and **Ctrl+Shift+R** to open Recovery Steps.
 The Tools menu also displays both shortcuts. Neither keyboard shortcut
 retrieves, copies or rotates a recovery secret; the existing source and
 protected audit gates still apply. Ctrl+1..7 and Ctrl+F remain unchanged.
+
+The global Tools menu captions for **Recovery Steps** and **Access Health**
+are translated in EN/RU/HE, retaining the same safe Ctrl+Shift+R/H keyboard
+gestures. Switching language does not reconstruct workspace tabs, invalidate
+search context, or change effective RBAC/audit policies.
