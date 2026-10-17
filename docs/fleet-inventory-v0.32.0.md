@@ -18,3 +18,23 @@ Use your approved Intune Remediations or GPO inventory mechanism to collect
 the output; secure the inventory centrally under normal institutional data
 retention policies. This output is *not* a statement of recovery access,
 a verified Audit Broker journal or permission to reveal secrets.
+
+## Centrally restricted auto-updates (v0.32.0 foundation)
+
+The program reads HKLM\\SOFTWARE\\Policies\\BitKeyBridge in the native
+64-bit registry view (32-bit on 32-bit Windows), with no registry writes.
+GPO or Intune device policy can define the following DWORD values:
+
+- DisableAutomaticUpdates = 1: block all automatic installation.
+- DisableUnsignedAutomaticUpdates = 1: block the unsigned channel.
+- RequireSignedAutomaticUpdates = 1: require an existing configured pinned signer.
+
+Missing values default to zero. Any invalid or unreadable policy denies
+automatic installation (fail closed). A policy can only restrict an already
+authorized local update configuration; it **cannot** set consent, pin a
+publisher, authorize recovery keys or install updates itself.
+
+Use `BitKeyBridge.exe --managed-update-policy --no-elevation` to inspect
+effective restrictions. Manual updating remains a distinct administrator
+action. Configure a central policy that reflects your environment; do not
+silently bypass AppLocker, WDAC or CyberArk EPM.

@@ -96,7 +96,8 @@ internal static class FleetInventoryService
         var running = new ServiceInfo { Installed = true, State = "Running" };
         var yes = Build(approved, "PC-DEMO", running, rollbackHold: false);
         var held = Build(approved, "PC-DEMO", running, rollbackHold: true);
-        if (!yes.AutoInstallPermitted || held.AutoInstallPermitted ||
+        if (yes.AutoInstallPermitted != ManagedUpdatePolicy.IsPermitted(approved) ||
+            held.AutoInstallPermitted ||
             !yes.AuditBrokerConfigured || !yes.ProtectedAuditRequired)
             failures.Add("Fleet inventory did not honor explicit consent and rollback.");
         var json = Serialize(yes);

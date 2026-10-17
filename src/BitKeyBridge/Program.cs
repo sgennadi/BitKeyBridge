@@ -97,6 +97,7 @@ internal static class Program
             x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--managed-update-policy", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
@@ -297,6 +298,7 @@ internal static class Program
             x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--managed-update-policy", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
@@ -1082,6 +1084,9 @@ internal static class Program
         if (args.Any(x => x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase)))
             return SetUpdateCheckSettings(config, enabled: false);
 
+        if (args.Any(x => x.Equals("--managed-update-policy", StringComparison.OrdinalIgnoreCase)))
+            return ManagedUpdatePolicy.PrintStatus(config);
+
         if (args.Any(x => x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase)))
             return ShowAutomaticUpdateSettings(config);
 
@@ -1835,6 +1840,7 @@ internal static class Program
 
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(FleetInventoryService.RunOfflineTests());
+            failures.AddRange(ManagedUpdatePolicy.RunOfflineTests());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
@@ -1982,7 +1988,11 @@ internal static class Program
                     AutoInstallUpdatesOnStart = true,
                     AllowUnsignedUnattendedUpdates = true
                 };
-                if (!ScheduledUpdateService.IsEligible(unsignedAuto))
+                if (!UpdateTrustPolicy.CanEnableUnattended(
+                        unsignedAuto.RequireTrustedUpdateSignature,
+                        unsignedAuto.TrustedUpdatePublisher,
+                        unsignedAuto.AllowUnsignedUnattendedUpdates,
+                        unsignedAuto.UpdateRepository))
                     failures.Add("Explicit official-repository unsigned scheduler opt-in is not recognized.");
                 unsignedAuto.UpdateRepository = "attacker/BitKeyBridge";
                 if (ScheduledUpdateService.IsEligible(unsignedAuto))
@@ -4318,6 +4328,7 @@ internal static class Program
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");
         Console.WriteLine("  --auto-update-status       Show auto-install and unsigned trust settings");
+        Console.WriteLine("  --managed-update-policy   Show effective read-only HKLM GPO/Intune update restrictions");
         Console.WriteLine("  --auto-update-enable       Enable trusted auto-installation (requires opt-in)");
         Console.WriteLine("  --accept-unsigned-update-risk  With --auto-update-enable: permit unsigned official GitHub auto-installation");
         Console.WriteLine("  --auto-update-disable      Disable automatic installation");
