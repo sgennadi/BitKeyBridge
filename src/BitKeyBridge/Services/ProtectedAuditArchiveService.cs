@@ -133,8 +133,20 @@ internal static class ProtectedAuditArchiveService
                 if (File.Exists(next) && !File.Exists(old))
                     File.Move(next, old);
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (IOException restoreException)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Protected audit archive rename rollback failed: " +
+                    DiagnosticRedaction.Sanitize(restoreException.Message),
+                    EventLogSeverity.Error, 4684, "Audit");
+            }
+            catch (UnauthorizedAccessException restoreException)
+            {
+                WindowsEventLogService.TryWrite(
+                    "Protected audit archive rename rollback denied: " +
+                    DiagnosticRedaction.Sanitize(restoreException.Message),
+                    EventLogSeverity.Error, 4684, "Audit");
+            }
             throw;
         }
     }
