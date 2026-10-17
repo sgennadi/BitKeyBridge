@@ -39,7 +39,10 @@ public sealed class ConfigMigrationService
 
     public AppConfig LoadAndMigrate()
     {
-        if (!File.Exists(_configPath))
+        // File.Exists returns false on ACCESS DENIED, not only on missing
+        // paths. A standard-user token must never interpret an unreadable
+        // machine security policy as permission to use new default settings.
+        if (!ConfigurationPathExists(_configPath))
         {
             return new AppConfig
             {
@@ -75,10 +78,12 @@ public sealed class ConfigMigrationService
             throw future;
         }
 
+        // Once detected, the policy must remain mandatory. A disappearing
+        // file, denied read, malformed JSON or literal null cannot silently
+        // reset RBAC/protected audit. All propagate to ConfigService.
         var config =
-            JsonStore.Read<AppConfig>(
-                _configPath)
-            ?? new AppConfig();
+            JsonStore.ReadRequired<AppConfig>(
+                _configPath);
 
         if (storedVersion ==
             ConfigSchema.CurrentVersion)
@@ -231,7 +236,7 @@ public sealed class ConfigMigrationService
     public static int DetectStoredSchemaVersion(
         string path)
     {
-        if (!File.Exists(path))
+        if (!ConfigurationPathExists(path))
             return ConfigSchema.CurrentVersion;
 
         using var document =
@@ -271,6 +276,25 @@ public sealed class ConfigMigrationService
 
         // Pre-versioned BitKeyBridge configuration.
         return 0;
+    }
+
+    private static bool ConfigurationPathExists(string path)
+    {
+        try
+        {
+            // Unlike File.Exists, GetAttributes throws on access-denied and
+            // other failures. Only actual absence permits first-run defaults.
+            _ = File.GetAttributes(path);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
     }
 
     private string BuildBackupPath(

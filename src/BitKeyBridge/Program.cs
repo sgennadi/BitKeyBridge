@@ -2970,6 +2970,47 @@ internal static class Program
                         "Missing configuration did not load safe defaults.");
                 }
 
+                // A directory at the expected file path and JSON null
+                // must not be treated as absent configuration. This
+                // specifically guards against permissive File.Exists.
+                var directoryAsConfig =
+                    Path.Combine(tempDirectory, "directory-appsettings.json");
+                Directory.CreateDirectory(directoryAsConfig);
+                var directoryRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        directoryAsConfig,
+                        Path.Combine(tempDirectory, "directory-status.json"),
+                        Path.Combine(tempDirectory, "directory-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    directoryRejected = true;
+                }
+
+                if (!directoryRejected)
+                    failures.Add("Configuration path that is a directory did not fail closed.");
+
+                var nullConfigPath =
+                    Path.Combine(tempDirectory, "null-appsettings.json");
+                File.WriteAllText(nullConfigPath, "null");
+                var nullRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        nullConfigPath,
+                        Path.Combine(tempDirectory, "null-status.json"),
+                        Path.Combine(tempDirectory, "null-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    nullRejected = true;
+                }
+
+                if (!nullRejected)
+                    failures.Add("Null machine policy JSON did not fail closed.");
+
                 var corruptConfigPath =
                     Path.Combine(
                         tempDirectory,

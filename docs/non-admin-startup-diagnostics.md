@@ -27,7 +27,7 @@ The file contains a sanitized exception type/message. Do not attach appsettings.
 ## Reading the results
 
 - **MachineConfiguration = Readable**: the token can open the file. It does *not* prove the file is valid, safe for migration, or usable by a service.
-- **MachineConfiguration = Denied**: ask an administrator to validate machine-policy **read** permissions. Do not grant modification permission on ProgramData, protected audit logs or Secrets.
+- **MachineConfiguration = Denied**: ask an administrator to validate machine-policy **read** permissions. Do not grant modification permission on ProgramData, protected audit logs or Secrets. The normal application must fail closed instead of using a permissive default policy.
 - **MachineConfiguration = Missing**: the administrator should inspect initial provisioning. Do not silently replace an existing unreadable security policy with defaults.
 - **WindowsToken = StandardOrFiltered**: normal for a standard user or UAC-filtered administrator; it is not evidence of RBAC approval.
 - **UserStartupLog = NotVisible**: can mean no error has been logged. It does not prove the EXE started.
