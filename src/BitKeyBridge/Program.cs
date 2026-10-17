@@ -1833,6 +1833,7 @@ internal static class Program
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AccessHealthLocalService.RunOfflineTests());
             failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
+            failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
