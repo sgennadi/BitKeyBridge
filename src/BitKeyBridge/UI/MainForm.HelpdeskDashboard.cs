@@ -228,8 +228,25 @@ public sealed partial class MainForm
                 {
                     journalStatus = "verification unavailable";
                 }
+                var integrityStatus = "not checked";
+                // The protected journal is normally readable only by SYSTEM/admins.
+                // Never treat access denied as a successful integrity check.
+                if (journalStatus == "protected ACL verified")
+                {
+                    try
+                    {
+                        var integrity = AuditIntegrityService.Verify(AppPaths.BrokerAuditLogFile);
+                        integrityStatus = integrity.Valid
+                            ? "hash chain valid"
+                            : "hash chain invalid or unavailable";
+                    }
+                    catch (Exception)
+                    {
+                        integrityStatus = "unavailable (insufficient access or I/O error)";
+                    }
+                }
                 readiness.Text =
-                    $"Protected journal: {journalStatus} (integrity not checked) | " +
+                    $"Protected journal: {journalStatus} | Integrity: {integrityStatus} | " +
                     $"Audit broker: {brokerStatus} | " +
                     $"Service: {serviceStatus} | " +
                     $"Directory: {(_directoryConnected ? "connected" : "not connected")} | " +
