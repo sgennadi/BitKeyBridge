@@ -25,3 +25,7 @@ first be enabled for a small approved pilot.
 CI regression tests verify post-install hash mismatch rejection and PowerShell
 parsing of the release approval step, including the interpolation syntax that
 previously blocked the v0.30.4 GitHub Release job.
+
+## Legacy upgrade coverage (GitHub-hosted Windows)
+
+A real `--apply-update-plan` transaction upgrades the pinned, previously published x64 EXEs for `v0.30.1` and `v0.30.3` to this candidate, then rolls each back. The test runs only in disposable GitHub-hosted Windows as an elevated administrator. It confirms byte-for-byte SHA256 recovery, the `.bak` checkpoint, unmodified synthetic machine/user configuration, file ACLs, and CurrentUser DPAPI decryptability. No real credentials are provisioned or uploaded. This is a single-architecture acceptance supplement, not proof of live domain recovery or updater network trust in a production environment.

@@ -542,6 +542,39 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
+  legacy-upgrade-regression:
+    # Only run on disposable hosted Windows. Exercises the ACTUAL elevated
+    # apply/rollback implementation with synthetic config and DPAPI fixtures.
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.head_ref == 'feature/v0.30.4-reliability-20261017') ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/release/v0.30.4')
+    needs: [build]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout regression harness
+        uses: actions/checkout@v7
+
+      - name: Download compiled candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: upgrade-candidate
+
+      - name: Verify upgrades and rollbacks from v0.30.1 and v0.30.3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Legacy upgrades must only run on a disposable hosted Windows runner.'
+          }
+          ./tests/windows/UpgradeMigrationRegression.ps1 -CandidateZip 'upgrade-candidate/BitKeyBridge-win-x64.zip' -EphemeralHostedRunner
+
   audit-broker-integration:
     # Must run only on GitHub-hosted ephemeral Windows. This isolated test
     # creates temporary local accounts, installs an SCM service and adjusts
