@@ -767,12 +767,15 @@ jobs:
          github.event.head_commit.message == 'Release v0.30.3' &&
          needs['audit-broker-integration'].result == 'success') ||
         (github.event_name == 'push' &&
-         github.ref == 'refs/heads/release/v0.30.4' &&
-         github.event.head_commit.message == 'Release v0.30.4' &&
+         ((github.ref == 'refs/heads/release/v0.30.4' &&
+           github.event.head_commit.message == 'Release v0.30.4') ||
+          (github.ref == 'refs/heads/release/v0.30.5' &&
+           github.event.head_commit.message == 'Release v0.30.5')) &&
          needs['audit-broker-integration'].result == 'success' &&
          needs['legacy-upgrade-regression'].result == 'success') ||
         (github.ref != 'refs/heads/release/v0.30.3' &&
          github.ref != 'refs/heads/release/v0.30.4' &&
+         github.ref != 'refs/heads/release/v0.30.5' &&
          (startsWith(github.ref, 'refs/tags/v') ||
           (github.event_name == 'push' &&
            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
@@ -838,6 +841,9 @@ jobs:
           if ("${{ github.ref }}" -eq "refs/heads/release/v0.30.4" -and $tag -ne "v0.30.4") {
             throw "The dedicated release branch is authorized only for v0.30.4."
           }
+          if ("${{ github.ref }}" -eq "refs/heads/release/v0.30.5" -and $tag -ne "v0.30.5") {
+            throw "The dedicated release branch is authorized only for v0.30.5."
+          }
 
           $exists = $false
           gh release view $tag --repo "${{ github.repository }}" *> $null
@@ -869,7 +875,9 @@ jobs:
           if (($tag -eq 'v0.30.3' -and
                "${{ github.ref }}" -eq 'refs/heads/release/v0.30.3') -or
               ($tag -eq 'v0.30.4' -and
-               "${{ github.ref }}" -eq 'refs/heads/release/v0.30.4')) {
+               "${{ github.ref }}" -eq 'refs/heads/release/v0.30.4') -or
+              ($tag -eq 'v0.30.5' -and
+               "${{ github.ref }}" -eq 'refs/heads/release/v0.30.5')) {
             Write-Host "Owner-authorized unsigned release ${tag}: no Authenticode signing."
           }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
@@ -909,7 +917,8 @@ jobs:
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
           steps.release_meta.outputs.tag != 'v0.30.0-rc.1' &&
           github.ref != 'refs/heads/release/v0.30.3' &&
-          github.ref != 'refs/heads/release/v0.30.4'
+          github.ref != 'refs/heads/release/v0.30.4' &&
+          github.ref != 'refs/heads/release/v0.30.5'
         shell: pwsh
         env:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
@@ -946,11 +955,15 @@ jobs:
         if: >-
           steps.release_meta.outputs.exists != 'true' &&
           (github.ref == 'refs/heads/release/v0.30.3' ||
-           github.ref == 'refs/heads/release/v0.30.4')
+           github.ref == 'refs/heads/release/v0.30.4' ||
+           github.ref == 'refs/heads/release/v0.30.5')
         shell: pwsh
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag -eq 'v0.30.4') {
+          if ($tag -eq 'v0.30.5') {
+            Copy-Item docs/unsigned-auto-update-0.30.5.md release/RELEASE-NOTES.md
+          }
+          elseif ($tag -eq 'v0.30.4') {
             Copy-Item docs/unsigned-auto-update-0.30.4.md release/RELEASE-NOTES.md
           }
           else {
@@ -1100,7 +1113,7 @@ jobs:
             '--target', '${{ github.sha }}',
             '--title', "BitKeyBridge $tag"
           )
-          if ($tag -in @('v0.30.3', 'v0.30.4') -and
+          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5') -and
               (Test-Path 'release/RELEASE-NOTES.md')) {
             $args += @('--notes-file', 'release/RELEASE-NOTES.md')
           }
