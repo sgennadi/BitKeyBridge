@@ -39,7 +39,58 @@ internal static class UiLanguageService
             ["ConnectionSettings"] =
                 ["Open Start / connection settings",
                  "Открыть главную / настройки подключения",
-                 "פתיחת התחלה / הגדרות חיבור"]
+                 "פתיחת התחלה / הגדרות חיבור"],
+            // New recovery guide: first translate navigation and step titles.
+            // Long directory-provider diagnostic descriptions remain technical
+            // English until the complete localized resource rollout.
+            ["RecoveryStepsShortcut"] =
+                ["Recovery Steps (Ctrl+Shift+R)",
+                 "Этапы восстановления (Ctrl+Shift+R)",
+                 "שלבי שחזור (Ctrl+Shift+R)"],
+            ["AccessHealthShortcut"] =
+                ["Access Health (Ctrl+Shift+H)",
+                 "Проверка доступа (Ctrl+Shift+H)",
+                 "בדיקת הרשאות (Ctrl+Shift+H)"],
+            ["RecoveryDialogTitle"] =
+                ["Recovery Steps - Read-only Preflight", "Восстановление — проверка",
+                 "שחזור — בדיקה מקדימה"],
+            ["RecoveryDialogHeading"] =
+                ["Recovery steps — no passwords or keys requested",
+                 "Этапы восстановления — без запроса паролей и ключей",
+                 "שלבי שחזור — ללא בקשה לסיסמאות או למפתחות"],
+            ["RecoveryDeviceLabel"] = ["Device:", "Устройство:", "מכשיר:"],
+            ["RecoverySourceLabel"] = ["Source:", "Источник:", "מקור:"],
+            ["RecoveryOpenStart"] = ["Open Start", "Открыть главную", "פתח התחלה"],
+            ["RecoveryAccessHealth"] = ["Access Health", "Проверка доступа", "בדיקת הרשאות"],
+            ["RecoveryOpenBitLocker"] = ["Open BitLocker", "Открыть BitLocker", "פתח BitLocker"],
+            ["RecoveryOpenLaps"] = ["Open LAPS", "Открыть LAPS", "פתח LAPS"],
+            ["RecoveryOpenDevices"] = ["Open Devices", "Открыть устройства", "פתח מכשירים"],
+            ["RecoveryClose"] = ["Close", "Закрыть", "סגור"],
+            ["RecoveryStep1"] = ["1. Exact device identity", "1. Точная идентификация устройства",
+                                 "1. זיהוי מדויק של המכשיר"],
+            ["RecoveryStep2"] = ["2. Directory source", "2. Источник каталога",
+                                 "2. מקור ספרייה"],
+            ["RecoveryStep3"] = ["3. BitLocker/LAPS metadata", "3. Метаданные BitLocker/LAPS",
+                                 "3. נתוני BitLocker/LAPS"],
+            ["RecoveryStep4"] = ["4. Windows RecoveryRead RBAC", "4. Права Windows RecoveryRead",
+                                 "4. הרשאות Windows RecoveryRead"],
+            ["RecoveryStep5"] = ["5. Ticket / reference", "5. Обращение / номер заявки",
+                                 "5. פנייה / מספר קריאה"],
+            ["RecoveryStep6"] = ["6. Durable recovery audit", "6. Защищённый аудит восстановления",
+                                 "6. רישום ביקורת מוגן"],
+            ["RecoveryStep7"] = ["7. Explicit reveal / copy / rotation", "7. Просмотр / копирование / ротация",
+                                 "7. הצגה / העתקה / החלפה"],
+            ["RecoveryStatusOk"] = ["OK", "OK", "תקין"],
+            ["RecoveryStatusAction"] = ["Action required", "Требуется действие", "נדרשת פעולה"],
+            ["RecoveryStatusUnverified"] = ["Unverified", "Не проверено", "לא אומת"],
+            ["RecoveryStatusNotTested"] = ["Not tested", "Не проверялось", "לא נבדק"],
+            ["RecoveryStatusInfo"] = ["Info", "Информация", "מידע"],
+            ["RecoveryStatusRequired"] = ["Required at retrieval", "Обязательно при чтении", "נדרש בעת קריאה"],
+            ["RecoveryStatusOptional"] = ["Optional", "Необязательно", "אופציונלי"],
+            ["RecoveryStatusPendingAck"] = ["Pending protected ACK", "Ожидается подтверждение аудита",
+                                           "ממתין לאישור ביקורת מוגן"],
+            ["RecoveryStatusPolicy"] = ["Policy-dependent", "По политике", "בהתאם למדיניות"],
+            ["RecoveryStatusExplicit"] = ["Explicit action only", "Только по команде", "פעולה מפורשת בלבד"]
         };
 
     internal static string PreferenceFile =>
@@ -116,7 +167,20 @@ internal static class UiLanguageService
                 {
                     "Start", "BitLocker", "LAPS", "Devices",
                     "Helpdesk", "Diagnostics", "Settings", "Tools",
-                    "Language", "Search", "Cancel", "ConnectionSettings"
+                    "Language", "Search", "Cancel", "ConnectionSettings",
+                    "RecoveryStepsShortcut", "AccessHealthShortcut",
+                    "RecoveryDialogTitle", "RecoveryDialogHeading",
+                    "RecoveryDeviceLabel", "RecoverySourceLabel",
+                    "RecoveryOpenStart", "RecoveryAccessHealth",
+                    "RecoveryOpenBitLocker", "RecoveryOpenLaps",
+                    "RecoveryOpenDevices", "RecoveryClose",
+                    "RecoveryStep1", "RecoveryStep2", "RecoveryStep3",
+                    "RecoveryStep4", "RecoveryStep5", "RecoveryStep6", "RecoveryStep7",
+                    "RecoveryStatusOk", "RecoveryStatusAction", "RecoveryStatusUnverified",
+                    "RecoveryStatusNotTested", "RecoveryStatusInfo",
+                    "RecoveryStatusRequired", "RecoveryStatusOptional",
+                    "RecoveryStatusPendingAck", "RecoveryStatusPolicy",
+                    "RecoveryStatusExplicit"
                 })
                 {
                     var text = Translate(code, key);
