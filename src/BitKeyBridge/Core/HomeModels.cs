@@ -8,6 +8,10 @@ public sealed class HomeSearchResult
     public string ComputerId { get; set; } =
         string.Empty;
 
+    // Exact AD computer DN captured during metadata search, when present.
+    // Never use a matching hostname alone to authorize a secret read.
+    public string AdComputerDistinguishedName { get; set; } = string.Empty;
+
     public int BitLockerKeyCount { get; set; }
 
     public bool BitLockerLookupFailed { get; set; }

@@ -4837,19 +4837,17 @@ public sealed partial class MainForm : DpiAwareForm
     private async Task<string?> EnsureStartRecoveryKeyAsync(
         RecoverySearchResult row)
     {
-        if (!string.IsNullOrWhiteSpace(
-                _startCurrentKey))
-        {
-            return _startCurrentKey;
-        }
-
+        // Never reuse or repopulate shared secret cache across an async
+        // read; the selection can change before the continuation executes.
+        // The reveal handler may cache only AFTER checking the same row.
+        string? recovered;
         try
         {
             UseWaitCursor = true;
 
             if (IsLocalRecoveryRow(row))
             {
-                _startCurrentKey =
+                recovered =
                     await Task.Run(
                         () =>
                             IsProtectedRecoveryRow(row)
@@ -4864,7 +4862,7 @@ public sealed partial class MainForm : DpiAwareForm
             }
             else
             {
-                _startCurrentKey =
+                recovered =
                     await Task.Run(
                         () =>
                         {
@@ -4882,7 +4880,7 @@ public sealed partial class MainForm : DpiAwareForm
                         });
             }
 
-            return _startCurrentKey;
+            return recovered;
         }
         catch (Exception ex)
         {
@@ -4954,6 +4952,15 @@ public sealed partial class MainForm : DpiAwareForm
         if (context is null)
             return;
 
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()))
+        {
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Selected recovery entry changed during the ticket prompt. Restart the operation.",
+                UiStatusKind.Warning);
+            return;
+        }
+
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
                 "RevealRecoveryKey",
@@ -4968,12 +4975,21 @@ public sealed partial class MainForm : DpiAwareForm
             await EnsureStartRecoveryKeyAsync(
                 row);
 
-        if (string.IsNullOrWhiteSpace(
-                key))
+        if (string.IsNullOrWhiteSpace(key))
+            return;
+
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()) || IsDisposed)
         {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Recovery selection changed during the confidential read. Stale key discarded.",
+                UiStatusKind.Warning);
             return;
         }
 
+        // Retain only the key for the currently selected and verified row.
+        _startCurrentKey = key;
         _startKey.Text =
             key;
         _startKey.UseSystemPasswordChar =
@@ -5030,6 +5046,15 @@ public sealed partial class MainForm : DpiAwareForm
         if (context is null)
             return;
 
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()))
+        {
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Selected recovery entry changed during the ticket prompt. Restart the operation.",
+                UiStatusKind.Warning);
+            return;
+        }
+
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
                 "CopyRecoveryKey",
@@ -5044,9 +5069,16 @@ public sealed partial class MainForm : DpiAwareForm
             await EnsureStartRecoveryKeyAsync(
                 row);
 
-        if (string.IsNullOrWhiteSpace(
-                key))
+        if (string.IsNullOrWhiteSpace(key))
+            return;
+
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()) || IsDisposed)
         {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Recovery selection changed during the confidential read. Nothing was copied.",
+                UiStatusKind.Warning);
             return;
         }
 

@@ -84,6 +84,9 @@ public static class UiLayoutSelfTest
         VerifyLapsHelpdeskStates(
             failures);
 
+        VerifyHebrewIdentityDirection(
+            failures);
+
         VerifyStartSourcePolicies(failures);
 
         var factories =
@@ -318,6 +321,55 @@ public static class UiLayoutSelfTest
                         ClientId = Guid.Empty.ToString()
                     })),
             (
+                "Recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig
+                        {
+                            RbacEnabled = true,
+                            RequireRecoveryAccessReference = true,
+                            RequireProtectedAuditForRecovery = true,
+                            AuditBrokerEnabled = true,
+                            RbacRecoveryReaders = ["S-1-5-32-544"]
+                        },
+                        new HomeSearchResult
+                        {
+                            ComputerName = "PC-12345",
+                            AdComputerDistinguishedName = "CN=PC-12345,OU=Clients,DC=example,DC=test",
+                            BitLockerKeyCount = 2,
+                            LatestRecoveryId = Guid.Empty.ToString(),
+                            LapsCandidateFound = true,
+                            LapsStatus = "Detected"
+                        },
+                        adConnected: true,
+                        cloudConnected: false,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }))),
+            (
+                "Hebrew recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig(), new HomeSearchResult
+                        {
+                            ComputerName = "PC-HEBREW", IsCloudRecord = true,
+                            SourceIdentity = "ENTRA:DEVICE:some-device-guid",
+                            BitLockerKeyCount = 1
+                        },
+                        adConnected: false, cloudConnected: true,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
+                    "he")),
+            (
+                "Russian recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig(), new HomeSearchResult
+                        {
+                            ComputerName = "PC-RUS", BitLockerKeyCount = 1,
+                            AdComputerDistinguishedName = "CN=PC-RUS,OU=Clients,DC=example,DC=test"
+                        },
+                        adConnected: true, cloudConnected: false,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
+                    "ru")),
+            (
                 "Recovery access",
                 () =>
                     new RecoveryAccessDialog(
@@ -411,6 +463,47 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    private static void VerifyHebrewIdentityDirection(List<string> failures)
+    {
+        try
+        {
+            using var form = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+            form.PreviewShellLanguageForLayoutTest("he");
+
+            var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
+            if (tabs is null || !tabs.RightToLeftLayout ||
+                tabs.RightToLeft != RightToLeft.Yes ||
+                tabs.TabPages.Count < 6 ||
+                tabs.TabPages[0].Text != UiLanguageService.Translate("he", "Start") ||
+                tabs.TabPages[3].Name != "DevicesWorkspace")
+                failures.Add("Hebrew mirrored navigation does not retain source-qualified tab identities.");
+
+            foreach (var name in new[]
+            {
+                "HomeUnifiedQuery", "BitLockerSearchQuery",
+                "LapsLiveSearchQuery", "UnifiedDeviceSearchQuery",
+                "BitLockerRecoverySecretField", "LapsPasswordValue",
+                "EntraBitLockerSecretField"
+            })
+            {
+                if (FindByName(form, name) is not TextBox literal ||
+                    literal.RightToLeft != RightToLeft.No)
+                    failures.Add("Hebrew shell changed identity or secret field direction: " + name);
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Hebrew main shell orientation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 
@@ -651,6 +744,19 @@ public static class UiLayoutSelfTest
 
             VerifyMainViewportFill(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
+            var healthResults = FindByName(main, "AccessHealthResults") as ListView;
+            if (healthResults is not null && !healthResults.ShowItemToolTips)
+                failures.Add($"{formName}/{scenario.Name}: Access Health long diagnostics must have full-text hover access.");
+            var toolsMenu = main.MainMenuStrip?.Items
+                .OfType<ToolStripMenuItem>()
+                .FirstOrDefault(x => x.Text == "Tools");
+            if (toolsMenu is null ||
+                toolsMenu.DropDownItems.Find("RecoveryStepsMenu", false).Length != 1 ||
+                toolsMenu.DropDownItems.Find("AccessHealthMenu", false).Length != 1)
+                failures.Add($"{formName}/{scenario.Name}: global Recovery Steps and Access Health shortcuts must be discoverable from Tools.");
+            if (FindByName(main, "HomeRecoverySteps") is not Button contextSteps ||
+                contextSteps.Enabled)
+                failures.Add($"{formName}/{scenario.Name}: Start Recovery Steps button should exist but remain disabled without a selected device.");
             VerifySelectedHomeRecoveryLayout(main, formName, scenario, failures);
             VerifyHomeStatusGlyphColumn(main, formName, scenario, failures);
         }
@@ -661,6 +767,17 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: dialog scrolling is disabled.");
             }
+        }
+        if (form is RecoveryWorkflowDialog)
+        {
+            var expectedCloud = formName.StartsWith("Hebrew", StringComparison.Ordinal);
+            var expectedHebrew = expectedCloud;
+            if (form.RightToLeftLayout != expectedHebrew ||
+                (expectedCloud
+                    ? FindByName(form, "RecoveryRouteDevices") is not Button dev || !dev.Enabled
+                    : FindByName(form, "RecoveryRouteBitLocker") is not Button bit || !bit.Enabled ||
+                      FindByName(form, "RecoveryRouteLaps") is not Button laps || !laps.Enabled))
+                failures.Add($"{formName}/{scenario.Name}: translated recovery guide lacks correct RTL or source-specific metadata navigation.");
         }
         if (form is not MainForm)
         {
@@ -1038,6 +1155,19 @@ public static class UiLayoutSelfTest
                     $"{formName}/{scenario.Name}: scheduled updater is missing " +
                     requiredBackgroundUpdaterControl);
         }
+        if (tabs.TabPages.Count > 3 &&
+            tabs.TabPages[3].Name != "DevicesWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant Devices workspace ID missing; localization must not break navigation.");
+        if (tabs.TabPages.Count > 5 &&
+            tabs.TabPages[5].Name != "DiagnosticsWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant Diagnostics workspace ID missing.");
+        if (tabs.TabPages.Count > 6 &&
+            tabs.TabPages[6].Name != "SettingsWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant admin Settings workspace ID missing.");
+
         var actualOrder = tabs.TabPages.Cast<TabPage>()
             .Select(page => page.Text).ToArray();
         if (actualOrder.Length < preferredOrder.Length ||

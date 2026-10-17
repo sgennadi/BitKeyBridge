@@ -307,6 +307,12 @@ public sealed partial class MainForm
                                 row.KeyDateUtc)
                         .FirstOrDefault();
 
+                var exactComputerDn = bitLocker
+                    .Select(item => item.ComputerDistinguishedName)
+                    .Append(laps?.ComputerDistinguishedName ?? string.Empty)
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                    ?? string.Empty;
+
                 var result =
                     new HomeSearchResult
                     {
@@ -315,6 +321,9 @@ public sealed partial class MainForm
                         ComputerId =
                             laps?.ComputerId ??
                             string.Empty,
+                        AdComputerDistinguishedName = exactComputerDn,
+                        SourceIdentity = string.IsNullOrWhiteSpace(exactComputerDn)
+                            ? string.Empty : "AD:DN:" + exactComputerDn,
                         BitLockerKeyCount =
                             bitLocker.Count,
                         BitLockerLookupFailed =
@@ -587,6 +596,8 @@ public sealed partial class MainForm
         }
 
         var connected = _directoryConnected && !_directoryConnecting;
+
+        _homeRecoveryStepsButton.Enabled = selected is not null;
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
