@@ -489,9 +489,12 @@ jobs:
             [xml]$xml = (& schtasks.exe /Query /TN $taskName /XML | Out-String)
             if ($LASTEXITCODE -ne 0) { throw 'Task XML query failed.' }
             $command = [string]$xml.SelectSingleNode("//*[local-name()='Exec']/*[local-name()='Command']").InnerText
+            # SchTasks stores a quoted Command when the Program Files path
+            # contains spaces. Require exactly that quoted absolute path.
+            $expectedCommand = '"' + $installedExe + '"'
             $arguments = [string]$xml.SelectSingleNode("//*[local-name()='Exec']/*[local-name()='Arguments']").InnerText
             $userId = [string]$xml.SelectSingleNode("//*[local-name()='Principal']/*[local-name()='UserId']").InnerText
-            if ($command -ine $installedExe -or
+            if ($command -ine $expectedCommand -or
                 $arguments -cne '--scheduled-update --no-elevation' -or
                 $userId -notin @('S-1-5-18', 'SYSTEM', 'NT AUTHORITY\SYSTEM')) {
               throw "Unexpected task action or principal; command=$command, arguments=$arguments, user=$userId"
