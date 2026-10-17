@@ -224,10 +224,6 @@ public sealed partial class MainForm
             e.Handled = true;
         };
 
-        // Apply the selected human-language shell without changing tab
-        // instances, metadata search state or security authorization.
-        ApplyNavigationLanguage();
-
         // The technician explicitly requested Start as the landing page.
         // Do not change selection in Shown (including after the connection
         // wizard), and never silently switch to Helpdesk on normal launch.
@@ -239,6 +235,9 @@ public sealed partial class MainForm
             0,
             3);
         MainMenuStrip = menu;
+        // MenuStrip must be attached before mirroring Hebrew RTL chrome.
+        // Keep the Start workspace selected and all form controls alive.
+        ApplyNavigationLanguage();
         return root;
     }
 
