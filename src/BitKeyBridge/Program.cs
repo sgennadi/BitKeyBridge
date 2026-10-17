@@ -231,7 +231,9 @@ internal static class Program
         }
         catch (Exception ex)
             when (ex is ConfigurationLoadException or
-                  FutureConfigurationSchemaException)
+                  FutureConfigurationSchemaException or
+                  UnauthorizedAccessException or
+                  System.Security.SecurityException)
         {
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge startup blocked because application configuration could not be loaded safely. " +
@@ -1087,9 +1089,46 @@ internal static class Program
         if (isCli)
             return RunExport(config, args).GetAwaiter().GetResult();
 
-        ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm(config));
-        return 0;
+        try
+        {
+            ApplicationConfiguration.Initialize();
+            Application.Run(new MainForm(config));
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            // GUI failures must never terminate silently for standard users.
+            // Log only a sanitized exception type/message, never configuration
+            // values, credentials, recovery passwords, or stack traces.
+            var message = "BitKeyBridge could not open its main window." +
+                Environment.NewLine + Environment.NewLine +
+                DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
+                Environment.NewLine + Environment.NewLine +
+                "Try launching with your normal Windows account. " +
+                "If this is an access denied error, ask an administrator to check " +
+                "read permissions on the machine configuration; do not grant write access.";
+            try
+            {
+                var folder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "BitKeyBridge", "Logs");
+                Directory.CreateDirectory(folder);
+                File.AppendAllText(Path.Combine(folder, "startup-errors.log"),
+                    DateTimeOffset.UtcNow.ToString("O") + " " +
+                    DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
+                    Environment.NewLine);
+            }
+            catch
+            {
+                // The dialog remains the fallback if the user profile is unavailable.
+            }
+            if (Environment.UserInteractive)
+                MessageBox.Show(message, "BitKeyBridge Startup Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else
+                Console.Error.WriteLine(message);
+            return 13;
+        }
     }
 
     private static async Task<int> RunExport(AppConfig config, string[] args)
