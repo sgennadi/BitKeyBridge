@@ -17,7 +17,8 @@ The native CLI processes at most 5,000 real JSON files (64 KiB each),
 without directory traversal or following reparse points. It requires the exact
 versioned `NonSecretMetadataOnly` schema, rejects unknown/duplicate
 properties (including unexpected key/password/token values), rejects
-unexpected status fields and untrusted machine identifiers, and keeps the
+unexpected status fields and untrusted machine identifiers, restricts OS
+architecture to X64/X86/Arm64, and keeps the
 newest UTC sample per machine.
 
 The output is a UTF-8 CSV with one row per machine: installed version,
