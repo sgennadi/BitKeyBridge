@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Security.Principal;
 
 namespace BitKeyBridge;
 
@@ -138,6 +139,62 @@ internal static class ProtectedAuditArchiveService
         }
     }
 
+    /// <summary>
+    /// Recover ONLY the narrowly defined interrupted-rotation state: an
+    /// absent current file AND a verified, ACL-protected .old file, running
+    /// as SYSTEM. An unexpectedly missing journal with no .old remains a
+    /// hard failure, not an invitation to create a fresh empty audit log.
+    /// </summary>
+    internal static bool RecoverInterruptedRotation()
+    {
+        var path = AppPaths.BrokerAuditLogFile;
+        if (File.Exists(path) || !File.Exists(path + ".old"))
+            return false;
+        if (!OperatingSystem.IsWindows() ||
+            !WindowsIdentity.GetCurrent().IsSystem)
+            throw new UnauthorizedAccessException(
+                "Only LocalSystem may recover interrupted protected audit rotation.");
+
+        using var auditLock = new FileStream(
+            path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        if (File.Exists(path))
+            return false;
+
+        if (!ProtectedAuditStoragePolicy.IsTrusted(path + ".old") ||
+            !ProtectedAuditStoragePolicy.IsTrusted(path + ".lock"))
+            throw new IOException("Interrupted journal rotation has unsafe file ACLs.");
+
+        var archiveDir = DirectoryFor(path);
+        if (Directory.Exists(archiveDir))
+        {
+            if (!ProtectedAuditStoragePolicy.IsTrustedBrokerArchiveDirectory(archiveDir))
+                throw new IOException("Interrupted journal rotation has unsafe archive ACLs.");
+            foreach (var file in OrderedFiles(path))
+            {
+                if (string.Equals(Path.GetDirectoryName(file), archiveDir,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !ProtectedAuditStoragePolicy.IsTrusted(file))
+                    throw new IOException("An archived protected audit segment has unsafe ACLs.");
+            }
+        }
+        var verified = AuditIntegrityService.VerifyUnderLock(path);
+        if (!verified.Valid)
+            throw new IOException("Interrupted protected journal rotation has invalid hash continuity.");
+
+        using (var file = new FileStream(
+                   path, FileMode.CreateNew, FileAccess.Write,
+                   FileShare.None, 4096, FileOptions.WriteThrough))
+            file.Flush(flushToDisk: true);
+
+        if (!ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(path))
+            throw new IOException("Recovered audit journal failed protected storage verification.");
+
+        WindowsEventLogService.TryWrite(
+            "Recovered an interrupted protected audit rotation without discarding evidence.",
+            EventLogSeverity.Information, 4683, "Audit");
+        return true;
+    }
+
     internal static IEnumerable<string> RunOfflineTests(string scratchDirectory)
     {
         var errors = new List<string>();
@@ -179,6 +236,16 @@ internal static class ProtectedAuditArchiveService
                     rows[3].EntryHash, StringComparison.OrdinalIgnoreCase) ||
                 !AuditIntegrityService.ContainsEntryHash(journal, rows[0].EntryHash))
                 errors.Add("Numbered protected journal archive did not preserve hash chain/history.");
+
+            // Power loss after File.Move(current, .old), before writing the
+            // next entry: the chain head must remain available from .old.
+            File.Delete(journal);
+            if (!string.Equals(AuditIntegrityService.GetLastHash(journal),
+                    rows[2].EntryHash, StringComparison.OrdinalIgnoreCase) ||
+                !AuditIntegrityService.Verify(journal).Valid)
+                errors.Add("Interrupted protected rotation lost the final .old hash.");
+            File.WriteAllText(journal,
+                JsonSerializer.Serialize(rows[3]) + Environment.NewLine);
 
             var missing = Path.Combine(archiveDirectory, "audit-00000001.jsonl");
             File.Delete(missing);

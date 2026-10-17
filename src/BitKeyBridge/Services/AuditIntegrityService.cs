@@ -49,9 +49,8 @@ public static class AuditIntegrityService
     {
         try
         {
-            if (!File.Exists(path))
-                return string.Empty;
-
+            // A crash between rotation and the next append can leave only
+            // audit.jsonl.old. Use the newest surviving protected segment.
             foreach (var journalFile in ProtectedAuditArchiveService.OrderedFiles(path).Reverse())
             {
                 foreach (var line in File.ReadLines(journalFile).Reverse())
