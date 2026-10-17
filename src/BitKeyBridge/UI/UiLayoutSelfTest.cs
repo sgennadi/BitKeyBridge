@@ -1018,6 +1018,19 @@ public static class UiLayoutSelfTest
         {
             "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
         };
+        foreach (var requiredBackgroundUpdaterControl in new[]
+                 {
+                     "InstallBackgroundUpdateTaskButton",
+                     "BackgroundUpdateTaskStatusButton",
+                     "RemoveBackgroundUpdateTaskButton",
+                     "BackgroundUpdateHour"
+                 })
+        {
+            if (FindByName(form, requiredBackgroundUpdaterControl) is null)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: scheduled updater is missing " +
+                    requiredBackgroundUpdaterControl);
+        }
         var actualOrder = tabs.TabPages.Cast<TabPage>()
             .Select(page => page.Text).ToArray();
         if (actualOrder.Length < preferredOrder.Length ||

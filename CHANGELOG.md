@@ -1,5 +1,6 @@
 ## Unreleased - v0.30.4
 
+- Add an admin-only GUI control to install, query and remove the optional daily SYSTEM update task, with selectable local hour and access checks; include HiDPI UI tests.
 - Update sample machine config from schema 4 to schema 5; auto-install and unsigned consent remain opt-in.
 - Add CI negative tests preventing a portable executable from installing or using the SYSTEM background updater; add deployment and roadmap documentation.
 - Add read-only `--audit-journal-capacity` metadata and threshold tests; never truncate or delete protected audit evidence.
