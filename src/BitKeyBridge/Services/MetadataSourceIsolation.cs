@@ -72,11 +72,9 @@ public static class MetadataSourceIsolation
             () =>
             {
                 deniedCalls++;
-                throw new HttpRequestException("Synthetic 403", null,
-                    HttpStatusCode.Forbidden);
-#pragma warning disable CS0162
-                return Task.FromResult(new List<string>());
-#pragma warning restore CS0162
+                return Task.FromException<List<string>>(
+                    new HttpRequestException("Synthetic 403", null,
+                        HttpStatusCode.Forbidden));
             }, CancellationToken.None).GetAwaiter().GetResult();
         if (deniedCalls != 1 || denied.Succeeded)
             failures.Add("Permission-denied metadata query was retried.");
