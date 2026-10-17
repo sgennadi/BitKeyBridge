@@ -1931,6 +1931,26 @@ internal static class Program
 
                 var updateDefaults =
                     new AppConfig();
+                if (ScheduledUpdateService.IsEligible(updateDefaults))
+                    failures.Add("Scheduled updater must not be enabled in default settings.");
+
+                var unsignedAuto = new AppConfig
+                {
+                    UpdateRepository = UpdateTrustPolicy.OfficialRepository,
+                    CheckForUpdatesOnStart = true,
+                    AutoInstallUpdatesOnStart = true,
+                    AllowUnsignedUnattendedUpdates = true
+                };
+                if (!ScheduledUpdateService.IsEligible(unsignedAuto))
+                    failures.Add("Explicit official-repository unsigned scheduler opt-in is not recognized.");
+                unsignedAuto.UpdateRepository = "attacker/BitKeyBridge";
+                if (ScheduledUpdateService.IsEligible(unsignedAuto))
+                    failures.Add("Background updater accepted unsigned consent for an untrusted repository.");
+                unsignedAuto.UpdateRepository = UpdateTrustPolicy.OfficialRepository;
+                unsignedAuto.CheckForUpdatesOnStart = false;
+                if (ScheduledUpdateService.IsEligible(unsignedAuto))
+                    failures.Add("Background updater ignored disabled update checks.");
+
                 if (!updateDefaults.CheckForUpdatesOnStart ||
                     updateDefaults.AutoInstallUpdatesOnStart)
                 {

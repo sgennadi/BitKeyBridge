@@ -65,10 +65,16 @@ internal static class ProtectedAuditCapacityService
     {
         try
         {
-            var current = LengthOrMissing(AppPaths.BrokerAuditLogFile, out _);
+            var current = LengthOrMissing(AppPaths.BrokerAuditLogFile,
+                out var currentExists);
             var prior = LengthOrMissing(AppPaths.BrokerAuditLogFile + ".old",
                 out var archiveExists);
-            var report = Evaluate(current, prior, archiveExists);
+            var report = !currentExists
+                ? new CapacityState("NotProvisioned", 0, prior, archiveExists,
+                    RotationThresholdBytes,
+                    "No current protected journal was found. " +
+                    "The existence of an archive is not proof that broker auditing is available.")
+                : Evaluate(current, prior, archiveExists);
             Console.WriteLine(JsonSerializer.Serialize(new
             {
                 Component = "ProtectedAuditJournalCapacity",
@@ -80,7 +86,7 @@ internal static class ProtectedAuditCapacityService
                 report.Message,
                 Limit = "Read-only metadata; not hash-chain verification, SIEM receipt, or permission to reveal secrets."
             }, new JsonSerializerOptions { WriteIndented = true }));
-            return report.Status == "Blocked" ? 3 : 0;
+            return report.Status is "Blocked" or "NotProvisioned" ? 3 : 0;
         }
         catch (Exception ex)
         {

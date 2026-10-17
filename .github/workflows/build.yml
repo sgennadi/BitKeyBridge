@@ -359,6 +359,22 @@ jobs:
           }
           Write-Host "Non-elevating startup diagnostics: $($report.Checks.Count) checks."
 
+      # Portable executables, including privileged CI runners, must never
+      # register a high-privilege scheduler task or run unattended installs.
+      - name: Background updater portable denial
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $results = & $exe --scheduled-update --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -eq 0) {
+            throw "SECURITY: portable copy was permitted to run the SYSTEM background updater."
+          }
+          $results = & $exe --update-task-install --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -eq 0) {
+            throw "SECURITY: portable copy registered a persistent SYSTEM update task."
+          }
+
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'
         shell: pwsh
