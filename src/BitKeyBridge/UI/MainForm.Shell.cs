@@ -180,6 +180,31 @@ public sealed partial class MainForm
             if (!e.Control || e.Alt || e.Shift)
                 return;
 
+            // Ctrl+F focuses the existing metadata search input in the
+            // currently selected workspace; it never invokes secret reveal.
+            if (e.KeyCode == Keys.F)
+            {
+                TextBox? query = _mainTabs.SelectedIndex switch
+                {
+                    0 => _homeQuery,
+                    1 => _startQuery,
+                    2 => _lapsQuery,
+                    3 => _unifiedQuery,
+                    4 => _mainTabs.TabPages[4].Controls
+                            .Find("HelpdeskQuickSearch", searchAllChildren: true)
+                            .OfType<TextBox>().FirstOrDefault(),
+                    _ => null
+                };
+                if (query is { Visible: true, Enabled: true })
+                {
+                    query.Focus();
+                    query.SelectAll();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                return;
+            }
+
             int index = e.KeyCode switch
             {
                 Keys.D1 or Keys.NumPad1 => 0,
@@ -2145,6 +2170,8 @@ public sealed partial class MainForm
             Margin = new Padding(0, 7, 10, 0)
         }, 0, 0);
 
+        _unifiedQuery.Name = "UnifiedDeviceSearchQuery";
+        _unifiedQuery.AccessibleName = "Search device metadata across AD, Entra and Intune";
         _unifiedQuery.Dock = DockStyle.Fill;
         _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);

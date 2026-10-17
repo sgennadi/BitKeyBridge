@@ -1017,6 +1017,10 @@ public static class UiLayoutSelfTest
         if (!form.KeyPreview)
             failures.Add($"{formName}/{scenario.Name}: Ctrl+1..7 global keyboard tab navigation requires KeyPreview.");
 
+        if (!form.KeyPreview)
+            failures.Add(
+                $"{formName}/{scenario.Name}: keyboard shortcuts require MainForm.KeyPreview.");
+
         var preferredOrder = new[]
         {
             "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
@@ -1045,6 +1049,23 @@ public static class UiLayoutSelfTest
                 string.Join(" / ", actualOrder) +
                 "; required Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics.");
         }
+        if (actualOrder.Length >= 5)
+        {
+            foreach (var (tabIndex, queryName) in new[]
+            {
+                (0, "HomeUnifiedQuery"),
+                (1, "BitLockerSearchQuery"),
+                (2, "LapsLiveSearchQuery"),
+                (3, "UnifiedDeviceSearchQuery"),
+                (4, "HelpdeskQuickSearch")
+            })
+            {
+                if (FindByName(tabs.TabPages[tabIndex], queryName) is not TextBox)
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Ctrl+F search input {queryName} is missing.");
+            }
+        }
+
         if (tabs.TabPages.Count == 0 ||
             !string.Equals(
                 tabs.TabPages[0].Text,

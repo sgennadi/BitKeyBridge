@@ -10,6 +10,13 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## v0.31.0 search UX (in development)
+
+`Ctrl+F` focuses the metadata query in the current Start, BitLocker, LAPS,
+Devices or Helpdesk workspace. It never automatically reveals a recovery
+key or LAPS password and preserves search context. `Ctrl+1`–`Ctrl+7`
+continues navigating the ordered main tabs.
+
 ## v0.30.4 work in progress
 
 [Current implementation, validation gates and planned 0.31/0.32 milestones](docs/development-roadmap-0.30.4.md). No release yet.
