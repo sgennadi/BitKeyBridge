@@ -37,6 +37,10 @@ internal static class HomeRecoverySelectionGuard
         return true;
     }
 
+    internal static bool IsSelectedStartRow(
+        RecoverySearchResult? original, RecoverySearchResult? current) =>
+        original is not null && ReferenceEquals(original, current);
+
     internal static IEnumerable<string> RunOfflineTests()
     {
         var errors = new List<string>();
@@ -89,6 +93,17 @@ internal static class HomeRecoverySelectionGuard
         selected.LatestRecoveryId = string.Empty;
         if (IsCurrent(selected, selected, row))
             errors.Add("BitLocker secret was allowed without a verified metadata Recovery ID.");
+
+        var sameMetadataDifferentRow = new RecoverySearchResult
+        {
+            ComputerName = row.ComputerName,
+            RecoveryId = row.RecoveryId,
+            ComputerDistinguishedName = row.ComputerDistinguishedName
+        };
+        if (!IsSelectedStartRow(row, row) ||
+            IsSelectedStartRow(row, sameMetadataDifferentRow) ||
+            IsSelectedStartRow(row, null))
+            errors.Add("Start recovery row identity guard accepted a stale Grid selection.");
 
         return errors;
     }
