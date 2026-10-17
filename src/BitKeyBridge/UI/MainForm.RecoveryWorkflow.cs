@@ -28,7 +28,7 @@ public sealed partial class MainForm
             return;
         }
 
-        using var dialog = new RecoveryWorkflowDialog(snapshot);
+        using var dialog = new RecoveryWorkflowDialog(snapshot, _uiLanguageCode);
         if (dialog.ShowDialog(this) != DialogResult.OK || IsDisposed)
             return;
 

@@ -45,3 +45,13 @@ search rows and Entra recovery-ID-only metadata (`ENTRA:KEY:`). Only
 nonempty, source-qualified `INTUNE:MANAGED:`, `INTUNE:DEVICE:` or
 `ENTRA:DEVICE:` device identifiers are eligible. The operator still
 needs to verify the exact managedDeviceId before any later rotation.
+
+## Russian and Hebrew guide navigation
+
+The guide now uses the same per-user EN/RU/HE setting as the main shell.
+The seven step headings, status labels, action captions and form title have
+translations; Hebrew mirrors the WinForms dialog frame. The selected computer,
+device IDs, keys and account identifiers remain LTR. Technical explanatory
+details still use English pending complete localization of nested recovery
+diagnostics. CI adds dedicated Russian/Hebrew guide layouts across the existing
+compact/150%/175%/200% scenarios. Language never changes security decisions.

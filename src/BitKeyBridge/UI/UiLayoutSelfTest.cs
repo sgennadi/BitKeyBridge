@@ -344,6 +344,30 @@ public static class UiLayoutSelfTest
                         cloudConnected: false,
                         new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }))),
             (
+                "Hebrew recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig(), new HomeSearchResult
+                        {
+                            ComputerName = "PC-HEBREW", IsCloudRecord = true,
+                            SourceIdentity = "ENTRA:DEVICE:some-device-guid",
+                            BitLockerKeyCount = 1
+                        },
+                        adConnected: false, cloudConnected: true,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
+                    "he")),
+            (
+                "Russian recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig(), new HomeSearchResult
+                        {
+                            ComputerName = "PC-RUS", BitLockerKeyCount = 1
+                        },
+                        adConnected: true, cloudConnected: false,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
+                    "ru")),
+            (
                 "Recovery access",
                 () =>
                     new RecoveryAccessDialog(
@@ -734,14 +758,14 @@ public static class UiLayoutSelfTest
         }
         if (form is RecoveryWorkflowDialog)
         {
-            if (FindByName(form, "RecoveryRouteBitLocker") is not Button adBitlocker ||
-                !adBitlocker.Enabled ||
-                FindByName(form, "RecoveryRouteLaps") is not Button adLaps ||
-                !adLaps.Enabled ||
-                FindByName(form, "RecoveryRouteDevices") is not null)
-            {
-                failures.Add($"{formName}/{scenario.Name}: guided AD recovery dialog has missing/incorrect metadata navigation choices.");
-            }
+            var expectedCloud = formName.StartsWith("Hebrew", StringComparison.Ordinal);
+            var expectedHebrew = expectedCloud;
+            if (form.RightToLeftLayout != expectedHebrew ||
+                (expectedCloud
+                    ? FindByName(form, "RecoveryRouteDevices") is not Button dev || !dev.Enabled
+                    : FindByName(form, "RecoveryRouteBitLocker") is not Button bit || !bit.Enabled ||
+                      FindByName(form, "RecoveryRouteLaps") is not Button laps || !laps.Enabled))
+                failures.Add($"{formName}/{scenario.Name}: translated recovery guide lacks correct RTL or source-specific metadata navigation.");
         }
         if (form is not MainForm)
         {

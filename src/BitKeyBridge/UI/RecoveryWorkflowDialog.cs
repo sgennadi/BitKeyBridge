@@ -8,9 +8,16 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
 {
     internal RecoveryWorkflowRoute SelectedRoute { get; private set; }
 
-    internal RecoveryWorkflowDialog(RecoveryWorkflowReadinessService.Snapshot report)
+    internal RecoveryWorkflowDialog(
+        RecoveryWorkflowReadinessService.Snapshot report,
+        string? languageCode = null)
     {
-        Text = "Recovery Steps - Read-only Preflight";
+        var locale = UiLanguageService.Normalize(languageCode);
+        string Tr(string key) => UiLanguageService.Translate(locale, key);
+        var rtl = UiLanguageService.IsRightToLeft(locale);
+        Text = Tr("RecoveryDialogTitle");
+        RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        RightToLeftLayout = rtl;
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(820, 625);
         MinimumSize = new Size(600, 430);
@@ -34,7 +41,7 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
         var heading = new Label
         {
             Name = "RecoveryWorkflowHeading",
-            Text = "Recovery steps - no passwords or recovery keys requested",
+            Text = Tr("RecoveryDialogHeading"),
             AccessibleName = "Read-only recovery preparation",
             Font = UiStyle.CreateSectionTitleFont(),
             AutoSize = true,
@@ -47,7 +54,8 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
         var summary = new Label
         {
             Name = "RecoveryWorkflowSummary",
-            Text = "Device: " + report.Computer + " | Source: " + report.Source +
+            Text = Tr("RecoveryDeviceLabel") + " " + report.Computer +
+                   " | " + Tr("RecoverySourceLabel") + " " + report.Source +
                    Environment.NewLine + report.Notice,
             AccessibleName = "Selected device and recovery security limitations",
             RightToLeft = RightToLeft.No,
@@ -78,6 +86,21 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
         for (var i = 0; i < report.Steps.Count; i++)
         {
             var item = report.Steps[i];
+            var localizedStepName = Tr("RecoveryStep" + (i + 1));
+            var localizedStatus = item.Status switch
+            {
+                "OK" => Tr("RecoveryStatusOk"),
+                "Action required" => Tr("RecoveryStatusAction"),
+                "Unverified" => Tr("RecoveryStatusUnverified"),
+                "Not tested" => Tr("RecoveryStatusNotTested"),
+                "Info" => Tr("RecoveryStatusInfo"),
+                "Required at retrieval" => Tr("RecoveryStatusRequired"),
+                "Optional" => Tr("RecoveryStatusOptional"),
+                "Pending protected ACK" => Tr("RecoveryStatusPendingAck"),
+                "Policy-dependent" => Tr("RecoveryStatusPolicy"),
+                "Explicit action only" => Tr("RecoveryStatusExplicit"),
+                _ => item.Status
+            };
             content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var group = new TableLayoutPanel
             {
@@ -94,8 +117,8 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
 
             var title = new Label
             {
-                Text = item.Name + " - " + item.Status,
-                AccessibleName = item.Name + ": " + item.Status,
+                Text = localizedStepName + " - " + localizedStatus,
+                AccessibleName = localizedStepName + ": " + localizedStatus,
                 Font = UiStyle.CreateEmphasisFont(10F),
                 AutoSize = true,
                 Dock = DockStyle.Top,
@@ -127,9 +150,9 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 8, 0, 0)
         };
-        var close = UiStyle.CreateActionButton("Close", DialogResult.Cancel);
-        var goStart = UiStyle.CreateActionButton("Open Start");
-        var health = UiStyle.CreateActionButton("Access Health");
+        var close = UiStyle.CreateActionButton(Tr("RecoveryClose"), DialogResult.Cancel);
+        var goStart = UiStyle.CreateActionButton(Tr("RecoveryOpenStart"));
+        var health = UiStyle.CreateActionButton(Tr("RecoveryAccessHealth"));
         goStart.Click += (_, _) => Finish(RecoveryWorkflowRoute.Start);
         health.Click += (_, _) => Finish(RecoveryWorkflowRoute.AccessHealth);
         actions.Controls.Add(close);
@@ -141,14 +164,14 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
         // revalidates the exact Start row and caller rights after closing.
         if (report.IsCloudSelection)
         {
-            AddRouteButton("Open Devices", RecoveryWorkflowRoute.Devices,
+            AddRouteButton(Tr("RecoveryOpenDevices"), RecoveryWorkflowRoute.Devices,
                 report.CanNavigateToRecoveryScreen);
         }
         else
         {
-            AddRouteButton("Open BitLocker", RecoveryWorkflowRoute.BitLocker,
+            AddRouteButton(Tr("RecoveryOpenBitLocker"), RecoveryWorkflowRoute.BitLocker,
                 report.CanNavigateToRecoveryScreen);
-            AddRouteButton("Open LAPS", RecoveryWorkflowRoute.Laps,
+            AddRouteButton(Tr("RecoveryOpenLaps"), RecoveryWorkflowRoute.Laps,
                 report.CanNavigateToRecoveryScreen);
         }
         root.Controls.Add(actions, 0, 3);
