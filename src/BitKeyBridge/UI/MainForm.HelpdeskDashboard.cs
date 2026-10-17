@@ -448,7 +448,10 @@ public sealed partial class MainForm
     {
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Diagnostics")
+            // Display titles change with UI language; use the stable
+            // workspace identity so Access Health works in Russian/Hebrew.
+            if (!string.Equals(page.Name, "DiagnosticsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)

@@ -2467,7 +2467,10 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Diagnostics");
+        var tab = new TabPage("Diagnostics")
+        {
+            Name = "DiagnosticsWorkspace"
+        };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
