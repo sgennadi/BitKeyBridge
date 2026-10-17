@@ -700,6 +700,37 @@ public sealed partial class MainForm
 
         try
         {
+            // Local policy, Windows-token RBAC and protected audit readiness
+            // are checked without a pipe probe, secret read or elevation.
+            // These findings use the operator's OWN enabled Windows token.
+            try
+            {
+                var localFindings = await Task.Run(
+                    () => AccessHealthLocalService.ReadOnly(_config));
+                if (IsDisposed)
+                    return;
+
+                foreach (var finding in localFindings)
+                {
+                    AddAccessHealthRow(finding.Source, finding.Check,
+                        finding.State, finding.Detail);
+                    if (finding.State == "Failed")
+                        errors++;
+                    else if (finding.State == "Warning")
+                        warnings++;
+                }
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                AddAccessHealthRow(
+                    "Local",
+                    "RBAC / Audit Broker preflight",
+                    "Failed",
+                    "Local access checks failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
             string? dc =
                 null;
 
