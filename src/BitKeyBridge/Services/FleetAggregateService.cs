@@ -159,6 +159,9 @@ internal static class FleetAggregateService
             report.Version.Any(c =>
                 !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '+')) ||
             report.RuntimeId is not ("win-x64" or "win-x86" or "win-arm64") ||
+            // Restrict all text fields to emitted enum/architecture values.
+            // Untrusted JSON must not carry arbitrary text into Excel exports.
+            report.OsArchitecture is not ("X64" or "X86" or "Arm64") ||
             report.ServiceState is not
                 ("Running" or "Stopped" or "StartPending" or "StopPending" or
                  "Paused" or "Unknown" or "NotInstalled") ||
@@ -273,10 +276,15 @@ internal static class FleetAggregateService
                 {
                     Machine = "=HYPERLINK(secret)"
                 }));
+            File.WriteAllText(Path.Combine(root, "arch-injection.json"),
+                FleetInventoryService.Serialize(current with
+                {
+                    OsArchitecture = "SECRET_ARCH_VALUE_FORBIDDEN"
+                }));
 
             var aggregate = ReadDirectory(root);
-            if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 4 ||
-                aggregate.RejectedFiles != 2 ||
+            if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 5 ||
+                aggregate.RejectedFiles != 3 ||
                 aggregate.DuplicateFiles != 1 ||
                 aggregate.Rows[0].Version != "0.32.0")
                 failures.Add("Fleet aggregation dedupe/schema rejection failed.");
@@ -287,7 +295,8 @@ internal static class FleetAggregateService
             if (!exported.Contains("PC-DEMO", StringComparison.Ordinal) ||
                 !exported.Contains("0.32.0", StringComparison.Ordinal) ||
                 exported.Contains("SECRET_DO_NOT_INCLUDE", StringComparison.Ordinal) ||
-                exported.Contains("=HYPERLINK", StringComparison.Ordinal))
+                exported.Contains("=HYPERLINK", StringComparison.Ordinal) ||
+                exported.Contains("SECRET_ARCH_VALUE_FORBIDDEN", StringComparison.Ordinal))
                 failures.Add("Fleet CSV leaked invalid JSON values or lost valid records.");
         }
         catch (Exception ex)
