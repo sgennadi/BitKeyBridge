@@ -1,5 +1,6 @@
 ## Unreleased - v0.30.4
 
+- Enable global Ctrl+1..7 primary workspace navigation without exposing permission-gated Settings to unauthorized users; verify KeyPreview in UI regressions.
 - Add an admin-only GUI control to install, query and remove the optional daily SYSTEM update task, with selectable local hour and access checks; include HiDPI UI tests.
 - Update sample machine config from schema 4 to schema 5; auto-install and unsigned consent remain opt-in.
 - Add CI negative tests preventing a portable executable from installing or using the SYSTEM background updater; add deployment and roadmap documentation.

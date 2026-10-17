@@ -173,6 +173,32 @@ public sealed partial class MainForm
                 }
             };
 
+        // Keyboard navigation uses the same authorized existing TabPages.
+        // Admin-only Settings cannot be opened when its tab is absent.
+        KeyDown += (_, e) =>
+        {
+            if (!e.Control || e.Alt || e.Shift)
+                return;
+
+            int index = e.KeyCode switch
+            {
+                Keys.D1 or Keys.NumPad1 => 0,
+                Keys.D2 or Keys.NumPad2 => 1,
+                Keys.D3 or Keys.NumPad3 => 2,
+                Keys.D4 or Keys.NumPad4 => 3,
+                Keys.D5 or Keys.NumPad5 => 4,
+                Keys.D6 or Keys.NumPad6 => 5,
+                Keys.D7 or Keys.NumPad7 => 6,
+                _ => -1
+            };
+            if (index < 0 || index >= _mainTabs.TabPages.Count)
+                return;
+
+            _mainTabs.SelectedIndex = index;
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+        };
+
         // The technician explicitly requested Start as the landing page.
         // Do not change selection in Shown (including after the connection
         // wizard), and never silently switch to Helpdesk on normal launch.

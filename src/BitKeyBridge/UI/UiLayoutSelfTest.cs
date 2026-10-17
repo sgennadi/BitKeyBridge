@@ -1014,6 +1014,9 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        if (!form.KeyPreview)
+            failures.Add($"{formName}/{scenario.Name}: Ctrl+1..7 global keyboard tab navigation requires KeyPreview.");
+
         var preferredOrder = new[]
         {
             "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
