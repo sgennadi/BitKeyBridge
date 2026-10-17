@@ -1,5 +1,6 @@
 ## Unreleased - v0.30.4
 
+- CI now registers, inspects and removes an actual daily LocalSystem Task Scheduler job on disposable Windows runners without triggering installation; verifies fixed Program Files action, system principal, and denial when an ordinary elevated administrator attempts the SYSTEM-only update.
 - Harden the SYSTEM scheduled updater: enforce real LocalSystem identity, machine executable-only apply targets and a noninteracting helper.
 - Abort a replacement when the original GUI process fails to exit or the Windows Service cannot stop. Verify policy and staged PE before interrupting the service.
 - When any automatic apply fails, persist an AutomaticFailure rollback hold across partially restored versions; never retry an endless failed automatic installation without explicit repair/resume. Add offline safety tests.
