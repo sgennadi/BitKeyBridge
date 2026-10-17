@@ -19,11 +19,14 @@ public sealed partial class MainForm
 
         var actions = CreateActionFlow();
         var search = NewActionButton("Find Device");
+        var prepare = NewActionButton("Recovery Steps");
+        prepare.Name = "HelpdeskRecoveryStepsButton";
+        prepare.AccessibleName = "Review recovery steps without revealing a password";
         var bitlocker = NewActionButton("BitLocker");
         var laps = NewActionButton("LAPS");
         var access = NewActionButton("Access Health");
         var support = NewActionButton("Support Bundle");
-        actions.Controls.AddRange([search, bitlocker, laps, access, support]);
+        actions.Controls.AddRange([search, prepare, bitlocker, laps, access, support]);
         root.Controls.Add(actions);
 
         var quickQuery = new TextBox
@@ -108,6 +111,7 @@ public sealed partial class MainForm
                 _homeSearchButton.PerformClick();
         }
         search.Click += (_, _) => OpenSearch();
+        prepare.Click += (_, _) => ShowRecoveryWorkflowSteps();
         quickQuery.KeyDown += (_, e) =>
         {
             if (e.KeyCode != Keys.Enter)
@@ -425,7 +429,9 @@ public sealed partial class MainForm
 
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Settings")
+            // Text changes with language: Settings is a stable control ID.
+            if (!string.Equals(page.Name, "SettingsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)
@@ -446,9 +452,39 @@ public sealed partial class MainForm
 
     private void OpenHelpdeskAccessHealth()
     {
+        // Reuse the exact Start AD selection without copying any recovery
+        // key, LAPS password, ticket or cloud token into the diagnostic UI.
+        // Never carry an ambiguous/cloud hostname into the AD query.
+        if (!_layoutSelfTest && _accessHealthRun.Enabled &&
+            !_accessHealthComputer.IsDisposed)
+        {
+            var selected = GetSelectedHomeSearchResult();
+            var safeName = AccessHealthGuidanceService.SafeAdComputerName(selected);
+            if (safeName is not null)
+            {
+                _accessHealthComputer.Text = safeName;
+                UiStyle.SetStatus(_accessHealthStatus,
+                    "Using selected Start computer " + safeName +
+                    ". Tests have not run; this is not recovery authorization.",
+                    UiStatusKind.Neutral);
+            }
+            else if (selected is not null)
+            {
+                // An old AD name must never masquerade as the newly selected
+                // cloud/ambiguous object during a cross-workspace switch.
+                _accessHealthComputer.Clear();
+                UiStyle.SetStatus(_accessHealthStatus,
+                    "Selected device cannot be safely reused as an AD computer. " +
+                    "Confirm its unique directory ID before entering a diagnostic query.",
+                    UiStatusKind.Warning);
+            }
+        }
+
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Diagnostics")
+            // Works under English, Russian and mirrored Hebrew navigation.
+            if (!string.Equals(page.Name, "DiagnosticsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)

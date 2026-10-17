@@ -569,6 +569,47 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "Start does not hide conflicting cloud identities",
+            () =>
+            {
+                var first = new UnifiedDeviceInfo
+                {
+                    ComputerName = "SHARED-PC",
+                    IdentityKey = "INTUNE:MANAGED:duplicate",
+                    FoundInIntune = true,
+                    EntraDeviceId = "entra-device-one"
+                };
+                first.RecoveryIds.Add("recovery-id-one");
+                var second = new UnifiedDeviceInfo
+                {
+                    ComputerName = "SHARED-PC",
+                    IdentityKey = "INTUNE:MANAGED:duplicate",
+                    FoundInIntune = true,
+                    EntraDeviceId = "entra-device-two"
+                };
+                var mapped = HomeCloudSearchMapper.Map([first, second]);
+                Assert(mapped.Count == 2 &&
+                       mapped.All(row =>
+                           row.IdentityAmbiguous &&
+                           row.BitLockerLookupFailed &&
+                           !RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(row)),
+                    "Duplicate source ID was collapsed or enabled guided recovery.");
+
+                var unknown = HomeCloudSearchMapper.Map(
+                    [new UnifiedDeviceInfo
+                    {
+                        ComputerName = "UNRESOLVED-PC",
+                        IdentityKey = string.Empty,
+                        FoundInIntune = true
+                    }]);
+                Assert(unknown.Count == 1 &&
+                       unknown[0].IdentityAmbiguous &&
+                       !RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(
+                           unknown[0]),
+                    "Missing cloud source ID was treated as authoritative.");
+            });
+
+        Check(
             "Device 360 summary excludes recovery passwords",
             () =>
             {

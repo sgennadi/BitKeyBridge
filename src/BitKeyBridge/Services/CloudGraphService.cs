@@ -574,7 +574,11 @@ public sealed partial class CloudGraphService : IDisposable
         using var response = await _http.SendAsync(request, ct);
         var content = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException("Microsoft Graph request failed: " + ExtractError(content));
+            throw new HttpRequestException(
+                "Microsoft Graph metadata request failed (HTTP " +
+                (int)response.StatusCode + "): " +
+                DiagnosticRedaction.Sanitize(ExtractError(content)),
+                inner: null, statusCode: response.StatusCode);
         return JsonDocument.Parse(content);
     }
 
