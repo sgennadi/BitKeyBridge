@@ -192,6 +192,34 @@ public sealed partial class MainForm
             MaximumSize = new Size(0, 0),
             Text = "Readiness has not been checked."
         };
+        var healthResults = new ListView
+        {
+            Name = "HelpdeskHealthDashboard",
+            AccessibleName = "Helpdesk readiness results",
+            View = View.Details,
+            FullRowSelect = true,
+            GridLines = true,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable,
+            Height = 165,
+            Dock = DockStyle.Top
+        };
+        healthResults.Columns.Add("Check", 190);
+        healthResults.Columns.Add("Result", 360);
+        void ShowHealth(string name, string result)
+        {
+            if (wizard.IsDisposed || healthResults.IsDisposed)
+                return;
+            var item = healthResults.Items.Cast<ListViewItem>()
+                .FirstOrDefault(entry => entry.Text == name);
+            if (item is null)
+            {
+                item = new ListViewItem(name);
+                item.SubItems.Add(result);
+                healthResults.Items.Add(item);
+            }
+            else
+                item.SubItems[1].Text = result;
+        }
         var readinessRunning = false;
         async void CheckReadiness()
         {
@@ -199,6 +227,7 @@ public sealed partial class MainForm
                 return;
             readinessRunning = true;
             readiness.Text = "Checking readiness...";
+            healthResults.Items.Clear();
             try
             {
                 var authorization = new AuthorizationService(_config)
@@ -255,6 +284,12 @@ public sealed partial class MainForm
                 }
                 if (wizard.IsDisposed || readiness.IsDisposed)
                     return;
+                ShowHealth("Windows service", serviceStatus);
+                ShowHealth("Active Directory", _directoryConnected ? "Connected" : "Not connected");
+                ShowHealth("Search authorization", authorization.Allowed ? "Allowed" : "Denied");
+                ShowHealth("Audit broker policy", brokerStatus);
+                ShowHealth("Protected journal ACL", journalStatus);
+                ShowHealth("Audit hash chain", integrityStatus);
                 readiness.Text =
                     $"Protected journal: {journalStatus} | Integrity: {integrityStatus} | " +
                     $"Audit broker: {brokerStatus} | " +
@@ -312,6 +347,9 @@ public sealed partial class MainForm
         notes.Controls.Add(guidance, 0, 1);
         notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         notes.Controls.Add(readiness, 0, 2);
+        notes.RowCount = 4;
+        notes.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        notes.Controls.Add(healthResults, 0, 3);
         layout.Controls.Add(notes, 0, 2);
 
         var actions = new FlowLayoutPanel
