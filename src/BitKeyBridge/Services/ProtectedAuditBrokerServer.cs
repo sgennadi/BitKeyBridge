@@ -73,6 +73,11 @@ internal sealed class ProtectedAuditBrokerServer
             throw new InvalidOperationException(
                 "Machine policy owner/ACL is not protected; broker will not start.");
 
+        // An interrupted atomic rotation may have left a validated .old
+        // and no current file. Restore an empty current segment ONLY in this
+        // case; never initialize a missing evidence log from scratch.
+        _ = ProtectedAuditArchiveService.RecoverInterruptedRotation();
+
         if (!ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(AppPaths.BrokerAuditLogFile))
             throw new InvalidOperationException(
                 "Protected audit journal was not provisioned with secure NTFS ACLs.");

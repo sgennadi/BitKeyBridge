@@ -789,7 +789,21 @@ public sealed class UpdateService : IDisposable
             return 1;
         }
 
+        // Apply, automatic update and rollback share the same exclusive gate.
+        // An overlapping request must not rewrite .bak while the first helper
+        // is installing or restoring the previous executable.
+        using var exclusiveApply = UpdateApplyGate.TryAcquire();
+        if (exclusiveApply is null)
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update apply is already active or its protected gate is unavailable.",
+                EventLogSeverity.Warning, 4194, "Update");
+            return 3;
+        }
+
         var backups = new List<(string Target, string Backup)>();
+        var createdTargets = new List<string>();
+        var retainedBackupSnapshots = new List<UpdateBackupSafety.BackupSnapshot>();
         try
         {
             // Reject hostile background plans before stopping services or
@@ -847,9 +861,15 @@ public sealed class UpdateService : IDisposable
                 Directory.CreateDirectory(directory);
 
                 var backup = fullTarget + ".bak";
-                if (File.Exists(backup)) File.Delete(backup);
-                if (File.Exists(fullTarget))
+                var existed = File.Exists(fullTarget);
+                if (existed)
                 {
+                    // An existing .bak may be the operator's only previous
+                    // rollback image. Snapshot it BEFORE rewriting .bak;
+                    // restore it after a failed install, including failures
+                    // raised by the post-install health probe.
+                    retainedBackupSnapshots.Add(
+                        UpdateBackupSafety.Snapshot(backup));
                     File.Copy(fullTarget, backup, true);
                     backups.Add((fullTarget, backup));
                 }
@@ -871,6 +891,8 @@ public sealed class UpdateService : IDisposable
                 }
 
                 File.Move(replacement, fullTarget, true);
+                if (!existed)
+                    createdTargets.Add(fullTarget);
             }
 
             // Persist the intentional downgrade before restarting the GUI.
@@ -891,18 +913,34 @@ public sealed class UpdateService : IDisposable
                     ConfigService.SaveAppConfig(config);
                 }
             }
-            else
-            {
-                UpdateRollbackHoldService.Clear();
-            }
-
-            WindowsEventLogService.TryWrite(
-                "BitKeyBridge update installed successfully.",
-                EventLogSeverity.Information,
-                4100);
-
             if (plan.RestartService)
                 WindowsServiceHost.Start();
+
+            // A staged self-test is necessary but not sufficient. Verify
+            // the installed bytes and execute the ACTUAL replaced program
+            // before committing success or allowing future auto-updates.
+            foreach (var target in plan.TargetExecutables
+                         .Where(x => !string.IsNullOrWhiteSpace(x))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                InstalledUpdateHealthService.VerifyInstalledExecutable(
+                    Path.GetFullPath(target),
+                    plan.StagedExecutableSha256);
+            }
+
+            if (plan.RestartService &&
+                !string.Equals(WindowsServiceHost.GetInfo().State,
+                    "Running", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Updated BitKeyBridge service did not remain Running after health verification.");
+
+            if (!plan.Rollback)
+                UpdateRollbackHoldService.Clear();
+
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update installed and passed post-install health checks.",
+                EventLogSeverity.Information,
+                4100);
 
             if (plan.RestartGui && !string.IsNullOrWhiteSpace(plan.GuiExecutable))
             {
@@ -942,11 +980,39 @@ public sealed class UpdateService : IDisposable
                                 : string.Empty)
                     });
 
+            // The freshly replaced .bak now holds the immediately previous
+            // executable. Remove any temporary older backup snapshots only
+            // once the update has been verified and recorded as successful.
+            foreach (var snapshot in retainedBackupSnapshots)
+            {
+                try { UpdateBackupSafety.Commit(snapshot); }
+                catch (Exception cleanupException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater previous-backup snapshot cleanup needs attention: " +
+                        DiagnosticRedaction.Sanitize(cleanupException.Message),
+                        EventLogSeverity.Warning, 4594, "Update");
+                }
+            }
             TryScheduleHelperCleanup(plan.CleanupDirectory);
             return 0;
         }
         catch (Exception ex)
         {
+            // The service may have passed its initial start check and then
+            // failed health verification. Stop it before restoring its EXE.
+            if (plan.RestartService && backups.Count + createdTargets.Count > 0)
+            {
+                try { WindowsServiceHost.Stop(); }
+                catch (Exception stopException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater could not stop the unhealthy service before rollback: " +
+                        DiagnosticRedaction.Sanitize(stopException.Message),
+                        EventLogSeverity.Error, 4593, "Update");
+                }
+            }
+
             if (plan.Automatic)
             {
                 try
@@ -1012,6 +1078,52 @@ public sealed class UpdateService : IDisposable
                         4592,
                         "Update");
                 }
+            }
+
+            // If there was no existing file, rolling back means removing
+            // the newly created executable rather than leaving a partial install.
+            foreach (var target in createdTargets.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (File.Exists(target))
+                        File.Delete(target);
+                    restoreAttempted++;
+                    restoreSucceeded++;
+                }
+                catch (Exception cleanupException)
+                {
+                    restoreFailed++;
+                    WindowsEventLogService.TryWrite(
+                        "Updater could not remove newly created failed target: " +
+                        DiagnosticRedaction.Sanitize(cleanupException.Message),
+                        EventLogSeverity.Error, 4592, "Update");
+                }
+            }
+
+            if (restoreFailed == 0)
+            {
+                foreach (var snapshot in retainedBackupSnapshots.AsEnumerable().Reverse())
+                {
+                    try { UpdateBackupSafety.Restore(snapshot); }
+                    catch (Exception backupException)
+                    {
+                        restoreFailed++;
+                        WindowsEventLogService.TryWrite(
+                            "Updater previous rollback image could not be restored: " +
+                            DiagnosticRedaction.Sanitize(backupException.Message),
+                            EventLogSeverity.Error, 4594, "Update");
+                    }
+                }
+            }
+            else if (retainedBackupSnapshots.Count > 0)
+            {
+                // The current EXE is not safely restored. Keep both rollback
+                // generations for operator recovery instead of overwriting
+                // the emergency .bak or deleting the older snapshot.
+                WindowsEventLogService.TryWrite(
+                    "Updater executable restoration incomplete; retained both backup generations.",
+                    EventLogSeverity.Error, 4594, "Update");
             }
 
             new UpdateHistoryService()

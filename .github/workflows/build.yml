@@ -542,6 +542,39 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
+  legacy-upgrade-regression:
+    # Only run on disposable hosted Windows. Exercises the ACTUAL elevated
+    # apply/rollback implementation with synthetic config and DPAPI fixtures.
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.head_ref == 'feature/v0.30.4-reliability-20261017') ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/release/v0.30.4')
+    needs: [build]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout regression harness
+        uses: actions/checkout@v7
+
+      - name: Download compiled candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: upgrade-candidate
+
+      - name: Verify upgrades and rollbacks from v0.30.1 and v0.30.3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Legacy upgrades must only run on a disposable hosted Windows runner.'
+          }
+          ./tests/windows/UpgradeMigrationRegression.ps1 -CandidateZip 'upgrade-candidate/BitKeyBridge-win-x64.zip' -EphemeralHostedRunner
+
   audit-broker-integration:
     # Must run only on GitHub-hosted ephemeral Windows. This isolated test
     # creates temporary local accounts, installs an SCM service and adjusts
@@ -551,7 +584,8 @@ jobs:
        (github.head_ref == 'feature/protected-audit-broker-20261014' ||
         github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
         github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
-        github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017')) ||
+        github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017' ||
+         github.head_ref == 'feature/v0.30.4-reliability-20261017')) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4'))
@@ -729,7 +763,8 @@ jobs:
         (github.event_name == 'push' &&
          github.ref == 'refs/heads/release/v0.30.4' &&
          github.event.head_commit.message == 'Release v0.30.4' &&
-         needs['audit-broker-integration'].result == 'success') ||
+         needs['audit-broker-integration'].result == 'success' &&
+         needs['legacy-upgrade-regression'].result == 'success') ||
         (github.ref != 'refs/heads/release/v0.30.3' &&
          github.ref != 'refs/heads/release/v0.30.4' &&
          (startsWith(github.ref, 'refs/tags/v') ||
@@ -740,7 +775,7 @@ jobs:
            github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
            startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))))
       )
-    needs: [build, laps-regression, audit-broker-integration]
+    needs: [build, laps-regression, audit-broker-integration, legacy-upgrade-regression]
     runs-on: windows-latest
     # Least-privilege token; these scopes are never granted to PR builds.
     permissions:
@@ -829,7 +864,7 @@ jobs:
                "${{ github.ref }}" -eq 'refs/heads/release/v0.30.3') -or
               ($tag -eq 'v0.30.4' -and
                "${{ github.ref }}" -eq 'refs/heads/release/v0.30.4')) {
-            Write-Host "Owner-authorized unsigned release $tag: no Authenticode signing."
+            Write-Host "Owner-authorized unsigned release ${tag}: no Authenticode signing."
           }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
                   $tag -ne "v0.30.0-rc.1") {

@@ -20,6 +20,28 @@ if (-not $releaseMatch.Success) {
 }
 $release = $workflow.Substring($releaseMatch.Index)
 
+# Parse the exact PowerShell release approval step on EVERY CI build.
+# A malformed expression in a release-only step cannot be caught by a PR
+# build that does not trigger publishing unless we parse it explicitly.
+$approvalMatch = [regex]::Match(
+    $release,
+    '(?ms)^      - name: Enforce protected audit release approval\r?\n.*?^        run: \|\r?\n(?<script>.*?)(?=^      - name: Download x64)'
+)
+if (-not $approvalMatch.Success) {
+    throw 'Release approval script was not found.'
+}
+$approvalScript = $approvalMatch.Groups['script'].Value -replace '(?m)^          ', ''
+$approvalScript = $approvalScript -replace '\$\{\{[^}]+\}\}', 'test-value'
+$parseTokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseInput(
+    $approvalScript, [ref]$parseTokens, [ref]$parseErrors
+) | Out-Null
+if ($parseErrors.Count -gt 0) {
+    throw "Release approval step is invalid PowerShell: $($parseErrors[0].Message)"
+}
+
+
 $stageName = '      - name: Smoke-test staged updater preferences (no network install)'
 $publishName = '      - name: Create GitHub Release'
 $stageIndex = $release.IndexOf($stageName, [StringComparison]::Ordinal)
@@ -51,8 +73,17 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
     $release -notmatch "github\.event\.head_commit\.message == 'Release v0\.30\.4'" -or
     $release -notmatch "needs\['audit-broker-integration'\]\.result == 'success'" -or
     $release -notmatch "github\.ref != 'refs/heads/release/v0\.30\.4'" -or
-    $release -notmatch 'SHA256SUMS.txt') {
-    throw 'Stable unsigned v0.30.4 lacks its exact commit, broker or checksum gates.'
+    $release -notmatch 'SHA256SUMS.txt' -or
+    $release -notmatch "needs\['legacy-upgrade-regression'\]\.result == 'success'" -or
+    $release -notmatch 'needs: \[build, laps-regression, audit-broker-integration, legacy-upgrade-regression\]') {
+    throw 'Stable unsigned v0.30.4 lacks exact commit, broker, legacy upgrade, or checksum gates.'
+}
+
+# The v0.30.4 reliability PR must run the TWO-identity protected audit
+# broker integration test, not just compile the broker code.
+if ($workflow -notmatch
+    "github\.head_ref == 'feature/v0\.30\.4-reliability-20261017'") {
+    throw 'Reliability PR must execute the protected audit broker integration.'
 }
 
 # Never delete operator release branches or install online updates from CI.

@@ -16,6 +16,8 @@ Windows x64, x86 and ARM64. Start opens first; navigate Start / BitLocker / LAPS
 
 [Technician install and scheduled-update guide](docs/unsigned-auto-update-0.30.4.md) and [development roadmap](docs/development-roadmap-0.30.4.md). Real AD/Entra/CyberArk pilot validation remains a separate acceptance step.
 
+For v0.30.4, post-install SHA-256 and executable self-tests now gate successful updates. Failed upgrades restore the prior EXE and retained .bak, and the protected audit journal archives numbered, hash-linked, ACL-protected segments without deleting evidence. [Updater transaction and rollback](docs/update-health-and-rollback-0.30.4.md) · [Protected audit archive](docs/protected-audit-archive-0.30.4.md).
+
 ## Historical stable v0.30.3
 
 Windows x64, x86 and ARM64 packages have canonical GitHub release names for

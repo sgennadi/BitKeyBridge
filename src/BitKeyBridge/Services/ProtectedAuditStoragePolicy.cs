@@ -52,31 +52,7 @@ internal static class ProtectedAuditStoragePolicy
                 return false;
 
             var serviceSid = ResolveServiceSid();
-            var reachedMachineRoot = false;
-            for (DirectoryInfo? current = new(normalizedDirectory);
-                 current is not null; current = current.Parent)
-            {
-                // Never follow a user-controllable junction or symbolic link,
-                // even if the target has apparently trusted ACLs.
-                if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
-                    return false;
-
-                var security = current.GetAccessControl(
-                    AccessControlSections.Owner | AccessControlSections.Access);
-                if (!IsTrustedOwner(security, serviceSid) ||
-                    !HasNoUntrustedWriter(security, serviceSid))
-                    return false;
-
-                if (string.Equals(
-                        Path.TrimEndingDirectorySeparator(current.FullName),
-                        machineRoot, StringComparison.OrdinalIgnoreCase))
-                {
-                    reachedMachineRoot = true;
-                    break;
-                }
-            }
-
-            if (!reachedMachineRoot)
+            if (!IsTrustedDirectoryChain(normalizedDirectory, machineRoot, serviceSid))
                 return false;
 
             var fileSecurity = new FileInfo(fullPath).GetAccessControl(
@@ -114,12 +90,73 @@ internal static class ProtectedAuditStoragePolicy
                     return false;
             }
 
+            var archiveDirectory = ProtectedAuditArchiveService.DirectoryFor(path);
+            if (File.Exists(archiveDirectory))
+                return false;
+            if (Directory.Exists(archiveDirectory))
+            {
+                if (!IsTrustedBrokerArchiveDirectory(archiveDirectory))
+                    return false;
+                foreach (var archived in ProtectedAuditArchiveService.OrderedFiles(path))
+                {
+                    if (string.Equals(Path.GetDirectoryName(archived),
+                        archiveDirectory, StringComparison.OrdinalIgnoreCase) &&
+                        !IsTrusted(archived))
+                        return false;
+                }
+            }
             return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    internal static bool IsTrustedBrokerArchiveDirectory(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+            return false;
+        try
+        {
+            if (!string.Equals(Path.GetFullPath(path),
+                    Path.GetFullPath(ProtectedAuditArchiveService.DirectoryFor(
+                        AppPaths.BrokerAuditLogFile)),
+                    StringComparison.OrdinalIgnoreCase) ||
+                !Directory.Exists(path))
+                return false;
+            var root = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(AppPaths.MachineConfigDirectory));
+            return IsTrustedDirectoryChain(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)),
+                root, ResolveServiceSid());
+        }
+        catch { return false; }
+    }
+
+    private static bool IsTrustedDirectoryChain(
+        string directory, string root, SecurityIdentifier? serviceSid)
+    {
+        if (!string.Equals(directory, root, StringComparison.OrdinalIgnoreCase) &&
+            !directory.StartsWith(root + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        for (DirectoryInfo? current = new(directory);
+             current is not null; current = current.Parent)
+        {
+            if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
+                return false;
+            var security = current.GetAccessControl(
+                AccessControlSections.Owner | AccessControlSections.Access);
+            if (!IsTrustedOwner(security, serviceSid) ||
+                !HasNoUntrustedWriter(security, serviceSid))
+                return false;
+            if (string.Equals(Path.TrimEndingDirectorySeparator(current.FullName),
+                    root, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static SecurityIdentifier? ResolveServiceSid()

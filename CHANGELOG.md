@@ -2,6 +2,16 @@
 
 **Stable unsigned technician release with explicitly opted-in automatic installation.** Windows x64/x86/ARM64, Task Scheduler and protected-audit fail-closed gates retained.
 
+- Verify the actual installed EXE SHA-256 and execute an isolated post-install self-test before recording upgrade success or clearing rollback holds; verify previously running services return to Running.
+- Roll back replaced EXEs and restart the previous service when the post-install probe or service health check fails; retain an AutomaticFailure hold to prevent unattended retry loops.
+- Preserve an existing older `.bak` via a temporary same-directory snapshot until a new install succeeds; restore both the original EXE and its preexisting backup when installation fails, retaining evidence on incomplete restoration.
+- Serialize manual, SYSTEM-scheduled and rollback apply transactions with one Windows-wide mutex; reject overlapping apply helpers before they touch EXEs or backups.
+- Safely archive every protected audit rotation as numbered, ACL-checked segments without overwriting or deleting previous evidence; detect gaps and missing genesis history, verify hash continuity, recover interrupted rotation, and fail closed on invalid journals.
+- Test real elevated upgrades and rollbacks from published v0.30.1 and v0.30.3 EXEs on isolated GitHub-hosted Windows using pinned archive SHA-256, synthetic DPAPI ciphertext, saved configuration, prior backup and NTFS ACL preservation.
+- Require successful legacy upgrade regression and real two-standard-user protected audit broker integration before creating the v0.30.4 GitHub Release.
+- Fix release-only PowerShell `${tag}:` string parsing; parse-test the exact release approval script on every Windows CI build.
+- Document post-install health limits, immutable protected journal retention and technician acceptance without enabling Authenticode signing.
+
 - Correct scheduler CI XML action expectation: schtasks.exe preserves double quotes around a Program Files executable path; the test still enforces an exact command, exact flags and SYSTEM principal.
 - Require two genuine non-admin Windows-token Audit Broker integration on the v0.30.4 feature PR and future release branch; its CI does not substitute the privileged runner for standard-user access.
 - CI now registers, inspects and removes an actual daily LocalSystem Task Scheduler job on disposable Windows runners without triggering installation; verifies fixed Program Files action, system principal, and denial when an ordinary elevated administrator attempts the SYSTEM-only update.
