@@ -1,4 +1,6 @@
-## Unreleased - v0.30.4
+## 0.30.4
+
+**Stable unsigned technician release with explicitly opted-in automatic installation.** Windows x64/x86/ARM64, Task Scheduler and protected-audit fail-closed gates retained.
 
 - Correct scheduler CI XML action expectation: schtasks.exe preserves double quotes around a Program Files executable path; the test still enforces an exact command, exact flags and SYSTEM principal.
 - Require two genuine non-admin Windows-token Audit Broker integration on the v0.30.4 feature PR and future release branch; its CI does not substitute the privileged runner for standard-user access.

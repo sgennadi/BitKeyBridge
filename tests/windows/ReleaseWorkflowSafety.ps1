@@ -45,6 +45,16 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.3" -or
     throw 'Unsigned v0.30.3 release lacks its exact branch, broker, or checksum gates.'
 }
 
+# v0.30.4 is another exact owner-approved unsigned stable branch; it must
+# retain full architecture, two-token broker, and SHA-256/provenance gates.
+if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
+    $release -notmatch "github\.event\.head_commit\.message == 'Release v0\.30\.4'" -or
+    $release -notmatch "needs\['audit-broker-integration'\]\.result == 'success'" -or
+    $release -notmatch "github\.ref != 'refs/heads/release/v0\.30\.4'" -or
+    $release -notmatch 'SHA256SUMS.txt') {
+    throw 'Stable unsigned v0.30.4 lacks its exact commit, broker or checksum gates.'
+}
+
 # Never delete operator release branches or install online updates from CI.
 $forbidden = @(
     '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',

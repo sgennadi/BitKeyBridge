@@ -1,8 +1,8 @@
 # BitKeyBridge deployment and upgrades (Windows .NET 10)
 
-Current stable GitHub release: v0.30.3 (unsigned, exact x64/x86/ARM64 ZIPs).
+Current stable GitHub release: v0.30.4 (unsigned, exact x64/x86/ARM64 ZIPs).
 This directory contains the optional Win32/GPO deployment templates. The
-background scheduled updater documented below is in unreleased v0.30.4.
+background scheduled updater documented below is available in v0.30.4.
 
 ## Intune Win32 / GPO Startup installation
 
@@ -15,8 +15,8 @@ background scheduled updater documented below is in unreleased v0.30.4.
    passwords, access tokens, AD credentials or private certificate keys.
 4. For IntuneWinAppUtil package the folder and set install.cmd / uninstall.cmd
    as SYSTEM commands. Use file-version detection for
-   %ProgramFiles%\BitKeyBridge\BitKeyBridge.exe, >= 0.30.3.0 on the stable
-   v0.30.3 package. For a later build, update the version detection rule.
+   %ProgramFiles%\BitKeyBridge\BitKeyBridge.exe, >= 0.30.4.0 on the stable
+   v0.30.4 package. For a later build, update the version detection rule.
 5. Use x64 ZIP for x64 endpoints, ARM64 ZIP for ARM64 endpoints, or x86 if
    32-bit Windows is intentionally supported. Never force ARM64 on x64.
 6. Pilot first on disposable managed workstations and standard Helpdesk users,

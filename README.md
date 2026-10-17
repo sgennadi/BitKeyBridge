@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable release channel: v0.30.3 — unsigned, with explicitly enabled automatic installation.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable release channel: v0.30.4 — unsigned, with explicitly enabled automatic installation.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,11 +10,13 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## v0.30.4 work in progress
+## Stable v0.30.4
 
-[Current implementation, validation gates and planned 0.31/0.32 milestones](docs/development-roadmap-0.30.4.md). No release yet.
+Windows x64, x86 and ARM64. Start opens first; navigate Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics / Settings (where permitted). Optional daily SYSTEM updater uses the existing verified/rollback-safe pipeline and requires explicit administrator-approved unsigned or pinned-signer trust. The release binaries are **unsigned**.
 
-## Stable v0.30.3
+[Technician install and scheduled-update guide](docs/unsigned-auto-update-0.30.4.md) and [development roadmap](docs/development-roadmap-0.30.4.md). Real AD/Entra/CyberArk pilot validation remains a separate acceptance step.
+
+## Historical stable v0.30.3
 
 Windows x64, x86 and ARM64 packages have canonical GitHub release names for
 manual and automatic installation. A machine must explicitly accept unsigned

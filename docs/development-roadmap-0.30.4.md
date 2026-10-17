@@ -1,9 +1,11 @@
-# BitKeyBridge v0.30.4 development roadmap
+# BitKeyBridge v0.30.4 release and future roadmap
 
-**Released baseline:** v0.30.3; no Authenticode signing until the owner
-specifically requests it. No QA or production release is created from this PR.
+**Released baseline:** v0.30.3. This v0.30.4 branch publishes a stable unsigned
+Release only after successful GitHub CI and Audit Broker integration, without
+Authenticode signing. Real AD/Entra/EPM endpoint acceptance remains required
+before wide institutional rollout.
 
-## Implemented in the development branch
+## Implemented for v0.30.4
 
 - Primary tabs: Start, BitLocker, LAPS, Devices (including Microsoft 365), Helpdesk, Diagnostics, and optional Settings; Start is selected on launch
 - Background updater with fixed Program Files path and daily privileged Task Scheduler job; accepts explicit machine-level unsigned consent only for sgennadi/BitKeyBridge
@@ -11,7 +13,7 @@ specifically requests it. No QA or production release is created from this PR.
 - Protected audit journal metadata capacity preflight; no automatic deletion or overwrite of SYSTEM evidence
 - Configuration example and Intune/GPO deployment documentation updated for current schema, security defaults and architecture
 
-## Required v0.30.4 validation before publishing
+## Additional managed pilot acceptance before wide deployment
 
 - GitHub Windows x64/x86/ARM64 compilation, offline regressions and UI scaling
 - Real privileged Task Scheduler creation/removal, rejection from portable EXEs, task invocation from LocalSystem and unattended update on a managed pilot

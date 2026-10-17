@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -726,7 +726,12 @@ jobs:
          github.ref == 'refs/heads/release/v0.30.3' &&
          github.event.head_commit.message == 'Release v0.30.3' &&
          needs['audit-broker-integration'].result == 'success') ||
+        (github.event_name == 'push' &&
+         github.ref == 'refs/heads/release/v0.30.4' &&
+         github.event.head_commit.message == 'Release v0.30.4' &&
+         needs['audit-broker-integration'].result == 'success') ||
         (github.ref != 'refs/heads/release/v0.30.3' &&
+         github.ref != 'refs/heads/release/v0.30.4' &&
          (startsWith(github.ref, 'refs/tags/v') ||
           (github.event_name == 'push' &&
            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
@@ -789,6 +794,9 @@ jobs:
           if ("${{ github.ref }}" -eq "refs/heads/release/v0.30.3" -and $tag -ne "v0.30.3") {
             throw "The dedicated release branch is authorized only for v0.30.3."
           }
+          if ("${{ github.ref }}" -eq "refs/heads/release/v0.30.4" -and $tag -ne "v0.30.4") {
+            throw "The dedicated release branch is authorized only for v0.30.4."
+          }
 
           $exists = $false
           gh release view $tag --repo "${{ github.repository }}" *> $null
@@ -817,9 +825,11 @@ jobs:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag -eq 'v0.30.3' -and
-              "${{ github.ref }}" -eq 'refs/heads/release/v0.30.3') {
-            Write-Host 'Owner-authorized unsigned release v0.30.3: no Authenticode signing.'
+          if (($tag -eq 'v0.30.3' -and
+               "${{ github.ref }}" -eq 'refs/heads/release/v0.30.3') -or
+              ($tag -eq 'v0.30.4' -and
+               "${{ github.ref }}" -eq 'refs/heads/release/v0.30.4')) {
+            Write-Host "Owner-authorized unsigned release $tag: no Authenticode signing."
           }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
                   $tag -ne "v0.30.0-rc.1") {
@@ -857,7 +867,8 @@ jobs:
           steps.release_meta.outputs.exists != 'true' &&
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
           steps.release_meta.outputs.tag != 'v0.30.0-rc.1' &&
-          github.ref != 'refs/heads/release/v0.30.3'
+          github.ref != 'refs/heads/release/v0.30.3' &&
+          github.ref != 'refs/heads/release/v0.30.4'
         shell: pwsh
         env:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
@@ -890,13 +901,20 @@ jobs:
           "Git commit: ${{ github.sha }}" | Add-Content release/BUILD-INFO.txt
           "Authenticode: UNSIGNED" | Add-Content release/BUILD-INFO.txt
 
-      - name: Prepare stable v0.30.3 release notes
+      - name: Prepare stable unsigned release notes
         if: >-
           steps.release_meta.outputs.exists != 'true' &&
-          github.ref == 'refs/heads/release/v0.30.3'
+          (github.ref == 'refs/heads/release/v0.30.3' ||
+           github.ref == 'refs/heads/release/v0.30.4')
         shell: pwsh
         run: |
-          Copy-Item docs/unsigned-auto-update-0.30.3.md release/RELEASE-NOTES.md
+          $tag = "${{ steps.release_meta.outputs.tag }}"
+          if ($tag -eq 'v0.30.4') {
+            Copy-Item docs/unsigned-auto-update-0.30.4.md release/RELEASE-NOTES.md
+          }
+          else {
+            Copy-Item docs/unsigned-auto-update-0.30.3.md release/RELEASE-NOTES.md
+          }
 
       - name: Generate SHA256SUMS
         if: steps.release_meta.outputs.exists != 'true'
@@ -927,7 +945,8 @@ jobs:
           steps.release_meta.outputs.exists != 'true' &&
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
           steps.release_meta.outputs.tag != 'v0.30.0-rc.1' &&
-          github.ref != 'refs/heads/release/v0.30.3'
+          github.ref != 'refs/heads/release/v0.30.3' &&
+          github.ref != 'refs/heads/release/v0.30.4'
         uses: actions/attest@v4
         with:
           subject-path: release/BitKeyBridge.signatures.json
@@ -1040,7 +1059,8 @@ jobs:
             '--target', '${{ github.sha }}',
             '--title', "BitKeyBridge $tag"
           )
-          if ($tag -eq 'v0.30.3' -and (Test-Path 'release/RELEASE-NOTES.md')) {
+          if ($tag -in @('v0.30.3', 'v0.30.4') -and
+              (Test-Path 'release/RELEASE-NOTES.md')) {
             $args += @('--notes-file', 'release/RELEASE-NOTES.md')
           }
           else {
