@@ -1071,10 +1071,10 @@ internal static class Program
             return ShowAutomaticUpdateSettings(config);
 
         if (args.Any(x => x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase)))
-            return SetAutomaticUpdateSettings(config, enabled: true);
+            return SetAutomaticUpdateSettings(config, enabled: true, args);
 
         if (args.Any(x => x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase)))
-            return SetAutomaticUpdateSettings(config, enabled: false);
+            return SetAutomaticUpdateSettings(config, enabled: false, args);
 
         if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
             return CheckUpdateAsync(config).GetAwaiter().GetResult();
@@ -1211,16 +1211,32 @@ internal static class Program
         AppConfig config)
     {
         Console.WriteLine(
-            $"AutomaticInstall={config.AutoInstallUpdatesOnStart}; AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}");
+            $"AutomaticInstall={config.AutoInstallUpdatesOnStart}; AutomaticChecks={config.CheckForUpdatesOnStart}; Repository={config.UpdateRepository}; AllowPrerelease={config.AllowPrereleaseUpdates}; UnsignedConsent={config.AllowUnsignedUnattendedUpdates}; TrustMode={UpdateTrustPolicy.DescribeMode(config)}");
         return 0;
     }
 
     private static int SetAutomaticUpdateSettings(
         AppConfig config,
-        bool enabled)
+        bool enabled,
+        string[] args)
     {
         try
         {
+            if (enabled && args.Any(x => x.Equals(
+                    "--accept-unsigned-update-risk", StringComparison.OrdinalIgnoreCase)))
+            {
+                // Never infer consent from a legacy 0.29.x AutoInstall=true.
+                config.AllowUnsignedUnattendedUpdates = true;
+            }
+
+            if (enabled && !UpdateTrustPolicy.CanInstallUnattended(config))
+            {
+                Console.Error.WriteLine(
+                    "Automatic installation requires a trusted signing publisher, or explicit " +
+                    "--accept-unsigned-update-risk with the official sgennadi/BitKeyBridge repository.");
+                return 1;
+            }
+
             config.AutoInstallUpdatesOnStart =
                 enabled;
 
@@ -1238,7 +1254,7 @@ internal static class Program
 
             Console.WriteLine(
                 enabled
-                    ? "Automatic verified updates enabled. Startup checks were also enabled."
+                    ? "Automatic updates enabled: " + UpdateTrustPolicy.DescribeMode(config) + ". Startup checks enabled."
                     : "Automatic installation disabled. Startup checks keep their current setting.");
             return 0;
         }
@@ -4210,6 +4226,10 @@ internal static class Program
         Console.WriteLine("  --update-checks-status   Show automatic update-check setting");
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");
+        Console.WriteLine("  --auto-update-status       Show auto-install and unsigned trust settings");
+        Console.WriteLine("  --auto-update-enable       Enable trusted auto-installation (requires opt-in)");
+        Console.WriteLine("  --accept-unsigned-update-risk  With --auto-update-enable: permit unsigned official GitHub auto-installation");
+        Console.WriteLine("  --auto-update-disable      Disable automatic installation");
         Console.WriteLine("  --search-base <DN>    Override scopes for this run; may be repeated");
         Console.WriteLine("  --no-elevation        Do not relaunch through UAC");
         Console.WriteLine("  --self-test           Run offline smoke tests and exit");

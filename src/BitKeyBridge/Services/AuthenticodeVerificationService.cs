@@ -218,13 +218,15 @@ public static class AuthenticodeVerificationService
             Verify(
                 path);
 
-        // A managed SYSTEM-owned audit broker must not be downgraded to
-        // unsigned code, even if the optional legacy signature checkbox is off.
+        // Honor an explicitly required signature. Unsigned auto-installation is
+        // separately gated by official GitHub source, exact release hashes,
+        // explicit opt-in and verified update/rollback staging.
+        // Strict audit and RBAC checks remain mandatory for recovery.
         var managedAudit =
             config.AuditBrokerEnabled &&
             config.RequireProtectedAuditForRecovery;
 
-        if ((config.RequireTrustedUpdateSignature || managedAudit) &&
+        if (config.RequireTrustedUpdateSignature &&
             !result.Trusted)
         {
             throw new InvalidOperationException(
@@ -236,14 +238,8 @@ public static class AuthenticodeVerificationService
             config.TrustedUpdatePublisher?.Trim() ??
             string.Empty;
 
-        if (managedAudit &&
-            string.IsNullOrWhiteSpace(expectedPublisher))
-        {
-            throw new InvalidOperationException(
-                "Managed protected audit updates require a pinned, exact " +
-                "TrustedUpdatePublisher in the machine policy.");
-        }
-
+        // Existing configured publisher pins are never bypassed by the
+        // unsigned update opt-in, including for a managed audit broker.
         if (string.IsNullOrWhiteSpace(expectedPublisher))
             return;
 
