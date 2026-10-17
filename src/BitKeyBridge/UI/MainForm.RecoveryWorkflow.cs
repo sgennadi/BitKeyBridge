@@ -55,7 +55,14 @@ public sealed partial class MainForm
         {
             var freshAuthorization = new AuthorizationService(_config)
                 .Check(BitKeyBridgePermission.RecoveryRead);
-            if (!RecoveryWorkflowNavigationPolicy.CanOpen(
+            // Strict audit and broker configuration may change while the
+            // modal guide is open; re-check these settings before routing.
+            var freshPreflight = RecoveryWorkflowReadinessService.Build(
+                _config, GetSelectedHomeSearchResult(),
+                _directoryConnected && !_directoryConnecting,
+                HasCloudSearchSession(), freshAuthorization);
+            if (!freshPreflight.CanNavigateToRecoveryScreen ||
+                !RecoveryWorkflowNavigationPolicy.CanOpen(
                     selectedBeforeDialog, GetSelectedHomeSearchResult(), route,
                     _directoryConnected && !_directoryConnecting,
                     HasCloudSearchSession(), freshAuthorization.Allowed))

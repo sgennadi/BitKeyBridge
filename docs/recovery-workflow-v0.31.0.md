@@ -55,3 +55,19 @@ device IDs, keys and account identifiers remain LTR. Technical explanatory
 details still use English pending complete localization of nested recovery
 diagnostics. CI adds dedicated Russian/Hebrew guide layouts across the existing
 compact/150%/175%/200% scenarios. Language never changes security decisions.
+
+## Protected Audit Broker consistency (phase 3)
+
+Guided recovery reports **Action required** whenever the machine enables
+`RequireProtectedAuditForRecovery` without `AuditBrokerEnabled`, or enables
+the broker without strict protected recovery auditing. Configuring only one
+setting is not a working, durable audit channel. This mismatch disables the
+guide's recovery navigation buttons; it never grants secret retrieval.
+
+On dialog close, BitKeyBridge recalculates RBAC, source readiness and the
+broker/strict audit policy before navigating, so changes during the modal
+dialog cannot reuse the stale preflight. Actual Reveal/Copy/Rotate handlers
+remain authoritative and continue to require durable audit ACK.
+
+Offline regression tests cover both policy mismatches and a valid explicit
+RecoveryReaders configuration.

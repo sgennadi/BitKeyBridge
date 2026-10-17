@@ -452,6 +452,34 @@ public sealed partial class MainForm
 
     private void OpenHelpdeskAccessHealth()
     {
+        // Reuse the exact Start AD selection without copying any recovery
+        // key, LAPS password, ticket or cloud token into the diagnostic UI.
+        // Never carry an ambiguous/cloud hostname into the AD query.
+        if (!_layoutSelfTest && _accessHealthRun.Enabled &&
+            !_accessHealthComputer.IsDisposed)
+        {
+            var selected = GetSelectedHomeSearchResult();
+            var safeName = AccessHealthGuidanceService.SafeAdComputerName(selected);
+            if (safeName is not null)
+            {
+                _accessHealthComputer.Text = safeName;
+                UiStyle.SetStatus(_accessHealthStatus,
+                    "Using selected Start computer " + safeName +
+                    ". Tests have not run; this is not recovery authorization.",
+                    UiStatusKind.Neutral);
+            }
+            else if (selected is not null)
+            {
+                // An old AD name must never masquerade as the newly selected
+                // cloud/ambiguous object during a cross-workspace switch.
+                _accessHealthComputer.Clear();
+                UiStyle.SetStatus(_accessHealthStatus,
+                    "Selected device cannot be safely reused as an AD computer. " +
+                    "Confirm its unique directory ID before entering a diagnostic query.",
+                    UiStatusKind.Warning);
+            }
+        }
+
         foreach (TabPage page in _mainTabs.TabPages)
         {
             // Works under English, Russian and mirrored Hebrew navigation.

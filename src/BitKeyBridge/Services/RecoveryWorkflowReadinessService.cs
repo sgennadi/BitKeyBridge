@@ -22,9 +22,13 @@ internal static class RecoveryWorkflowReadinessService
             (!cloud || RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(selected));
         var sourceReady = known && (cloud ? cloudConnected : adConnected);
         var rbacAllowed = authorization?.Allowed == true;
-        var invalidBroker = config.AuditBrokerEnabled &&
-            (!config.RequireProtectedAuditForRecovery || !config.RbacEnabled ||
-             config.RbacRecoveryReaders.Count == 0);
+        // A one-sided strict-audit/broker setting must never be considered
+        // ready for guided recovery. The broker and strict policy travel together.
+        var protectedAuditRequested = config.AuditBrokerEnabled ||
+            config.RequireProtectedAuditForRecovery;
+        var invalidBroker = protectedAuditRequested &&
+            (!config.AuditBrokerEnabled || !config.RequireProtectedAuditForRecovery ||
+             !config.RbacEnabled || config.RbacRecoveryReaders.Count == 0);
 
         var steps = new List<Step>
         {
@@ -119,6 +123,18 @@ internal static class RecoveryWorkflowReadinessService
         cloud.SourceIdentity = "ENTRA:KEY:recovery-id-only";
         if (Build(config, cloud, false, true, allow).CanNavigateToRecoveryScreen)
             errors.Add("Cloud recovery-key metadata was confused with an authoritative device ID.");
+        config.AuditBrokerEnabled = false;
+        var missingBroker = Build(config, ad, true, false, allow);
+        if (missingBroker.CanNavigateToRecoveryScreen ||
+            missingBroker.Steps[5].Status != "Action required")
+            errors.Add("Strict recovery audit without broker was marked ready.");
+        config.AuditBrokerEnabled = true;
+        config.RequireProtectedAuditForRecovery = false;
+        var missingStrictPolicy = Build(config, ad, true, false, allow);
+        if (missingStrictPolicy.CanNavigateToRecoveryScreen ||
+            missingStrictPolicy.Steps[5].Status != "Action required")
+            errors.Add("Broker without strict protected audit was marked ready.");
+        config.RequireProtectedAuditForRecovery = true;
         config.RbacRecoveryReaders.Clear();
         if (Build(config, ad, true, false, allow).CanNavigateToRecoveryScreen)
             errors.Add("Incomplete broker policy was accepted.");
