@@ -38,3 +38,22 @@ Use `BitKeyBridge.exe --managed-update-policy --no-elevation` to inspect
 effective restrictions. Manual updating remains a distinct administrator
 action. Configure a central policy that reflects your environment; do not
 silently bypass AppLocker, WDAC or CyberArk EPM.
+
+
+## Central fleet snapshots (development)
+
+Use your own GPO/Intune device execution context to write an atomic, versioned,
+non-secret report to an approved share (with its normal Windows ACL):
+
+    BitKeyBridge.exe --fleet-export "\\fileserver\Inventory\BitKeyBridge\PC-01.json" --no-elevation
+
+On an authorized administrator workstation, aggregate a directory:
+
+    BitKeyBridge.exe --fleet-aggregate "\\fileserver\Inventory\BitKeyBridge" --no-elevation
+
+The collector accepts up to 20,000 validated snapshots (16 KiB each) and
+deduplicates by machine and most recent UTC timestamp, reporting versions,
+service states, audit configuration issues, update rollback holds, and
+stale reports older than 24 hours. No automatic network sender is installed.
+A missing/stale report does not prove a domain controller or Graph outage.
+Neither operation reads or exports recovery keys, passwords or tokens.
