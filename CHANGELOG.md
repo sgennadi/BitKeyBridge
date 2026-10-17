@@ -10,6 +10,8 @@
 - Exercise startup diagnostics under both authorized and unauthorized non-admin Windows identities in the protected-audit integration harness.
 - Make ephemeral signing integration derive expected ProductVersion and negative test tag from project instead of hardcoding the prior v0.30.2 RC.
 
+- Fix accidental duplicate content and invalid PowerShell syntax in ephemeral signing QA test; dynamically derive its expected version and parse-check all Windows QA scripts.
+
 ## 0.30.2-rc.1
 
 **Integrated unsigned QA candidate — not a production release**

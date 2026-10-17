@@ -223,6 +223,24 @@ jobs:
             throw "Direct ListView column construction is not allowed outside UiStyle. Use UiStyle.ConfigureListViewColumns."
           }
 
+      - name: Parse-check PowerShell Windows QA scripts
+        shell: pwsh
+        run: |
+          $issues = @()
+          foreach ($file in (Get-ChildItem tests/windows -Recurse -Filter *.ps1 -File)) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName, [ref]$tokens, [ref]$parseErrors)
+            foreach ($issue in $parseErrors) {
+              $issues += "$($file.Name):$($issue.Extent.StartLineNumber): $($issue.Message)"
+            }
+          }
+          if ($issues.Count -ne 0) {
+            $issues | ForEach-Object { Write-Host $_ }
+            throw "PowerShell QA scripts contain syntax errors."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
