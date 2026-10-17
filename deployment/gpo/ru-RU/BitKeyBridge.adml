@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources revision="1.0" schemaVersion="1.0">
+  <displayName>BitKeyBridge</displayName>
+  <description>BitKeyBridge machine update restrictions</description>
+  <resources>
+    <stringTable>
+      <string id="BitKeyBridgeCategory">BitKeyBridge</string>
+      <string id="DisableAutomaticUpdates">Запретить автоматические обновления</string>
+      <string id="ExplainDisableAutomaticUpdates">Запрещает все автоматические установки обновлений BitKeyBridge. Политика не выдаёт разрешения.</string>
+      <string id="DisableUnsignedAutomaticUpdates">Запретить автоматические обновления без подписи</string>
+      <string id="ExplainDisableUnsignedAutomaticUpdates">Запрещает неподписанные обновления даже при прежнем локальном разрешении администратора.</string>
+      <string id="RequireSignedAutomaticUpdates">Требовать подпись для автоматических обновлений</string>
+      <string id="ExplainRequireSignedAutomaticUpdates">Разрешает обновления только при уже настроенном доверенном издателе. Политика не назначает издателя.</string>
+    </stringTable>
+    <presentationTable />
+  </resources>
+</policyDefinitionResources>
