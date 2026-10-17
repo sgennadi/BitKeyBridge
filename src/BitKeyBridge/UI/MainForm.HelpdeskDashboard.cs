@@ -253,6 +253,8 @@ public sealed partial class MainForm
                         integrityStatus = "unavailable (insufficient access or I/O error)";
                     }
                 }
+                if (wizard.IsDisposed || readiness.IsDisposed)
+                    return;
                 readiness.Text =
                     $"Protected journal: {journalStatus} | Integrity: {integrityStatus} | " +
                     $"Audit broker: {brokerStatus} | " +
