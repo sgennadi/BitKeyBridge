@@ -223,6 +223,24 @@ jobs:
             throw "Direct ListView column construction is not allowed outside UiStyle. Use UiStyle.ConfigureListViewColumns."
           }
 
+      - name: Validate project versions under PowerShell StrictMode
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          [xml]$project = Get-Content src/BitKeyBridge/BitKeyBridge.csproj -Raw
+          $versions = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+          $informational = @($project.SelectNodes('/Project/PropertyGroup/InformationalVersion'))
+          if ($versions.Count -ne 1 -or $informational.Count -ne 1) {
+            throw "Expected exactly one Version and InformationalVersion node."
+          }
+          $version = [string]$versions[0].InnerText.Trim()
+          $informationalVersion = [string]$informational[0].InnerText.Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$' -or
+              $version -cne $informationalVersion) {
+            throw "Project metadata versions do not match valid SemVer."
+          }
+          Write-Host "Verified strict-mode project release version: $version"
+
       - name: Parse-check PowerShell Windows QA scripts
         shell: pwsh
         run: |

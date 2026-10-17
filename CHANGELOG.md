@@ -14,6 +14,8 @@
 
 - Extend the QA preflight CMD wrapper to save a separate non-elevating startup report before protected broker readiness, failing safely when process execution or report generation fails.
 
+- Fix ephemeral signing QA version extraction for PowerShell StrictMode and SDK-style multiple PropertyGroup XML nodes; compare Version against InformationalVersion and gate it early in CI.
+
 ## 0.30.2-rc.1
 
 **Integrated unsigned QA candidate — not a production release**

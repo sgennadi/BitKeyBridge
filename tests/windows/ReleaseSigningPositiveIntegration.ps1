@@ -55,9 +55,19 @@ $thumbprint = ''
 # Determine the expected ProductVersion from the release candidate's project.
 $projectFile = Join-Path $PSScriptRoot '..\..\src\BitKeyBridge\BitKeyBridge.csproj'
 [xml]$project = Get-Content -LiteralPath $projectFile -Raw
-$projectVersion = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
-if (-not $projectVersion -or $projectVersion -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') {
-    throw 'Cannot determine a valid SemVer from BitKeyBridge.csproj.'
+# PropertyGroup is a collection in SDK projects. Under Set-StrictMode Latest,
+# dereferencing .Version on every PropertyGroup fails for groups without it.
+# Query the XML nodes instead, and reject missing/duplicate version metadata.
+$versionNodes = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+$informationalNodes = @($project.SelectNodes('/Project/PropertyGroup/InformationalVersion'))
+if ($versionNodes.Count -ne 1 -or $informationalNodes.Count -ne 1) {
+    throw 'Expected exactly one Version and InformationalVersion in BitKeyBridge.csproj.'
+}
+$projectVersion = [string]$versionNodes[0].InnerText.Trim()
+$informationalVersion = [string]$informationalNodes[0].InnerText.Trim()
+if ($projectVersion -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$' -or
+    $informationalVersion -cne $projectVersion) {
+    throw 'Project Version and InformationalVersion must match valid SemVer.'
 }
 $tag = 'v' + $projectVersion
 # Derive a different but syntactically valid release tag for negative testing.
