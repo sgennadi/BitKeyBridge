@@ -742,6 +742,9 @@ public static class UiLayoutSelfTest
 
             VerifyMainViewportFill(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
+            var healthResults = FindByName(main, "AccessHealthResults") as ListView;
+            if (healthResults is not null && !healthResults.ShowItemToolTips)
+                failures.Add($"{formName}/{scenario.Name}: Access Health long diagnostics must have full-text hover access.");
             var toolsMenu = main.MainMenuStrip?.Items
                 .OfType<ToolStripMenuItem>()
                 .FirstOrDefault(x => x.Text == "Tools");

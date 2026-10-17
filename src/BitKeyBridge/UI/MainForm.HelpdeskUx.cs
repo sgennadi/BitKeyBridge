@@ -633,6 +633,24 @@ public sealed partial class MainForm
             true;
         _accessHealthResults.GridLines =
             true;
+        // At 175-200% DPI, long permission advice may exceed the
+        // available table width. Keep every diagnostic readable with
+        // tooltips and keyboard/double-click activation.
+        _accessHealthResults.ShowItemToolTips = true;
+        _accessHealthResults.AccessibleName = "Source-specific Access Health results";
+        _accessHealthResults.AccessibleDescription =
+            "Select a diagnostic and press Enter or double-click to read the complete remediation guidance.";
+        _accessHealthResults.ItemActivate += (_, _) =>
+        {
+            if (_accessHealthResults.SelectedItems.Count != 1)
+                return;
+            var row = _accessHealthResults.SelectedItems[0];
+            if (row.SubItems.Count < 4)
+                return;
+            _appDiagnostics.ShowMessage(
+                "Access Health: " + row.SubItems[0].Text + " / " + row.SubItems[1].Text,
+                row.SubItems[3].Text);
+        };
         _accessHealthResults.Dock =
             DockStyle.Fill;
         AddColumns(
@@ -666,9 +684,10 @@ public sealed partial class MainForm
             check);
         item.SubItems.Add(
             state);
-        item.SubItems.Add(
-            AccessHealthGuidanceService.Enrich(
-                source, check, state, detail));
+        var fullDetail = AccessHealthGuidanceService.Enrich(
+            source, check, state, detail);
+        item.SubItems.Add(fullDetail);
+        item.ToolTipText = fullDetail;
         _accessHealthResults.Items.Add(
             item);
     }

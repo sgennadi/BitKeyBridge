@@ -42,3 +42,12 @@ The global Tools menu captions for **Recovery Steps** and **Access Health**
 are translated in EN/RU/HE, retaining the same safe Ctrl+Shift+R/H keyboard
 gestures. Switching language does not reconstruct workspace tabs, invalidate
 search context, or change effective RBAC/audit policies.
+
+## Full diagnostic text under HiDPI/RDP
+
+Source-qualified recommendations are retained in the complete ListView row
+and its hover tooltip; **Enter** or double-click on an item displays the
+complete guidance in the application diagnostics panel. This avoids hiding
+important permission/broker steps beyond a fixed-width Detail column under
+175%-200% Windows scaling. No secret reads, automatic clipboard copy or
+permission changes occur.
