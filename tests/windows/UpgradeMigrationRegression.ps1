@@ -66,9 +66,35 @@ function Invoke-Apply([string]$Tool, [string]$Stage, [string]$Version,
     }
     $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $planPath -Encoding utf8
     $planHash = Hash-Of $planPath
-    & $Tool --apply-update-plan $planPath --apply-update-plan-sha256 $planHash --no-elevation
-    if ($LASTEXITCODE -ne 0) {
-        throw "Actual BitKeyBridge apply helper failed. Rollback=$Rollback Version=$Version ExitCode=$LASTEXITCODE"
+    # BitKeyBridge is a WinExe: PowerShell may return immediately from a
+    # GUI-subsystem native process. Wait explicitly for the REAL process
+    # before checking changed files, backup data or the exit code.
+    $start = [Diagnostics.ProcessStartInfo]::new($Tool)
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    [void]$start.ArgumentList.Add('--apply-update-plan')
+    [void]$start.ArgumentList.Add($planPath)
+    [void]$start.ArgumentList.Add('--apply-update-plan-sha256')
+    [void]$start.ArgumentList.Add($planHash)
+    [void]$start.ArgumentList.Add('--no-elevation')
+    $process = [Diagnostics.Process]::Start($start)
+    if ($null -eq $process) {
+        throw 'Failed to start real BitKeyBridge apply helper.'
+    }
+    try {
+        if (-not $process.WaitForExit(240000)) {
+            try { $process.Kill($true) }
+            catch [InvalidOperationException] {
+                Write-Warning 'Updater exited during test timeout cleanup.'
+            }
+            throw 'BitKeyBridge apply helper exceeded four-minute test timeout.'
+        }
+        if ($process.ExitCode -ne 0) {
+            throw "Actual BitKeyBridge apply helper failed. Rollback=$Rollback Version=$Version ExitCode=$($process.ExitCode)"
+        }
+    }
+    finally {
+        $process.Dispose()
     }
 }
 
