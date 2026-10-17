@@ -36,6 +36,23 @@ internal static class RecoveryWorkflowNavigationPolicy
             !string.IsNullOrWhiteSpace(value[prefix.Length..]);
     }
 
+    /// <summary>
+    /// A hostname-only AD search hit does not identify an exact directory
+    /// object. Require a source-returned DN or parseable nonempty object GUID
+    /// before claiming this guide can route to the selected AD computer.
+    /// This checks metadata identity only, never secret-read delegation.
+    /// </summary>
+    internal static bool HasAuthoritativeAdComputerId(HomeSearchResult? row)
+    {
+        if (row is null || row.IsCloudRecord || row.IdentityAmbiguous)
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(row.AdComputerDistinguishedName))
+            return true;
+
+        return Guid.TryParse(row.ComputerId, out var id) && id != Guid.Empty;
+    }
+
     internal static bool CanOpen(
         HomeSearchResult? initial, HomeSearchResult? current,
         RecoveryWorkflowRoute route,
@@ -55,6 +72,7 @@ internal static class RecoveryWorkflowNavigationPolicy
         }
 
         return adConnected &&
+               HasAuthoritativeAdComputerId(initial) &&
                route is RecoveryWorkflowRoute.BitLocker or RecoveryWorkflowRoute.Laps;
     }
 
@@ -63,11 +81,30 @@ internal static class RecoveryWorkflowNavigationPolicy
         var failures = new List<string>();
         var original = new HomeSearchResult
         {
-            ComputerName = "PC-TEST", BitLockerKeyCount = 1
+            ComputerName = "PC-TEST", BitLockerKeyCount = 1,
+            AdComputerDistinguishedName = "CN=PC-TEST,OU=Clients,DC=example,DC=com"
         };
         if (!CanOpen(original, original, RecoveryWorkflowRoute.BitLocker, true, false, true) ||
             !CanOpen(original, original, RecoveryWorkflowRoute.Laps, true, false, true))
             failures.Add("AD guided recovery navigation was blocked.");
+
+        original.AdComputerDistinguishedName = string.Empty;
+        if (HasAuthoritativeAdComputerId(original) ||
+            CanOpen(original, original, RecoveryWorkflowRoute.BitLocker,
+                true, false, true))
+            failures.Add("Hostname-only AD metadata passed guided recovery navigation.");
+
+        original.ComputerId = Guid.NewGuid().ToString();
+        if (!HasAuthoritativeAdComputerId(original) ||
+            !CanOpen(original, original, RecoveryWorkflowRoute.Laps,
+                true, false, true))
+            failures.Add("An exact AD object GUID could not route to metadata.");
+        original.ComputerId = "not-a-guid";
+        if (HasAuthoritativeAdComputerId(original))
+            failures.Add("Invalid AD object GUID was treated as authoritative.");
+        original.ComputerId = string.Empty;
+        original.AdComputerDistinguishedName =
+            "CN=PC-TEST,OU=Clients,DC=example,DC=com";
 
         var replacement = new HomeSearchResult
         {
