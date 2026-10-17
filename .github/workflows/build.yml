@@ -414,7 +414,7 @@ jobs:
     # Must run only on GitHub-hosted ephemeral Windows. This isolated test
     # creates temporary local accounts, installs an SCM service and adjusts
     # ProgramData ACLs; it must never run on a persistent/self-hosted machine.
-    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -451,7 +451,7 @@ jobs:
     # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
-      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
@@ -493,7 +493,7 @@ jobs:
     # passes. Never attach unsigned developer binaries to GitHub Releases.
     if: >-
       github.event_name == 'pull_request' &&
-      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
     runs-on: ubuntu-latest
     permissions:
@@ -551,6 +551,7 @@ jobs:
           From an ordinary, non-elevated CMD inside the EXE directory run:
 
               BitKeyBridge.exe --version
+              BitKeyBridge.exe --startup-diagnostics --no-elevation
               BitKeyBridge.exe --self-test --no-elevation
               BitKeyBridge.exe --audit-broker-preflight --no-elevation
 

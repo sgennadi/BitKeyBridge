@@ -6,6 +6,7 @@
 - Add a startup diagnostics CI smoke check and an operational guide for CyberArk EPM / standard-user launch triage. No security bypass or production release is implied.
 - Run CodeQL on stacked pull requests targeting integration branches, not only main/staging.
 - Reject unreadable, disappearing, directory-backed, and JSON-null machine security configurations instead of treating them as first-run defaults; add offline regression cases.
+- Run two-standard-user protected-audit integration, ephemeral signing checks and gated unsigned QA bundle for the stacked Helpdesk PR; make Find Device actually launch metadata search through existing authorization.
 
 ## 0.30.2-rc.1
 

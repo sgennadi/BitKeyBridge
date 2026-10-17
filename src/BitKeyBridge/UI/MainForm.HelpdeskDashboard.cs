@@ -97,9 +97,15 @@ public sealed partial class MainForm
             if (_homeWorkspaceTab is null)
                 return;
             _mainTabs.SelectedTab = _homeWorkspaceTab;
-            if (!string.IsNullOrWhiteSpace(quickQuery.Text))
-                _homeQuery.Text = quickQuery.Text.Trim();
+            var query = quickQuery.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(query))
+                _homeQuery.Text = query;
             _homeQuery.Focus();
+            // A deliberate Find Device click/Enter must execute a metadata
+            // search instead of only transferring keyboard focus. The Start
+            // handler remains authoritative for source and RBAC checks.
+            if (query.Length >= SearchText.MinimumLiveSearchCharacters)
+                _homeSearchButton.PerformClick();
         }
         search.Click += (_, _) => OpenSearch();
         quickQuery.KeyDown += (_, e) =>
