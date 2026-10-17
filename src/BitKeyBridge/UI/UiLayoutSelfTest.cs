@@ -84,6 +84,9 @@ public static class UiLayoutSelfTest
         VerifyLapsHelpdeskStates(
             failures);
 
+        VerifyHebrewIdentityDirection(
+            failures);
+
         VerifyStartSourcePolicies(failures);
 
         var factories =
@@ -434,6 +437,47 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    private static void VerifyHebrewIdentityDirection(List<string> failures)
+    {
+        try
+        {
+            using var form = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+            form.PreviewShellLanguageForLayoutTest("he");
+
+            var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
+            if (tabs is null || !tabs.RightToLeftLayout ||
+                tabs.RightToLeft != RightToLeft.Yes ||
+                tabs.TabPages.Count < 6 ||
+                tabs.TabPages[0].Text != UiLanguageService.Translate("he", "Start") ||
+                tabs.TabPages[3].Name != "DevicesWorkspace")
+                failures.Add("Hebrew mirrored navigation does not retain source-qualified tab identities.");
+
+            foreach (var name in new[]
+            {
+                "HomeUnifiedQuery", "BitLockerSearchQuery",
+                "LapsLiveSearchQuery", "UnifiedDeviceSearchQuery",
+                "BitLockerRecoverySecretField", "LapsPasswordValue",
+                "EntraBitLockerSecretField"
+            })
+            {
+                if (FindByName(form, name) is not TextBox literal ||
+                    literal.RightToLeft != RightToLeft.No)
+                    failures.Add("Hebrew shell changed identity or secret field direction: " + name);
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Hebrew main shell orientation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 

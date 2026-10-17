@@ -406,6 +406,17 @@ public sealed partial class MainForm
             _mainTabs.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
             _mainTabs.RightToLeftLayout = rtl;
 
+            // Recovery-key strings, passwords, GUIDs and account/device IDs
+            // must stay visually LTR even under mirrored Hebrew navigation.
+            foreach (var literal in new[]
+            {
+                _homeQuery, _startQuery, _lapsQuery, _unifiedQuery,
+                _startKey, _lapsPassword, _deviceRecoveryKey,
+                _adServer, _adDomain, _adUsername,
+                _cloudTenant, _cloudClient, _cloudUsername, _cloudThumbprint
+            })
+                literal.RightToLeft = RightToLeft.No;
+
             var keys = new[]
             {
                 "Start", "BitLocker", "LAPS", "Devices", "Helpdesk",
@@ -437,6 +448,14 @@ public sealed partial class MainForm
             _mainTabs.ResumeLayout(performLayout: true);
             ResumeLayout(performLayout: true);
         }
+    }
+
+    internal void PreviewShellLanguageForLayoutTest(string code)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Language preview is restricted to UI tests.");
+        _uiLanguageCode = UiLanguageService.Normalize(code);
+        ApplyShellLanguage();
     }
 
     private TabPage BuildHomeWorkspaceTab()
@@ -1956,6 +1975,7 @@ public sealed partial class MainForm
             new RowStyle(
                 SizeType.AutoSize));
 
+        _startKey.Name = "BitLockerRecoverySecretField";
         _startKey.Dock =
             DockStyle.Top;
         _startKey.ReadOnly = true;
@@ -2415,6 +2435,7 @@ public sealed partial class MainForm
                     4)
         }, 0, 1);
 
+        _deviceRecoveryKey.Name = "EntraBitLockerSecretField";
         _deviceRecoveryKey.Dock =
             DockStyle.Top;
         _deviceRecoveryKey.ReadOnly = true;
