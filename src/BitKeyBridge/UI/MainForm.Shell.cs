@@ -2212,7 +2212,7 @@ public sealed partial class MainForm
 
     private TabPage BuildDevicesWorkspaceTab()
     {
-        var tab = new TabPage("Devices");
+        var tab = new TabPage("Devices") { Name = "DevicesWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill

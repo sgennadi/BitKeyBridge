@@ -1061,6 +1061,11 @@ public static class UiLayoutSelfTest
                     $"{formName}/{scenario.Name}: scheduled updater is missing " +
                     requiredBackgroundUpdaterControl);
         }
+        if (tabs.TabPages.Count > 3 &&
+            tabs.TabPages[3].Name != "DevicesWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant Devices workspace ID missing; localization must not break navigation.");
+
         var actualOrder = tabs.TabPages.Cast<TabPage>()
             .Select(page => page.Text).ToArray();
         if (actualOrder.Length < preferredOrder.Length ||
