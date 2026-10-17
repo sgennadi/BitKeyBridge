@@ -86,6 +86,7 @@ internal static class Program
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--fleet-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--scheduled-update", StringComparison.OrdinalIgnoreCase) ||
@@ -288,6 +289,7 @@ internal static class Program
         var noElevation = args.Any(x => x.Equals("--no-elevation", StringComparison.OrdinalIgnoreCase));
         var readOnlyStatusCommand = args.Any(x =>
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--fleet-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
@@ -1056,6 +1058,9 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase)))
             return ProtectedAuditCapacityService.PrintStatus();
+
+        if (args.Any(x => x.Equals("--fleet-status", StringComparison.OrdinalIgnoreCase)))
+            return FleetInventoryService.PrintJson(config);
 
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
         {
@@ -1829,6 +1834,7 @@ internal static class Program
             Directory.CreateDirectory(tempDirectory);
 
             failures.AddRange(LapsSelfTest.Run());
+            failures.AddRange(FleetInventoryService.RunOfflineTests());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
@@ -4277,6 +4283,7 @@ internal static class Program
         Console.WriteLine("  --output-root <path>  Local/UNC export root for this run");
         Console.WriteLine("  --output-subdirectory <name>  Export subdirectory for this run");
         Console.WriteLine("  --health              Print the local health snapshot as JSON");
+        Console.WriteLine("  --fleet-status        Print secret-free machine, version, broker and update metadata for managed collection");
         Console.WriteLine("  --install-service     Install/update and start the native Windows Service");
         Console.WriteLine("  --uninstall-service   Stop and remove the native Windows Service");
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
