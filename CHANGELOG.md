@@ -12,6 +12,8 @@
 
 - Fix accidental duplicate content and invalid PowerShell syntax in ephemeral signing QA test; dynamically derive its expected version and parse-check all Windows QA scripts.
 
+- Extend the QA preflight CMD wrapper to save a separate non-elevating startup report before protected broker readiness, failing safely when process execution or report generation fails.
+
 ## 0.30.2-rc.1
 
 **Integrated unsigned QA candidate — not a production release**

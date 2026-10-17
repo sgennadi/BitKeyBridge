@@ -14,6 +14,12 @@ To verify WinForms layout without connecting to AD or Graph:
 
     .\BitKeyBridge.exe --ui-self-test
 
+To collect both startup prerequisites and protected audit-broker readiness into separate per-user JSON files without elevation, run the QA helper next to the release-candidate EXE:
+
+    BitKeyBridge-DomainPreflight.cmd "C:\QA\BitKeyBridge.exe"
+
+The command writes two reports under %LOCALAPPDATA%\BitKeyBridge\Acceptance, does not read recovery passwords, and does not require administrator rights. The optional /probe argument is an explicitly requested synthetic audit event; omit it for a read-only check.
+
 For the existing GUI, simply run:
 
     .\BitKeyBridge.exe

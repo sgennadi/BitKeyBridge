@@ -16,6 +16,8 @@ Verify SHA256SUMS.txt for the 3 architecture ZIPs before extracting. Use only a 
     BitKeyBridge.exe --ui-self-test
     BitKeyBridge.exe --audit-broker-preflight --no-elevation
 
+For a single local diagnostic collection step, run the packaged BitKeyBridge-DomainPreflight.cmd with the EXE path; it collects two per-user JSON reports without elevation.
+
 To exercise the broker, an administrator must provision the test service and explicit scoped RecoveryReaders policy. Then as an authorized **non-admin** run (writes one synthetic health event):
 
     BitKeyBridge.exe --audit-broker-preflight --probe --no-elevation
