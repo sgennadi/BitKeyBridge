@@ -38,3 +38,23 @@ Use `BitKeyBridge.exe --managed-update-policy --no-elevation` to inspect
 effective restrictions. Manual updating remains a distinct administrator
 action. Configure a central policy that reflects your environment; do not
 silently bypass AppLocker, WDAC or CyberArk EPM.
+
+
+## v0.32.0 fleet health report additions
+
+`brokerServiceHealth` distinguishes *NotConfigured*, *PolicyIncomplete*,
+*ServiceNotInstalled*, *ServiceNotRunningOrUnknown*, *ServiceIdentityUnexpected*
+and *ServiceRunningNotVerified*. **Running is not broker readiness**:
+the report deliberately cannot claim a durable protected audit ACK or verified
+journal chain from the SCM state alone.
+
+`lastUpdateOutcome` is one of *Success*, *Failed*, *Unclassified* or
+*UnknownOrNotRecorded*. The last value is also used when protected update
+history is unavailable to the collector; it must not be interpreted as a
+healthy endpoint. `lastUpdateUtc` is supplied when a recent history entry
+was readable. Update history details, publisher metadata, release URLs and
+any credential-like values are never included.
+
+This is a versioned local JSON output for an approved management system
+to collect. No new network sender, remote control action, writable policy
+channel or implicit unsigned auto-install consent is introduced.
