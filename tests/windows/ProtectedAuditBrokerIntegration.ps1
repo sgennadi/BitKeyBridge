@@ -66,6 +66,36 @@ function Invoke-ElevatedTestCommand {
     }
 }
 
+function Invoke-StandardUserStartupDiagnostics {
+    param([Parameter(Mandatory)][pscredential]$Credential)
+    $nonce = [guid]::NewGuid().ToString('N')
+    $outPath = Join-Path $env:RUNNER_TEMP ("startup-standard-" + $nonce + ".json")
+    $errPath = Join-Path $env:RUNNER_TEMP ("startup-standard-" + $nonce + ".err")
+    try {
+        $process = Start-Process -FilePath $standardExecutable -WorkingDirectory (Join-Path $env:WINDIR 'System32') -ArgumentList @('--startup-diagnostics', '--no-elevation') -Credential $Credential -LoadUserProfile -Wait -PassThru -RedirectStandardOutput $outPath -RedirectStandardError $errPath
+        if ($process.ExitCode -ne 0) {
+            $stderr = if (Test-Path -LiteralPath $errPath) {
+                Get-Content -LiteralPath $errPath -Raw
+            } else { '' }
+            throw "Startup diagnostics returned $($process.ExitCode): $stderr"
+        }
+        $report = Get-Content -LiteralPath $outPath -Raw | ConvertFrom-Json
+        if ($report.Mode -ne 'NonElevatingStartupDiagnostics' -or
+            $report.WindowsToken -ne 'StandardOrFiltered' -or
+            -not $report.ProcessArchitecture) {
+            throw 'Standard Windows token was not validated by startup diagnostics.'
+        }
+        $config = @($report.Checks | Where-Object Check -eq 'MachineConfiguration')
+        if ($config.Count -ne 1 -or $config[0].Status -ne 'Readable') {
+            throw 'Protected machine configuration must be readable by standard users, not writable.'
+        }
+        Write-Host 'Standard-user startup diagnostics passed without elevation or secret reads.'
+    }
+    finally {
+        Remove-Item -LiteralPath $outPath, $errPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-StandardUserProbe {
     param(
         [Parameter(Mandatory)][pscredential]$Credential,
@@ -248,6 +278,12 @@ try {
 
     $reader = ($accounts | Where-Object Name -eq $readerName).Credential
     $denied = ($accounts | Where-Object Name -eq $deniedName).Credential
+
+    # Exercise process creation and machine policy READ access with two
+    # separate true non-admin Windows tokens, not the privileged CI runner.
+    Invoke-StandardUserStartupDiagnostics -Credential $reader
+    Invoke-StandardUserStartupDiagnostics -Credential $denied
+
     $accepted = $false
     for ($attempt = 0; $attempt -lt 12; $attempt++) {
         try {

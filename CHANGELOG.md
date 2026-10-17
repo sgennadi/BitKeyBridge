@@ -1,3 +1,21 @@
+## 0.30.3-rc.1
+
+- Add a non-elevating, secret-free `--startup-diagnostics` mode that runs before loading machine configuration, allowing standard users to distinguish missing or unreadable policy from a GUI startup failure.
+- Fail closed when restricted Windows identity lookups prevent Helpdesk readiness or administrator-tab visibility checks; keep the main Helpdesk window available without exposing privileged controls.
+- Convert the Helpdesk deployment checklist into a shared DPI-aware dialog and include it in compact/175%/200% WinForms layout regression testing.
+- Add a startup diagnostics CI smoke check and an operational guide for CyberArk EPM / standard-user launch triage. No security bypass or production release is implied.
+- Run CodeQL on stacked pull requests targeting integration branches, not only main/staging.
+- Reject unreadable, disappearing, directory-backed, and JSON-null machine security configurations instead of treating them as first-run defaults; add offline regression cases.
+- Run two-standard-user protected-audit integration, ephemeral signing checks and gated unsigned QA bundle for the stacked Helpdesk PR; make Find Device actually launch metadata search through existing authorization.
+- Exercise startup diagnostics under both authorized and unauthorized non-admin Windows identities in the protected-audit integration harness.
+- Make ephemeral signing integration derive expected ProductVersion and negative test tag from project instead of hardcoding the prior v0.30.2 RC.
+
+- Fix accidental duplicate content and invalid PowerShell syntax in ephemeral signing QA test; dynamically derive its expected version and parse-check all Windows QA scripts.
+
+- Extend the QA preflight CMD wrapper to save a separate non-elevating startup report before protected broker readiness, failing safely when process execution or report generation fails.
+
+- Fix ephemeral signing QA version extraction for PowerShell StrictMode and SDK-style multiple PropertyGroup XML nodes; compare Version against InformationalVersion and gate it early in CI.
+
 ## 0.30.2-rc.1
 
 **Integrated unsigned QA candidate — not a production release**

@@ -26,8 +26,31 @@ if not exist "%BKB_REPORT_DIR%" (
 )
 
 set "BKB_REPORT=%BKB_REPORT_DIR%\Broker-Preflight-%RANDOM%-%RANDOM%.json"
-echo BitKeyBridge broker acceptance preflight
+set "BKB_STARTUP_REPORT=%BKB_REPORT_DIR%\Startup-Preflight-%RANDOM%-%RANDOM%.json"
+echo BitKeyBridge standard-user acceptance preflight
 echo EXE: "%BKB_EXE%"
+echo.
+echo Checking startup permissions with the current Windows token...
+"%BKB_EXE%" --startup-diagnostics --no-elevation > "%BKB_STARTUP_REPORT%"
+set "BKB_STARTUP_EXIT=%ERRORLEVEL%"
+if not "%BKB_STARTUP_EXIT%"=="0" (
+    echo ERROR: Startup diagnostics failed with exit %BKB_STARTUP_EXIT%.
+    echo Read the report if present: "%BKB_STARTUP_REPORT%"
+    exit /b 2
+)
+if not exist "%BKB_STARTUP_REPORT%" (
+    echo ERROR: No startup diagnostic report was written.
+    exit /b 2
+)
+for %%F in ("%BKB_STARTUP_REPORT%") do (
+    if %%~zF EQU 0 (
+        echo ERROR: Startup diagnostics returned empty JSON.
+        exit /b 2
+    )
+)
+echo Startup diagnostics report: "%BKB_STARTUP_REPORT%"
+echo.
+echo Checking protected audit broker configuration...
 if defined BKB_PROBE (
     echo Explicit synthetic protected audit probe: ENABLED
 ) else (
@@ -49,8 +72,9 @@ for %%F in ("%BKB_REPORT%") do (
 )
 
 echo.
-echo Preflight exit code: %BKB_EXIT%
-echo Report: "%BKB_REPORT%"
+echo Broker preflight exit code: %BKB_EXIT%
+echo Startup report: "%BKB_STARTUP_REPORT%"
+echo Broker report: "%BKB_REPORT%"
 echo The report contains machine/identity metadata but no recovery secrets.
 echo Do not publish this report or paste it into public GitHub issues.
 echo.

@@ -223,6 +223,42 @@ jobs:
             throw "Direct ListView column construction is not allowed outside UiStyle. Use UiStyle.ConfigureListViewColumns."
           }
 
+      - name: Validate project versions under PowerShell StrictMode
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          [xml]$project = Get-Content src/BitKeyBridge/BitKeyBridge.csproj -Raw
+          $versions = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+          $informational = @($project.SelectNodes('/Project/PropertyGroup/InformationalVersion'))
+          if ($versions.Count -ne 1 -or $informational.Count -ne 1) {
+            throw "Expected exactly one Version and InformationalVersion node."
+          }
+          $version = [string]$versions[0].InnerText.Trim()
+          $informationalVersion = [string]$informational[0].InnerText.Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$' -or
+              $version -cne $informationalVersion) {
+            throw "Project metadata versions do not match valid SemVer."
+          }
+          Write-Host "Verified strict-mode project release version: $version"
+
+      - name: Parse-check PowerShell Windows QA scripts
+        shell: pwsh
+        run: |
+          $issues = @()
+          foreach ($file in (Get-ChildItem tests/windows -Recurse -Filter *.ps1 -File)) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName, [ref]$tokens, [ref]$parseErrors)
+            foreach ($issue in $parseErrors) {
+              $issues += "$($file.Name):$($issue.Extent.StartLineNumber): $($issue.Message)"
+            }
+          }
+          if ($issues.Count -ne 0) {
+            $issues | ForEach-Object { Write-Host $_ }
+            throw "PowerShell QA scripts contain syntax errors."
+          }
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
@@ -303,6 +339,25 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
           }
+
+      # Basic JSON contract smoke on a CI runner. The broker integration job
+      # separately launches this mode under TWO genuine non-admin accounts.
+      - name: Startup diagnostics JSON smoke
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $output = & $exe --startup-diagnostics --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "Startup diagnostics failed with exit code $LASTEXITCODE."
+          }
+          $report = $output | ConvertFrom-Json
+          if ($report.Mode -ne "NonElevatingStartupDiagnostics" -or
+              -not $report.Checks -or
+              -not $report.ProcessArchitecture) {
+            throw "Startup diagnostics did not return the expected secret-free JSON report."
+          }
+          Write-Host "Non-elevating startup diagnostics: $($report.Checks.Count) checks."
 
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'
@@ -395,7 +450,7 @@ jobs:
     # Must run only on GitHub-hosted ephemeral Windows. This isolated test
     # creates temporary local accounts, installs an SCM service and adjusts
     # ProgramData ACLs; it must never run on a persistent/self-hosted machine.
-    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -432,7 +487,7 @@ jobs:
     # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
-      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
@@ -474,7 +529,7 @@ jobs:
     # passes. Never attach unsigned developer binaries to GitHub Releases.
     if: >-
       github.event_name == 'pull_request' &&
-      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016')
+      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
     runs-on: ubuntu-latest
     permissions:
@@ -511,9 +566,9 @@ jobs:
             test -s "BitKeyBridge-${rid}.zip"
           done
           sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
-          printf 'Git commit: %s\nVersion: 0.30.2-rc.1 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
+          printf 'Git commit: %s\nVersion: 0.30.3-rc.1 (TEST ONLY)\n' "${GITHUB_SHA}" > BUILD-INFO.txt
           cat > README-TEST.txt <<'EOF'
-          BitKeyBridge 0.30.2-rc.1 -- UNSIGNED QA TEST BUNDLE
+          BitKeyBridge 0.30.3-rc.1 -- UNSIGNED QA TEST BUNDLE
           ==================================================
           This archive is NOT a production release and NOT organization-signed.
           Do not install on a domain controller or production Helpdesk workstation.
@@ -532,6 +587,7 @@ jobs:
           From an ordinary, non-elevated CMD inside the EXE directory run:
 
               BitKeyBridge.exe --version
+              BitKeyBridge.exe --startup-diagnostics --no-elevation
               BitKeyBridge.exe --self-test --no-elevation
               BitKeyBridge.exe --audit-broker-preflight --no-elevation
 
@@ -551,7 +607,7 @@ jobs:
       - name: Publish one-click unsigned QA bundle (Actions only)
         uses: actions/upload-artifact@v7
         with:
-          name: BitKeyBridge-v0.30.2-rc.1-TEST-BUNDLE-UNSIGNED
+          name: BitKeyBridge-v0.30.3-rc.1-TEST-BUNDLE-UNSIGNED
           path: test-bundle/
           if-no-files-found: error
           retention-days: 90

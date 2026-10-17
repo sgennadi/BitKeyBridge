@@ -17,6 +17,15 @@ public static class JsonStore
         return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options);
     }
 
+    // Use only for machine security policy: never mask a missing or
+    // unreadable file after the caller verified that policy exists.
+    public static T ReadRequired<T>(string path)
+    {
+        return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options)
+            ?? throw new JsonException(
+                "Required JSON configuration must not be null.");
+    }
+
     public static void WriteAtomic<T>(string path, T value)
     {
         var directory = Path.GetDirectoryName(path);

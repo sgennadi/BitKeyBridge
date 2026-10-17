@@ -57,6 +57,14 @@ internal static class Program
             return RunSelfTest();
         }
 
+        // Runs before machine configuration loading and before any UAC decision.
+        // Suitable for diagnosing standard-user launches without reading secrets.
+        if (args.Any(x => x.Equals("--startup-diagnostics", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConsoleHelper.EnsureConsole();
+            return StartupDiagnosticService.Run();
+        }
+
         if (args.Any(x => x.Equals("--ui-self-test", StringComparison.OrdinalIgnoreCase)))
         {
             ConsoleHelper.EnsureConsole();
@@ -231,7 +239,9 @@ internal static class Program
         }
         catch (Exception ex)
             when (ex is ConfigurationLoadException or
-                  FutureConfigurationSchemaException)
+                  FutureConfigurationSchemaException or
+                  UnauthorizedAccessException or
+                  System.Security.SecurityException)
         {
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge startup blocked because application configuration could not be loaded safely. " +
@@ -1087,9 +1097,46 @@ internal static class Program
         if (isCli)
             return RunExport(config, args).GetAwaiter().GetResult();
 
-        ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm(config));
-        return 0;
+        try
+        {
+            ApplicationConfiguration.Initialize();
+            Application.Run(new MainForm(config));
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            // GUI failures must never terminate silently for standard users.
+            // Log only a sanitized exception type/message, never configuration
+            // values, credentials, recovery passwords, or stack traces.
+            var message = "BitKeyBridge could not open its main window." +
+                Environment.NewLine + Environment.NewLine +
+                DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
+                Environment.NewLine + Environment.NewLine +
+                "Try launching with your normal Windows account. " +
+                "If this is an access denied error, ask an administrator to check " +
+                "read permissions on the machine configuration; do not grant write access.";
+            try
+            {
+                var folder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "BitKeyBridge", "Logs");
+                Directory.CreateDirectory(folder);
+                File.AppendAllText(Path.Combine(folder, "startup-errors.log"),
+                    DateTimeOffset.UtcNow.ToString("O") + " " +
+                    DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
+                    Environment.NewLine);
+            }
+            catch
+            {
+                // The dialog remains the fallback if the user profile is unavailable.
+            }
+            if (Environment.UserInteractive)
+                MessageBox.Show(message, "BitKeyBridge Startup Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else
+                Console.Error.WriteLine(message);
+            return 13;
+        }
     }
 
     private static async Task<int> RunExport(AppConfig config, string[] args)
@@ -2923,6 +2970,47 @@ internal static class Program
                         "Missing configuration did not load safe defaults.");
                 }
 
+                // A directory at the expected file path and JSON null
+                // must not be treated as absent configuration. This
+                // specifically guards against permissive File.Exists.
+                var directoryAsConfig =
+                    Path.Combine(tempDirectory, "directory-appsettings.json");
+                Directory.CreateDirectory(directoryAsConfig);
+                var directoryRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        directoryAsConfig,
+                        Path.Combine(tempDirectory, "directory-status.json"),
+                        Path.Combine(tempDirectory, "directory-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    directoryRejected = true;
+                }
+
+                if (!directoryRejected)
+                    failures.Add("Configuration path that is a directory did not fail closed.");
+
+                var nullConfigPath =
+                    Path.Combine(tempDirectory, "null-appsettings.json");
+                File.WriteAllText(nullConfigPath, "null");
+                var nullRejected = false;
+                try
+                {
+                    _ = ConfigService.LoadAppConfig(
+                        nullConfigPath,
+                        Path.Combine(tempDirectory, "null-status.json"),
+                        Path.Combine(tempDirectory, "null-backups"));
+                }
+                catch (ConfigurationLoadException)
+                {
+                    nullRejected = true;
+                }
+
+                if (!nullRejected)
+                    failures.Add("Null machine policy JSON did not fail closed.");
+
                 var corruptConfigPath =
                     Path.Combine(
                         tempDirectory,
@@ -3974,6 +4062,7 @@ internal static class Program
         Console.WriteLine("GUI:");
         Console.WriteLine("  BitKeyBridge.exe");
         Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout without showing the UI");
+        Console.WriteLine("  --startup-diagnostics Check standard-user startup prerequisites without reading secrets or elevating");
         Console.WriteLine();
         Console.WriteLine("CLI:");
         Console.WriteLine("  --cli                 Export using saved scopes");

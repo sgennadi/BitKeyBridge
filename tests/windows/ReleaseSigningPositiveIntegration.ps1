@@ -52,7 +52,27 @@ $publisherPublic = $null
 $testPfx = ''
 $testPfxPassword = ''
 $thumbprint = ''
-$tag = 'v0.30.2-rc.1'
+# Determine the expected ProductVersion from the release candidate's project.
+$projectFile = Join-Path $PSScriptRoot '..\..\src\BitKeyBridge\BitKeyBridge.csproj'
+[xml]$project = Get-Content -LiteralPath $projectFile -Raw
+# PropertyGroup is a collection in SDK projects. Under Set-StrictMode Latest,
+# dereferencing .Version on every PropertyGroup fails for groups without it.
+# Query the XML nodes instead, and reject missing/duplicate version metadata.
+$versionNodes = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+$informationalNodes = @($project.SelectNodes('/Project/PropertyGroup/InformationalVersion'))
+if ($versionNodes.Count -ne 1 -or $informationalNodes.Count -ne 1) {
+    throw 'Expected exactly one Version and InformationalVersion in BitKeyBridge.csproj.'
+}
+$projectVersion = [string]$versionNodes[0].InnerText.Trim()
+$informationalVersion = [string]$informationalNodes[0].InnerText.Trim()
+if ($projectVersion -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$' -or
+    $informationalVersion -cne $projectVersion) {
+    throw 'Project Version and InformationalVersion must match valid SemVer.'
+}
+$tag = 'v' + $projectVersion
+# Derive a different but syntactically valid release tag for negative testing.
+$wrongVersionTag = 'v' + ($projectVersion -replace '^(\d+)\.(\d+)\.(\d+)', '$1.$2.9999')
+if ($wrongVersionTag -ceq $tag) { $wrongVersionTag = 'v0.0.0' }
 $rids = @('win-x64', 'win-x86', 'win-arm64')
 $original = @{}
 $rootTrustAdded = $false
@@ -293,7 +313,7 @@ try {
     $wrongPin = '0' * 40
     if ($wrongPin -ceq $thumbprint) { $wrongPin = 'F' * 40 }
     Require-Rejection -Case 'wrong signer thumbprint' -Pin $wrongPin -Version $tag
-    Require-Rejection -Case 'wrong ProductVersion' -Pin $thumbprint -Version 'v0.30.2-rc.2'
+    Require-Rejection -Case 'wrong ProductVersion' -Pin $thumbprint -Version $wrongVersionTag
 
     $arm = Join-Path $release 'BitKeyBridge-win-arm64.zip'
     $armBackup = Join-Path $root 'original-arm64.zip'
