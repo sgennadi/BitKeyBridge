@@ -203,19 +203,7 @@ public sealed partial class MainForm
             Height = 165,
             Dock = DockStyle.Top
         };
-        healthResults.Columns.Add("Check", 190);
-        healthResults.Columns.Add("Result", 360);
-        void ResizeHealthColumns()
-        {
-            if (healthResults.IsDisposed || healthResults.Columns.Count < 2)
-                return;
-            var width = Math.Max(220, healthResults.ClientSize.Width -
-                SystemInformation.VerticalScrollBarWidth - 8);
-            var first = Math.Min(Math.Max(130, width / 3), 240);
-            healthResults.Columns[0].Width = first;
-            healthResults.Columns[1].Width = Math.Max(90, width - first);
-        }
-        healthResults.SizeChanged += (_, _) => ResizeHealthColumns();
+        UiStyle.ConfigureListViewColumns(healthResults, ("Check", 190), ("Result", 360));
         void ShowHealth(string name, string result)
         {
             if (wizard.IsDisposed || healthResults.IsDisposed)
@@ -391,7 +379,6 @@ public sealed partial class MainForm
         };
         close.Click += (_, _) => wizard.Close();
         wizard.CancelButton = close;
-        ResizeHealthColumns();
         wizard.ShowDialog(this);
     }
 
