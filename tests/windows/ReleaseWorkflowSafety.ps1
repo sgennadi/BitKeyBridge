@@ -79,13 +79,26 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
     throw 'Stable unsigned v0.30.4 lacks exact commit, broker, legacy upgrade, or checksum gates.'
 }
 
+# v0.30.5 must use its explicitly approved release branch and safe ZIP build.
+$pushBranches = @($workflow -split '\n' | Where-Object { $_ -like '    branches: *' })
+if ($pushBranches.Count -ne 1 -or
+    -not $pushBranches[0].Contains('"release/v0.30.5"') -or
+    -not $release.Contains("github.event.head_commit.message == 'Release v0.30.5'") -or
+    -not $release.Contains("github.ref != 'refs/heads/release/v0.30.5'") -or
+    -not $release.Contains("needs['legacy-upgrade-regression'].result == 'success'") -or
+    -not $release.Contains("needs['audit-broker-integration'].result == 'success'") -or
+    -not $workflow.Contains('Compress-Archive -LiteralPath $exe -DestinationPath $zip') -or
+    -not $workflow.Contains('Verify-UpdateZipLayout.ps1') -or
+    -not $workflow.Contains('UpdateZipLayoutRegression.ps1')) {
+    throw 'v0.30.5 trigger, ZIP regression, broker or upgrade gates are missing.'
+}
+
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch
     "github\.head_ref == 'feature/v0\.30\.4-reliability-20261017'") {
     throw 'Reliability PR must execute the protected audit broker integration.'
 }
-
 # Never delete operator release branches or install online updates from CI.
 $forbidden = @(
     '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',
