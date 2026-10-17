@@ -318,6 +318,29 @@ public static class UiLayoutSelfTest
                         ClientId = Guid.Empty.ToString()
                     })),
             (
+                "Recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig
+                        {
+                            RbacEnabled = true,
+                            RequireRecoveryAccessReference = true,
+                            RequireProtectedAuditForRecovery = true,
+                            AuditBrokerEnabled = true,
+                            RbacRecoveryReaders = ["S-1-5-32-544"]
+                        },
+                        new HomeSearchResult
+                        {
+                            ComputerName = "PC-12345",
+                            BitLockerKeyCount = 2,
+                            LatestRecoveryId = Guid.Empty.ToString(),
+                            LapsCandidateFound = true,
+                            LapsStatus = "Detected"
+                        },
+                        adConnected: true,
+                        cloudConnected: false,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }))),
+            (
                 "Recovery access",
                 () =>
                     new RecoveryAccessDialog(

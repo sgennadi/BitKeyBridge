@@ -19,11 +19,14 @@ public sealed partial class MainForm
 
         var actions = CreateActionFlow();
         var search = NewActionButton("Find Device");
+        var prepare = NewActionButton("Recovery Steps");
+        prepare.Name = "HelpdeskRecoveryStepsButton";
+        prepare.AccessibleName = "Review recovery steps without revealing a password";
         var bitlocker = NewActionButton("BitLocker");
         var laps = NewActionButton("LAPS");
         var access = NewActionButton("Access Health");
         var support = NewActionButton("Support Bundle");
-        actions.Controls.AddRange([search, bitlocker, laps, access, support]);
+        actions.Controls.AddRange([search, prepare, bitlocker, laps, access, support]);
         root.Controls.Add(actions);
 
         var quickQuery = new TextBox
@@ -108,6 +111,7 @@ public sealed partial class MainForm
                 _homeSearchButton.PerformClick();
         }
         search.Click += (_, _) => OpenSearch();
+        prepare.Click += (_, _) => ShowRecoveryWorkflowSteps();
         quickQuery.KeyDown += (_, e) =>
         {
             if (e.KeyCode != Keys.Enter)

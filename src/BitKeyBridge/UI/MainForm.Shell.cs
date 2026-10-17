@@ -337,6 +337,10 @@ public sealed partial class MainForm
         }
 
         tools.DropDownItems.Add(
+            "Recovery Steps (no secret read)",
+            null,
+            (_, _) => ShowRecoveryWorkflowSteps());
+        tools.DropDownItems.Add(
             "Latest GitHub release",
             null,
             (_, _) => OpenLatestRelease());
