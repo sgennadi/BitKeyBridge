@@ -1832,6 +1832,7 @@ internal static class Program
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AccessHealthLocalService.RunOfflineTests());
+            failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(

@@ -3,6 +3,10 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly TabControl _mainTabs = new();
+    private ToolStripMenuItem? _toolsTopMenu;
+    private ToolStripMenuItem? _languageTopMenu;
+    private readonly List<ToolStripMenuItem> _languageChoices = [];
+    private string _uiLanguageCode = "en";
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly Button _connectAdButton = new();
@@ -228,6 +232,7 @@ public sealed partial class MainForm
         // Do not change selection in Shown (including after the connection
         // wizard), and never silently switch to Helpdesk on normal launch.
         _mainTabs.SelectedTab = _homeWorkspaceTab;
+        ApplyShellLanguage();
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
@@ -336,8 +341,98 @@ public sealed partial class MainForm
             null,
             (_, _) => OpenLatestRelease());
 
+        _toolsTopMenu = tools;
         menu.Items.Add(tools);
+
+        // Language selection is per user. Never change machine RBAC, cloud
+        // credentials, system locale or the saved search/recovery context.
+        var languages = new ToolStripMenuItem("Language")
+        {
+            Name = "UiLanguageMenu"
+        };
+        _languageTopMenu = languages;
+        foreach (var language in UiLanguageService.SupportedLanguages)
+        {
+            var option = new ToolStripMenuItem(language.DisplayName)
+            {
+                Name = "UiLanguage-" + language.Code,
+                Tag = language.Code,
+                CheckOnClick = false
+            };
+            option.Click += (_, _) => SetShellLanguage(language.Code);
+            languages.DropDownItems.Add(option);
+            _languageChoices.Add(option);
+        }
+        menu.Items.Add(languages);
         return menu;
+    }
+
+    private void SetShellLanguage(string code)
+    {
+        var next = UiLanguageService.Normalize(code);
+        if (string.Equals(next, _uiLanguageCode, StringComparison.Ordinal))
+            return;
+        try
+        {
+            UiLanguageService.SavePreferred(next);
+            _uiLanguageCode = next;
+            ApplyShellLanguage();
+            QueueMainViewportReflow();
+        }
+        catch (Exception ex)
+        {
+            _appDiagnostics.ShowMessage(
+                "Cannot save the selected interface language.",
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private void ApplyShellLanguage()
+    {
+        var rtl = UiLanguageService.IsRightToLeft(_uiLanguageCode);
+        SuspendLayout();
+        _mainTabs.SuspendLayout();
+        try
+        {
+            // WinForms handles the mirrored shell and tab strip; identifiers
+            // and recovery-key text inside functional workspaces are NOT
+            // converted, reversed or translated by this operation.
+            RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+            RightToLeftLayout = rtl;
+            _mainTabs.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+            _mainTabs.RightToLeftLayout = rtl;
+
+            var keys = new[]
+            {
+                "Start", "BitLocker", "LAPS", "Devices", "Helpdesk",
+                "Diagnostics", "Settings"
+            };
+            for (var i = 0; i < Math.Min(keys.Length, _mainTabs.TabPages.Count); i++)
+                _mainTabs.TabPages[i].Text =
+                    UiLanguageService.Translate(_uiLanguageCode, keys[i]);
+
+            if (_toolsTopMenu is not null)
+                _toolsTopMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "Tools");
+            if (_languageTopMenu is not null)
+                _languageTopMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "Language");
+            foreach (var choice in _languageChoices)
+                choice.Checked = string.Equals(choice.Tag as string,
+                    _uiLanguageCode, StringComparison.Ordinal);
+
+            _homeSearchButton.Text =
+                UiLanguageService.Translate(_uiLanguageCode, "Search");
+            _homeSearchCancelButton.Text =
+                UiLanguageService.Translate(_uiLanguageCode, "Cancel");
+            _globalConnectionStatus.ToolTipText =
+                UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+        }
+        finally
+        {
+            _mainTabs.ResumeLayout(performLayout: true);
+            ResumeLayout(performLayout: true);
+        }
     }
 
     private TabPage BuildHomeWorkspaceTab()

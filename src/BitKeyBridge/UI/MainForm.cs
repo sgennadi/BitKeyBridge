@@ -167,6 +167,9 @@ public sealed partial class MainForm : DpiAwareForm
         _config = config;
         _layoutSelfTest =
             layoutSelfTest;
+        _uiLanguageCode = layoutSelfTest
+            ? "en"
+            : UiLanguageService.ReadPreferred();
         _ad =
             new ActiveDirectoryService(
                 config);
