@@ -84,3 +84,14 @@ The check applies to the initial guide and its post-dialog revalidation;
 it does not alter existing search, directory reads or recovery permissions.
 An exact Entra/Intune device ID is still required for cloud navigation.
 Offline checks cover absent DN, invalid GUID, valid GUID and ambiguous rows.
+
+## Duplicate cloud identities (phase 5)
+
+`HomeCloudSearchMapper` now preserves each result when multiple cloud records
+claim the same source-qualified identity, instead of silently returning
+only the first. These rows are marked ambiguous and their BitLocker metadata
+as unverified; guided recovery cannot navigate from them. A missing source
+identity is also ambiguous. This does not change explicit Intune operations
+on a separately confirmed, unique managedDeviceId.
+
+Offline Helpdesk regression verifies both duplicate IDs and missing IDs.
