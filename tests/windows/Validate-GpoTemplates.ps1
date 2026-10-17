@@ -90,9 +90,11 @@ if (-not (Test-Path -LiteralPath $wrapperPath -PathType Leaf)) {
     throw 'Native GPO fleet collector wrapper is missing.'
 }
 $wrapper = Get-Content -LiteralPath $wrapperPath -Raw
-if ($wrapper -notmatch '--fleet-export' -or
-    $wrapper -match '(?i)(?:powershell|pwsh)(?:\.exe)?' -or
-    $wrapper -notmatch '--no-elevation') {
+$activeLines = ($wrapper -split '\r?\n' |
+    Where-Object { $_ -notmatch '(?i)^\s*(?:rem\b|::)' }) -join "`n"
+if ($activeLines -notmatch '--fleet-export' -or
+    $activeLines -match '(?i)\b(?:powershell|pwsh)(?:\.exe)?\b' -or
+    $activeLines -notmatch '--no-elevation') {
     throw 'Fleet GPO wrapper must use native, non-elevating export only.'
 }
 
