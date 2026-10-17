@@ -790,6 +790,7 @@ public sealed class UpdateService : IDisposable
         }
 
         var backups = new List<(string Target, string Backup)>();
+        var createdTargets = new List<string>();
         try
         {
             // Reject hostile background plans before stopping services or
@@ -847,9 +848,11 @@ public sealed class UpdateService : IDisposable
                 Directory.CreateDirectory(directory);
 
                 var backup = fullTarget + ".bak";
-                if (File.Exists(backup)) File.Delete(backup);
-                if (File.Exists(fullTarget))
+                var existed = File.Exists(fullTarget);
+                if (existed)
                 {
+                    // Keep the previous version until the new executable
+                    // passes an AFTER-install health check.
                     File.Copy(fullTarget, backup, true);
                     backups.Add((fullTarget, backup));
                 }
@@ -871,6 +874,8 @@ public sealed class UpdateService : IDisposable
                 }
 
                 File.Move(replacement, fullTarget, true);
+                if (!existed)
+                    createdTargets.Add(fullTarget);
             }
 
             // Persist the intentional downgrade before restarting the GUI.
@@ -891,18 +896,34 @@ public sealed class UpdateService : IDisposable
                     ConfigService.SaveAppConfig(config);
                 }
             }
-            else
-            {
-                UpdateRollbackHoldService.Clear();
-            }
-
-            WindowsEventLogService.TryWrite(
-                "BitKeyBridge update installed successfully.",
-                EventLogSeverity.Information,
-                4100);
-
             if (plan.RestartService)
                 WindowsServiceHost.Start();
+
+            // A staged self-test is necessary but not sufficient. Verify
+            // the installed bytes and execute the ACTUAL replaced program
+            // before committing success or allowing future auto-updates.
+            foreach (var target in plan.TargetExecutables
+                         .Where(x => !string.IsNullOrWhiteSpace(x))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                InstalledUpdateHealthService.VerifyInstalledExecutable(
+                    Path.GetFullPath(target),
+                    plan.StagedExecutableSha256);
+            }
+
+            if (plan.RestartService &&
+                !string.Equals(WindowsServiceHost.GetInfo().State,
+                    "Running", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Updated BitKeyBridge service did not remain Running after health verification.");
+
+            if (!plan.Rollback)
+                UpdateRollbackHoldService.Clear();
+
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update installed and passed post-install health checks.",
+                EventLogSeverity.Information,
+                4100);
 
             if (plan.RestartGui && !string.IsNullOrWhiteSpace(plan.GuiExecutable))
             {
@@ -947,6 +968,20 @@ public sealed class UpdateService : IDisposable
         }
         catch (Exception ex)
         {
+            // The service may have passed its initial start check and then
+            // failed health verification. Stop it before restoring its EXE.
+            if (plan.RestartService && backups.Count + createdTargets.Count > 0)
+            {
+                try { WindowsServiceHost.Stop(); }
+                catch (Exception stopException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater could not stop the unhealthy service before rollback: " +
+                        DiagnosticRedaction.Sanitize(stopException.Message),
+                        EventLogSeverity.Error, 4593, "Update");
+                }
+            }
+
             if (plan.Automatic)
             {
                 try
@@ -1011,6 +1046,27 @@ public sealed class UpdateService : IDisposable
                         EventLogSeverity.Error,
                         4592,
                         "Update");
+                }
+            }
+
+            // If there was no existing file, rolling back means removing
+            // the newly created executable rather than leaving a partial install.
+            foreach (var target in createdTargets.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (File.Exists(target))
+                        File.Delete(target);
+                    restoreAttempted++;
+                    restoreSucceeded++;
+                }
+                catch (Exception cleanupException)
+                {
+                    restoreFailed++;
+                    WindowsEventLogService.TryWrite(
+                        "Updater could not remove newly created failed target: " +
+                        DiagnosticRedaction.Sanitize(cleanupException.Message),
+                        EventLogSeverity.Error, 4592, "Update");
                 }
             }
 

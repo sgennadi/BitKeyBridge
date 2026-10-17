@@ -20,6 +20,28 @@ if (-not $releaseMatch.Success) {
 }
 $release = $workflow.Substring($releaseMatch.Index)
 
+# Parse the exact PowerShell release approval step on EVERY CI build.
+# A malformed expression in a release-only step cannot be caught by a PR
+# build that does not trigger publishing unless we parse it explicitly.
+$approvalMatch = [regex]::Match(
+    $release,
+    '(?ms)^      - name: Enforce protected audit release approval\r?\n.*?^        run: \|\r?\n(?<script>.*?)(?=^      - name: Download x64)'
+)
+if (-not $approvalMatch.Success) {
+    throw 'Release approval script was not found.'
+}
+$approvalScript = $approvalMatch.Groups['script'].Value -replace '(?m)^          ', ''
+$approvalScript = $approvalScript -replace '\$\{\{[^}]+\}\}', 'test-value'
+$parseTokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseInput(
+    $approvalScript, [ref]$parseTokens, [ref]$parseErrors
+) | Out-Null
+if ($parseErrors.Count -gt 0) {
+    throw "Release approval step is invalid PowerShell: $($parseErrors[0].Message)"
+}
+
+
 $stageName = '      - name: Smoke-test staged updater preferences (no network install)'
 $publishName = '      - name: Create GitHub Release'
 $stageIndex = $release.IndexOf($stageName, [StringComparison]::Ordinal)

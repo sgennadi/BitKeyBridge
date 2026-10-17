@@ -829,7 +829,7 @@ jobs:
                "${{ github.ref }}" -eq 'refs/heads/release/v0.30.3') -or
               ($tag -eq 'v0.30.4' -and
                "${{ github.ref }}" -eq 'refs/heads/release/v0.30.4')) {
-            Write-Host "Owner-authorized unsigned release $tag: no Authenticode signing."
+            Write-Host "Owner-authorized unsigned release ${tag}: no Authenticode signing."
           }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
                   $tag -ne "v0.30.0-rc.1") {
