@@ -24,6 +24,7 @@ public static class AppPaths
 
     public static string CloudConfigFile => Path.Combine(LocalConfigDirectory, "cloud_auth_config.json");
     public static string StartConnectionPreferencesFile => Path.Combine(LocalConfigDirectory, "start_connection.json");
+    public static string UiLanguagePreferencesFile => Path.Combine(LocalConfigDirectory, "ui_language.json");
     public static string RecentComputersFile => Path.Combine(LocalConfigDirectory, "recent_computers.json");
     public static string HelpdeskProfilesFile => Path.Combine(LocalConfigDirectory, "helpdesk_profiles.json");
     public static string SupportBundlesDirectory => Path.Combine(LocalConfigDirectory, "SupportBundles");

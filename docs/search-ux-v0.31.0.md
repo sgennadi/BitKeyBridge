@@ -10,3 +10,16 @@
   fallback recovery.
 - Future work: source-specific retry, incident-centric workflow, stable
   language resources and correctly mirrored Hebrew RTL layout.
+
+## Localization foundation (English / Russian / Hebrew)
+
+The selected language for primary navigation is stored per-user as
+`%LOCALAPPDATA%\BitKeyBridge\ui_language.json`, never in machine security
+policy. The default follows the Windows UI language, falling back to English.
+The Language menu switches tab names live, preserving search content, selected
+device and Windows authorization context. Hebrew mirrors the tab header and
+menu order via RightToLeft/RightToLeftLayout while computer names, recovery
+IDs and search inputs remain LTR. Offline tests validate the navigation
+resources for all three languages. More Helpdesk, settings and diagnostics
+strings require translation in subsequent v0.31 stages; this is a localized
+navigation foundation rather than a completed app-wide translation.

@@ -174,6 +174,9 @@ public sealed partial class MainForm : DpiAwareForm
             layoutSelfTest
                 ? new CloudAuthConfig()
                 : ConfigService.LoadCloudConfig();
+        _language = layoutSelfTest
+            ? UiLanguage.English
+            : UiLocalizationService.LoadPreference();
 
         if (!layoutSelfTest)
         {

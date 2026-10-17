@@ -224,6 +224,10 @@ public sealed partial class MainForm
             e.Handled = true;
         };
 
+        // Apply the selected human-language shell without changing tab
+        // instances, metadata search state or security authorization.
+        ApplyNavigationLanguage();
+
         // The technician explicitly requested Start as the landing page.
         // Do not change selection in Shown (including after the connection
         // wizard), and never silently switch to Helpdesk on normal launch.
@@ -337,6 +341,7 @@ public sealed partial class MainForm
             (_, _) => OpenLatestRelease());
 
         menu.Items.Add(tools);
+        menu.Items.Add(BuildLanguageMenu(menu));
         return menu;
     }
 
