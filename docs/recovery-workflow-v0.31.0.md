@@ -71,3 +71,16 @@ remain authoritative and continue to require durable audit ACK.
 
 Offline regression tests cover both policy mismatches and a valid explicit
 RecoveryReaders configuration.
+
+## AD identity preflight (phase 4)
+
+A Windows recovery or LAPS search result containing only a hostname is not
+proof of a unique AD computer object. The guide now requires an exact AD
+object Distinguished Name or a valid, nonempty object GUID before offering
+an AD BitLocker/LAPS metadata-navigation shortcut. A hostname-only result
+shows **Action required** and advises confirming the directory identity.
+
+The check applies to the initial guide and its post-dialog revalidation;
+it does not alter existing search, directory reads or recovery permissions.
+An exact Entra/Intune device ID is still required for cloud navigation.
+Offline checks cover absent DN, invalid GUID, valid GUID and ambiguous rows.
