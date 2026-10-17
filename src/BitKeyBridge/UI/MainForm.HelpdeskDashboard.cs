@@ -216,7 +216,20 @@ public sealed partial class MainForm
                     : !_config.RequireProtectedAuditForRecovery
                         ? "enabled; strict audit not required"
                         : "enabled; strict audit required (runtime unverified)";
+                string journalStatus;
+                try
+                {
+                    journalStatus = ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(
+                        AppPaths.BrokerAuditLogFile)
+                        ? "protected ACL verified"
+                        : "not verified / untrusted";
+                }
+                catch (Exception)
+                {
+                    journalStatus = "verification unavailable";
+                }
                 readiness.Text =
+                    $"Protected journal: {journalStatus} (integrity not checked) | " +
                     $"Audit broker: {brokerStatus} | " +
                     $"Service: {serviceStatus} | " +
                     $"Directory: {(_directoryConnected ? "connected" : "not connected")} | " +
