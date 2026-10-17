@@ -2530,7 +2530,7 @@ public sealed partial class MainForm
 
     private TabPage BuildAdministrationWorkspaceTab()
     {
-        var tab = new TabPage("Settings");
+        var tab = new TabPage("Settings") { Name = "SettingsWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
@@ -2562,7 +2562,7 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Diagnostics");
+        var tab = new TabPage("Diagnostics") { Name = "DiagnosticsWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill

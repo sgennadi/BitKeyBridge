@@ -429,7 +429,9 @@ public sealed partial class MainForm
 
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Settings")
+            // Text changes with language: Settings is a stable control ID.
+            if (!string.Equals(page.Name, "SettingsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)
@@ -452,7 +454,9 @@ public sealed partial class MainForm
     {
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Diagnostics")
+            // Works under English, Russian and mirrored Hebrew navigation.
+            if (!string.Equals(page.Name, "DiagnosticsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)

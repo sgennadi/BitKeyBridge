@@ -1065,6 +1065,14 @@ public static class UiLayoutSelfTest
             tabs.TabPages[3].Name != "DevicesWorkspace")
             failures.Add(
                 $"{formName}/{scenario.Name}: invariant Devices workspace ID missing; localization must not break navigation.");
+        if (tabs.TabPages.Count > 5 &&
+            tabs.TabPages[5].Name != "DiagnosticsWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant Diagnostics workspace ID missing.");
+        if (tabs.TabPages.Count > 6 &&
+            tabs.TabPages[6].Name != "SettingsWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant admin Settings workspace ID missing.");
 
         var actualOrder = tabs.TabPages.Cast<TabPage>()
             .Select(page => page.Text).ToArray();
