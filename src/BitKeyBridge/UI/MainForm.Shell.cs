@@ -235,6 +235,9 @@ public sealed partial class MainForm
             0,
             3);
         MainMenuStrip = menu;
+        // MenuStrip must be attached before mirroring Hebrew RTL chrome.
+        // Keep the Start workspace selected and all form controls alive.
+        ApplyNavigationLanguage();
         return root;
     }
 
@@ -337,6 +340,7 @@ public sealed partial class MainForm
             (_, _) => OpenLatestRelease());
 
         menu.Items.Add(tools);
+        menu.Items.Add(BuildLanguageMenu(menu));
         return menu;
     }
 
@@ -2463,7 +2467,10 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Diagnostics");
+        var tab = new TabPage("Diagnostics")
+        {
+            Name = "DiagnosticsWorkspace"
+        };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
