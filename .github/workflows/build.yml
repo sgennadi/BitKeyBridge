@@ -532,8 +532,36 @@ jobs:
           ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable "artifacts/win-x64/BitKeyBridge.exe"
 
       - name: Package architecture
-        shell: cmd
-        run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $publishDir = Join-Path 'artifacts' '${{ matrix.rid }}'
+          $exe = Join-Path $publishDir 'BitKeyBridge.exe'
+          $zip = Join-Path 'artifacts' 'BitKeyBridge-${{ matrix.rid }}.zip'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw 'Missing release executable.'
+          }
+          if (Test-Path -LiteralPath $zip) {
+            Remove-Item -LiteralPath $zip -Force
+          }
+          # Archive exactly the executable, not self-test logs or publish sidecars.
+          Compress-Archive -LiteralPath $exe -DestinationPath $zip -CompressionLevel Optimal
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip).Path)
+          try {
+            if ($archive.Entries.Count -ne 1 -or
+                $archive.Entries[0].FullName -cne 'BitKeyBridge.exe' -or
+                $archive.Entries[0].Length -le 0) {
+              throw 'Updater-incompatible ZIP: expected exactly one root BitKeyBridge.exe.'
+            }
+            $entry = $archive.Entries[0]
+            $unixType = ($entry.ExternalAttributes -shr 16) -band 0xF000
+            if ($unixType -eq 0xA000) {
+              throw 'Release ZIP contains a symbolic link.'
+            }
+          } finally {
+            $archive.Dispose()
+          }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

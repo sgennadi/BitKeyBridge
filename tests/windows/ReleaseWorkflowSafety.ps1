@@ -86,6 +86,15 @@ if ($workflow -notmatch
     throw 'Reliability PR must execute the protected audit broker integration.'
 }
 
+# The ZIP uploaded to Releases must be consumable by legacy v0.30.3.
+# Packaging the entire publish directory can include self-test logs/sidecars.
+if ($workflow -match '(?m)^\s*run:\s*tar\s+-a\s+-c\s+-f\b' -or
+    $workflow -notmatch 'Compress-Archive -LiteralPath \$exe -DestinationPath \$zip' -or
+    $workflow -notmatch "Entries\.Count -ne 1" -or
+    $workflow -notmatch "FullName -cne 'BitKeyBridge\.exe'") {
+    throw 'Release packaging is not restricted to one root BitKeyBridge.exe.'
+}
+
 # Never delete operator release branches or install online updates from CI.
 $forbidden = @(
     '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',
