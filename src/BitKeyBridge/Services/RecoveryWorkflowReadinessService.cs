@@ -19,7 +19,9 @@ internal static class RecoveryWorkflowReadinessService
                     !string.IsNullOrWhiteSpace(selected.ComputerName);
         var cloud = selected?.IsCloudRecord == true;
         var identitySafe = known && !selected!.IdentityAmbiguous &&
-            (!cloud || RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(selected));
+            (cloud
+                ? RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(selected)
+                : RecoveryWorkflowNavigationPolicy.HasAuthoritativeAdComputerId(selected));
         var sourceReady = known && (cloud ? cloudConnected : adConnected);
         var rbacAllowed = authorization?.Allowed == true;
         // A one-sided strict-audit/broker setting must never be considered
@@ -35,8 +37,10 @@ internal static class RecoveryWorkflowReadinessService
             new("1. Exact device identity", identitySafe ? "OK" : "Action required",
                 !known ? "Select an exact computer/device in Start." :
                 selected!.IdentityAmbiguous ? "Identity collision: confirm the AD object GUID or Entra/Intune device ID." :
-                !identitySafe ? "Cloud result lacks an authoritative source-qualified ID. Search again." :
-                "A source-qualified record is selected. Its identity is rechecked at retrieval."),
+                !identitySafe ? cloud
+                    ? "Cloud result lacks an authoritative source-qualified device ID. Search again."
+                    : "AD result is hostname-only. Confirm the exact object DN/GUID in directory metadata."
+                    : "A source-qualified record is selected. Its identity is rechecked at retrieval."),
             new("2. Directory source", sourceReady ? "OK" : "Action required",
                 !known ? "Connect to AD or Microsoft 365 and search first." :
                 sourceReady ? "Directory session is present; individual permissions remain unverified." :
@@ -93,7 +97,11 @@ internal static class RecoveryWorkflowReadinessService
         };
         var allow = new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" };
         var deny = new AuthorizationDecision { Allowed = false, Permission = "RecoveryRead" };
-        var ad = new HomeSearchResult { ComputerName = "PC-TEST", BitLockerKeyCount = 2 };
+        var ad = new HomeSearchResult
+        {
+            ComputerName = "PC-TEST", BitLockerKeyCount = 2,
+            AdComputerDistinguishedName = "CN=PC-TEST,OU=Clients,DC=example,DC=com"
+        };
         var good = Build(config, ad, true, false, allow);
         if (!good.CanNavigateToRecoveryScreen ||
             good.Steps[4].Status != "Required at retrieval" ||
@@ -103,6 +111,18 @@ internal static class RecoveryWorkflowReadinessService
             Build(config, ad, false, true, allow).CanNavigateToRecoveryScreen ||
             Build(config, ad, true, false, deny).CanNavigateToRecoveryScreen)
             errors.Add("Recovery workflow accepted missing target, directory or RBAC.");
+        ad.AdComputerDistinguishedName = string.Empty;
+        var nameOnly = Build(config, ad, true, false, allow);
+        if (nameOnly.CanNavigateToRecoveryScreen ||
+            nameOnly.Steps[0].Status != "Action required" ||
+            !nameOnly.Steps[0].Explanation.Contains("hostname-only", StringComparison.Ordinal))
+            errors.Add("Hostname-only AD record was advertised as a verified device.");
+
+        ad.ComputerId = Guid.NewGuid().ToString();
+        if (!Build(config, ad, true, false, allow).CanNavigateToRecoveryScreen)
+            errors.Add("Exact AD object GUID did not permit metadata navigation.");
+        ad.ComputerId = string.Empty;
+        ad.AdComputerDistinguishedName = "CN=PC-TEST,OU=Clients,DC=example,DC=com";
         ad.IdentityAmbiguous = true;
         if (Build(config, ad, true, false, allow).CanNavigateToRecoveryScreen)
             errors.Add("Ambiguous AD identity passed recovery preflight.");
