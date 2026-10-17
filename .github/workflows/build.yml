@@ -789,12 +789,29 @@ jobs:
           $version = "${{ steps.release_meta.outputs.tag }}".TrimStart("v")
           .\.tools\dotnet-CycloneDX.exe src\BitKeyBridge\BitKeyBridge.csproj -o release -fn BitKeyBridge.cdx.json -F Json -spv 1.7 -sn BitKeyBridge -sv $version -st Application
 
+      - name: Include build info and technician diagnostics
+        if: steps.release_meta.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          Copy-Item tests/windows/BitKeyBridge-DomainPreflight.cmd release/BitKeyBridge-DomainPreflight.cmd
+          "Version: ${{ steps.release_meta.outputs.tag }}" | Set-Content release/BUILD-INFO.txt
+          "Git commit: ${{ github.sha }}" | Add-Content release/BUILD-INFO.txt
+          "Authenticode: UNSIGNED" | Add-Content release/BUILD-INFO.txt
+
+      - name: Prepare stable v0.30.3 release notes
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          github.ref == 'refs/heads/release/v0.30.3'
+        shell: pwsh
+        run: |
+          Copy-Item docs/unsigned-auto-update-0.30.3.md release/RELEASE-NOTES.md
+
       - name: Generate SHA256SUMS
         if: steps.release_meta.outputs.exists != 'true'
         shell: bash
         run: |
           cd release
-          files=(BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json)
+          files=(BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip BitKeyBridge.cdx.json BUILD-INFO.txt BitKeyBridge-DomainPreflight.cmd)
           if [[ -f BitKeyBridge.signatures.json ]]; then
             files+=(BitKeyBridge.signatures.json)
           fi
@@ -809,6 +826,8 @@ jobs:
             release/BitKeyBridge-win-x86.zip
             release/BitKeyBridge-win-arm64.zip
             release/BitKeyBridge.cdx.json
+            release/BUILD-INFO.txt
+            release/BitKeyBridge-DomainPreflight.cmd
             release/SHA256SUMS.txt
 
       - name: Attest protected audit signature verification evidence
@@ -912,6 +931,8 @@ jobs:
             'release/BitKeyBridge-win-x86.zip',
             'release/BitKeyBridge-win-arm64.zip',
             'release/BitKeyBridge.cdx.json',
+            'release/BUILD-INFO.txt',
+            'release/BitKeyBridge-DomainPreflight.cmd',
             'release/SHA256SUMS.txt'
           )
           if (Test-Path 'release/BitKeyBridge.signatures.json') {
@@ -920,9 +941,14 @@ jobs:
           $args = @('release', 'create', $tag) + $assets + @(
             '--repo', '${{ github.repository }}',
             '--target', '${{ github.sha }}',
-            '--generate-notes',
             '--title', "BitKeyBridge $tag"
           )
+          if ($tag -eq 'v0.30.3' -and (Test-Path 'release/RELEASE-NOTES.md')) {
+            $args += @('--notes-file', 'release/RELEASE-NOTES.md')
+          }
+          else {
+            $args += '--generate-notes'
+          }
           if ($tag.Contains('-')) {
             # Mark RC/beta as prerelease. Never override GitHub stable Latest.
             $args += '--prerelease'
