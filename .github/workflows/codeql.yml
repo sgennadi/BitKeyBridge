@@ -4,8 +4,8 @@ on:
   push:
     branches: [ "main", "master" ]
   pull_request:
-    # Review the protected-broker PR against the RC staging branch as well.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014" ]
+    # Analyze feature PRs targeting integration/staging branches as well as
+    # main; security checks must not silently disappear on stacked PRs.
   schedule:
     - cron: "27 2 * * 1"
   workflow_dispatch:

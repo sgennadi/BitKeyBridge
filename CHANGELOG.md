@@ -4,6 +4,7 @@
 - Fail closed when restricted Windows identity lookups prevent Helpdesk readiness or administrator-tab visibility checks; keep the main Helpdesk window available without exposing privileged controls.
 - Convert the Helpdesk deployment checklist into a shared DPI-aware dialog and include it in compact/175%/200% WinForms layout regression testing.
 - Add a startup diagnostics CI smoke check and an operational guide for CyberArk EPM / standard-user launch triage. No security bypass or production release is implied.
+- Run CodeQL on stacked pull requests targeting integration branches, not only main/staging.
 
 ## 0.30.2-rc.1
 
