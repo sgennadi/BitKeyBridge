@@ -35,6 +35,16 @@ if ($release -notmatch 'Verify-ReleaseSigning\.ps1' -or
     throw 'Missing protected audit signing, approval or source revision gate.'
 }
 
+# Stable unsigned release requires an explicit branch and two real non-admin
+# tokens. The temporary code-signing tests are NOT release signer approval.
+if ($workflow -notmatch "refs/heads/release/v0\.30\.3" -or
+    $release -notmatch "needs\['audit-broker-integration'\]\.result == 'success'" -or
+    $release -notmatch "github\.ref != 'refs/heads/release/v0\.30\.3'" -or
+    $release -notmatch 'SHA256SUMS.txt' -or
+    $release -notmatch 'BitKeyBridge-win-arm64.zip') {
+    throw 'Unsigned v0.30.3 release lacks its exact branch, broker, or checksum gates.'
+}
+
 # Never delete operator release branches or install online updates from CI.
 $forbidden = @(
     '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',

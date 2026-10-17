@@ -902,10 +902,15 @@ jobs:
             throw "Automatic update installation was not persisted as disabled."
           }
 
-          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          $deniedOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -eq 0) {
+            throw "SECURITY: unsigned auto-install was enabled without explicit consent."
+          }
+
+          $autoEnableOutput = & $exe --auto-update-enable --accept-unsigned-update-risk --no-elevation 2>&1 | Out-String
           Write-Host $autoEnableOutput
           if ($LASTEXITCODE -ne 0) {
-            throw "--auto-update-enable failed."
+            throw "Explicit unsigned auto-update enable failed."
           }
 
           $autoEnabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String

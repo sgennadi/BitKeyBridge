@@ -4,6 +4,8 @@
 
 - Restore the v0.30.1 unsigned auto-update opt-in with official repository binding, SHA-256 verification, staged self-tests, and rollback. No Authenticode signature is created or required when an administrator explicitly opts in; signing/publisher policies already configured remain enforceable.
 - Retain strict protected Audit Broker, Windows-token-based RBAC and durable protected journal; do not grant recovery secrets for a failed audit.
+- Prepare stable unsigned v0.30.3 publication from a dedicated branch, gated by Windows architecture, LAPS and two-token Audit Broker integration; include SHA256SUMS, SBOM, provenance, version metadata, and technician diagnostics.
+- Remove stale manual-only update UI dependency and verify that unsigned auto-install requires explicit operator consent in both build and release smoke tests.
 - Add a visible unsigned auto-update consent control to the Updates tab. Automatic updates remain disabled until the operator explicitly enables them.
 
 

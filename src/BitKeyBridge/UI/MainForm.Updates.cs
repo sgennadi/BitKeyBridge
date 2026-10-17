@@ -341,15 +341,7 @@ public sealed partial class MainForm
                 return;
             }
 
-            if (_lastUpdateInfo.ManualReleaseAvailable && !silentWhenCurrent)
-            {
-                ShowAppMessage(
-                    "BitKeyBridge Update",
-                    $"BitKeyBridge {_lastUpdateInfo.LatestVersion} is published for manual download only. " +
-                    "This release does not provide an auto-installable archive for your architecture. " +
-                    "Open GitHub Releases from Tools to download it.");
-            }
-            else if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
+            if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
             {
                 ShowAppMessage(
                     "BitKeyBridge Update",

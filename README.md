@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable: v0.29.12 · published prerelease: v0.30.0-rc.1 · test-only Draft PR: v0.30.0-rc.2.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable release channel: v0.30.3 — unsigned, with explicitly enabled automatic installation.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,7 +10,20 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## Experimental protected audit broker (0.30.0-rc.2)
+## Stable v0.30.3
+
+Windows x64, x86 and ARM64 packages have canonical GitHub release names for
+manual and automatic installation. A machine must explicitly accept unsigned
+automatic updates before the application installs one on startup:
+
+    BitKeyBridge.exe --auto-update-enable --accept-unsigned-update-risk --no-elevation
+
+See [unsigned v0.30.3 update instructions](docs/unsigned-auto-update-0.30.3.md).
+No Authenticode certificate is used. Publisher requirements already configured
+on a machine, Windows application control, RBAC and protected audit are not
+disabled by this option. SHA-256 does not establish publisher identity.
+
+## Historical: experimental protected audit broker (0.30.0-rc.2)
 
 **Single QA download:** in the latest successful PR #57 Windows Actions run,
 use **Artifacts → BitKeyBridge-v0.30.0-rc.2-TEST-BUNDLE-UNSIGNED**.
