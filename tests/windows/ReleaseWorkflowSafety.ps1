@@ -79,6 +79,45 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
     throw 'Stable unsigned v0.30.4 lacks exact commit, broker, legacy upgrade, or checksum gates.'
 }
 
+# v0.30.5 must actually run on its dedicated branch. Validate packaging
+# both positively and negatively before any GitHub Release is created.
+if ($workflow -notmatch '(?m)^    branches: \[.*"release/v0\.30\.5".*\]
+# broker integration test, not just compile the broker code.
+if ($workflow -notmatch
+    "github\.head_ref == 'feature/v0\.30\.4-reliability-20261017'") {
+    throw 'Reliability PR must execute the protected audit broker integration.'
+}
+
+# Never delete operator release branches or install online updates from CI.
+$forbidden = @(
+    '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',
+    '(?im)^\s*git\s+push\b[^\r\n]*:refs/heads/',
+    '(?im)^\s*- name:\s*Archive and remove stale release branches\b',
+    '(?im)^\s*\$updateOutput\s*=\s*&\s*\$exe\s+--update\b',
+    '(?im)^\s*gh\s+release\s+delete\b'
+)
+foreach ($pattern in $forbidden) {
+    if ($release -match $pattern) {
+        throw "Forbidden release workflow operation: $pattern"
+    }
+}
+
+$afterPublish = $release.Substring($publishIndex + $publishName.Length)
+if ($afterPublish -match '(?m)^\s*- name:') {
+    throw 'GitHub Release creation must be the FINAL workflow step.'
+}
+Write-Host 'Release workflow order, signing, approval and branch safety passed.'
+ -or
+    $release -notmatch "github\.event\.head_commit\.message == 'Release v0\.30\.5'" -or
+    $release -notmatch "github\.ref != 'refs/heads/release/v0\.30\.5'" -or
+    $release -notmatch "needs\['audit-broker-integration'\]\.result == 'success'" -or
+    $release -notmatch "needs\['legacy-upgrade-regression'\]\.result == 'success'" -or
+    $workflow -notmatch 'Compress-Archive -LiteralPath \$exe -DestinationPath \$zip' -or
+    $workflow -notmatch 'Verify-UpdateZipLayout\.ps1' -or
+    $workflow -notmatch 'UpdateZipLayoutRegression\.ps1') {
+    throw 'v0.30.5 release branch trigger, ZIP validation, broker or upgrade gates are missing.'
+}
+
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch
