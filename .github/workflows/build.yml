@@ -359,6 +359,30 @@ jobs:
           }
           Write-Host "Non-elevating startup diagnostics: $($report.Checks.Count) checks."
 
+      # Portable executables, including privileged CI runners, must never
+      # register a high-privilege scheduler task or run unattended installs.
+      - name: Background updater portable denial
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          # Native stderr from an expected denial must not be turned into
+          # a PowerShell terminating error by the GitHub Actions runner.
+          $background = Start-Process -FilePath $exe -ArgumentList @(
+            '--scheduled-update', '--no-elevation'
+          ) -PassThru -Wait
+          if ($background.ExitCode -eq 0) {
+            throw "SECURITY: portable copy was permitted to run the SYSTEM background updater."
+          }
+
+          $register = Start-Process -FilePath $exe -ArgumentList @(
+            '--update-task-install', '--no-elevation'
+          ) -PassThru -Wait
+          if ($register.ExitCode -eq 0) {
+            throw "SECURITY: portable copy registered a persistent SYSTEM update task."
+          }
+          Write-Host "Portable background update denied with $($background.ExitCode) and task creation denied with $($register.ExitCode)."
+
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -429,6 +453,72 @@ jobs:
             throw "Automatic update installation was not persisted as enabled."
           }
 
+      # Only register/query/remove: NEVER run a SYSTEM scheduled update in CI.
+      # A fresh GitHub-hosted Windows runner is disposable. The test schedules
+      # 12 hours ahead and tears down its task in finally, even on failure.
+      - name: Task Scheduler registration and SYSTEM identity smoke (no task run)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installedDir = Join-Path $env:ProgramFiles 'BitKeyBridge'
+          $installedExe = Join-Path $installedDir 'BitKeyBridge.exe'
+          $sourceExe = Join-Path (Get-Location) 'artifacts\win-x64\BitKeyBridge.exe'
+          if (Test-Path -LiteralPath $installedExe) {
+            throw 'An existing Program Files installation cannot be replaced during CI.'
+          }
+          $taskName = 'BitKeyBridge-AutoUpdate'
+          & schtasks.exe /Query /TN $taskName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw 'An existing updater task cannot be replaced during CI.'
+          }
+          $created = $false
+          try {
+            New-Item -ItemType Directory -Path $installedDir -Force | Out-Null
+            Copy-Item -LiteralPath $sourceExe -Destination $installedExe -Force
+            $hour = (Get-Date).AddHours(12).Hour
+            $output = & $installedExe --update-task-install --update-task-hour $hour --no-elevation 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) {
+              throw "Task registration failed: $output"
+            }
+            $created = $true
+            $status = & $installedExe --update-task-status --no-elevation 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) {
+              throw "Registered task is not queryable: $status"
+            }
+            [xml]$xml = (& schtasks.exe /Query /TN $taskName /XML | Out-String)
+            if ($LASTEXITCODE -ne 0) { throw 'Task XML query failed.' }
+            $command = [string]$xml.SelectSingleNode("//*[local-name()='Exec']/*[local-name()='Command']").InnerText
+            # SchTasks stores a quoted Command when the Program Files path
+            # contains spaces. Require exactly that quoted absolute path.
+            $expectedCommand = '"' + $installedExe + '"'
+            $arguments = [string]$xml.SelectSingleNode("//*[local-name()='Exec']/*[local-name()='Arguments']").InnerText
+            $userId = [string]$xml.SelectSingleNode("//*[local-name()='Principal']/*[local-name()='UserId']").InnerText
+            if ($command -ine $expectedCommand -or
+                $arguments -cne '--scheduled-update --no-elevation' -or
+                $userId -notin @('S-1-5-18', 'SYSTEM', 'NT AUTHORITY\SYSTEM')) {
+              throw "Unexpected task action or principal; command=$command, arguments=$arguments, user=$userId"
+            }
+            # Even an elevated human administrator must NOT run the
+            # background updater, which is restricted to LocalSystem.
+            $denied = & $installedExe --scheduled-update --no-elevation 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) {
+              throw 'Background update accepted a non-SYSTEM administrator token.'
+            }
+            Write-Host 'Daily SYSTEM task action, principal, registration and denial passed.'
+          }
+          finally {
+            if ($created) {
+              $removed = & $installedExe --update-task-remove --no-elevation 2>&1 | Out-String
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "WARNING: task removal failed: $removed"
+                & schtasks.exe /Delete /F /TN $taskName
+              }
+            }
+            Remove-Item -LiteralPath $installedExe -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $installedDir -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Guard release workflow ordering and branch safety
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -460,9 +550,11 @@ jobs:
       (github.event_name == 'pull_request' &&
        (github.head_ref == 'feature/protected-audit-broker-20261014' ||
         github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
-        github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')) ||
+        github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
+        github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017')) ||
       (github.event_name == 'push' &&
-       github.ref == 'refs/heads/release/v0.30.3')
+       (github.ref == 'refs/heads/release/v0.30.3' ||
+        github.ref == 'refs/heads/release/v0.30.4'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20

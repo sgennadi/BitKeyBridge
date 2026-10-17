@@ -88,6 +88,10 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--scheduled-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-install", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-remove", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
@@ -114,6 +118,7 @@ internal static class Program
                 x.Equals("--rbac-ui-admin-add", StringComparison.OrdinalIgnoreCase) ||
                 x.Equals("--rbac-ui-admin-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-setup", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-sign", StringComparison.OrdinalIgnoreCase) ||
@@ -287,6 +292,7 @@ internal static class Program
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
@@ -298,6 +304,7 @@ internal static class Program
             x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
@@ -1047,6 +1054,9 @@ internal static class Program
             return CoveragePolicyCliService.Configure(config, args);
         }
 
+        if (args.Any(x => x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase)))
+            return ProtectedAuditCapacityService.PrintStatus();
+
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
         {
             var health = new HealthService(config).GetSnapshot();
@@ -1078,6 +1088,18 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
             return CheckUpdateAsync(config).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--scheduled-update", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.RunOnceAsync(config).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--update-task-install", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.InstallTask(args);
+
+        if (args.Any(x => x.Equals("--update-task-remove", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.RemoveTask();
+
+        if (args.Any(x => x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.ShowTaskStatus();
 
         if (args.Any(x => x.Equals("--update", StringComparison.OrdinalIgnoreCase)))
             return InstallUpdateAsync(config).GetAwaiter().GetResult();
@@ -1808,6 +1830,7 @@ internal static class Program
 
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(UpdatePackageSelfTest.Run());
+            failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
@@ -1908,6 +1931,61 @@ internal static class Program
 
                 var updateDefaults =
                     new AppConfig();
+                var safeBackgroundPlan = new UpdateApplyPlan
+                {
+                    Automatic = true,
+                    ScheduledBackground = true,
+                    RestartGui = false,
+                    TargetExecutables = [AppPaths.ServiceExecutable]
+                };
+                UpdateApplySafety.ValidateScheduledBackgroundPlan(
+                    safeBackgroundPlan, AppPaths.ServiceExecutable);
+                safeBackgroundPlan.TargetExecutables =
+                    [Path.Combine(Path.GetTempPath(), "unrelated.exe")];
+                var arbitraryTargetBlocked = false;
+                try
+                {
+                    UpdateApplySafety.ValidateScheduledBackgroundPlan(
+                        safeBackgroundPlan, AppPaths.ServiceExecutable);
+                }
+                catch (InvalidDataException)
+                {
+                    arbitraryTargetBlocked = true;
+                }
+                if (!arbitraryTargetBlocked)
+                    failures.Add("Scheduled updater accepted an arbitrary privileged target.");
+
+                var failedAutomaticHold = Path.Combine(
+                    tempDirectory, "failed-auto-update-hold.json");
+                UpdateRollbackHoldService.Activate("0.30.3",
+                    "AutomaticFailure", failedAutomaticHold);
+                if (!UpdateRollbackHoldService.IsActiveForVersion(
+                        "0.30.4", failedAutomaticHold) ||
+                    !UpdateRollbackHoldService.IsActiveForVersion(
+                        "0.30.3", failedAutomaticHold))
+                    failures.Add("Failed automatic update did not remain held across partial rollbacks.");
+
+                UpdateRollbackHoldService.Clear(failedAutomaticHold);
+                if (ScheduledUpdateService.IsEligible(updateDefaults))
+                    failures.Add("Scheduled updater must not be enabled in default settings.");
+
+                var unsignedAuto = new AppConfig
+                {
+                    UpdateRepository = UpdateTrustPolicy.OfficialRepository,
+                    CheckForUpdatesOnStart = true,
+                    AutoInstallUpdatesOnStart = true,
+                    AllowUnsignedUnattendedUpdates = true
+                };
+                if (!ScheduledUpdateService.IsEligible(unsignedAuto))
+                    failures.Add("Explicit official-repository unsigned scheduler opt-in is not recognized.");
+                unsignedAuto.UpdateRepository = "attacker/BitKeyBridge";
+                if (ScheduledUpdateService.IsEligible(unsignedAuto))
+                    failures.Add("Background updater accepted unsigned consent for an untrusted repository.");
+                unsignedAuto.UpdateRepository = UpdateTrustPolicy.OfficialRepository;
+                unsignedAuto.CheckForUpdatesOnStart = false;
+                if (ScheduledUpdateService.IsEligible(unsignedAuto))
+                    failures.Add("Background updater ignored disabled update checks.");
+
                 if (!updateDefaults.CheckForUpdatesOnStart ||
                     updateDefaults.AutoInstallUpdatesOnStart)
                 {
@@ -4134,6 +4212,7 @@ internal static class Program
         Console.WriteLine("  --rbac-ui-admin-add <principal> Add DOMAIN\\group/user or SID to Administration UI");
         Console.WriteLine("  --rbac-ui-admin-remove <principal> Remove Administration UI principal");
         Console.WriteLine("  --audit-verify        Verify tamper-evident audit hash chain");
+        Console.WriteLine("  --audit-journal-capacity  Read-only protected journal space/rotation check");
         Console.WriteLine("  --audit-signing-status  Show signed-checkpoint and certificate state");
         Console.WriteLine("  --audit-signing-setup   Create/reuse non-exportable machine signing certificate");
         Console.WriteLine("  --audit-signing-years <1-10>  Certificate lifetime for setup");
@@ -4223,6 +4302,11 @@ internal static class Program
         Console.WriteLine("  --service-coverage-no-run-on-start  Do not run Coverage immediately on start");
         Console.WriteLine("  --check-update        Check the configured GitHub repository for a newer release");
         Console.WriteLine("  --update              Verify and install the latest stable release");
+        Console.WriteLine("  --scheduled-update     Background auto-check/install (explicit policy + SYSTEM task only)");
+        Console.WriteLine("  --update-task-install  Register optional daily SYSTEM task for installed Program Files EXE");
+        Console.WriteLine("  --update-task-hour <0-23>  Task local-time hour (default 3)");
+        Console.WriteLine("  --update-task-status   Query the background updater task");
+        Console.WriteLine("  --update-task-remove   Remove background updater task");
         Console.WriteLine("  --update-checks-status   Show automatic update-check setting");
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");

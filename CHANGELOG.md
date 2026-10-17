@@ -1,3 +1,23 @@
+## Unreleased - v0.30.4
+
+- Correct scheduler CI XML action expectation: schtasks.exe preserves double quotes around a Program Files executable path; the test still enforces an exact command, exact flags and SYSTEM principal.
+- Require two genuine non-admin Windows-token Audit Broker integration on the v0.30.4 feature PR and future release branch; its CI does not substitute the privileged runner for standard-user access.
+- CI now registers, inspects and removes an actual daily LocalSystem Task Scheduler job on disposable Windows runners without triggering installation; verifies fixed Program Files action, system principal, and denial when an ordinary elevated administrator attempts the SYSTEM-only update.
+- Harden the SYSTEM scheduled updater: enforce real LocalSystem identity, machine executable-only apply targets and a noninteracting helper.
+- Abort a replacement when the original GUI process fails to exit or the Windows Service cannot stop. Verify policy and staged PE before interrupting the service.
+- When any automatic apply fails, persist an AutomaticFailure rollback hold across partially restored versions; never retry an endless failed automatic installation without explicit repair/resume. Add offline safety tests.
+- Enable global Ctrl+1..7 primary workspace navigation without exposing permission-gated Settings to unauthorized users; verify KeyPreview in UI regressions.
+- Add an admin-only GUI control to install, query and remove the optional daily SYSTEM update task, with selectable local hour and access checks; include HiDPI UI tests.
+- Update sample machine config from schema 4 to schema 5; auto-install and unsigned consent remain opt-in.
+- Add CI negative tests preventing a portable executable from installing or using the SYSTEM background updater; add deployment and roadmap documentation.
+- Add read-only `--audit-journal-capacity` metadata and threshold tests; never truncate or delete protected audit evidence.
+- Implement optional background auto-update without an open GUI: admin-controlled daily Windows Task Scheduler task, fixed Program Files action, machine trust-policy checks, rollback hold, staging hashes and the existing verified apply helper.
+- Add `--scheduled-update`, `--update-task-install [--update-task-hour 0-23]`, `--update-task-status`, `--update-task-remove` CLI commands. Scheduling never grants unsigned consent implicitly and uses no PowerShell.
+- Allow already-elevated update helpers (including SYSTEM) to launch without an interactive UAC prompt; retain UAC for ordinary standard-user manual updates.
+- Reorder top-level workspaces to **Start → BitLocker → LAPS → Devices (AD + Microsoft 365) → Helpdesk → Diagnostics → Settings** (Settings remains permission-gated).
+- Keep **Start** selected on initial launch for every normal Windows session; remove the unexpected post-Shown switch to Helpdesk.
+- Add Windows UI regression checks for exact tab order and initial selection across supported DPI/layout scenarios. No permission checks, secret retrieval or audit gates are changed.
+
 ## 0.30.3
 
 **Stable unsigned GitHub Release, including optional unsigned automatic installation.**

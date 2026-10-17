@@ -1014,14 +1014,46 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        if (!form.KeyPreview)
+            failures.Add($"{formName}/{scenario.Name}: Ctrl+1..7 global keyboard tab navigation requires KeyPreview.");
+
+        var preferredOrder = new[]
+        {
+            "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
+        };
+        foreach (var requiredBackgroundUpdaterControl in new[]
+                 {
+                     "InstallBackgroundUpdateTaskButton",
+                     "BackgroundUpdateTaskStatusButton",
+                     "RemoveBackgroundUpdateTaskButton",
+                     "BackgroundUpdateHour"
+                 })
+        {
+            if (FindByName(form, requiredBackgroundUpdaterControl) is null)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: scheduled updater is missing " +
+                    requiredBackgroundUpdaterControl);
+        }
+        var actualOrder = tabs.TabPages.Cast<TabPage>()
+            .Select(page => page.Text).ToArray();
+        if (actualOrder.Length < preferredOrder.Length ||
+            !actualOrder.Take(preferredOrder.Length)
+                .SequenceEqual(preferredOrder, StringComparer.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: unexpected main tab order: " +
+                string.Join(" / ", actualOrder) +
+                "; required Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics.");
+        }
         if (tabs.TabPages.Count == 0 ||
             !string.Equals(
                 tabs.TabPages[0].Text,
                 "Start",
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            !ReferenceEquals(tabs.SelectedTab, tabs.TabPages[0]))
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Start must be the first main workspace tab.");
+                $"{formName}/{scenario.Name}: Start must be the first and selected workspace at launch.");
         }
         else
         {

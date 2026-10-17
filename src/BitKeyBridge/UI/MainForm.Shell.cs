@@ -127,16 +127,15 @@ public sealed partial class MainForm
         _lapsWorkspaceTab =
             BuildLapsWorkspaceTab();
 
-        _mainTabs.TabPages.Add(
-            _homeWorkspaceTab);
-        var helpdeskDashboard = BuildHelpdeskDashboardTab();
-        _mainTabs.TabPages.Add(helpdeskDashboard);
-        _mainTabs.TabPages.Add(
-            _recoveryWorkspaceTab);
-        _mainTabs.TabPages.Add(
-            BuildDevicesWorkspaceTab());
-        _mainTabs.TabPages.Add(
-            _lapsWorkspaceTab);
+        // Keep primary recovery tasks in the technician's actual work order:
+        // Start -> BitLocker -> LAPS -> Devices / Microsoft 365 -> Helpdesk.
+        // Never reconstruct pages when switching, so search state and
+        // authorization checks remain bound to their original instances.
+        _mainTabs.TabPages.Add(_homeWorkspaceTab);
+        _mainTabs.TabPages.Add(_recoveryWorkspaceTab);
+        _mainTabs.TabPages.Add(_lapsWorkspaceTab);
+        _mainTabs.TabPages.Add(BuildDevicesWorkspaceTab());
+        _mainTabs.TabPages.Add(BuildHelpdeskDashboardTab());
 
         // Read-only access diagnostics are useful to non-admin Helpdesk staff.
         // Privileged service, DC and signed-audit controls remain gated.
@@ -174,18 +173,36 @@ public sealed partial class MainForm
                 }
             };
 
-        // Keep Start as the first tab for compatibility and layout tests.
-        // Launch Helpdesk for normal sessions without changing existing tab order.
-        _mainTabs.SelectedTab = _homeWorkspaceTab;
-        if (!_layoutSelfTest)
+        // Keyboard navigation uses the same authorized existing TabPages.
+        // Admin-only Settings cannot be opened when its tab is absent.
+        KeyDown += (_, e) =>
         {
-            // Keep Start visible during its first layout pass; select Helpdesk afterwards.
-            Shown += (_, _) =>
+            if (!e.Control || e.Alt || e.Shift)
+                return;
+
+            int index = e.KeyCode switch
             {
-                if (!IsDisposed && _mainTabs.TabPages.Contains(helpdeskDashboard))
-                    _mainTabs.SelectedTab = helpdeskDashboard;
+                Keys.D1 or Keys.NumPad1 => 0,
+                Keys.D2 or Keys.NumPad2 => 1,
+                Keys.D3 or Keys.NumPad3 => 2,
+                Keys.D4 or Keys.NumPad4 => 3,
+                Keys.D5 or Keys.NumPad5 => 4,
+                Keys.D6 or Keys.NumPad6 => 5,
+                Keys.D7 or Keys.NumPad7 => 6,
+                _ => -1
             };
-        }
+            if (index < 0 || index >= _mainTabs.TabPages.Count)
+                return;
+
+            _mainTabs.SelectedIndex = index;
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+        };
+
+        // The technician explicitly requested Start as the landing page.
+        // Do not change selection in Shown (including after the connection
+        // wizard), and never silently switch to Helpdesk on normal launch.
+        _mainTabs.SelectedTab = _homeWorkspaceTab;
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(

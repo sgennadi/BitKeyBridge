@@ -196,6 +196,8 @@ public sealed partial class MainForm : DpiAwareForm
             $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
         StartPosition =
             FormStartPosition.CenterScreen;
+        // Global Ctrl+1..7 workspace navigation without stealing text input.
+        KeyPreview = true;
         Size =
             new Size(
                 1220,
