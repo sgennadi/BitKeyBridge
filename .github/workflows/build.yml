@@ -366,14 +366,22 @@ jobs:
         shell: pwsh
         run: |
           $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
-          $results = & $exe --scheduled-update --no-elevation 2>&1 | Out-String
-          if ($LASTEXITCODE -eq 0) {
+          # Native stderr from an expected denial must not be turned into
+          # a PowerShell terminating error by the GitHub Actions runner.
+          $background = Start-Process -FilePath $exe -ArgumentList @(
+            '--scheduled-update', '--no-elevation'
+          ) -PassThru -Wait
+          if ($background.ExitCode -eq 0) {
             throw "SECURITY: portable copy was permitted to run the SYSTEM background updater."
           }
-          $results = & $exe --update-task-install --no-elevation 2>&1 | Out-String
-          if ($LASTEXITCODE -eq 0) {
+
+          $register = Start-Process -FilePath $exe -ArgumentList @(
+            '--update-task-install', '--no-elevation'
+          ) -PassThru -Wait
+          if ($register.ExitCode -eq 0) {
             throw "SECURITY: portable copy registered a persistent SYSTEM update task."
           }
+          Write-Host "Portable background update denied with $($background.ExitCode) and task creation denied with $($register.ExitCode)."
 
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'
