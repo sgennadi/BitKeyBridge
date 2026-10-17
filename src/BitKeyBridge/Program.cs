@@ -118,6 +118,7 @@ internal static class Program
                 x.Equals("--rbac-ui-admin-add", StringComparison.OrdinalIgnoreCase) ||
                 x.Equals("--rbac-ui-admin-remove", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-setup", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-sign", StringComparison.OrdinalIgnoreCase) ||
@@ -303,6 +304,7 @@ internal static class Program
             x.Equals("--coverage-policy-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--rbac-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-verify", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-signing-verify", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--remote-token-status", StringComparison.OrdinalIgnoreCase) ||
@@ -1051,6 +1053,9 @@ internal static class Program
         {
             return CoveragePolicyCliService.Configure(config, args);
         }
+
+        if (args.Any(x => x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase)))
+            return ProtectedAuditCapacityService.PrintStatus();
 
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
         {
@@ -1825,6 +1830,7 @@ internal static class Program
 
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(UpdatePackageSelfTest.Run());
+            failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
@@ -4151,6 +4157,7 @@ internal static class Program
         Console.WriteLine("  --rbac-ui-admin-add <principal> Add DOMAIN\\group/user or SID to Administration UI");
         Console.WriteLine("  --rbac-ui-admin-remove <principal> Remove Administration UI principal");
         Console.WriteLine("  --audit-verify        Verify tamper-evident audit hash chain");
+        Console.WriteLine("  --audit-journal-capacity  Read-only protected journal space/rotation check");
         Console.WriteLine("  --audit-signing-status  Show signed-checkpoint and certificate state");
         Console.WriteLine("  --audit-signing-setup   Create/reuse non-exportable machine signing certificate");
         Console.WriteLine("  --audit-signing-years <1-10>  Certificate lifetime for setup");
