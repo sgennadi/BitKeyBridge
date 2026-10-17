@@ -1,3 +1,10 @@
+## Unreleased (v0.30.3 Helpdesk preview, PR #62)
+
+- Add a non-elevating, secret-free `--startup-diagnostics` mode that runs before loading machine configuration, allowing standard users to distinguish missing or unreadable policy from a GUI startup failure.
+- Fail closed when restricted Windows identity lookups prevent Helpdesk readiness or administrator-tab visibility checks; keep the main Helpdesk window available without exposing privileged controls.
+- Convert the Helpdesk deployment checklist into a shared DPI-aware dialog and include it in compact/175%/200% WinForms layout regression testing.
+- Add a startup diagnostics CI smoke check and an operational guide for CyberArk EPM / standard-user launch triage. No security bypass or production release is implied.
+
 ## 0.30.2-rc.1
 
 **Integrated unsigned QA candidate — not a production release**

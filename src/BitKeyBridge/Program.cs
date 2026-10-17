@@ -57,6 +57,14 @@ internal static class Program
             return RunSelfTest();
         }
 
+        // Runs before machine configuration loading and before any UAC decision.
+        // Suitable for diagnosing standard-user launches without reading secrets.
+        if (args.Any(x => x.Equals("--startup-diagnostics", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConsoleHelper.EnsureConsole();
+            return StartupDiagnosticService.Run();
+        }
+
         if (args.Any(x => x.Equals("--ui-self-test", StringComparison.OrdinalIgnoreCase)))
         {
             ConsoleHelper.EnsureConsole();
@@ -4013,6 +4021,7 @@ internal static class Program
         Console.WriteLine("GUI:");
         Console.WriteLine("  BitKeyBridge.exe");
         Console.WriteLine("  --ui-self-test        Validate responsive WinForms layout without showing the UI");
+        Console.WriteLine("  --startup-diagnostics Check standard-user startup prerequisites without reading secrets or elevating");
         Console.WriteLine();
         Console.WriteLine("CLI:");
         Console.WriteLine("  --cli                 Export using saved scopes");

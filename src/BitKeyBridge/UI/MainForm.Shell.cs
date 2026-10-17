@@ -61,11 +61,30 @@ public sealed partial class MainForm
     private readonly Button _deviceCopyKey = new();
     private string? _deviceCurrentKey;
 
-    private bool AdministrationAllowed =>
-        _layoutSelfTest ||
-        new AuthorizationService(_config)
-            .Check(BitKeyBridgePermission.Administrator)
-            .Allowed;
+    // A restricted endpoint-management token may fail an identity lookup.
+    // Treat that as NOT authorized to administer settings; never let it prevent
+    // a standard-user Helpdesk session from constructing its main window.
+    private bool AdministrationAllowed
+    {
+        get
+        {
+            if (_layoutSelfTest)
+                return true;
+            try
+            {
+                return new AuthorizationService(_config)
+                    .Check(BitKeyBridgePermission.Administrator)
+                    .Allowed;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "Administrator tab visibility check unavailable: " +
+                    ex.GetType().Name);
+                return false;
+            }
+        }
+    }
 
     private Control BuildMainShell()
     {

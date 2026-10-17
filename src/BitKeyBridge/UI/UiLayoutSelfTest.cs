@@ -225,6 +225,23 @@ public static class UiLayoutSelfTest
                         NewConfig(),
                         layoutSelfTest: true)),
             (
+                "Helpdesk deployment checklist",
+                () =>
+                {
+                    var main = new MainForm(NewConfig(), layoutSelfTest: true);
+                    try
+                    {
+                        var wizard = main.CreateHelpdeskDeploymentWizard();
+                        wizard.Disposed += (_, _) => main.Dispose();
+                        return wizard;
+                    }
+                    catch
+                    {
+                        main.Dispose();
+                        throw;
+                    }
+                }),
+            (
                 "Environment prerequisites",
                 () => new EnvironmentDiagnosticDialog(
                     NewConfig(), cloudConfigured: false, computer: "PC-TEST", runOnOpen: false)),

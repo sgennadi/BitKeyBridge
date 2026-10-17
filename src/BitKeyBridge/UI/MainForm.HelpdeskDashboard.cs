@@ -61,8 +61,25 @@ public sealed partial class MainForm
                 return;
             }
 
-            var permission = new AuthorizationService(_config)
-                .Check(BitKeyBridgePermission.SearchDevices);
+            bool searchAllowed;
+            try
+            {
+                searchAllowed = new AuthorizationService(_config)
+                    .Check(BitKeyBridgePermission.SearchDevices)
+                    .Allowed;
+            }
+            catch (Exception ex)
+            {
+                // A restricted Windows token must not crash the landing tab
+                // or imply that access has been granted.
+                System.Diagnostics.Debug.WriteLine(
+                    "Helpdesk search readiness unavailable: " + ex.GetType().Name);
+                UiStyle.SetStatus(status,
+                    "Search permissions could not be verified. Open Access Health; " +
+                    "recovery access remains subject to its normal authorization checks.",
+                    UiStatusKind.Warning);
+                return;
+            }
             var audit = _config.RequireProtectedAuditForRecovery
                 ? "Protected audit required"
                 : "Protected audit not required by current policy";
@@ -70,9 +87,9 @@ public sealed partial class MainForm
                 ? "AD connected"
                 : "AD not connected";
             UiStyle.SetStatus(status,
-                $"{connection} | {audit} | Search: {(permission.Allowed ? "permitted" : "denied")}. " +
+                $"{connection} | {audit} | Search: {(searchAllowed ? "permitted" : "denied")}. " +
                 "Use Access Health for detailed checks; status alone does not authorize secret reads.",
-                permission.Allowed ? UiStatusKind.Neutral : UiStatusKind.Warning);
+                searchAllowed ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
 
         void OpenSearch()
@@ -124,9 +141,16 @@ public sealed partial class MainForm
 
     private void ShowHelpdeskDeploymentChecklist()
     {
+        using var wizard = CreateHelpdeskDeploymentWizard();
+        wizard.ShowDialog(this);
+    }
+
+    // Shared by the real dialog and the offline 100-200% UI regression test.
+    internal DpiAwareForm CreateHelpdeskDeploymentWizard()
+    {
         // Read-only guided preparation. All privileged changes remain in the
         // existing administrator UI / CLI with their own authorization gates.
-        using var wizard = new Form
+        var wizard = new DpiAwareForm
         {
             Text = "Helpdesk deployment - preparation",
             Name = "HelpdeskDeploymentWizard",
@@ -189,7 +213,7 @@ public sealed partial class MainForm
             Name = "HelpdeskDeploymentReadiness",
             AutoSize = true,
             Dock = DockStyle.Fill,
-            MaximumSize = new Size(0, 0),
+            MaximumSize = new Size(900, 0),
             Text = "Readiness has not been checked."
         };
         var healthResults = new ListView
@@ -290,13 +314,9 @@ public sealed partial class MainForm
                 ShowHealth("Protected journal ACL", journalStatus);
                 ShowHealth("Audit hash chain", integrityStatus);
                 readiness.Text =
-                    $"Protected journal: {journalStatus} | Integrity: {integrityStatus} | " +
-                    $"Audit broker: {brokerStatus} | " +
-                    $"Service: {serviceStatus} | " +
-                    $"Directory: {(_directoryConnected ? "connected" : "not connected")} | " +
-                    $"Search authorization: {(authorization.Allowed ? "allowed" : "denied")} | " +
-                    $"Protected audit policy: {(_config.RequireProtectedAuditForRecovery ? "required" : "optional")}. " +
-                    "Use Access Health for protected broker and delegation checks.";
+                    "Local readiness checks completed. Review each result below; " +
+                    "Access Health and an actual delegated account are required " +
+                    "before recovery can be approved.";
             }
             catch (Exception)
             {
@@ -336,7 +356,8 @@ public sealed partial class MainForm
             Text = "Checking an item records progress in this window only. " +
                    "It does not install services, modify RBAC, grant directory access, " +
                    "or assert that a security check has passed.",
-            Margin = new Padding(0, 12, 0, 12)
+            Margin = new Padding(0, 12, 0, 12),
+            MaximumSize = new Size(900, 0)
         };
         var notes = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
         notes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -379,7 +400,8 @@ public sealed partial class MainForm
         };
         close.Click += (_, _) => wizard.Close();
         wizard.CancelButton = close;
-        wizard.ShowDialog(this);
+        wizard.AcceptButton = check;
+        return wizard;
     }
 
     private void OpenHelpdeskSetup()
