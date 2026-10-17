@@ -259,6 +259,11 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Validate GPO templates and localized restriction resources
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/Validate-GpoTemplates.ps1
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
