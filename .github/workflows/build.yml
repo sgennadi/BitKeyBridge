@@ -553,9 +553,11 @@ jobs:
     # apply/rollback implementation with synthetic config and DPAPI fixtures.
     if: >-
       (github.event_name == 'pull_request' &&
-       github.head_ref == 'feature/v0.30.4-reliability-20261017') ||
+       (github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
+        github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
       (github.event_name == 'push' &&
-       github.ref == 'refs/heads/release/v0.30.4')
+       (github.ref == 'refs/heads/release/v0.30.4' ||
+        github.ref == 'refs/heads/release/v0.30.5'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 30
@@ -591,10 +593,12 @@ jobs:
         github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
         github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
         github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017' ||
-         github.head_ref == 'feature/v0.30.4-reliability-20261017')) ||
+         github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
+         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
-        github.ref == 'refs/heads/release/v0.30.4'))
+        github.ref == 'refs/heads/release/v0.30.4' ||
+        github.ref == 'refs/heads/release/v0.30.5'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
