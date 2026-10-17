@@ -1218,6 +1218,14 @@ public sealed partial class MainForm
             _secretLifetimeStatus);
         secretLifetime.Controls.Add(
             _clearSecretNow);
+        _homeRecoveryStepsButton.Name = "HomeRecoverySteps";
+        _homeRecoveryStepsButton.Text = "Recovery Steps";
+        _homeRecoveryStepsButton.AccessibleName =
+            "Review selected computer recovery steps without revealing secrets";
+        _homeRecoveryStepsButton.Enabled = false;
+        UiStyle.ConfigureActionButton(_homeRecoveryStepsButton);
+        _homeRecoveryStepsButton.Click += (_, _) => ShowRecoveryWorkflowSteps();
+        secretLifetime.Controls.Add(_homeRecoveryStepsButton);
         _homeSelectionPanel.Controls.Add(
             secretLifetime,
             0,

@@ -597,6 +597,8 @@ public sealed partial class MainForm
 
         var connected = _directoryConnected && !_directoryConnecting;
 
+        _homeRecoveryStepsButton.Enabled = selected is not null;
+
         _homeRevealBitLockerButton.Enabled =
             connected &&
             selected is not null &&

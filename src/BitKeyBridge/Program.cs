@@ -1835,6 +1835,7 @@ internal static class Program
             failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
             failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
             failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
+            failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
             failures.AddRange(HomeRecoverySelectionGuard.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(

@@ -9,8 +9,8 @@ internal static class RecoveryWorkflowReadinessService
 {
     internal sealed record Step(string Name, string Status, string Explanation);
     internal sealed record Snapshot(
-        string Computer, string Source, bool CanNavigateToRecoveryScreen,
-        IReadOnlyList<Step> Steps, string Notice);
+        string Computer, string Source, bool IsCloudSelection,
+        bool CanNavigateToRecoveryScreen, IReadOnlyList<Step> Steps, string Notice);
 
     internal static Snapshot Build(AppConfig config, HomeSearchResult? selected,
         bool adConnected, bool cloudConnected, AuthorizationDecision? authorization)
@@ -73,7 +73,7 @@ internal static class RecoveryWorkflowReadinessService
         return new Snapshot(
             known ? DiagnosticRedaction.Sanitize(selected!.ComputerName) : "No device selected",
             !known ? "Not selected" : cloud ? "Entra / Intune" : "Active Directory",
-            identitySafe && sourceReady && rbacAllowed && !invalidBroker,
+            cloud, identitySafe && sourceReady && rbacAllowed && !invalidBroker,
             steps,
             "Read-only preflight, NOT an authorization. No recovery secrets were requested. " +
             "Actual recovery still requires a fresh policy decision and its durable audit ACK.");

@@ -6,6 +6,8 @@ namespace BitKeyBridge;
 /// </summary>
 internal sealed class RecoveryWorkflowDialog : DpiAwareForm
 {
+    internal RecoveryWorkflowRoute SelectedRoute { get; private set; }
+
     internal RecoveryWorkflowDialog(RecoveryWorkflowReadinessService.Snapshot report)
     {
         Text = "Recovery Steps - Read-only Preflight";
@@ -126,14 +128,49 @@ internal sealed class RecoveryWorkflowDialog : DpiAwareForm
             Padding = new Padding(0, 8, 0, 0)
         };
         var close = UiStyle.CreateActionButton("Close", DialogResult.Cancel);
-        var goStart = UiStyle.CreateActionButton("Open Start", DialogResult.Yes);
-        var health = UiStyle.CreateActionButton("Access Health", DialogResult.No);
+        var goStart = UiStyle.CreateActionButton("Open Start");
+        var health = UiStyle.CreateActionButton("Access Health");
+        goStart.Click += (_, _) => Finish(RecoveryWorkflowRoute.Start);
+        health.Click += (_, _) => Finish(RecoveryWorkflowRoute.AccessHealth);
         actions.Controls.Add(close);
         actions.Controls.Add(goStart);
         actions.Controls.Add(health);
+
+        // These commands only navigate to existing metadata/search pages.
+        // They do not reveal, copy or rotate any secret. The owner Form
+        // revalidates the exact Start row and caller rights after closing.
+        if (report.IsCloudSelection)
+        {
+            AddRouteButton("Open Devices", RecoveryWorkflowRoute.Devices,
+                report.CanNavigateToRecoveryScreen);
+        }
+        else
+        {
+            AddRouteButton("Open BitLocker", RecoveryWorkflowRoute.BitLocker,
+                report.CanNavigateToRecoveryScreen);
+            AddRouteButton("Open LAPS", RecoveryWorkflowRoute.Laps,
+                report.CanNavigateToRecoveryScreen);
+        }
         root.Controls.Add(actions, 0, 3);
 
         AcceptButton = goStart;
         CancelButton = close;
+
+        void AddRouteButton(string title, RecoveryWorkflowRoute route, bool enabled)
+        {
+            var button = UiStyle.CreateActionButton(title);
+            button.Name = "RecoveryRoute" + route;
+            button.AccessibleName = title + " search (no secret retrieval)";
+            button.Enabled = enabled;
+            button.Click += (_, _) => Finish(route);
+            actions.Controls.Add(button);
+        }
+
+        void Finish(RecoveryWorkflowRoute route)
+        {
+            SelectedRoute = route;
+            DialogResult = DialogResult.OK;
+            Close();
+        }
     }
 }

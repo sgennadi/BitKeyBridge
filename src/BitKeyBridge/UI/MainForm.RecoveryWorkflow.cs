@@ -2,21 +2,22 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
-    /// <summary>
-    /// Informational preflight only. The existing privileged recovery handlers
-    /// remain authoritative for secrets, ticket validation and audit commits.
-    /// </summary>
-    private void ShowRecoveryWorkflowSteps()
+    // Local context action; changes only the selected workspace, never
+    // triggers Reveal, Copy, LAPS read or automatic Intune key rotation.
+    private readonly Button _homeRecoveryStepsButton = new();
+
+    private async void ShowRecoveryWorkflowSteps()
     {
-        RecoveryWorkflowReadinessService.Snapshot report;
+        var selectedBeforeDialog = GetSelectedHomeSearchResult();
+        RecoveryWorkflowReadinessService.Snapshot snapshot;
         try
         {
-            AuthorizationDecision? decision = _layoutSelfTest ? null :
+            AuthorizationDecision? authorization = _layoutSelfTest ? null :
                 new AuthorizationService(_config).Check(BitKeyBridgePermission.RecoveryRead);
-            report = RecoveryWorkflowReadinessService.Build(
-                _config, GetSelectedHomeSearchResult(),
+            snapshot = RecoveryWorkflowReadinessService.Build(
+                _config, selectedBeforeDialog,
                 _directoryConnected && !_directoryConnecting,
-                HasCloudSearchSession(), decision);
+                HasCloudSearchSession(), authorization);
         }
         catch (Exception ex)
         {
@@ -27,18 +28,71 @@ public sealed partial class MainForm
             return;
         }
 
-        using var dialog = new RecoveryWorkflowDialog(report);
-        var choice = dialog.ShowDialog(this);
-        if (IsDisposed)
+        using var dialog = new RecoveryWorkflowDialog(snapshot);
+        if (dialog.ShowDialog(this) != DialogResult.OK || IsDisposed)
             return;
-        if (choice == DialogResult.Yes && _homeWorkspaceTab is not null)
+
+        var route = dialog.SelectedRoute;
+        if (route == RecoveryWorkflowRoute.Start)
         {
-            _mainTabs.SelectedTab = _homeWorkspaceTab;
-            _homeQuery.Focus();
+            if (_homeWorkspaceTab is not null)
+            {
+                _mainTabs.SelectedTab = _homeWorkspaceTab;
+                _homeQuery.Focus();
+            }
+            return;
         }
-        else if (choice == DialogResult.No)
+        if (route == RecoveryWorkflowRoute.AccessHealth)
         {
             OpenHelpdeskAccessHealth();
+            return;
+        }
+
+        // The modal dialog freezes ordinary UI input, but network status,
+        // token revocation, search cancellation or async refresh may still
+        // invalidate its snapshot. Never route by the old hostname alone.
+        try
+        {
+            var freshAuthorization = new AuthorizationService(_config)
+                .Check(BitKeyBridgePermission.RecoveryRead);
+            if (!RecoveryWorkflowNavigationPolicy.CanOpen(
+                    selectedBeforeDialog, GetSelectedHomeSearchResult(), route,
+                    _directoryConnected && !_directoryConnecting,
+                    HasCloudSearchSession(), freshAuthorization.Allowed))
+            {
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "Recovery context changed or access is denied. Select the exact device in Start and recheck Recovery Steps.",
+                    UiStatusKind.Warning);
+                if (_homeWorkspaceTab is not null)
+                    _mainTabs.SelectedTab = _homeWorkspaceTab;
+                return;
+            }
+
+            switch (route)
+            {
+                case RecoveryWorkflowRoute.BitLocker:
+                    await OpenSelectedHomeBitLockerAsync();
+                    break;
+                case RecoveryWorkflowRoute.Laps:
+                    await OpenSelectedHomeLapsAsync();
+                    break;
+                case RecoveryWorkflowRoute.Devices:
+                    // This performs metadata search only. The operator must
+                    // verify the exact managedDeviceId before any cloud
+                    // recovery or explicit Intune rotation.
+                    OpenHomeDeviceDetails();
+                    UiStyle.SetStatus(_unifiedStatus,
+                        "Select the exact Entra/Intune device ID. The guided recovery step has not read a secret.",
+                        UiStatusKind.Warning);
+                    await SearchUnifiedDevicesAsync();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _appDiagnostics.ShowMessage(
+                "Recovery navigation failed; no secret was requested by this guide.",
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 }

@@ -20,3 +20,21 @@ Offline self-tests exercise negative identity, source, RBAC, incomplete
 metadata and strict broker configurations. The GUI DPI smoke suite now
 includes this dialog at compact, 150%, 175% and 200% scaling.
 Real AD/Entra/CyberArk, Windows-token and RDP acceptance is still required.
+
+## Context-aware navigation (phase 2)
+
+The selected **Start** device now offers a compact *Recovery Steps* action.
+The guide contains explicit **Open BitLocker** and **Open LAPS** choices
+for AD objects, or **Open Devices** for source-qualified Entra/Intune objects.
+These choices NEVER call Reveal, Copy, LAPS read or Intune rotation.
+Open Start and Access Health are always available for diagnostics.
+
+Every route re-checks the exact original Start-row object, the currently
+connected AD/Graph source and the current Windows RecoveryRead decision
+AFTER closing the dialog. A same-named replacement row is not the same
+device and cannot use its prior preflight. Ambiguous AD/cloud identities,
+name-only cloud objects, disconnected sources and denied rights cannot
+navigate through a guided recovery shortcut. The real individual recovery
+handlers remain responsible for ticket validation, approval, durable audit
+ACK and secret retrieval. Windows offline tests exercise all negative routes;
+the existing UI DPI test covers the buttons.
