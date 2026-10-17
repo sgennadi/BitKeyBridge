@@ -1014,14 +1014,30 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        var preferredOrder = new[]
+        {
+            "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
+        };
+        var actualOrder = tabs.TabPages.Cast<TabPage>()
+            .Select(page => page.Text).ToArray();
+        if (actualOrder.Length < preferredOrder.Length ||
+            !actualOrder.Take(preferredOrder.Length)
+                .SequenceEqual(preferredOrder, StringComparer.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: unexpected main tab order: " +
+                string.Join(" / ", actualOrder) +
+                "; required Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics.");
+        }
         if (tabs.TabPages.Count == 0 ||
             !string.Equals(
                 tabs.TabPages[0].Text,
                 "Start",
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            !ReferenceEquals(tabs.SelectedTab, tabs.TabPages[0]))
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Start must be the first main workspace tab.");
+                $"{formName}/{scenario.Name}: Start must be the first and selected workspace at launch.");
         }
         else
         {

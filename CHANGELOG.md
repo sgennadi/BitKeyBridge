@@ -1,3 +1,9 @@
+## Unreleased - v0.30.4
+
+- Reorder top-level workspaces to **Start → BitLocker → LAPS → Devices (AD + Microsoft 365) → Helpdesk → Diagnostics → Settings** (Settings remains permission-gated).
+- Keep **Start** selected on initial launch for every normal Windows session; remove the unexpected post-Shown switch to Helpdesk.
+- Add Windows UI regression checks for exact tab order and initial selection across supported DPI/layout scenarios. No permission checks, secret retrieval or audit gates are changed.
+
 ## 0.30.3
 
 **Stable unsigned GitHub Release, including optional unsigned automatic installation.**

@@ -127,16 +127,15 @@ public sealed partial class MainForm
         _lapsWorkspaceTab =
             BuildLapsWorkspaceTab();
 
-        _mainTabs.TabPages.Add(
-            _homeWorkspaceTab);
-        var helpdeskDashboard = BuildHelpdeskDashboardTab();
-        _mainTabs.TabPages.Add(helpdeskDashboard);
-        _mainTabs.TabPages.Add(
-            _recoveryWorkspaceTab);
-        _mainTabs.TabPages.Add(
-            BuildDevicesWorkspaceTab());
-        _mainTabs.TabPages.Add(
-            _lapsWorkspaceTab);
+        // Keep primary recovery tasks in the technician's actual work order:
+        // Start -> BitLocker -> LAPS -> Devices / Microsoft 365 -> Helpdesk.
+        // Never reconstruct pages when switching, so search state and
+        // authorization checks remain bound to their original instances.
+        _mainTabs.TabPages.Add(_homeWorkspaceTab);
+        _mainTabs.TabPages.Add(_recoveryWorkspaceTab);
+        _mainTabs.TabPages.Add(_lapsWorkspaceTab);
+        _mainTabs.TabPages.Add(BuildDevicesWorkspaceTab());
+        _mainTabs.TabPages.Add(BuildHelpdeskDashboardTab());
 
         // Read-only access diagnostics are useful to non-admin Helpdesk staff.
         // Privileged service, DC and signed-audit controls remain gated.
@@ -174,18 +173,10 @@ public sealed partial class MainForm
                 }
             };
 
-        // Keep Start as the first tab for compatibility and layout tests.
-        // Launch Helpdesk for normal sessions without changing existing tab order.
+        // The technician explicitly requested Start as the landing page.
+        // Do not change selection in Shown (including after the connection
+        // wizard), and never silently switch to Helpdesk on normal launch.
         _mainTabs.SelectedTab = _homeWorkspaceTab;
-        if (!_layoutSelfTest)
-        {
-            // Keep Start visible during its first layout pass; select Helpdesk afterwards.
-            Shown += (_, _) =>
-            {
-                if (!IsDisposed && _mainTabs.TabPages.Contains(helpdeskDashboard))
-                    _mainTabs.SelectedTab = helpdeskDashboard;
-            };
-        }
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
