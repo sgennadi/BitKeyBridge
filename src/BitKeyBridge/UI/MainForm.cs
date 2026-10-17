@@ -5063,6 +5063,14 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadDashboardSettings()
     {
+        // Normalize WinForms numeric control bounds before restoring settings.
+        // NumericUpDown defaults to Maximum=100, and settings can exceed it.
+        _serviceInterval.Minimum = 1;
+        _serviceInterval.Maximum = 10080;
+        _healthPort.Minimum = 1024;
+        _healthPort.Maximum = 65535;
+        _serviceCoverageInterval.Minimum = 15;
+        _serviceCoverageInterval.Maximum = 10080;
         _serviceInterval.Value = Math.Clamp((decimal)_config.ServiceIntervalMinutes, _serviceInterval.Minimum, _serviceInterval.Maximum);
         _healthPort.Value = Math.Clamp((decimal)_config.HealthEndpointPort, _healthPort.Minimum, _healthPort.Maximum);
         _healthEnabled.Checked = _config.HealthEndpointEnabled;
