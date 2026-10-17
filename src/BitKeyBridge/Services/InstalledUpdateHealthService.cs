@@ -54,7 +54,11 @@ internal static class InstalledUpdateHealthService
             if (!process.HasExited)
             {
                 try { process.Kill(entireProcessTree: true); }
-                catch (InvalidOperationException) { }
+                catch (InvalidOperationException ex)
+                {
+                    Debug.WriteLine("Post-install probe already exited: " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
                 process.WaitForExit(5000);
             }
         }
