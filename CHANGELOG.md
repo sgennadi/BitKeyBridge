@@ -1,4 +1,11 @@
-## 0.30.3-rc.1
+## 0.30.3
+
+**Stable unsigned GitHub Release, including optional unsigned automatic installation.**
+
+- Restore the v0.30.1 unsigned auto-update opt-in with official repository binding, SHA-256 verification, staged self-tests, and rollback. No Authenticode signature is created or required when an administrator explicitly opts in; signing/publisher policies already configured remain enforceable.
+- Retain strict protected Audit Broker, Windows-token-based RBAC and durable protected journal; do not grant recovery secrets for a failed audit.
+- Add a visible unsigned auto-update consent control to the Updates tab. Automatic updates remain disabled until the operator explicitly enables them.
+
 
 - Add a non-elevating, secret-free `--startup-diagnostics` mode that runs before loading machine configuration, allowing standard users to distinguish missing or unreadable policy from a GUI startup failure.
 - Fail closed when restricted Windows identity lookups prevent Helpdesk readiness or administrator-tab visibility checks; keep the main Helpdesk window available without exposing privileged controls.

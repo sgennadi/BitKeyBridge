@@ -40,6 +40,7 @@ public sealed partial class MainForm
     private readonly Button _rollbackUpdateButton = new();
     private readonly Button _onlineRollbackButton = new();
     private readonly CheckBox _requireTrustedUpdateSignature = new();
+    private readonly CheckBox _allowUnsignedAutoUpdates = new();
     private readonly TextBox _trustedUpdatePublisher = new();
 
     private void RefreshUpdateHistory()

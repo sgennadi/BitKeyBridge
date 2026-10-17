@@ -16,6 +16,8 @@ public sealed partial class MainForm
             _config.CheckForUpdatesOnStart;
         _autoInstallUpdatesOnStart.Checked =
             _config.AutoInstallUpdatesOnStart;
+        _allowUnsignedAutoUpdates.Checked =
+            _config.AllowUnsignedUnattendedUpdates;
         _allowPrereleaseUpdates.Checked =
             _config.AllowPrereleaseUpdates;
         _requireTrustedUpdateSignature.Checked =
@@ -41,8 +43,8 @@ public sealed partial class MainForm
                     _config.CheckForUpdatesOnStart
                         ? _config.AutoInstallUpdatesOnStart
                             ? UpdateTrustPolicy.CanInstallUnattended(_config)
-                                ? "Automatic updates will install only publisher-verified releases."
-                                : "Saved auto-install setting is blocked: configure a required trusted signature and publisher."
+                                ? "Auto-updates enabled: " + UpdateTrustPolicy.DescribeMode(_config) + "."
+                                : "Saved auto-install setting blocked: configure trusted signing or explicit unsigned consent."
                             : "Automatic startup update checks are enabled. Installation remains manual."
                         : "Automatic startup update checks are disabled. Manual Check for Updates and Update Now remain available.",
                     UiStatusKind.Neutral);
@@ -92,10 +94,31 @@ public sealed partial class MainForm
             !UpdateTrustPolicy.CanInstallUnattended(_config);
         var downgradedLegacyAutoinstall = false;
 
+        // Never migrate AutoInstall=true from an old install into unsigned
+        // consent. A user must acknowledge the risk in this UI explicitly.
+        if (_allowUnsignedAutoUpdates.Checked &&
+            !_config.AllowUnsignedUnattendedUpdates)
+        {
+            var approval = MessageBox.Show(
+                this,
+                "Unsigned update packages are verified against GitHub release metadata and SHA-256, " +
+                "but do NOT authenticate a publisher. If the GitHub publishing account is compromised, " +
+                "a malicious update could still pass these checks.\n\n" +
+                "Allow unsigned automatic updates ONLY from sgennadi/BitKeyBridge on this computer?",
+                "Unsigned Automatic Update Risk",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+            if (approval != DialogResult.Yes)
+                return false;
+        }
+
         if (_autoInstallUpdatesOnStart.Checked &&
             !UpdateTrustPolicy.CanEnableUnattended(
                 _requireTrustedUpdateSignature.Checked,
-                _trustedUpdatePublisher.Text))
+                _trustedUpdatePublisher.Text,
+                _allowUnsignedAutoUpdates.Checked,
+                repository))
         {
             if (untrustedLegacyAutoinstall)
             {
@@ -108,8 +131,8 @@ public sealed partial class MainForm
             else
             {
                 UiStyle.SetStatus(_updateStatus,
-                    "Cannot enable unattended installation without both a required " +
-                    "trusted Authenticode signature and a non-empty expected publisher.",
+                    "Auto-install requires a trusted Authenticode publisher OR explicit " +
+                    "unsigned-update consent with the official BitKeyBridge GitHub repository.",
                     UiStatusKind.Warning);
                 return false;
             }
@@ -123,6 +146,8 @@ public sealed partial class MainForm
                 _checkUpdatesOnStart.Checked;
             _config.AutoInstallUpdatesOnStart =
                 _autoInstallUpdatesOnStart.Checked;
+            _config.AllowUnsignedUnattendedUpdates =
+                _allowUnsignedAutoUpdates.Checked;
             _config.AllowPrereleaseUpdates =
                 _allowPrereleaseUpdates.Checked;
             _config.RequireTrustedUpdateSignature =
@@ -143,7 +168,7 @@ public sealed partial class MainForm
                 "SaveUpdateSettings",
                 source: "Local",
                 details:
-                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RequireTrustedSignature={_config.RequireTrustedUpdateSignature}; TrustedPublisher={_config.TrustedUpdatePublisher}");
+                    $"UpdateRepository={_config.UpdateRepository}; CheckOnStart={_config.CheckForUpdatesOnStart}; AutoInstallOnStart={_config.AutoInstallUpdatesOnStart}; AllowUnsignedConsent={_config.AllowUnsignedUnattendedUpdates}; AllowPrerelease={_config.AllowPrereleaseUpdates}; RequireTrustedSignature={_config.RequireTrustedUpdateSignature}; TrustedPublisher={_config.TrustedUpdatePublisher}");
 
             if (showConfirmation)
             {
@@ -154,7 +179,7 @@ public sealed partial class MainForm
                           "Startup checks and manual updates remain available."
                         : _config.CheckForUpdatesOnStart
                         ? _config.AutoInstallUpdatesOnStart
-                            ? "Update settings saved. Automatic startup installation is enabled."
+                            ? "Auto-install enabled: " + UpdateTrustPolicy.DescribeMode(_config) + "."
                             : "Update settings saved. Startup checks are enabled; installation remains manual."
                         : "Update settings saved. Automatic startup checks are disabled; manual checks remain available.",
                     UiStatusKind.Success);
@@ -236,8 +261,8 @@ public sealed partial class MainForm
                 !UpdateTrustPolicy.CanInstallUnattended(_config))
             {
                 UiStyle.SetStatus(_updateStatus,
-                    "Automatic installation needs a required trusted Authenticode signature " +
-                    "and trusted publisher. Adjust Update Settings or use a manual update.",
+                    "Auto-install requires trusted publisher signing OR your explicit " +
+                    "unsigned-update consent restricted to the official GitHub repository.",
                     UiStatusKind.Warning);
                 return false;
             }
@@ -316,11 +341,19 @@ public sealed partial class MainForm
                 return;
             }
 
-            if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
+            if (_lastUpdateInfo.ManualReleaseAvailable && !silentWhenCurrent)
             {
                 ShowAppMessage(
-                "BitKeyBridge Update",
-                $"BitKeyBridge {_lastUpdateInfo.CurrentVersion} is current.");
+                    "BitKeyBridge Update",
+                    $"BitKeyBridge {_lastUpdateInfo.LatestVersion} is published for manual download only. " +
+                    "This release does not provide an auto-installable archive for your architecture. " +
+                    "Open GitHub Releases from Tools to download it.");
+            }
+            else if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
+            {
+                ShowAppMessage(
+                    "BitKeyBridge Update",
+                    $"BitKeyBridge {_lastUpdateInfo.CurrentVersion} is current.");
             }
 
             if (_lastUpdateInfo.UpdateAvailable)
@@ -372,7 +405,7 @@ public sealed partial class MainForm
             Environment.NewLine +
             $"Automatic startup checks: {(_config.CheckForUpdatesOnStart ? "Enabled" : "Disabled")}" +
             Environment.NewLine +
-            $"Automatic install: {(UpdateRollbackHoldService.IsActiveForCurrentBuild() ? "Paused after rollback" : _config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? UpdateTrustPolicy.CanInstallUnattended(_config) ? "Enabled" : "Blocked: trusted publisher required" : "Disabled")}" +
+            $"Automatic install: {(UpdateRollbackHoldService.IsActiveForCurrentBuild() ? "Paused after rollback" : _config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? UpdateTrustPolicy.CanInstallUnattended(_config) ? "Enabled" : "Blocked: explicit update trust required" : "Disabled")}" +
             Environment.NewLine +
             $"Authenticode trust required: {(_config.RequireTrustedUpdateSignature ? "Yes" : "No")}" +
             (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)

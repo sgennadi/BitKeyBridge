@@ -58,6 +58,14 @@ public sealed partial class MainForm
             1,
             2);
 
+        _allowUnsignedAutoUpdates.Name = "AllowUnsignedAutomaticUpdates";
+        _allowUnsignedAutoUpdates.AccessibleName =
+            "Explicitly allow unsigned automatic updates from the official BitKeyBridge GitHub repository";
+        _allowUnsignedAutoUpdates.Text =
+            "Allow unsigned auto-install from official GitHub (requires consent)";
+        _allowUnsignedAutoUpdates.AutoSize = true;
+        updateGrid.Controls.Add(_allowUnsignedAutoUpdates, 1, 3);
+
         _allowPrereleaseUpdates.Name =
             "AllowPrereleaseUpdates";
         _allowPrereleaseUpdates.Text =
@@ -67,7 +75,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _allowPrereleaseUpdates,
             1,
-            3);
+            4);
 
         _requireTrustedUpdateSignature.Name =
             "RequireTrustedUpdateSignature";
@@ -78,7 +86,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _requireTrustedUpdateSignature,
             1,
-            4);
+            5);
 
         _trustedUpdatePublisher.Name =
             "TrustedUpdatePublisher";
@@ -86,7 +94,7 @@ public sealed partial class MainForm
             "Optional expected publisher name";
         AddGridField(
             updateGrid,
-            5,
+            6,
             "Trusted publisher:",
             _trustedUpdatePublisher);
 
@@ -122,7 +130,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             updateActions,
             1,
-            6);
+            7);
 
         UiStyle.ConfigureStatusLabel(
             _updateStatus);
@@ -140,7 +148,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _updateStatus,
             1,
-            7);
+            8);
 
         root.Controls.Add(
             updateGrid);
@@ -208,11 +216,13 @@ public sealed partial class MainForm
             {
                 if (!UpdateTrustPolicy.CanEnableUnattended(
                         _requireTrustedUpdateSignature.Checked,
-                        _trustedUpdatePublisher.Text))
+                        _trustedUpdatePublisher.Text,
+                        _allowUnsignedAutoUpdates.Checked,
+                        _updateRepository.Text))
                 {
                     UiStyle.SetStatus(_updateStatus,
-                        "Cannot resume unattended updates until the expected " +
-                        "publisher and required Authenticode policy are configured.",
+                        "Cannot resume unattended updates until a trusted publisher OR " +
+                        "explicit unsigned official GitHub consent is configured.",
                         UiStatusKind.Warning);
                     return;
                 }
