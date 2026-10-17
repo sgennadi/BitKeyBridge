@@ -1,4 +1,4 @@
-## Unreleased (v0.30.3 Helpdesk preview, PR #62)
+## 0.30.3-rc.1
 
 - Add a non-elevating, secret-free `--startup-diagnostics` mode that runs before loading machine configuration, allowing standard users to distinguish missing or unreadable policy from a GUI startup failure.
 - Fail closed when restricted Windows identity lookups prevent Helpdesk readiness or administrator-tab visibility checks; keep the main Helpdesk window available without exposing privileged controls.
