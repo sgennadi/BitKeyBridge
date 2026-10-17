@@ -192,8 +192,13 @@ public sealed partial class MainForm
             MaximumSize = new Size(0, 0),
             Text = "Readiness has not been checked."
         };
-        void CheckReadiness()
+        var readinessRunning = false;
+        async void CheckReadiness()
         {
+            if (readinessRunning || wizard.IsDisposed)
+                return;
+            readinessRunning = true;
+            readiness.Text = "Checking readiness...";
             try
             {
                 var authorization = new AuthorizationService(_config)
@@ -235,7 +240,10 @@ public sealed partial class MainForm
                 {
                     try
                     {
-                        var integrity = AuditIntegrityService.Verify(AppPaths.BrokerAuditLogFile);
+                        // Journal verification may scan a large file and wait for its lock.
+                        // Keep the WinForms UI responsive while it runs.
+                        var integrity = await Task.Run(() =>
+                            AuditIntegrityService.Verify(AppPaths.BrokerAuditLogFile));
                         integrityStatus = integrity.Valid
                             ? "hash chain valid"
                             : "hash chain invalid or unavailable";
@@ -256,7 +264,12 @@ public sealed partial class MainForm
             }
             catch (Exception)
             {
-                readiness.Text = "Readiness check failed. Open Access Health for diagnostics.";
+                if (!wizard.IsDisposed)
+                    readiness.Text = "Readiness check failed. Open Access Health for diagnostics.";
+            }
+            finally
+            {
+                readinessRunning = false;
             }
         }
 
