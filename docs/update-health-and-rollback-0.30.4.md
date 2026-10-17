@@ -40,3 +40,12 @@ from that snapshot. On successful install only the immediate previous version
 remains as `.bak`. If EXE restoration is incomplete, neither generation is
 silently discarded; technician intervention is required. Synthetic offline
 regressions exercise both previously existing and absent `.bak` files.
+
+## Exclusive apply / rollback gate
+
+Manual updates, scheduled SYSTEM updates and rollback helpers now use one
+cross-process Windows mutex for the whole apply, health verification and
+restoration transaction. A concurrent helper exits before modifying any EXE
+or .bak, and it does not turn an otherwise healthy automatic update into an
+automatic-failure hold. A separate uniquely named mutex is used in the
+self-test to prove that different threads cannot apply simultaneously.

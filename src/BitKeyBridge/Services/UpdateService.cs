@@ -789,6 +789,18 @@ public sealed class UpdateService : IDisposable
             return 1;
         }
 
+        // Apply, automatic update and rollback share the same exclusive gate.
+        // An overlapping request must not rewrite .bak while the first helper
+        // is installing or restoring the previous executable.
+        using var exclusiveApply = UpdateApplyGate.TryAcquire();
+        if (exclusiveApply is null)
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update apply is already active or its protected gate is unavailable.",
+                EventLogSeverity.Warning, 4194, "Update");
+            return 3;
+        }
+
         var backups = new List<(string Target, string Backup)>();
         var createdTargets = new List<string>();
         var retainedBackupSnapshots = new List<UpdateBackupSafety.BackupSnapshot>();
