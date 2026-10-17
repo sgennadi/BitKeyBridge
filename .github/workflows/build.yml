@@ -672,8 +672,9 @@ jobs:
           }
           else {
             [xml]$project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
-            $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
-            if (-not $version) { throw "Project version was not found." }
+            $nodes = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+            if ($nodes.Count -ne 1) { throw "Exactly one project version is required." }
+            $version = [string]$nodes[0].InnerText.Trim()
             $tag = "v$version"
           }
 
@@ -682,13 +683,19 @@ jobs:
           }
 
           [xml]$project = Get-Content src\BitKeyBridge\BitKeyBridge.csproj
-          $projectVersion = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+          $nodes = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+          if ($nodes.Count -ne 1) { throw "Exactly one project version is required." }
+          $projectVersion = [string]$nodes[0].InnerText.Trim()
           if ($tag -ne "v$projectVersion") {
             throw "Release $tag does not match the tested project version $projectVersion."
           }
           if ("${{ github.ref }}" -eq "refs/heads/improve/nonadmin-audit-ui-20261014" -and
               $tag -ne "v0.30.0-rc.1") {
             throw "Staging branch is authorized only for v0.30.0-rc.1."
+          }
+
+          if ("${{ github.ref }}" -eq "refs/heads/release/v0.30.3" -and $tag -ne "v0.30.3") {
+            throw "The dedicated release branch is authorized only for v0.30.3."
           }
 
           $exists = $false
@@ -718,8 +725,12 @@ jobs:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
-              $tag -ne "v0.30.0-rc.1") {
+          if ($tag -eq 'v0.30.3' -and
+              "${{ github.ref }}" -eq 'refs/heads/release/v0.30.3') {
+            Write-Host 'Owner-authorized unsigned release v0.30.3: no Authenticode signing.'
+          }
+          elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
+                  $tag -ne "v0.30.0-rc.1") {
             if ($env:PROTECTED_AUDIT_APPROVED -ne 'true') {
               throw "Protected audit broker release is NOT approved: complete real-domain AD/Entra acceptance and set BITKEYBRIDGE_PROTECTED_AUDIT_APPROVED=true intentionally."
             }
@@ -753,7 +764,8 @@ jobs:
         if: >-
           steps.release_meta.outputs.exists != 'true' &&
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
-          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1' &&
+          github.ref != 'refs/heads/release/v0.30.3'
         shell: pwsh
         env:
           SIGNING_THUMBPRINT: ${{ vars.BITKEYBRIDGE_SIGNING_THUMBPRINT }}
@@ -803,7 +815,8 @@ jobs:
         if: >-
           steps.release_meta.outputs.exists != 'true' &&
           startsWith(steps.release_meta.outputs.tag, 'v0.30.') &&
-          steps.release_meta.outputs.tag != 'v0.30.0-rc.1'
+          steps.release_meta.outputs.tag != 'v0.30.0-rc.1' &&
+          github.ref != 'refs/heads/release/v0.30.3'
         uses: actions/attest@v4
         with:
           subject-path: release/BitKeyBridge.signatures.json
