@@ -532,8 +532,11 @@ public sealed class UpdateService : IDisposable
     public string LaunchApplyHelper(
         PreparedUpdate prepared,
         bool restartGui,
-        bool automatic = false)
+        bool automatic = false,
+        bool scheduledBackground = false)
     {
+        if (scheduledBackground && !automatic)
+            throw new InvalidOperationException("A background task may only stage automatic updates.");
         var current = Environment.ProcessPath
             ?? throw new InvalidOperationException("Current executable path is unavailable.");
 
@@ -569,6 +572,8 @@ public sealed class UpdateService : IDisposable
                 GetCurrentVersion().ToString(),
             Automatic =
                 automatic,
+            ScheduledBackground =
+                scheduledBackground,
             Rollback =
                 prepared.Info.IsRollbackTarget ||
                 prepared.Info.ReleaseTag.Equals(
@@ -784,41 +789,34 @@ public sealed class UpdateService : IDisposable
             return 1;
         }
 
-        if (plan.WaitForProcessId > 0)
-        {
-            try
-            {
-                using var process = Process.GetProcessById(plan.WaitForProcessId);
-                process.WaitForExit(60000);
-            }
-            catch (ArgumentException ex)
-            {
-                Debug.WriteLine(
-                    "Updater wait target process already exited: " +
-                    DiagnosticRedaction.Sanitize(ex.Message));
-            }
-        }
-
-        if (plan.RestartService)
-        {
-            try
-            {
-                WindowsServiceHost.Stop();
-            }
-            catch (Exception ex)
-            {
-                WindowsEventLogService.TryWrite(
-                    "Updater could not stop the BitKeyBridge service before replacement: " +
-                    ex.Message,
-                    EventLogSeverity.Warning,
-                    4591,
-                    "Update");
-            }
-        }
-
         var backups = new List<(string Target, string Backup)>();
         try
         {
+            // Reject hostile background plans before stopping services or
+            // touching any deployment target.
+            UpdateApplySafety.ValidateScheduledBackgroundPlan(
+                plan, AppPaths.ServiceExecutable);
+            if (plan.ScheduledBackground &&
+                !System.Security.Principal.WindowsIdentity.GetCurrent().IsSystem)
+                throw new InvalidOperationException(
+                    "Scheduled background apply requires the LocalSystem token.");
+
+            if (plan.WaitForProcessId > 0)
+            {
+                try
+                {
+                    using var waitProcess = Process.GetProcessById(plan.WaitForProcessId);
+                    if (!waitProcess.WaitForExit(60000))
+                        throw new TimeoutException(
+                            "The launching BitKeyBridge process did not exit within 60 seconds.");
+                }
+                catch (ArgumentException ex)
+                {
+                    Debug.WriteLine("Updater source process exited: " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
+            }
+
             using var stagedExecutable =
                 OpenVerifiedStagedExecutable(
                     plan);
@@ -832,6 +830,12 @@ public sealed class UpdateService : IDisposable
                     "signature and publisher policy is not enabled.");
             AuthenticodeVerificationService.EnforcePolicy(
                 activePolicy, plan.StagedExecutable);
+
+            // Do not interrupt a running recovery/audit service when staged
+            // executable verification or machine policy already failed.
+            // A service stop failure aborts the transaction and restores it.
+            if (plan.RestartService)
+                WindowsServiceHost.Stop();
 
             foreach (var target in plan.TargetExecutables
                          .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -943,6 +947,38 @@ public sealed class UpdateService : IDisposable
         }
         catch (Exception ex)
         {
+            if (plan.Automatic)
+            {
+                try
+                {
+                    // Prevent endless install-restore-install cycles. This
+                    // hold survives partial rollbacks and is cleared only
+                    // after a deliberate administrator intervention.
+                    UpdateRollbackHoldService.Activate(
+                        plan.PreviousVersion, "AutomaticFailure");
+                }
+                catch (Exception holdException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Automatic update failure hold could not be written: " +
+                        DiagnosticRedaction.Sanitize(holdException.Message),
+                        EventLogSeverity.Error, 4196, "Update");
+                    try
+                    {
+                        var disable = ConfigService.LoadAppConfig();
+                        disable.AutoInstallUpdatesOnStart = false;
+                        ConfigService.SaveAppConfig(disable);
+                    }
+                    catch (Exception configException)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Automatic update could not be disabled after failure: " +
+                            DiagnosticRedaction.Sanitize(configException.Message),
+                            EventLogSeverity.Error, 4195, "Update");
+                    }
+                }
+            }
+
             var restoreAttempted = 0;
             var restoreSucceeded = 0;
             var restoreFailed = 0;

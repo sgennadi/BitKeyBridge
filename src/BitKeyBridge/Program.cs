@@ -1931,6 +1931,41 @@ internal static class Program
 
                 var updateDefaults =
                     new AppConfig();
+                var safeBackgroundPlan = new UpdateApplyPlan
+                {
+                    Automatic = true,
+                    ScheduledBackground = true,
+                    RestartGui = false,
+                    TargetExecutables = [AppPaths.ServiceExecutable]
+                };
+                UpdateApplySafety.ValidateScheduledBackgroundPlan(
+                    safeBackgroundPlan, AppPaths.ServiceExecutable);
+                safeBackgroundPlan.TargetExecutables =
+                    [Path.Combine(Path.GetTempPath(), "unrelated.exe")];
+                var arbitraryTargetBlocked = false;
+                try
+                {
+                    UpdateApplySafety.ValidateScheduledBackgroundPlan(
+                        safeBackgroundPlan, AppPaths.ServiceExecutable);
+                }
+                catch (InvalidDataException)
+                {
+                    arbitraryTargetBlocked = true;
+                }
+                if (!arbitraryTargetBlocked)
+                    failures.Add("Scheduled updater accepted an arbitrary privileged target.");
+
+                var failedAutomaticHold = Path.Combine(
+                    tempDirectory, "failed-auto-update-hold.json");
+                UpdateRollbackHoldService.Activate("0.30.3",
+                    "AutomaticFailure", failedAutomaticHold);
+                if (!UpdateRollbackHoldService.IsActiveForVersion(
+                        "0.30.4", failedAutomaticHold) ||
+                    !UpdateRollbackHoldService.IsActiveForVersion(
+                        "0.30.3", failedAutomaticHold))
+                    failures.Add("Failed automatic update did not remain held across partial rollbacks.");
+
+                UpdateRollbackHoldService.Clear(failedAutomaticHold);
                 if (ScheduledUpdateService.IsEligible(updateDefaults))
                     failures.Add("Scheduled updater must not be enabled in default settings.");
 

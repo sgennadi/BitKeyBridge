@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Principal;
 
 namespace BitKeyBridge;
 
@@ -73,8 +74,10 @@ internal static class ScheduledUpdateService
     {
         if (!OperatingSystem.IsWindows())
             return Fail("Windows is required.", 2);
-        if (!SecurityContext.IsAdministrator() || !IsMachineInstalledExecutable())
-            return Fail("Background update requires the protected Program Files installation and elevated task identity.", 5);
+        if (!SecurityContext.IsAdministrator() ||
+            !WindowsIdentity.GetCurrent().IsSystem ||
+            !IsMachineInstalledExecutable())
+            return Fail("Background updates require the machine-installed Program Files executable running as LocalSystem.", 5);
         if (!IsEligible(config))
             return Fail("Background auto-install is disabled or the active trust policy is not approved.", 3);
 
@@ -124,7 +127,8 @@ internal static class ScheduledUpdateService
             // SYSTEM task launches helper in the same privileged identity;
             // the helper rechecks plan hash, executable hash, active policy,
             // version and Authenticode configuration before any replacement.
-            updater.LaunchApplyHelper(staged, restartGui: false, automatic: true);
+            updater.LaunchApplyHelper(staged, restartGui: false,
+                automatic: true, scheduledBackground: true);
             WindowsEventLogService.TryWrite(
                 "BitKeyBridge background update verified and staged for " + info.LatestVersion,
                 EventLogSeverity.Information, 4104, "Update");

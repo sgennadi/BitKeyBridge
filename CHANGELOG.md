@@ -1,5 +1,8 @@
 ## Unreleased - v0.30.4
 
+- Harden the SYSTEM scheduled updater: enforce real LocalSystem identity, machine executable-only apply targets and a noninteracting helper.
+- Abort a replacement when the original GUI process fails to exit or the Windows Service cannot stop. Verify policy and staged PE before interrupting the service.
+- When any automatic apply fails, persist an AutomaticFailure rollback hold across partially restored versions; never retry an endless failed automatic installation without explicit repair/resume. Add offline safety tests.
 - Enable global Ctrl+1..7 primary workspace navigation without exposing permission-gated Settings to unauthorized users; verify KeyPreview in UI regressions.
 - Add an admin-only GUI control to install, query and remove the optional daily SYSTEM update task, with selectable local hour and access checks; include HiDPI UI tests.
 - Update sample machine config from schema 4 to schema 5; auto-install and unsigned consent remain opt-in.
