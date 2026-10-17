@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -407,11 +407,15 @@ jobs:
             throw "Automatic update installation was not persisted as disabled."
           }
 
-          $autoEnableOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          $deniedOutput = & $exe --auto-update-enable --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -eq 0) {
+            throw "Unsigned auto-install incorrectly accepted without explicit consent."
+          }
+          $autoEnableOutput = & $exe --auto-update-enable --accept-unsigned-update-risk --no-elevation 2>&1 | Out-String
           $autoEnableExit = $LASTEXITCODE
           Write-Host $autoEnableOutput
           if ($autoEnableExit -ne 0) {
-            throw "--auto-update-enable failed with exit code $autoEnableExit."
+            throw "Explicit unsigned auto-install enable failed ($autoEnableExit)."
           }
 
           $autoEnabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
@@ -419,7 +423,9 @@ jobs:
           Write-Host $autoEnabledStatus
           if ($autoEnabledExit -ne 0 -or
               $autoEnabledStatus -notmatch 'AutomaticInstall=True' -or
-              $autoEnabledStatus -notmatch 'AutomaticChecks=True') {
+              $autoEnabledStatus -notmatch 'AutomaticChecks=True' -or
+              $autoEnabledStatus -notmatch 'UnsignedConsent=True' -or
+              $autoEnabledStatus -notmatch 'Unsigned opt-in') {
             throw "Automatic update installation was not persisted as enabled."
           }
 
@@ -450,7 +456,13 @@ jobs:
     # Must run only on GitHub-hosted ephemeral Windows. This isolated test
     # creates temporary local accounts, installs an SCM service and adjusts
     # ProgramData ACLs; it must never run on a persistent/self-hosted machine.
-    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
+    if: >-
+      (github.event_name == 'pull_request' &&
+       (github.head_ref == 'feature/protected-audit-broker-20261014' ||
+        github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
+        github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')) ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/release/v0.30.3')
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -614,14 +626,24 @@ jobs:
 
   release:
     if: >-
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'push' &&
-       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-       startsWith(github.event.head_commit.message, 'Release v')) ||
-      (github.event_name == 'push' &&
-       github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
-       startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))
-    needs: [build, laps-regression]
+      always() &&
+      needs.build.result == 'success' &&
+      needs.laps-regression.result == 'success' &&
+      (
+        (github.event_name == 'push' &&
+         github.ref == 'refs/heads/release/v0.30.3' &&
+         github.event.head_commit.message == 'Release v0.30.3' &&
+         needs['audit-broker-integration'].result == 'success') ||
+        (github.ref != 'refs/heads/release/v0.30.3' &&
+         (startsWith(github.ref, 'refs/tags/v') ||
+          (github.event_name == 'push' &&
+           (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+           startsWith(github.event.head_commit.message, 'Release v')) ||
+          (github.event_name == 'push' &&
+           github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
+           startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))))
+      )
+    needs: [build, laps-regression, audit-broker-integration]
     runs-on: windows-latest
     # Least-privilege token; these scopes are never granted to PR builds.
     permissions:
@@ -857,7 +879,9 @@ jobs:
           $autoEnabledStatus = & $exe --auto-update-status --no-elevation 2>&1 | Out-String
           Write-Host $autoEnabledStatus
           if ($autoEnabledStatus -notmatch 'AutomaticInstall=True' -or
-              $autoEnabledStatus -notmatch 'AutomaticChecks=True') {
+              $autoEnabledStatus -notmatch 'AutomaticChecks=True' -or
+              $autoEnabledStatus -notmatch 'UnsignedConsent=True' -or
+              $autoEnabledStatus -notmatch 'Unsigned opt-in') {
             throw "Automatic update installation was not persisted as enabled."
           }
 
