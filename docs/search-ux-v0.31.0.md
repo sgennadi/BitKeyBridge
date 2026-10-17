@@ -23,3 +23,16 @@ IDs and search inputs remain LTR. Offline tests validate the navigation
 resources for all three languages. More Helpdesk, settings and diagnostics
 strings require translation in subsequent v0.31 stages; this is a localized
 navigation foundation rather than a completed app-wide translation.
+
+## Access Health 2.0 metadata checks
+
+The Access Health panel now includes source-aware current Windows token RBAC
+(search, read, rotation) and a fail-closed protected audit broker policy
+check. When strict audit is enabled, it also reports the installed Windows
+Service state without reading protected journal entries. A durable broker
+ACK is deliberately **not** executed by the read-only diagnostics; the
+explicit `--audit-broker-preflight --probe` performs that test and writes a
+synthetic health event. BitLocker metadata, AD LAPS checks, Intune/Graph
+metadata and Entra LAPS checks remain in their existing source-isolated
+sections. These diagnostics never substitute for per-request authorization
+or grant a secret reveal.

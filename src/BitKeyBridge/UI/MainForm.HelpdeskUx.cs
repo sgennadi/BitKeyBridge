@@ -700,6 +700,77 @@ public sealed partial class MainForm
 
         try
         {
+            // First show the authoritative current-token RBAC decision.
+            // These checks are metadata only; actual recovery still requires
+            // per-secret approval, protected audit ACK and directory rights.
+            foreach (var permission in new[]
+                     {
+                         BitKeyBridgePermission.SearchDevices,
+                         BitKeyBridgePermission.RecoveryRead,
+                         BitKeyBridgePermission.Rotate
+                     })
+            {
+                try
+                {
+                    var decision = new AuthorizationService(_config).Check(permission);
+                    AddAccessHealthRow(
+                        "RBAC", permission.ToString(),
+                        decision.Allowed ? "OK" : "Denied",
+                        decision.Reason);
+                    if (!decision.Allowed)
+                        warnings++;
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    AddAccessHealthRow(
+                        "RBAC", permission.ToString(), "Failed",
+                        "Windows token/group evaluation failed: " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
+            }
+
+            var brokerPolicy = AccessHealthBrokerGate.Evaluate(_config);
+            AddAccessHealthRow(
+                "Protected Audit Broker", "Policy", brokerPolicy.Status,
+                brokerPolicy.Explanation);
+            if (brokerPolicy.Status == "Failed")
+                errors++;
+
+            if (_config.RequireProtectedAuditForRecovery)
+            {
+                try
+                {
+                    var service = WindowsServiceHost.GetInfo();
+                    var running = service.Installed &&
+                        string.Equals(service.State, "Running",
+                            StringComparison.OrdinalIgnoreCase);
+                    AddAccessHealthRow(
+                        "Protected Audit Broker", "Windows Service",
+                        running ? "OK" : "Failed",
+                        running
+                            ? "Local broker service is running. A protected audit ACK still requires " +
+                              "the separate explicit broker probe; this check does not write an event."
+                            : "Protected audit requires the installed, running BitKeyBridge service. " +
+                              "Status=" + service.State + "; verify service identity and startup.");
+                    if (!running)
+                        errors++;
+                }
+                catch (Exception ex)
+                {
+                    warnings++;
+                    AddAccessHealthRow(
+                        "Protected Audit Broker", "Windows Service",
+                        "Unknown",
+                        "Current Windows token cannot verify Service Control Manager status: " +
+                        DiagnosticRedaction.Sanitize(ex.GetType().Name));
+                }
+                AddAccessHealthRow(
+                    "Protected Audit Broker", "Durable audit ACK", "Not tested",
+                    "Use the explicit --audit-broker-preflight --probe command with " +
+                    "an authorized identity. No synthetic event is written by Access Health.");
+            }
+
             string? dc =
                 null;
 

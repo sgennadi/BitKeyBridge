@@ -85,6 +85,7 @@ public static class UiLayoutSelfTest
             failures);
 
         VerifyStartSourcePolicies(failures);
+        failures.AddRange(AccessHealthBrokerGate.RunOfflineTests());
         failures.AddRange(UiLocalizationService.RunOfflineTests());
 
         var factories =
