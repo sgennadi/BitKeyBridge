@@ -1,3 +1,9 @@
+## 0.30.5
+
+- Hotfix release ZIP layout: archive only BitKeyBridge.exe at ZIP root; exclude generated UI test logs.
+- Verify single-entry ZIP, executable SHA-256, exact size and reject symlinks before upload.
+- Preserve strict validation, unchanged v0.30.4 assets and explicit unsigned-update consent.
+
 ## 0.30.4
 
 **Stable unsigned technician release with explicitly opted-in automatic installation.** Windows x64/x86/ARM64, Task Scheduler and protected-audit fail-closed gates retained.

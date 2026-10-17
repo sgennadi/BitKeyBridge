@@ -531,9 +531,15 @@ jobs:
         run: |
           ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable "artifacts/win-x64/BitKeyBridge.exe"
 
-      - name: Package architecture
-        shell: cmd
-        run: tar -a -c -f artifacts\BitKeyBridge-${{ matrix.rid }}.zip -C artifacts\${{ matrix.rid }} .
+      - name: Package architecture (exact executable only)
+        shell: pwsh
+        run: |
+          $exe = "artifacts/${{ matrix.rid }}/BitKeyBridge.exe"
+          $zip = "artifacts/BitKeyBridge-${{ matrix.rid }}.zip"
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Missing published executable.' }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          Compress-Archive -LiteralPath $exe -DestinationPath $zip -CompressionLevel Optimal
+          ./tests/windows/Verify-UpdateZipLayout.ps1 -ArchivePath $zip -ExpectedExecutable $exe
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

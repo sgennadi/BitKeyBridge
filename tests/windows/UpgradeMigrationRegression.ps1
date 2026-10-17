@@ -118,8 +118,8 @@ try {
         throw 'Candidate x64 executable is missing.'
     }
     $candidateVersion = ((& $current --version --no-elevation | Out-String).Trim())
-    if ($LASTEXITCODE -ne 0 -or $candidateVersion -ne '0.30.4') {
-        throw "Expected a v0.30.4 candidate. Received $candidateVersion."
+    if ($LASTEXITCODE -ne 0 -or $candidateVersion -ne '0.30.5') {
+        throw "Expected a v0.30.5 candidate. Received $candidateVersion."
     }
     $currentHash = Hash-Of $current
 
