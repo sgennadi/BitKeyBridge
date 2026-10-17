@@ -742,6 +742,13 @@ public static class UiLayoutSelfTest
 
             VerifyMainViewportFill(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
+            var toolsMenu = main.MainMenuStrip?.Items
+                .OfType<ToolStripMenuItem>()
+                .FirstOrDefault(x => x.Text == "Tools");
+            if (toolsMenu is null ||
+                toolsMenu.DropDownItems.Find("RecoveryStepsMenu", false).Length != 1 ||
+                toolsMenu.DropDownItems.Find("AccessHealthMenu", false).Length != 1)
+                failures.Add($"{formName}/{scenario.Name}: global Recovery Steps and Access Health shortcuts must be discoverable from Tools.");
             if (FindByName(main, "HomeRecoverySteps") is not Button contextSteps ||
                 contextSteps.Enabled)
                 failures.Add($"{formName}/{scenario.Name}: Start Recovery Steps button should exist but remain disabled without a selected device.");

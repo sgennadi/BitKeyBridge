@@ -181,6 +181,24 @@ public sealed partial class MainForm
         // Admin-only Settings cannot be opened when its tab is absent.
         KeyDown += (_, e) =>
         {
+            // Global, non-secret Helpdesk shortcuts; they never invoke
+            // Reveal, Copy, rotation or an audit-broker probe.
+            if (e.Control && e.Shift && !e.Alt)
+            {
+                if (e.KeyCode == Keys.H)
+                {
+                    OpenHelpdeskAccessHealth();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.R)
+                {
+                    ShowRecoveryWorkflowSteps();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                return;
+            }
             if (!e.Control || e.Alt || e.Shift)
                 return;
 
@@ -336,10 +354,23 @@ public sealed partial class MainForm
             tools.DropDownItems.Add(new ToolStripSeparator());
         }
 
-        tools.DropDownItems.Add(
-            "Recovery Steps (no secret read)",
-            null,
-            (_, _) => ShowRecoveryWorkflowSteps());
+        var recoverySteps = new ToolStripMenuItem(
+            "Recovery Steps (Ctrl+Shift+R)")
+        {
+            Name = "RecoveryStepsMenu",
+            ToolTipText = "Read-only helpdesk recovery checklist; never reveals a password."
+        };
+        recoverySteps.Click += (_, _) => ShowRecoveryWorkflowSteps();
+        tools.DropDownItems.Add(recoverySteps);
+
+        var accessHealth = new ToolStripMenuItem(
+            "Access Health (Ctrl+Shift+H)")
+        {
+            Name = "AccessHealthMenu",
+            ToolTipText = "Metadata-only permissions diagnosis; no secret reads or elevation."
+        };
+        accessHealth.Click += (_, _) => OpenHelpdeskAccessHealth();
+        tools.DropDownItems.Add(accessHealth);
         tools.DropDownItems.Add(
             "Latest GitHub release",
             null,

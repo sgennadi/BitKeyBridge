@@ -29,3 +29,11 @@ Graph roles, Intune RBAC, Windows ACL, services, tokens or audit policy.
 The full recovery authorization and protected broker ACK remain authoritative.
 Offline self-test fixtures cover HTTP 401/403/429/503, source distinctions,
 NotProbed/OK behavior and safe selected-AD handoff.
+
+## Fast non-secret keyboard navigation
+
+Technicians can use **Ctrl+Shift+H** from any workspace to open metadata-only
+Access Health diagnostics and **Ctrl+Shift+R** to open Recovery Steps.
+The Tools menu also displays both shortcuts. Neither keyboard shortcut
+retrieves, copies or rotates a recovery secret; the existing source and
+protected audit gates still apply. Ctrl+1..7 and Ctrl+F remain unchanged.
