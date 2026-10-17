@@ -75,9 +75,37 @@ internal static class ProtectedAuditCapacityService
                     "No current protected journal was found. " +
                     "The existence of an archive is not proof that broker auditing is available.")
                 : Evaluate(current, prior, archiveExists);
+
+            var archiveDirectory = ProtectedAuditArchiveService.DirectoryFor(
+                AppPaths.BrokerAuditLogFile);
+            var archiveFiles = ProtectedAuditArchiveService.OrderedFiles(
+                AppPaths.BrokerAuditLogFile)
+                .Where(x => string.Equals(Path.GetDirectoryName(x),
+                    archiveDirectory, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var archiveBytes = archiveFiles.Sum(x => new FileInfo(x).Length);
+
+            // A full journal plus .old is recoverable without erasing any
+            // entries ONLY when ACLs and all hash links can be validated.
+            var canArchive = currentExists &&
+                ProtectedAuditStoragePolicy.IsTrustedBrokerJournal(
+                    AppPaths.BrokerAuditLogFile) &&
+                AuditIntegrityService.Verify(AppPaths.BrokerAuditLogFile).Valid;
+            if (report.Status == "Blocked" && canArchive)
+                report = report with
+                {
+                    Status = "Warning",
+                    Message = "Journal rotation requires verified archiving. " +
+                        "The protected broker can preserve .old as a new numbered " +
+                        "segment before its next write; no retained entries are deleted."
+                };
+
             Console.WriteLine(JsonSerializer.Serialize(new
             {
                 Component = "ProtectedAuditJournalCapacity",
+                ArchivedSegments = archiveFiles.Length,
+                RetainedArchiveBytes = archiveBytes,
+                VerifiedArchivingReady = canArchive,
                 report.Status,
                 report.CurrentBytes,
                 report.ArchivedBytes,

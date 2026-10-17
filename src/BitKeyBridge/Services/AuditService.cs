@@ -235,27 +235,31 @@ public sealed class AuditService
     {
         try
         {
-            if (!File.Exists(path))
-                return [];
-
             var result = new List<AuditEntry>();
-            foreach (var line in File.ReadLines(path)
-                         .Where(x => !string.IsNullOrWhiteSpace(x))
-                         .TakeLast(maximum))
+            // Inspect newest segments first, but never ignore broken archive
+            // numbering, reparse points or errors opening protected evidence.
+            foreach (var file in ProtectedAuditArchiveService.OrderedFiles(path).Reverse())
             {
-                try
+                foreach (var line in File.ReadLines(file).Reverse()
+                             .Where(x => !string.IsNullOrWhiteSpace(x))
+                             .Take(maximum - result.Count))
                 {
-                    var entry = JsonSerializer.Deserialize<AuditEntry>(line);
-                    if (entry is not null)
-                        result.Add(entry);
+                    try
+                    {
+                        var entry = JsonSerializer.Deserialize<AuditEntry>(line);
+                        if (entry is not null)
+                            result.Add(entry);
+                    }
+                    catch (Exception ex)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Audit entry parse failed: " +
+                            DiagnosticRedaction.Sanitize(ex.Message),
+                            EventLogSeverity.Warning, 4559, "Audit");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    WindowsEventLogService.TryWrite(
-                        "Audit entry parse failed: " +
-                        DiagnosticRedaction.Sanitize(ex.Message),
-                        EventLogSeverity.Warning, 4559, "Audit");
-                }
+                if (result.Count >= maximum)
+                    break;
             }
             return result;
         }
@@ -309,14 +313,18 @@ public sealed class AuditService
     {
         if (!File.Exists(path) || new FileInfo(path).Length < _maxBytes) return;
         var old = path + ".old";
-        if (RejectProtectedArchiveOverwrite(path, File.Exists(old)))
-            throw new IOException(
-                "Protected audit capacity reached. Refusing to delete the existing " +
-                "rotated archive. A security-approved archival/checkpoint policy " +
-                "is required before more protected recovery operations.");
-
-        // Existing legacy/non-protected audit rotation behavior is unchanged.
-        if (File.Exists(old)) File.Delete(old);
+        if (ProtectedAuditArchiveService.IsBrokerJournal(path))
+        {
+            // Preserve old evidence as a numbered, ACL-protected segment
+            // instead of overwriting it. Any integrity or ACL failure aborts
+            // the secret-read acknowledgement with all evidence intact.
+            ProtectedAuditArchiveService.ArchivePreviousRotationUnderLock(path);
+        }
+        else if (File.Exists(old))
+        {
+            // Existing legacy/non-protected audit rotation behavior.
+            File.Delete(old);
+        }
         File.Move(path, old);
     }
 

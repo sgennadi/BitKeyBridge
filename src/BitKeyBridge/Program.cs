@@ -1831,6 +1831,7 @@ internal static class Program
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
+            failures.AddRange(ProtectedAuditArchiveService.RunOfflineTests(tempDirectory));
             failures.AddRange(InstalledUpdateHealthService.RunOfflineTests(tempDirectory));
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(

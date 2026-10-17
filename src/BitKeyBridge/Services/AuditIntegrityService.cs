@@ -52,25 +52,25 @@ public static class AuditIntegrityService
             if (!File.Exists(path))
                 return string.Empty;
 
-            foreach (var line in File.ReadLines(path).Reverse())
+            foreach (var journalFile in ProtectedAuditArchiveService.OrderedFiles(path).Reverse())
             {
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
+                foreach (var line in File.ReadLines(journalFile).Reverse())
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
 
-                try
-                {
-                    var entry =
-                        JsonSerializer.Deserialize<AuditEntry>(line);
-                    if (entry is not null &&
-                        entry.ChainVersion > 0 &&
-                        !string.IsNullOrWhiteSpace(entry.EntryHash))
+                    try
                     {
-                        return entry.EntryHash;
+                        var entry = JsonSerializer.Deserialize<AuditEntry>(line);
+                        if (entry is not null &&
+                            entry.ChainVersion > 0 &&
+                            !string.IsNullOrWhiteSpace(entry.EntryHash))
+                            return entry.EntryHash;
                     }
-                }
-                catch
-                {
-                    return string.Empty;
+                    catch
+                    {
+                        return string.Empty;
+                    }
                 }
             }
         }
@@ -96,15 +96,20 @@ public static class AuditIntegrityService
                 "Could not acquire the audit interprocess lock for verification.");
         }
 
-        var result = new AuditIntegrityResult();
+        return VerifyUnderLock(path);
+    }
 
-        var paths = new[]
+    // Caller already holds the audit.jsonl.lock handle (archival on write).
+    internal static AuditIntegrityResult VerifyUnderLock(string path)
+    {
+        var result = new AuditIntegrityResult();
+        IReadOnlyList<string> paths;
+        try { paths = ProtectedAuditArchiveService.OrderedFiles(path); }
+        catch (Exception ex)
         {
-            path + ".old",
-            path
+            return Fail(result, "Protected audit archive index invalid: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
-        .Where(File.Exists)
-        .ToArray();
 
         string? previousHash = null;
         var chainStarted = false;
@@ -238,12 +243,7 @@ public static class AuditIntegrityService
                 "Could not acquire the audit interprocess lock.");
         }
 
-        foreach (var file in new[]
-                 {
-                     path + ".old",
-                     path
-                 }
-                 .Where(File.Exists))
+        foreach (var file in ProtectedAuditArchiveService.OrderedFiles(path))
         {
             foreach (var line in File.ReadLines(file))
             {
@@ -307,12 +307,7 @@ public static class AuditIntegrityService
         if (processLock is null)
             return false;
 
-        foreach (var file in new[]
-                 {
-                     path + ".old",
-                     path
-                 }
-                 .Where(File.Exists))
+        foreach (var file in ProtectedAuditArchiveService.OrderedFiles(path))
         {
             foreach (var line in File.ReadLines(file))
             {
