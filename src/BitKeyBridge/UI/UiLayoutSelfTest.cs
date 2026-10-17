@@ -335,6 +335,7 @@ public static class UiLayoutSelfTest
                         new HomeSearchResult
                         {
                             ComputerName = "PC-12345",
+                            AdComputerDistinguishedName = "CN=PC-12345,OU=Clients,DC=example,DC=test",
                             BitLockerKeyCount = 2,
                             LatestRecoveryId = Guid.Empty.ToString(),
                             LapsCandidateFound = true,
@@ -362,7 +363,8 @@ public static class UiLayoutSelfTest
                     RecoveryWorkflowReadinessService.Build(
                         new AppConfig(), new HomeSearchResult
                         {
-                            ComputerName = "PC-RUS", BitLockerKeyCount = 1
+                            ComputerName = "PC-RUS", BitLockerKeyCount = 1,
+                            AdComputerDistinguishedName = "CN=PC-RUS,OU=Clients,DC=example,DC=test"
                         },
                         adConnected: true, cloudConnected: false,
                         new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
