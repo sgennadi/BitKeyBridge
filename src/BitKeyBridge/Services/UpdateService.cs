@@ -603,10 +603,13 @@ public sealed class UpdateService : IDisposable
             Arguments =
                 $"--apply-update-plan \"{planPath}\" " +
                 $"--apply-update-plan-sha256 {planSha256}",
-            UseShellExecute = true,
+            // A SYSTEM scheduled task is already elevated and must never
+            // show an interactive UAC dialog in Session 0. For an ordinary
+            // non-admin GUI install retain the existing UAC request.
+            UseShellExecute = !SecurityContext.IsAdministrator(),
             WorkingDirectory = helperDir
         };
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows() && psi.UseShellExecute)
             psi.Verb = "runas";
 
         // Keep the helper file non-writable until CreateProcess has opened it.

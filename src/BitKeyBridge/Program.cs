@@ -88,6 +88,10 @@ internal static class Program
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--scheduled-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-install", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-remove", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
@@ -287,6 +291,7 @@ internal static class Program
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
@@ -1078,6 +1083,18 @@ internal static class Program
 
         if (args.Any(x => x.Equals("--check-update", StringComparison.OrdinalIgnoreCase)))
             return CheckUpdateAsync(config).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--scheduled-update", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.RunOnceAsync(config).GetAwaiter().GetResult();
+
+        if (args.Any(x => x.Equals("--update-task-install", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.InstallTask(args);
+
+        if (args.Any(x => x.Equals("--update-task-remove", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.RemoveTask();
+
+        if (args.Any(x => x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase)))
+            return ScheduledUpdateService.ShowTaskStatus();
 
         if (args.Any(x => x.Equals("--update", StringComparison.OrdinalIgnoreCase)))
             return InstallUpdateAsync(config).GetAwaiter().GetResult();
@@ -4223,6 +4240,11 @@ internal static class Program
         Console.WriteLine("  --service-coverage-no-run-on-start  Do not run Coverage immediately on start");
         Console.WriteLine("  --check-update        Check the configured GitHub repository for a newer release");
         Console.WriteLine("  --update              Verify and install the latest stable release");
+        Console.WriteLine("  --scheduled-update     Background auto-check/install (explicit policy + SYSTEM task only)");
+        Console.WriteLine("  --update-task-install  Register optional daily SYSTEM task for installed Program Files EXE");
+        Console.WriteLine("  --update-task-hour <0-23>  Task local-time hour (default 3)");
+        Console.WriteLine("  --update-task-status   Query the background updater task");
+        Console.WriteLine("  --update-task-remove   Remove background updater task");
         Console.WriteLine("  --update-checks-status   Show automatic update-check setting");
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");

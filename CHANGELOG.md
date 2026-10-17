@@ -1,5 +1,8 @@
 ## Unreleased - v0.30.4
 
+- Implement optional background auto-update without an open GUI: admin-controlled daily Windows Task Scheduler task, fixed Program Files action, machine trust-policy checks, rollback hold, staging hashes and the existing verified apply helper.
+- Add `--scheduled-update`, `--update-task-install [--update-task-hour 0-23]`, `--update-task-status`, `--update-task-remove` CLI commands. Scheduling never grants unsigned consent implicitly and uses no PowerShell.
+- Allow already-elevated update helpers (including SYSTEM) to launch without an interactive UAC prompt; retain UAC for ordinary standard-user manual updates.
 - Reorder top-level workspaces to **Start → BitLocker → LAPS → Devices (AD + Microsoft 365) → Helpdesk → Diagnostics → Settings** (Settings remains permission-gated).
 - Keep **Start** selected on initial launch for every normal Windows session; remove the unexpected post-Shown switch to Helpdesk.
 - Add Windows UI regression checks for exact tab order and initial selection across supported DPI/layout scenarios. No permission checks, secret retrieval or audit gates are changed.
