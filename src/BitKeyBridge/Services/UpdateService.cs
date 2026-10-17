@@ -791,6 +791,7 @@ public sealed class UpdateService : IDisposable
 
         var backups = new List<(string Target, string Backup)>();
         var createdTargets = new List<string>();
+        var retainedBackupSnapshots = new List<UpdateBackupSafety.BackupSnapshot>();
         try
         {
             // Reject hostile background plans before stopping services or
@@ -851,8 +852,12 @@ public sealed class UpdateService : IDisposable
                 var existed = File.Exists(fullTarget);
                 if (existed)
                 {
-                    // Keep the previous version until the new executable
-                    // passes an AFTER-install health check.
+                    // An existing .bak may be the operator's only previous
+                    // rollback image. Snapshot it BEFORE rewriting .bak;
+                    // restore it after a failed install, including failures
+                    // raised by the post-install health probe.
+                    retainedBackupSnapshots.Add(
+                        UpdateBackupSafety.Snapshot(backup));
                     File.Copy(fullTarget, backup, true);
                     backups.Add((fullTarget, backup));
                 }
@@ -963,6 +968,20 @@ public sealed class UpdateService : IDisposable
                                 : string.Empty)
                     });
 
+            // The freshly replaced .bak now holds the immediately previous
+            // executable. Remove any temporary older backup snapshots only
+            // once the update has been verified and recorded as successful.
+            foreach (var snapshot in retainedBackupSnapshots)
+            {
+                try { UpdateBackupSafety.Commit(snapshot); }
+                catch (Exception cleanupException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater previous-backup snapshot cleanup needs attention: " +
+                        DiagnosticRedaction.Sanitize(cleanupException.Message),
+                        EventLogSeverity.Warning, 4594, "Update");
+                }
+            }
             TryScheduleHelperCleanup(plan.CleanupDirectory);
             return 0;
         }
@@ -1068,6 +1087,31 @@ public sealed class UpdateService : IDisposable
                         DiagnosticRedaction.Sanitize(cleanupException.Message),
                         EventLogSeverity.Error, 4592, "Update");
                 }
+            }
+
+            if (restoreFailed == 0)
+            {
+                foreach (var snapshot in retainedBackupSnapshots.AsEnumerable().Reverse())
+                {
+                    try { UpdateBackupSafety.Restore(snapshot); }
+                    catch (Exception backupException)
+                    {
+                        restoreFailed++;
+                        WindowsEventLogService.TryWrite(
+                            "Updater previous rollback image could not be restored: " +
+                            DiagnosticRedaction.Sanitize(backupException.Message),
+                            EventLogSeverity.Error, 4594, "Update");
+                    }
+                }
+            }
+            else if (retainedBackupSnapshots.Count > 0)
+            {
+                // The current EXE is not safely restored. Keep both rollback
+                // generations for operator recovery instead of overwriting
+                // the emergency .bak or deleting the older snapshot.
+                WindowsEventLogService.TryWrite(
+                    "Updater executable restoration incomplete; retained both backup generations.",
+                    EventLogSeverity.Error, 4594, "Update");
             }
 
             new UpdateHistoryService()
