@@ -73,8 +73,10 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
     $release -notmatch "github\.event\.head_commit\.message == 'Release v0\.30\.4'" -or
     $release -notmatch "needs\['audit-broker-integration'\]\.result == 'success'" -or
     $release -notmatch "github\.ref != 'refs/heads/release/v0\.30\.4'" -or
-    $release -notmatch 'SHA256SUMS.txt') {
-    throw 'Stable unsigned v0.30.4 lacks its exact commit, broker or checksum gates.'
+    $release -notmatch 'SHA256SUMS.txt' -or
+    $release -notmatch "needs\['legacy-upgrade-regression'\]\.result == 'success'" -or
+    $release -notmatch 'needs: \[build, laps-regression, audit-broker-integration, legacy-upgrade-regression\]') {
+    throw 'Stable unsigned v0.30.4 lacks exact commit, broker, legacy upgrade, or checksum gates.'
 }
 
 # Never delete operator release branches or install online updates from CI.
