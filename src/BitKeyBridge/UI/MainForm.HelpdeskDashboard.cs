@@ -211,7 +211,13 @@ public sealed partial class MainForm
                 {
                     serviceStatus = "unavailable (query failed)";
                 }
+                var brokerStatus = !_config.AuditBrokerEnabled
+                    ? "disabled in configuration"
+                    : !_config.RequireProtectedAuditForRecovery
+                        ? "enabled; strict audit not required"
+                        : "enabled; strict audit required (runtime unverified)";
                 readiness.Text =
+                    $"Audit broker: {brokerStatus} | " +
                     $"Service: {serviceStatus} | " +
                     $"Directory: {(_directoryConnected ? "connected" : "not connected")} | " +
                     $"Search authorization: {(authorization.Allowed ? "allowed" : "denied")} | " +
