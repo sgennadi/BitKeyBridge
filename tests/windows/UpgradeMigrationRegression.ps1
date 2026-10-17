@@ -35,6 +35,8 @@ $createdSecret = $false
 
 function Assert-Equal([string]$Actual, [string]$Expected, [string]$Description) {
     if (-not [string]::Equals($Actual, $Expected, [StringComparison]::OrdinalIgnoreCase)) {
+        # Diagnostics contain only SHA-256 of synthetic data or signed-off binaries.
+        Write-Host ("CHECK FAILED: {0} Actual={1} Expected={2}" -f $Description, $Actual, $Expected)
         throw "$Description mismatch."
     }
 }
@@ -156,6 +158,9 @@ try {
         $applyDir = Join-Path $legacyFolder 'apply'
         New-Item -ItemType Directory -Path $applyDir | Out-Null
         Invoke-Apply $current $current $candidateVersion $version $target $false $applyDir
+        Write-Host ("Candidate hash={0}; target hash={1}; target version={2}" -f
+            $currentHash, (Hash-Of $target),
+            ((& $target --version --no-elevation | Out-String).Trim()))
         Assert-Equal (Hash-Of $target) $currentHash 'Installed newer executable'
         Assert-Equal (Hash-Of ($target + '.bak')) $oldHash 'Rollback backup'
         Assert-FixturePreserved
