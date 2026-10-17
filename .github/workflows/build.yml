@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -540,6 +540,7 @@ jobs:
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           Compress-Archive -LiteralPath $exe -DestinationPath $zip -CompressionLevel Optimal
           ./tests/windows/Verify-UpdateZipLayout.ps1 -ArchivePath $zip -ExpectedExecutable $exe
+          ./tests/windows/UpdateZipLayoutRegression.ps1
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
