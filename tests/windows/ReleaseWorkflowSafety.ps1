@@ -93,6 +93,15 @@ if ($pushBranches.Count -ne 1 -or
     throw 'v0.30.5 trigger, ZIP regression, broker or upgrade gates are missing.'
 }
 
+# Exact unsigned v0.30.5 must NOT attempt to attest absent signing.json.
+# Keep Authenticode verification/evidence mandatory for other protected
+# audit releases that require a genuine organization signing identity.
+$signingEvidence = [regex]::Match($release,
+    '(?ms)^      - name: Attest protected audit signature verification evidence\r?\n(?<step>.*?)(?=^      - name: Attest release SBOM)')
+if (-not $signingEvidence.Success -or
+    $signingEvidence.Groups['step'].Value -notmatch "github\.ref != 'refs/heads/release/v0\.30\.5'") {
+    throw 'v0.30.5 unsigned stable release must skip signed-only attestation evidence.'
+}
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch
