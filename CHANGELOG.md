@@ -1,3 +1,16 @@
+## 0.31.0-rc.1
+
+**Development release candidate only — not published or production-approved.** Based on the v0.30.5 updater/protected-audit hotfix and the full v0.31.0 WinForms feature integration.
+
+- Add a source-qualified Unified Search 2.0 spanning AD, Intune and Entra recovery metadata; never merge distinct device records using hostname alone.
+- Retry only transient Graph metadata HTTP 429/500/502/503/504 requests once, with bounded delay and cancellation. Never retry 401/403, secret reads, rotation or unauthorized actions.
+- Include Helpdesk Access Health 2.0 with current Windows-token RBAC, AD/LAPS/BitLocker/Graph and protected broker guidance. No probe authorizes a recovery secret.
+- Include a seven-step read-only Recovery Workflow, with explicit ticket/audit readiness, stale selection prevention, exact AD object DN/GUID or authoritative cloud ID verification and no automatic reveal/rotation.
+- Provide compact keyboard navigation (Ctrl+F and Ctrl+1..7), EN/RU/HE shell labels, Hebrew RTL and HiDPI/RDP 175%/200% UI regression coverage.
+- Preserve v0.30.5 hardened updater ZIP (one root EXE, SHA-256 checks), post-install self-test/rollback, legacy migration checks and lossless protected journal archival. Both previous and new offline regression suites are retained.
+- RC compiled binaries are strictly test artifacts. No public GitHub Release, GPO fleet rollout, machine enrollment, automatic unsigned update opt-in or recovery secret access is authorized.
+- Before promotion: complete x64/x86/ARM64 and CodeQL CI on this exact revision, two-standard-user protected audit acceptance, and physical AD/Graph/CyberArk EPM/RDP/4K pilot checks.
+
 ## 0.30.5
 
 - Hotfix release ZIP layout: archive only BitKeyBridge.exe at ZIP root; exclude generated UI test logs.
