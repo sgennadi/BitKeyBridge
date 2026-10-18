@@ -95,8 +95,8 @@ internal static class UiWorkspacePreferenceService
             return null;
 
         var area = best.Work;
-        var width = Math.Min(previousBounds.Width, area.Width);
-        var height = Math.Min(previousBounds.Height, area.Height);
+        var width = Math.Clamp(previousBounds.Width, minimumSize.Width, area.Width);
+        var height = Math.Clamp(previousBounds.Height, minimumSize.Height, area.Height);
         return new Rectangle(
             Math.Clamp(previousBounds.Left, area.Left, area.Right - width),
             Math.Clamp(previousBounds.Top, area.Top, area.Bottom - height),
