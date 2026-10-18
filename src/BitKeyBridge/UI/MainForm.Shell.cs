@@ -3,6 +3,12 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly TabControl _mainTabs = new();
+    private ToolStripMenuItem? _toolsTopMenu;
+    private ToolStripMenuItem? _recoveryStepsMenu;
+    private ToolStripMenuItem? _accessHealthMenu;
+    private ToolStripMenuItem? _languageTopMenu;
+    private readonly List<ToolStripMenuItem> _languageChoices = [];
+    private string _uiLanguageCode = "en";
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly Button _connectAdButton = new();
@@ -177,8 +183,51 @@ public sealed partial class MainForm
         // Admin-only Settings cannot be opened when its tab is absent.
         KeyDown += (_, e) =>
         {
+            // Global, non-secret Helpdesk shortcuts; they never invoke
+            // Reveal, Copy, rotation or an audit-broker probe.
+            if (e.Control && e.Shift && !e.Alt)
+            {
+                if (e.KeyCode == Keys.H)
+                {
+                    OpenHelpdeskAccessHealth();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.R)
+                {
+                    ShowRecoveryWorkflowSteps();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                return;
+            }
             if (!e.Control || e.Alt || e.Shift)
                 return;
+
+            // Ctrl+F focuses the existing metadata search input in the
+            // currently selected workspace; it never invokes secret reveal.
+            if (e.KeyCode == Keys.F)
+            {
+                TextBox? query = _mainTabs.SelectedIndex switch
+                {
+                    0 => _homeQuery,
+                    1 => _startQuery,
+                    2 => _lapsQuery,
+                    3 => _unifiedQuery,
+                    4 => _mainTabs.TabPages[4].Controls
+                            .Find("HelpdeskQuickSearch", searchAllChildren: true)
+                            .OfType<TextBox>().FirstOrDefault(),
+                    _ => null
+                };
+                if (query is { Visible: true, Enabled: true })
+                {
+                    query.Focus();
+                    query.SelectAll();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                return;
+            }
 
             int index = e.KeyCode switch
             {
@@ -203,6 +252,7 @@ public sealed partial class MainForm
         // Do not change selection in Shown (including after the connection
         // wizard), and never silently switch to Helpdesk on normal launch.
         _mainTabs.SelectedTab = _homeWorkspaceTab;
+        ApplyShellLanguage();
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
@@ -306,13 +356,147 @@ public sealed partial class MainForm
             tools.DropDownItems.Add(new ToolStripSeparator());
         }
 
+        var recoverySteps = new ToolStripMenuItem(
+            "Recovery Steps (Ctrl+Shift+R)")
+        {
+            Name = "RecoveryStepsMenu",
+            ToolTipText = "Read-only helpdesk recovery checklist; never reveals a password."
+        };
+        recoverySteps.Click += (_, _) => ShowRecoveryWorkflowSteps();
+        _recoveryStepsMenu = recoverySteps;
+        tools.DropDownItems.Add(recoverySteps);
+
+        var accessHealth = new ToolStripMenuItem(
+            "Access Health (Ctrl+Shift+H)")
+        {
+            Name = "AccessHealthMenu",
+            ToolTipText = "Metadata-only permissions diagnosis; no secret reads or elevation."
+        };
+        accessHealth.Click += (_, _) => OpenHelpdeskAccessHealth();
+        _accessHealthMenu = accessHealth;
+        tools.DropDownItems.Add(accessHealth);
         tools.DropDownItems.Add(
             "Latest GitHub release",
             null,
             (_, _) => OpenLatestRelease());
 
+        _toolsTopMenu = tools;
         menu.Items.Add(tools);
+
+        // Language selection is per user. Never change machine RBAC, cloud
+        // credentials, system locale or the saved search/recovery context.
+        var languages = new ToolStripMenuItem("Language")
+        {
+            Name = "UiLanguageMenu"
+        };
+        _languageTopMenu = languages;
+        foreach (var language in UiLanguageService.SupportedLanguages)
+        {
+            var option = new ToolStripMenuItem(language.DisplayName)
+            {
+                Name = "UiLanguage-" + language.Code,
+                Tag = language.Code,
+                CheckOnClick = false
+            };
+            option.Click += (_, _) => SetShellLanguage(language.Code);
+            languages.DropDownItems.Add(option);
+            _languageChoices.Add(option);
+        }
+        menu.Items.Add(languages);
         return menu;
+    }
+
+    private void SetShellLanguage(string code)
+    {
+        var next = UiLanguageService.Normalize(code);
+        if (string.Equals(next, _uiLanguageCode, StringComparison.Ordinal))
+            return;
+        try
+        {
+            UiLanguageService.SavePreferred(next);
+            _uiLanguageCode = next;
+            ApplyShellLanguage();
+            QueueMainViewportReflow();
+        }
+        catch (Exception ex)
+        {
+            _appDiagnostics.ShowMessage(
+                "Cannot save the selected interface language.",
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private void ApplyShellLanguage()
+    {
+        var rtl = UiLanguageService.IsRightToLeft(_uiLanguageCode);
+        SuspendLayout();
+        _mainTabs.SuspendLayout();
+        try
+        {
+            // WinForms handles the mirrored shell and tab strip; identifiers
+            // and recovery-key text inside functional workspaces are NOT
+            // converted, reversed or translated by this operation.
+            RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+            RightToLeftLayout = rtl;
+            _mainTabs.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+            _mainTabs.RightToLeftLayout = rtl;
+
+            // Recovery-key strings, passwords, GUIDs and account/device IDs
+            // must stay visually LTR even under mirrored Hebrew navigation.
+            foreach (var literal in new[]
+            {
+                _homeQuery, _startQuery, _lapsQuery, _unifiedQuery,
+                _startKey, _lapsPassword, _deviceRecoveryKey,
+                _adServer, _adDomain, _adUsername,
+                _cloudTenant, _cloudClient, _cloudUsername, _cloudThumbprint
+            })
+                literal.RightToLeft = RightToLeft.No;
+
+            var keys = new[]
+            {
+                "Start", "BitLocker", "LAPS", "Devices", "Helpdesk",
+                "Diagnostics", "Settings"
+            };
+            for (var i = 0; i < Math.Min(keys.Length, _mainTabs.TabPages.Count); i++)
+                _mainTabs.TabPages[i].Text =
+                    UiLanguageService.Translate(_uiLanguageCode, keys[i]);
+
+            if (_toolsTopMenu is not null)
+                _toolsTopMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "Tools");
+            if (_recoveryStepsMenu is not null)
+                _recoveryStepsMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "RecoveryStepsShortcut");
+            if (_accessHealthMenu is not null)
+                _accessHealthMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "AccessHealthShortcut");
+            if (_languageTopMenu is not null)
+                _languageTopMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "Language");
+            foreach (var choice in _languageChoices)
+                choice.Checked = string.Equals(choice.Tag as string,
+                    _uiLanguageCode, StringComparison.Ordinal);
+
+            _homeSearchButton.Text =
+                UiLanguageService.Translate(_uiLanguageCode, "Search");
+            _homeSearchCancelButton.Text =
+                UiLanguageService.Translate(_uiLanguageCode, "Cancel");
+            _globalConnectionStatus.ToolTipText =
+                UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+        }
+        finally
+        {
+            _mainTabs.ResumeLayout(performLayout: true);
+            ResumeLayout(performLayout: true);
+        }
+    }
+
+    internal void PreviewShellLanguageForLayoutTest(string code)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Language preview is restricted to UI tests.");
+        _uiLanguageCode = UiLanguageService.Normalize(code);
+        ApplyShellLanguage();
     }
 
     private TabPage BuildHomeWorkspaceTab()
@@ -1075,6 +1259,14 @@ public sealed partial class MainForm
             _secretLifetimeStatus);
         secretLifetime.Controls.Add(
             _clearSecretNow);
+        _homeRecoveryStepsButton.Name = "HomeRecoverySteps";
+        _homeRecoveryStepsButton.Text = "Recovery Steps";
+        _homeRecoveryStepsButton.AccessibleName =
+            "Review selected computer recovery steps without revealing secrets";
+        _homeRecoveryStepsButton.Enabled = false;
+        UiStyle.ConfigureActionButton(_homeRecoveryStepsButton);
+        _homeRecoveryStepsButton.Click += (_, _) => ShowRecoveryWorkflowSteps();
+        secretLifetime.Controls.Add(_homeRecoveryStepsButton);
         _homeSelectionPanel.Controls.Add(
             secretLifetime,
             0,
@@ -1832,6 +2024,7 @@ public sealed partial class MainForm
             new RowStyle(
                 SizeType.AutoSize));
 
+        _startKey.Name = "BitLockerRecoverySecretField";
         _startKey.Dock =
             DockStyle.Top;
         _startKey.ReadOnly = true;
@@ -2088,7 +2281,7 @@ public sealed partial class MainForm
 
     private TabPage BuildDevicesWorkspaceTab()
     {
-        var tab = new TabPage("Devices");
+        var tab = new TabPage("Devices") { Name = "DevicesWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
@@ -2145,6 +2338,8 @@ public sealed partial class MainForm
             Margin = new Padding(0, 7, 10, 0)
         }, 0, 0);
 
+        _unifiedQuery.Name = "UnifiedDeviceSearchQuery";
+        _unifiedQuery.AccessibleName = "Search device metadata across AD, Entra and Intune";
         _unifiedQuery.Dock = DockStyle.Fill;
         _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);
@@ -2289,6 +2484,7 @@ public sealed partial class MainForm
                     4)
         }, 0, 1);
 
+        _deviceRecoveryKey.Name = "EntraBitLockerSecretField";
         _deviceRecoveryKey.Dock =
             DockStyle.Top;
         _deviceRecoveryKey.ReadOnly = true;
@@ -2404,7 +2600,7 @@ public sealed partial class MainForm
 
     private TabPage BuildAdministrationWorkspaceTab()
     {
-        var tab = new TabPage("Settings");
+        var tab = new TabPage("Settings") { Name = "SettingsWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
@@ -2436,7 +2632,7 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Diagnostics");
+        var tab = new TabPage("Diagnostics") { Name = "DiagnosticsWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
