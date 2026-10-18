@@ -259,6 +259,11 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Validate GPO templates and localized restriction resources
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/Validate-GpoTemplates.ps1
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
@@ -382,6 +387,81 @@ jobs:
             throw "SECURITY: portable copy registered a persistent SYSTEM update task."
           }
           Write-Host "Portable background update denied with $($background.ExitCode) and task creation denied with $($register.ExitCode)."
+
+      - name: Fleet secret-free JSON schema smoke
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $json = & $exe --fleet-status --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -notin @(0, 2)) {
+            throw "Fleet metadata command crashed: $json"
+          }
+          $report = $json | ConvertFrom-Json
+          if ($report.schemaVersion -ne 1 -or
+              !$report.machine -or !$report.version -or
+              $report.dataClassification -ne 'NonSecretMetadataOnly' -or
+              $null -eq $report.autoInstallPermitted) {
+            throw 'Fleet JSON schema mismatch.'
+          }
+          foreach ($name in @('password','recoveryKey','accessToken','tenantId','privateKey')) {
+            if ($json -match ('"'+$name+'"s*:')) {
+              throw "Forbidden sensitive field in fleet JSON: $name"
+            }
+          }
+
+      - name: Fleet atomic export and CSV roundtrip
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A deliberately rejected CLI operation must be inspected via $LASTEXITCODE.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $folder = Join-Path $env:RUNNER_TEMP ('bkb-fleet-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $folder | Out-Null
+          try {
+            $machine = [Environment]::MachineName
+            $target = Join-Path $folder ($machine + '.json')
+            & $exe --fleet-export $target --no-elevation | Out-Null
+            $status = $LASTEXITCODE
+            Write-Host "Fleet export exit code: $status; JSON present: $(Test-Path -LiteralPath $target -PathType Leaf)"
+            if ($status -notin @(0, 2) -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+              throw 'Native fleet export did not write a machine-scoped JSON report.'
+            }
+            $raw = Get-Content -LiteralPath $target -Raw -Encoding UTF8
+            $report = $raw | ConvertFrom-Json
+            if ($report.machine -ne $machine -or $report.schemaVersion -ne 1 -or
+                $report.dataClassification -ne 'NonSecretMetadataOnly') {
+              throw 'Fleet export wrote a mismatched or unsafe inventory schema.'
+            }
+            $csv = Join-Path $folder 'fleet.csv'
+            & $exe --fleet-aggregate $folder $csv --no-elevation | Out-Null
+            $aggregateExit = $LASTEXITCODE
+            Write-Host "Fleet aggregation exit code: $aggregateExit; CSV present: $(Test-Path -LiteralPath $csv -PathType Leaf)"
+            if ($aggregateExit -ne 0 -or -not (Test-Path -LiteralPath $csv -PathType Leaf)) {
+              throw 'Fleet roundtrip aggregation failed.'
+            }
+            $rows = @(Get-Content -LiteralPath $csv -Encoding UTF8)
+            if ($rows.Count -ne 2 -or $rows[0] -notmatch '^Machine,CollectedUtc,' -or
+                $rows[1] -notmatch [regex]::Escape($machine)) {
+              throw 'Fleet aggregate CSV does not include exactly one device.'
+            }
+            $denied = Join-Path $folder 'OTHER-COMPUTER.json'
+            & $exe --fleet-export $denied --no-elevation 2>&1 | Out-Null
+            $deniedExit = $LASTEXITCODE
+            Write-Host "Wrong-machine export exit code: $deniedExit; output absent: $(!(Test-Path -LiteralPath $denied))"
+            if ($deniedExit -eq 0 -or (Test-Path -LiteralPath $denied)) {
+              throw 'Fleet export allowed overwriting another computer identity.'
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          # The final native invocation intentionally returned 2 (denied).
+          # Explicitly report success after assertions: pwsh otherwise returns
+          # the last native exit code even when every safety assertion passed.
+          exit 0
 
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'

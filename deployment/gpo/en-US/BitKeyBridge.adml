@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources revision="1.0" schemaVersion="1.0" xmlns="http://www.microsoft.com/GroupPolicy/PolicyDefinitions">
+  <displayName>BitKeyBridge</displayName>
+  <description>BitKeyBridge machine update restrictions</description>
+  <resources>
+    <stringTable>
+      <string id="BitKeyBridgeCategory">BitKeyBridge</string>
+      <string id="DisableAutomaticUpdates">Disable automatic updates</string>
+      <string id="ExplainDisableAutomaticUpdates">Stops all unattended BitKeyBridge update installations. This setting cannot grant update permission.</string>
+      <string id="DisableUnsignedAutomaticUpdates">Disable unsigned automatic updates</string>
+      <string id="ExplainDisableUnsignedAutomaticUpdates">Stops unsigned automatic updates even when a local administrator previously opted in.</string>
+      <string id="RequireSignedAutomaticUpdates">Require signed automatic updates</string>
+      <string id="ExplainRequireSignedAutomaticUpdates">Allows unattended updates only when an existing local trusted-signer configuration is present. This setting cannot enroll a signer.</string>
+    </stringTable>
+    <presentationTable />
+  </resources>
+</policyDefinitionResources>
