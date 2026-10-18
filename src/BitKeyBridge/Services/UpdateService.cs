@@ -842,6 +842,16 @@ public sealed class UpdateService : IDisposable
                 throw new InvalidOperationException(
                     "Automatic update apply refused: current machine " +
                     "signature and publisher policy is not enabled.");
+
+            // A preview cannot cross the privileged apply boundary after its
+            // channel permission was revoked during an asynchronous download.
+            // Explicit manual rollbacks remain possible for recovery.
+            if (!IsReleaseChannelAllowed(
+                    plan.ExpectedVersion, plan.Rollback,
+                    activePolicy.AllowPrereleaseUpdates))
+                throw new InvalidOperationException(
+                    "The prerelease channel was disabled after staging. " +
+                    "Refusing to install the preview without current consent.");
             AuthenticodeVerificationService.EnforcePolicy(
                 activePolicy, plan.StagedExecutable);
 
@@ -1974,6 +1984,28 @@ public sealed class UpdateService : IDisposable
 
     internal static SemanticVersion ParseVersion(string value) =>
         SemanticVersion.Parse(value);
+
+    internal static bool IsReleaseChannelAllowed(
+        string expectedVersion, bool explicitRollback, bool allowPrerelease)
+    {
+        // A manual rollback can restore an earlier verified prerelease as an
+        // explicit recovery action; an upgrade cannot bypass channel policy.
+        return explicitRollback ||
+            !ParseVersion(expectedVersion).IsPrerelease ||
+            allowPrerelease;
+    }
+
+    internal static IEnumerable<string> RunReleaseChannelOfflineTests()
+    {
+        var errors = new List<string>();
+        if (IsReleaseChannelAllowed("0.32.0-rc.3", false, false) ||
+            IsReleaseChannelAllowed("0.32.0-beta.1", false, false) ||
+            !IsReleaseChannelAllowed("0.30.5", false, false) ||
+            !IsReleaseChannelAllowed("0.32.0-rc.3", false, true) ||
+            !IsReleaseChannelAllowed("0.32.0-rc.3", true, false))
+            errors.Add("Revoked prerelease permission was ignored by update apply policy.");
+        return errors;
+    }
 
     internal static bool ReleaseVersionsMatch(
         string? actual,
