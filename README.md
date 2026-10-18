@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable release channel: v0.30.4 — unsigned, with explicitly enabled automatic installation.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Latest stable v0.30.5 (unsigned); upcoming opt-in preview v0.32.0-rc.1 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,23 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+## v0.32.0-rc.1 release candidate
+
+The prerelease combines the v0.31.0 Unified Search/Recovery Workflow, v0.32.0
+secret-free Fleet/GPO reporting, and stable v0.30.5 updater/audit foundations.
+It is a GitHub **prerelease** and will NOT replace Stable / Latest v0.30.5.
+All executables are **unsigned**. Do not deploy across managed computers
+before controlled AD/Entra/Intune, CyberArk EPM and Audit Broker acceptance.
+
+Test machines may enable prerelease checks in Settings > Updates. Merely
+allowing prereleases does not grant permission to install automatically.
+Unattended installation requires separately configured signature publisher
+trust or conscious unsigned consent for the official GitHub repository; GPO
+can always deny automatic installation. `--check-update --no-elevation`
+checks for updates without installing them.
+
+[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.1.md).
 
 ## v0.32.0 fleet inventory (development)
 
@@ -25,7 +42,14 @@ Devices or Helpdesk workspace. It never automatically reveals a recovery
 key or LAPS password and preserves search context. `Ctrl+1`–`Ctrl+7`
 continues navigating the ordered main tabs.
 
-## Stable v0.30.4
+## Latest stable v0.30.5
+
+[GitHub Release v0.30.5](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.30.5)
+contains x64/x86/ARM64 packages with exactly one tested executable in each
+root ZIP, preserving strict legacy updater compatibility. Unsigned
+automatic installation remains explicitly opt-in and rollback protected.
+
+## Historical stable v0.30.4
 
 Windows x64, x86 and ARM64. Start opens first; navigate Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics / Settings (where permitted). Optional daily SYSTEM updater uses the existing verified/rollback-safe pipeline and requires explicit administrator-approved unsigned or pinned-signer trust. The release binaries are **unsigned**.
 
