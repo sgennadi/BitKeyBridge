@@ -1,3 +1,20 @@
+## 0.32.0-rc.5
+
+**Unsigned, opt-in hardened Update Center 2.0 preview. Stable Latest stays v0.30.5.**
+
+- Fix security-sensitive Update Center shortcuts: Pause and Enable affect only saved machine automatic-update flags, require an administrator and explicit enable confirmation, preserve all unrelated unsigned consent/publisher/channel settings, and never clear a failed-update hold.
+- Require administrator identity, explicit Yes/No approval and effective GPO/signer policy revalidation before the existing Resume Auto-Install action can remove a rollback/failure hold.
+- Make Retry a bounded (30-second), non-mutating online metadata check against saved machine configuration with duplicate-click suppression; add a Windows regression that rejects any accidental Save Update Settings or configuration write.
+- Recheck prerelease permission both in the scheduled SYSTEM worker and the privileged apply helper; reject a preview update when permission was revoked during async staging, without breaking explicitly requested manual rollback.
+- Read Task Scheduler off the GUI thread with stale-refresh suppression, display the task's next run in compact mode and flag any principal, runlevel, executable or arguments that differ from the exact intended SYSTEM task.
+- Show separately the last successful update and latest sanitized failure with EN/RU/HE status strings; improve responsive wrapped labels/actions at HiDPI/200% and RDP.
+- Clamp saved window bounds to current screen after monitor/resolution changes and keep per-user compact layout.
+- Release three architecture ZIPs only after the exact RC5 commit passes source/version checks, LAPS, CodeQL, executable/UI tests, two-standard-user protected audit and real legacy upgrade/rollback. No managed endpoint enrollment or signing bypass.
+
+## 0.32.0-rc.4
+
+- Published the initial compact Update Center 2.0 and per-user HiDPI/RDP workspace preview, including read-only updater status and pilot-facing UI documentation. RC5 supersedes its security and policy handling; neither prerelease is Stable/Latest.
+
 ## 0.32.0-rc.3
 
 - Add a startup connection wizard checkbox **Remember this connection**; explicitly opt in to automatic reuse of the last selected AD, Microsoft Entra/Intune or combined source.
