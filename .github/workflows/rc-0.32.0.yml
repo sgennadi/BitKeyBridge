@@ -98,6 +98,7 @@ jobs:
         run: |
           ./tests/windows/Validate-GpoTemplates.ps1
           ./tests/windows/UpdateZipLayoutRegression.ps1
+          ./tests/windows/UpdateHoldSettingsRegression.ps1
       - name: Restore and publish
         shell: pwsh
         run: |
