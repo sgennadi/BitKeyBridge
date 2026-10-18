@@ -168,7 +168,6 @@ public sealed class UpdateService : IDisposable
                 if (!forRollback &&
                     HasManualOnlyPackage(assets, tag, info.Architecture))
                 {
-                    info.ManualReleaseAvailable = latest > current;
                     info.UpdateAvailable = false;
                     info.AssetName = string.Empty;
                     try
@@ -438,6 +437,10 @@ public sealed class UpdateService : IDisposable
             throw new InvalidOperationException(
                 $"GitHub asset digest mismatch for {info.AssetName}. Expected {info.AssetDigestSha256}, got {actual}.");
 
+        // An unsigned release ZIP must not be able to expand arbitrary files,
+        // executable sidecars or an unbounded payload into ProgramData.
+        UpdatePackageValidator.ValidateSingleExecutableArchive(zipPath);
+
         var extractDir = Path.Combine(versionDir, "extract");
         ZipFile.ExtractToDirectory(zipPath, extractDir, overwriteFiles: true);
 
@@ -480,6 +483,10 @@ public sealed class UpdateService : IDisposable
                 $"ProductVersion '{versionInfo.ProductVersion}' does not match " +
                 $"release {info.LatestVersion}.");
         }
+
+        // Repeat the CI PE-machine check on each technician workstation.
+        // FileVersion/ProductVersion alone cannot prove the executable RID.
+        UpdatePackageValidator.ValidateExecutableMachine(executable, info.Architecture);
 
         var stagedHashBeforeSelfTest =
             await ComputeSha256Async(
@@ -525,8 +532,11 @@ public sealed class UpdateService : IDisposable
     public string LaunchApplyHelper(
         PreparedUpdate prepared,
         bool restartGui,
-        bool automatic = false)
+        bool automatic = false,
+        bool scheduledBackground = false)
     {
+        if (scheduledBackground && !automatic)
+            throw new InvalidOperationException("A background task may only stage automatic updates.");
         var current = Environment.ProcessPath
             ?? throw new InvalidOperationException("Current executable path is unavailable.");
 
@@ -562,6 +572,8 @@ public sealed class UpdateService : IDisposable
                 GetCurrentVersion().ToString(),
             Automatic =
                 automatic,
+            ScheduledBackground =
+                scheduledBackground,
             Rollback =
                 prepared.Info.IsRollbackTarget ||
                 prepared.Info.ReleaseTag.Equals(
@@ -596,10 +608,13 @@ public sealed class UpdateService : IDisposable
             Arguments =
                 $"--apply-update-plan \"{planPath}\" " +
                 $"--apply-update-plan-sha256 {planSha256}",
-            UseShellExecute = true,
+            // A SYSTEM scheduled task is already elevated and must never
+            // show an interactive UAC dialog in Session 0. For an ordinary
+            // non-admin GUI install retain the existing UAC request.
+            UseShellExecute = !SecurityContext.IsAdministrator(),
             WorkingDirectory = helperDir
         };
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows() && psi.UseShellExecute)
             psi.Verb = "runas";
 
         // Keep the helper file non-writable until CreateProcess has opened it.
@@ -669,6 +684,8 @@ public sealed class UpdateService : IDisposable
             throw new InvalidDataException(
                 "The rollback backup does not contain a valid file version.");
         }
+
+        UpdatePackageValidator.ValidateExecutableMachine(staged, GetRid());
 
         AuthenticodeVerificationService.EnforcePolicy(
             _config,
@@ -772,44 +789,67 @@ public sealed class UpdateService : IDisposable
             return 1;
         }
 
-        if (plan.WaitForProcessId > 0)
+        // Apply, automatic update and rollback share the same exclusive gate.
+        // An overlapping request must not rewrite .bak while the first helper
+        // is installing or restoring the previous executable.
+        using var exclusiveApply = UpdateApplyGate.TryAcquire();
+        if (exclusiveApply is null)
         {
-            try
-            {
-                using var process = Process.GetProcessById(plan.WaitForProcessId);
-                process.WaitForExit(60000);
-            }
-            catch (ArgumentException ex)
-            {
-                Debug.WriteLine(
-                    "Updater wait target process already exited: " +
-                    DiagnosticRedaction.Sanitize(ex.Message));
-            }
-        }
-
-        if (plan.RestartService)
-        {
-            try
-            {
-                WindowsServiceHost.Stop();
-            }
-            catch (Exception ex)
-            {
-                WindowsEventLogService.TryWrite(
-                    "Updater could not stop the BitKeyBridge service before replacement: " +
-                    ex.Message,
-                    EventLogSeverity.Warning,
-                    4591,
-                    "Update");
-            }
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update apply is already active or its protected gate is unavailable.",
+                EventLogSeverity.Warning, 4194, "Update");
+            return 3;
         }
 
         var backups = new List<(string Target, string Backup)>();
+        var createdTargets = new List<string>();
+        var retainedBackupSnapshots = new List<UpdateBackupSafety.BackupSnapshot>();
         try
         {
+            // Reject hostile background plans before stopping services or
+            // touching any deployment target.
+            UpdateApplySafety.ValidateScheduledBackgroundPlan(
+                plan, AppPaths.ServiceExecutable);
+            if (plan.ScheduledBackground &&
+                !System.Security.Principal.WindowsIdentity.GetCurrent().IsSystem)
+                throw new InvalidOperationException(
+                    "Scheduled background apply requires the LocalSystem token.");
+
+            if (plan.WaitForProcessId > 0)
+            {
+                try
+                {
+                    using var waitProcess = Process.GetProcessById(plan.WaitForProcessId);
+                    if (!waitProcess.WaitForExit(60000))
+                        throw new TimeoutException(
+                            "The launching BitKeyBridge process did not exit within 60 seconds.");
+                }
+                catch (ArgumentException ex)
+                {
+                    Debug.WriteLine("Updater source process exited: " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
+            }
+
             using var stagedExecutable =
                 OpenVerifiedStagedExecutable(
                     plan);
+
+            // Recheck active signing policy in the elevated apply helper.
+            var activePolicy = ConfigService.LoadAppConfig();
+            if (plan.Automatic &&
+                !UpdateTrustPolicy.CanInstallUnattended(activePolicy))
+                throw new InvalidOperationException(
+                    "Automatic update apply refused: current machine " +
+                    "signature and publisher policy is not enabled.");
+            AuthenticodeVerificationService.EnforcePolicy(
+                activePolicy, plan.StagedExecutable);
+
+            // Do not interrupt a running recovery/audit service when staged
+            // executable verification or machine policy already failed.
+            // A service stop failure aborts the transaction and restores it.
+            if (plan.RestartService)
+                WindowsServiceHost.Stop();
 
             foreach (var target in plan.TargetExecutables
                          .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -821,9 +861,15 @@ public sealed class UpdateService : IDisposable
                 Directory.CreateDirectory(directory);
 
                 var backup = fullTarget + ".bak";
-                if (File.Exists(backup)) File.Delete(backup);
-                if (File.Exists(fullTarget))
+                var existed = File.Exists(fullTarget);
+                if (existed)
                 {
+                    // An existing .bak may be the operator's only previous
+                    // rollback image. Snapshot it BEFORE rewriting .bak;
+                    // restore it after a failed install, including failures
+                    // raised by the post-install health probe.
+                    retainedBackupSnapshots.Add(
+                        UpdateBackupSafety.Snapshot(backup));
                     File.Copy(fullTarget, backup, true);
                     backups.Add((fullTarget, backup));
                 }
@@ -845,6 +891,8 @@ public sealed class UpdateService : IDisposable
                 }
 
                 File.Move(replacement, fullTarget, true);
+                if (!existed)
+                    createdTargets.Add(fullTarget);
             }
 
             // Persist the intentional downgrade before restarting the GUI.
@@ -865,18 +913,34 @@ public sealed class UpdateService : IDisposable
                     ConfigService.SaveAppConfig(config);
                 }
             }
-            else
-            {
-                UpdateRollbackHoldService.Clear();
-            }
-
-            WindowsEventLogService.TryWrite(
-                "BitKeyBridge update installed successfully.",
-                EventLogSeverity.Information,
-                4100);
-
             if (plan.RestartService)
                 WindowsServiceHost.Start();
+
+            // A staged self-test is necessary but not sufficient. Verify
+            // the installed bytes and execute the ACTUAL replaced program
+            // before committing success or allowing future auto-updates.
+            foreach (var target in plan.TargetExecutables
+                         .Where(x => !string.IsNullOrWhiteSpace(x))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                InstalledUpdateHealthService.VerifyInstalledExecutable(
+                    Path.GetFullPath(target),
+                    plan.StagedExecutableSha256);
+            }
+
+            if (plan.RestartService &&
+                !string.Equals(WindowsServiceHost.GetInfo().State,
+                    "Running", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Updated BitKeyBridge service did not remain Running after health verification.");
+
+            if (!plan.Rollback)
+                UpdateRollbackHoldService.Clear();
+
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge update installed and passed post-install health checks.",
+                EventLogSeverity.Information,
+                4100);
 
             if (plan.RestartGui && !string.IsNullOrWhiteSpace(plan.GuiExecutable))
             {
@@ -916,20 +980,95 @@ public sealed class UpdateService : IDisposable
                                 : string.Empty)
                     });
 
+            // The freshly replaced .bak now holds the immediately previous
+            // executable. Remove any temporary older backup snapshots only
+            // once the update has been verified and recorded as successful.
+            foreach (var snapshot in retainedBackupSnapshots)
+            {
+                try { UpdateBackupSafety.Commit(snapshot); }
+                catch (Exception cleanupException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater previous-backup snapshot cleanup needs attention: " +
+                        DiagnosticRedaction.Sanitize(cleanupException.Message),
+                        EventLogSeverity.Warning, 4594, "Update");
+                }
+            }
             TryScheduleHelperCleanup(plan.CleanupDirectory);
             return 0;
         }
         catch (Exception ex)
         {
+            // The service may have passed its initial start check and then
+            // failed health verification. Stop it before restoring its EXE.
+            if (plan.RestartService && backups.Count + createdTargets.Count > 0)
+            {
+                try { WindowsServiceHost.Stop(); }
+                catch (Exception stopException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Updater could not stop the unhealthy service before rollback: " +
+                        DiagnosticRedaction.Sanitize(stopException.Message),
+                        EventLogSeverity.Error, 4593, "Update");
+                }
+            }
+
+            if (plan.Automatic)
+            {
+                try
+                {
+                    // Prevent endless install-restore-install cycles. This
+                    // hold survives partial rollbacks and is cleared only
+                    // after a deliberate administrator intervention.
+                    UpdateRollbackHoldService.Activate(
+                        plan.PreviousVersion, "AutomaticFailure");
+                }
+                catch (Exception holdException)
+                {
+                    WindowsEventLogService.TryWrite(
+                        "Automatic update failure hold could not be written: " +
+                        DiagnosticRedaction.Sanitize(holdException.Message),
+                        EventLogSeverity.Error, 4196, "Update");
+                    try
+                    {
+                        var disable = ConfigService.LoadAppConfig();
+                        disable.AutoInstallUpdatesOnStart = false;
+                        ConfigService.SaveAppConfig(disable);
+                    }
+                    catch (Exception configException)
+                    {
+                        WindowsEventLogService.TryWrite(
+                            "Automatic update could not be disabled after failure: " +
+                            DiagnosticRedaction.Sanitize(configException.Message),
+                            EventLogSeverity.Error, 4195, "Update");
+                    }
+                }
+            }
+
+            var restoreAttempted = 0;
+            var restoreSucceeded = 0;
+            var restoreFailed = 0;
             foreach (var (target, backup) in backups.AsEnumerable().Reverse())
             {
                 try
                 {
+                    restoreAttempted++;
                     if (File.Exists(backup))
+                    {
                         File.Copy(backup, target, true);
+                        restoreSucceeded++;
+                    }
+                    else
+                    {
+                        restoreFailed++;
+                        WindowsEventLogService.TryWrite(
+                            "Updater rollback backup is missing for " + target,
+                            EventLogSeverity.Error, 4592, "Update");
+                    }
                 }
                 catch (Exception rollbackException)
                 {
+                    restoreFailed++;
                     WindowsEventLogService.TryWrite(
                         "Updater file rollback failed for " +
                         target +
@@ -939,6 +1078,52 @@ public sealed class UpdateService : IDisposable
                         4592,
                         "Update");
                 }
+            }
+
+            // If there was no existing file, rolling back means removing
+            // the newly created executable rather than leaving a partial install.
+            foreach (var target in createdTargets.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (File.Exists(target))
+                        File.Delete(target);
+                    restoreAttempted++;
+                    restoreSucceeded++;
+                }
+                catch (Exception cleanupException)
+                {
+                    restoreFailed++;
+                    WindowsEventLogService.TryWrite(
+                        "Updater could not remove newly created failed target: " +
+                        DiagnosticRedaction.Sanitize(cleanupException.Message),
+                        EventLogSeverity.Error, 4592, "Update");
+                }
+            }
+
+            if (restoreFailed == 0)
+            {
+                foreach (var snapshot in retainedBackupSnapshots.AsEnumerable().Reverse())
+                {
+                    try { UpdateBackupSafety.Restore(snapshot); }
+                    catch (Exception backupException)
+                    {
+                        restoreFailed++;
+                        WindowsEventLogService.TryWrite(
+                            "Updater previous rollback image could not be restored: " +
+                            DiagnosticRedaction.Sanitize(backupException.Message),
+                            EventLogSeverity.Error, 4594, "Update");
+                    }
+                }
+            }
+            else if (retainedBackupSnapshots.Count > 0)
+            {
+                // The current EXE is not safely restored. Keep both rollback
+                // generations for operator recovery instead of overwriting
+                // the emergency .bak or deleting the older snapshot.
+                WindowsEventLogService.TryWrite(
+                    "Updater executable restoration incomplete; retained both backup generations.",
+                    EventLogSeverity.Error, 4594, "Update");
             }
 
             new UpdateHistoryService()
@@ -961,6 +1146,9 @@ public sealed class UpdateService : IDisposable
                             plan.AuthenticodePublisher,
                         Details =
                             $"Source={(plan.Rollback ? plan.RollbackSource : "Update")}; " +
+                            $"RestoreAttempted={restoreAttempted}; " +
+                            $"RestoreSucceeded={restoreSucceeded}; " +
+                            $"RestoreFailed={restoreFailed}; " +
                             DiagnosticRedaction.Sanitize(ex.Message)
                     });
 
@@ -1090,6 +1278,8 @@ public sealed class UpdateService : IDisposable
                 throw new InvalidDataException(
                     "Staged BitKeyBridge executable SHA-256 changed after verification.");
             }
+
+            UpdatePackageValidator.ValidateExecutableMachine(stream, GetRid());
 
             var versionInfo = FileVersionInfo.GetVersionInfo(fullPath);
             if (!ReleaseExecutableMatches(
@@ -1691,17 +1881,49 @@ public sealed class UpdateService : IDisposable
                 RedirectStandardError = true
             }
         };
-        process.Start();
-        var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-        var errorTask = process.StandardError.ReadToEndAsync(ct);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(2));
-        await process.WaitForExitAsync(timeout.Token);
-        var output = await outputTask;
-        var error = await errorTask;
+        if (!process.Start())
+            throw new InvalidOperationException("The downloaded BitKeyBridge self-test could not start.");
+
+        // Read both streams concurrently so verbose self-tests cannot block
+        // the process on a full stdout/stderr pipe. Apply the SAME deadline
+        // to stream reads and process exit, and never leave a timed-out EXE running.
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            _ = await outputTask;
+            _ = await errorTask;
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The process may have exited between the check and Kill.
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Debug.WriteLine("Timed-out updater self-test cleanup: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
+            if (ct.IsCancellationRequested)
+                throw;
+            throw new TimeoutException(
+                "The downloaded BitKeyBridge self-test exceeded two minutes and was stopped.");
+        }
+
         if (process.ExitCode != 0)
             throw new InvalidOperationException(
-                $"Downloaded BitKeyBridge self-test failed with exit code {process.ExitCode}. {output} {error}".Trim());
+                $"Downloaded BitKeyBridge self-test failed with exit code {process.ExitCode}. " +
+                "Raw process output is not copied into logs because it could contain sensitive data.");
     }
 
     private static void AddUnique(ICollection<string> list, string value)

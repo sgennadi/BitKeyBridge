@@ -53,6 +53,8 @@ public sealed class UpdateHistoryService
         {
             try
             {
+                entry.Details = DiagnosticRedaction.Sanitize(entry.Details);
+                entry.Publisher = DiagnosticRedaction.Sanitize(entry.Publisher);
                 var rows =
                     Read(
                         499);
@@ -73,7 +75,7 @@ public sealed class UpdateHistoryService
             {
                 WindowsEventLogService.TryWrite(
                     "Update history persistence failed: " +
-                    ex.Message,
+                    DiagnosticRedaction.Sanitize(ex.Message),
                     EventLogSeverity.Warning,
                     4201,
                     "Update");

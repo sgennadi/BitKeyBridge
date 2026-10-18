@@ -14,6 +14,11 @@ public static class LapsDiagnosticRunbook
             "Run these commands manually. BitKeyBridge does not execute PowerShell.",
             "The default checks are read-only and do not request secret attributes.",
             "Never share passwords, access tokens, encrypted password blobs or unredacted support logs.",
+            "NO RECORDS / ACCESS DENIED: Confirm selected domain, DC, computer DN and Connected as identity.",
+            "LAPS expiration metadata does not prove confidential password read permission.",
+            "Encrypted Windows LAPS requires separate LDAP attribute-read and DPAPI-NG decrypt authorization.",
+            "Zero results may indicate no backup, missing rights, replication lag or a different backup destination.",
+            "Ask AD administrators to review least-privilege OU delegation; do not grant Domain Admin as a workaround.",
             ""
         };
 

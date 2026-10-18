@@ -1,12 +1,18 @@
 # BitKeyBridge — кратко
 
-**Актуальная ветка релиза: 0.26.x.** Start стал основным helpdesk-dashboard: один metadata-поиск для BitLocker + LAPS, контекстные действия, Recent без секретов, упрощённый выбор AD account, Advanced-настройки подключения на Start, постоянная connection bar и компактные LAPS details. Расширенные Recovery/LAPS/Devices/Administration workflows сохранены.
+**Стабильный релиз: v0.29.12. Опубликованная тестовая версия: v0.30.0-rc.1. Разработка v0.30.0-rc.2 — в черновике PR #57, не в стабильном релизе.** Start стал основным helpdesk-dashboard: один metadata-поиск для BitLocker + LAPS, контекстные действия, Recent без секретов, упрощённый выбор AD account, Advanced-настройки подключения на Start, постоянная connection bar и компактные LAPS details. Расширенные Recovery/LAPS/Devices/Administration workflows сохранены.
 
 BitKeyBridge — native Windows-приложение для восстановления и администрирования **BitLocker** и **LAPS** в Active Directory, Microsoft Entra ID и Intune.
 
 Программа написана на **C# / .NET 10 / WinForms** и напрямую использует LDAP, Microsoft Graph, Windows API, DPAPI-NG, Credential Manager и Windows Certificate Store.
 
 PowerShell в рабочем режиме не используется вообще: нет запуска powershell.exe/pwsh.exe, ActiveDirectory PowerShell module, Microsoft Graph PowerShell SDK или shell fallback.
+
+## Диагностика защищённого аудита — 0.30.0-rc.2 (тестовый билд)
+
+Для обычного Helpdesk-пользователя: `BitKeyBridge.exe --audit-broker-preflight --no-elevation` — JSON-диагностика службы, RBAC, текущих групп Windows, ACL и подписи без чтения LAPS/BitLocker-секретов. Дополнительный `--probe` записывает только безопасное тестовое событие в защищённый журнал. Если нет прав локального администратора, глубокую проверку NTFS выполняет отдельный администратор через `--audit-broker-verify`.
+
+[Пошаговое тестирование на доменном компьютере, без запуска GUI от администратора](managed-domain-acceptance-0.30.0-rc.2.md). [CMD-скрипт формирования локального отчёта без PowerShell](../tests/windows/BitKeyBridge-DomainPreflight.cmd). Для реальной проверки AD/Entra нужны делегированные права, а не только локальный RBAC.
 
 ## Мастера настройки — 0.21.0
 

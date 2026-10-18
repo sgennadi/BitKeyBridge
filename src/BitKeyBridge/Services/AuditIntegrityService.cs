@@ -49,28 +49,27 @@ public static class AuditIntegrityService
     {
         try
         {
-            if (!File.Exists(path))
-                return string.Empty;
-
-            foreach (var line in File.ReadLines(path).Reverse())
+            // A crash between rotation and the next append can leave only
+            // audit.jsonl.old. Use the newest surviving protected segment.
+            foreach (var journalFile in ProtectedAuditArchiveService.OrderedFiles(path).Reverse())
             {
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
+                foreach (var line in File.ReadLines(journalFile).Reverse())
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
 
-                try
-                {
-                    var entry =
-                        JsonSerializer.Deserialize<AuditEntry>(line);
-                    if (entry is not null &&
-                        entry.ChainVersion > 0 &&
-                        !string.IsNullOrWhiteSpace(entry.EntryHash))
+                    try
                     {
-                        return entry.EntryHash;
+                        var entry = JsonSerializer.Deserialize<AuditEntry>(line);
+                        if (entry is not null &&
+                            entry.ChainVersion > 0 &&
+                            !string.IsNullOrWhiteSpace(entry.EntryHash))
+                            return entry.EntryHash;
                     }
-                }
-                catch
-                {
-                    return string.Empty;
+                    catch
+                    {
+                        return string.Empty;
+                    }
                 }
             }
         }
@@ -96,18 +95,24 @@ public static class AuditIntegrityService
                 "Could not acquire the audit interprocess lock for verification.");
         }
 
-        var result = new AuditIntegrityResult();
+        return VerifyUnderLock(path);
+    }
 
-        var paths = new[]
+    // Caller already holds the audit.jsonl.lock handle (archival on write).
+    internal static AuditIntegrityResult VerifyUnderLock(string path)
+    {
+        var result = new AuditIntegrityResult();
+        IReadOnlyList<string> paths;
+        try { paths = ProtectedAuditArchiveService.OrderedFiles(path); }
+        catch (Exception ex)
         {
-            path + ".old",
-            path
+            return Fail(result, "Protected audit archive index invalid: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
-        .Where(File.Exists)
-        .ToArray();
 
         string? previousHash = null;
         var chainStarted = false;
+        var strictGenesis = ProtectedAuditArchiveService.IsBrokerJournal(path);
 
         foreach (var file in paths)
         {
@@ -187,6 +192,14 @@ public static class AuditIntegrityService
                         $"{Path.GetFileName(file)}:{lineNumber}: entry hash mismatch.");
                 }
 
+                if (IsMissingProtectedGenesis(strictGenesis, chainStarted,
+                        entry.PreviousHash))
+                {
+                    return Fail(
+                        result,
+                        $"{Path.GetFileName(file)}:{lineNumber}: protected audit history starts without the original genesis entry. Missing archive prefix.");
+                }
+
                 if (chainStarted &&
                     !string.Equals(
                         entry.PreviousHash,
@@ -208,6 +221,14 @@ public static class AuditIntegrityService
 
         return result;
     }
+
+    // A protected log must preserve its first chained entry and the empty
+    // genesis pointer. Otherwise a missing archived prefix could be hidden
+    // simply by renumbering the remaining segments from 00000001.
+    // Legacy non-protected journals may intentionally rotate away history.
+    internal static bool IsMissingProtectedGenesis(
+        bool protectedJournal, bool chainStarted, string? previousHash) =>
+        protectedJournal && !chainStarted && !string.IsNullOrEmpty(previousHash);
 
     public static Dictionary<string, AuditEntry> ReadEntriesByHash(
         string path,
@@ -238,12 +259,7 @@ public static class AuditIntegrityService
                 "Could not acquire the audit interprocess lock.");
         }
 
-        foreach (var file in new[]
-                 {
-                     path + ".old",
-                     path
-                 }
-                 .Where(File.Exists))
+        foreach (var file in ProtectedAuditArchiveService.OrderedFiles(path))
         {
             foreach (var line in File.ReadLines(file))
             {
@@ -307,12 +323,7 @@ public static class AuditIntegrityService
         if (processLock is null)
             return false;
 
-        foreach (var file in new[]
-                 {
-                     path + ".old",
-                     path
-                 }
-                 .Where(File.Exists))
+        foreach (var file in ProtectedAuditArchiveService.OrderedFiles(path))
         {
             foreach (var line in File.ReadLines(file))
             {

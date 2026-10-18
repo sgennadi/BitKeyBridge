@@ -341,15 +341,7 @@ public sealed partial class MainForm
                 return;
             }
 
-            if (_lastUpdateInfo.ManualReleaseAvailable && !silentWhenCurrent)
-            {
-                ShowAppMessage(
-                    "BitKeyBridge Update",
-                    $"BitKeyBridge {_lastUpdateInfo.LatestVersion} is published for manual download only. " +
-                    "This release does not provide an auto-installable archive for your architecture. " +
-                    "Open GitHub Releases from Tools to download it.");
-            }
-            else if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
+            if (!_lastUpdateInfo.UpdateAvailable && !silentWhenCurrent)
             {
                 ShowAppMessage(
                     "BitKeyBridge Update",
@@ -396,9 +388,7 @@ public sealed partial class MainForm
             $"Current: {info.CurrentVersion}    Latest: {info.LatestVersion}    Architecture: {info.Architecture}{Environment.NewLine}" +
             (info.UpdateAvailable
                 ? $"UPDATE AVAILABLE: {info.LatestVersion}    Asset: {info.AssetName}"
-                : info.ManualReleaseAvailable
-                    ? $"MANUAL DOWNLOAD AVAILABLE: {info.LatestVersion}. This release intentionally has no auto-installable ZIP. Use Tools > Latest GitHub release."
-                    : "No newer release is available.") +
+                : "No newer release is available.") +
             Environment.NewLine +
             $"Checked: {info.CheckedAtUtc:u}" +
             (string.IsNullOrWhiteSpace(info.ExpectedSha256)
@@ -409,12 +399,11 @@ public sealed partial class MainForm
             Environment.NewLine +
             $"Automatic install: {(UpdateRollbackHoldService.IsActiveForCurrentBuild() ? "Paused after rollback" : _config.CheckForUpdatesOnStart && _config.AutoInstallUpdatesOnStart ? UpdateTrustPolicy.CanInstallUnattended(_config) ? "Enabled" : "Blocked: explicit update trust required" : "Disabled")}" +
             Environment.NewLine +
-            $"Update trust mode: {UpdateTrustPolicy.DescribeMode(_config)}" + Environment.NewLine +
             $"Authenticode trust required: {(_config.RequireTrustedUpdateSignature ? "Yes" : "No")}" +
             (string.IsNullOrWhiteSpace(_config.TrustedUpdatePublisher)
                 ? string.Empty
                 : $" • Publisher: {_config.TrustedUpdatePublisher}"),
-            cached || info.UpdateAvailable || info.ManualReleaseAvailable
+            cached || info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);
     }

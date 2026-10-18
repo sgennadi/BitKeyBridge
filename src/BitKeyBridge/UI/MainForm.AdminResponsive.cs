@@ -58,6 +58,14 @@ public sealed partial class MainForm
             1,
             2);
 
+        _allowUnsignedAutoUpdates.Name = "AllowUnsignedAutomaticUpdates";
+        _allowUnsignedAutoUpdates.AccessibleName =
+            "Explicitly allow unsigned automatic updates from the official BitKeyBridge GitHub repository";
+        _allowUnsignedAutoUpdates.Text =
+            "Allow unsigned auto-install from official GitHub (requires consent)";
+        _allowUnsignedAutoUpdates.AutoSize = true;
+        updateGrid.Controls.Add(_allowUnsignedAutoUpdates, 1, 3);
+
         _allowPrereleaseUpdates.Name =
             "AllowPrereleaseUpdates";
         _allowPrereleaseUpdates.Text =
@@ -67,7 +75,7 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _allowPrereleaseUpdates,
             1,
-            3);
+            4);
 
         _requireTrustedUpdateSignature.Name =
             "RequireTrustedUpdateSignature";
@@ -78,20 +86,12 @@ public sealed partial class MainForm
         updateGrid.Controls.Add(
             _requireTrustedUpdateSignature,
             1,
-            4);
+            5);
 
         _trustedUpdatePublisher.Name =
             "TrustedUpdatePublisher";
         _trustedUpdatePublisher.PlaceholderText =
             "Optional expected publisher name";
-        _allowUnsignedAutoUpdates.Name = "AllowUnsignedUnattendedUpdates";
-        _allowUnsignedAutoUpdates.AccessibleName =
-            "Explicitly allow unsigned automatic updates from the official BitKeyBridge GitHub repository";
-        _allowUnsignedAutoUpdates.Text =
-            "Allow unsigned auto-updates (official GitHub only; higher risk)";
-        _allowUnsignedAutoUpdates.AutoSize = true;
-        updateGrid.Controls.Add(_allowUnsignedAutoUpdates, 1, 5);
-
         AddGridField(
             updateGrid,
             6,
@@ -152,6 +152,104 @@ public sealed partial class MainForm
 
         root.Controls.Add(
             updateGrid);
+
+        root.Controls.Add(CreateSectionTitle(
+            "Background updater (optional)",
+            "Run verified updates daily even when the GUI is closed. " +
+            "Requires an installed Program Files executable, local admin " +
+            "permission, and explicitly approved automatic updates."));
+
+        var scheduledHour = new NumericUpDown
+        {
+            Name = "BackgroundUpdateHour",
+            AccessibleName = "Background updater local hour, 0 through 23",
+            Minimum = 0,
+            Maximum = 23,
+            Value = 3,
+            Width = 75
+        };
+        var scheduledConfig = CreateTwoColumnGrid();
+        AddGridField(
+            scheduledConfig, 0, "Local time (hour):", scheduledHour);
+        root.Controls.Add(scheduledConfig);
+
+        var scheduledActions = CreateActionFlow();
+        var installScheduled = NewActionButton("Schedule Daily");
+        installScheduled.Name = "InstallBackgroundUpdateTaskButton";
+        var statusScheduled = NewActionButton("Task Status");
+        statusScheduled.Name = "BackgroundUpdateTaskStatusButton";
+        var removeScheduled = NewActionButton("Remove Schedule");
+        removeScheduled.Name = "RemoveBackgroundUpdateTaskButton";
+        scheduledActions.Controls.AddRange([
+            installScheduled, statusScheduled, removeScheduled
+        ]);
+        root.Controls.Add(scheduledActions);
+
+        installScheduled.Click += (_, _) =>
+        {
+            if (!SecurityContext.IsAdministrator())
+            {
+                UiStyle.SetStatus(_updateStatus,
+                    "Local administrator rights are required to install " +
+                    "a SYSTEM scheduled task.", UiStatusKind.Warning);
+                return;
+            }
+            if (!SaveUpdateSettings(showConfirmation: false))
+                return;
+            if (!ScheduledUpdateService.IsEligible(_config))
+            {
+                UiStyle.SetStatus(_updateStatus,
+                    "Enable approved automatic updates before scheduling.",
+                    UiStatusKind.Warning);
+                return;
+            }
+            var taskArgs = new[]
+            {
+                "--update-task-hour",
+                scheduledHour.Value.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)
+            };
+            var code = ScheduledUpdateService.InstallTask(taskArgs);
+            UiStyle.SetStatus(_updateStatus,
+                code == 0
+                    ? "Daily SYSTEM task registered. Existing security policy " +
+                      "and rollback holds are still enforced."
+                    : "Could not schedule background updates. Check the " +
+                      "Program Files installation, permissions and Task Scheduler.",
+                code == 0 ? UiStatusKind.Success : UiStatusKind.Warning);
+            if (code == 0)
+                _audit.Write("InstallScheduledUpdater", source: "Local");
+        };
+
+        statusScheduled.Click += (_, _) =>
+        {
+            var code = ScheduledUpdateService.ShowTaskStatus();
+            UiStyle.SetStatus(_updateStatus,
+                code == 0
+                    ? "Scheduled update task exists; check Task Scheduler " +
+                      "for its next run and last exit status."
+                    : "No accessible scheduled update task was found.",
+                code == 0 ? UiStatusKind.Neutral : UiStatusKind.Warning);
+        };
+
+        removeScheduled.Click += (_, _) =>
+        {
+            if (!SecurityContext.IsAdministrator())
+            {
+                UiStyle.SetStatus(_updateStatus,
+                    "Local administrator rights are required to remove " +
+                    "the scheduled update task.", UiStatusKind.Warning);
+                return;
+            }
+            var code = ScheduledUpdateService.RemoveTask();
+            UiStyle.SetStatus(_updateStatus,
+                code == 0
+                    ? "Background update task removed. Startup checks remain unchanged."
+                    : "Could not remove scheduled updater. Check Task Scheduler.",
+                code == 0 ? UiStatusKind.Success : UiStatusKind.Warning);
+            if (code == 0)
+                _audit.Write("RemoveScheduledUpdater", source: "Local");
+        };
 
         root.Controls.Add(
             CreateSectionTitle(
@@ -221,8 +319,8 @@ public sealed partial class MainForm
                         _updateRepository.Text))
                 {
                     UiStyle.SetStatus(_updateStatus,
-                        "Cannot resume auto-updates: use a trusted signing publisher " +
-                        "or explicitly opt into unsigned updates from the official GitHub repository.",
+                        "Cannot resume unattended updates until a trusted publisher OR " +
+                        "explicit unsigned official GitHub consent is configured.",
                         UiStatusKind.Warning);
                     return;
                 }
@@ -300,10 +398,6 @@ public sealed partial class MainForm
             };
 
         _requireTrustedUpdateSignature.CheckedChanged +=
-            (_, _) =>
-                RefreshAutomaticControls();
-
-        _allowUnsignedAutoUpdates.CheckedChanged +=
             (_, _) =>
                 RefreshAutomaticControls();
 

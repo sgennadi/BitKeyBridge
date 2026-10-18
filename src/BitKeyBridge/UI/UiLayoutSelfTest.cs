@@ -22,6 +22,18 @@ public static class UiLayoutSelfTest
                 720),
             1.50F),
         new(
+            "Scale175",
+            new Size(
+                1200,
+                780),
+            1.75F),
+        new(
+            "RdpCompact200",
+            new Size(
+                1024,
+                768),
+            2.00F),
+        new(
             "Scale200Stress",
             new Size(
                 1280,
@@ -212,6 +224,23 @@ public static class UiLayoutSelfTest
                     new MainForm(
                         NewConfig(),
                         layoutSelfTest: true)),
+            (
+                "Helpdesk deployment checklist",
+                () =>
+                {
+                    var main = new MainForm(NewConfig(), layoutSelfTest: true);
+                    try
+                    {
+                        var wizard = main.CreateHelpdeskDeploymentWizard();
+                        wizard.Disposed += (_, _) => main.Dispose();
+                        return wizard;
+                    }
+                    catch
+                    {
+                        main.Dispose();
+                        throw;
+                    }
+                }),
             (
                 "Environment prerequisites",
                 () => new EnvironmentDiagnosticDialog(
@@ -985,14 +1014,46 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        if (!form.KeyPreview)
+            failures.Add($"{formName}/{scenario.Name}: Ctrl+1..7 global keyboard tab navigation requires KeyPreview.");
+
+        var preferredOrder = new[]
+        {
+            "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
+        };
+        foreach (var requiredBackgroundUpdaterControl in new[]
+                 {
+                     "InstallBackgroundUpdateTaskButton",
+                     "BackgroundUpdateTaskStatusButton",
+                     "RemoveBackgroundUpdateTaskButton",
+                     "BackgroundUpdateHour"
+                 })
+        {
+            if (FindByName(form, requiredBackgroundUpdaterControl) is null)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: scheduled updater is missing " +
+                    requiredBackgroundUpdaterControl);
+        }
+        var actualOrder = tabs.TabPages.Cast<TabPage>()
+            .Select(page => page.Text).ToArray();
+        if (actualOrder.Length < preferredOrder.Length ||
+            !actualOrder.Take(preferredOrder.Length)
+                .SequenceEqual(preferredOrder, StringComparer.OrdinalIgnoreCase))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: unexpected main tab order: " +
+                string.Join(" / ", actualOrder) +
+                "; required Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics.");
+        }
         if (tabs.TabPages.Count == 0 ||
             !string.Equals(
                 tabs.TabPages[0].Text,
                 "Start",
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            !ReferenceEquals(tabs.SelectedTab, tabs.TabPages[0]))
         {
             failures.Add(
-                $"{formName}/{scenario.Name}: Start must be the first main workspace tab.");
+                $"{formName}/{scenario.Name}: Start must be the first and selected workspace at launch.");
         }
         else
         {

@@ -1178,6 +1178,7 @@ public static class WindowsServiceHost
     {
         HealthHttpServer? health = null;
         RemoteApiServer? remoteApi = null;
+        ProtectedAuditBrokerServer? auditBroker = null;
         try
         {
             if (config.HealthEndpointEnabled)
@@ -1206,6 +1207,19 @@ public static class WindowsServiceHost
                 RunExportWorkerAsync(config, ct),
                 RunAuditIntegrityWorkerAsync(config, ct)
             };
+
+            if (config.AuditBrokerEnabled)
+            {
+                // Fail the worker startup closed if identity, machine policy,
+                // RBAC readers or protected NTFS journal cannot be verified.
+                auditBroker = new ProtectedAuditBrokerServer(config);
+                workers.Add(auditBroker.RunAsync(ct));
+                _serviceLog?.Info(
+                    "Protected audit broker running on local, SYSTEM-owned pipe.");
+                WindowsEventLogService.TryWrite(
+                    "Protected local-only recovery audit broker is active.",
+                    EventLogSeverity.Information, 4683, "RecoveryAudit");
+            }
 
             if (config.ServiceCoverageEnabled)
                 workers.Add(RunCoverageWorkerAsync(config, ct));

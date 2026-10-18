@@ -36,6 +36,12 @@ public static class UpdateRollbackHoldService
             if (hold is null || string.IsNullOrWhiteSpace(hold.InstalledVersion))
                 return true;
 
+            // On an automatic failure, restoration can be partial. The
+            // installed file version is not trustworthy until an operator
+            // inspects it, so keep this hold active across all versions.
+            if (hold.Source == "AutomaticFailure")
+                return true;
+
             return UpdateService.ReleaseVersionsMatch(
                 hold.InstalledVersion,
                 installedVersion);
@@ -58,7 +64,7 @@ public static class UpdateRollbackHoldService
         string? path = null)
     {
         _ = UpdateService.ParseVersion(installedVersion);
-        if (source is not "Local" and not "Online")
+        if (source is not "Local" and not "Online" and not "AutomaticFailure")
             throw new InvalidDataException("Unknown rollback source.");
 
         JsonStore.WriteAtomic(

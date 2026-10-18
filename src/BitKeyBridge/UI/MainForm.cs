@@ -196,6 +196,8 @@ public sealed partial class MainForm : DpiAwareForm
             $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
         StartPosition =
             FormStartPosition.CenterScreen;
+        // Global Ctrl+1..7 workspace navigation without stealing text input.
+        KeyPreview = true;
         Size =
             new Size(
                 1220,
@@ -5063,13 +5065,21 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadDashboardSettings()
     {
-        _serviceInterval.Value = Math.Clamp(_config.ServiceIntervalMinutes, 1, 10080);
-        _healthPort.Value = Math.Clamp(_config.HealthEndpointPort, 1024, 65535);
+        // Normalize WinForms numeric control bounds before restoring settings.
+        // NumericUpDown defaults to Maximum=100, and settings can exceed it.
+        _serviceInterval.Minimum = 1;
+        _serviceInterval.Maximum = 10080;
+        _healthPort.Minimum = 1024;
+        _healthPort.Maximum = 65535;
+        _serviceCoverageInterval.Minimum = 15;
+        _serviceCoverageInterval.Maximum = 10080;
+        _serviceInterval.Value = Math.Clamp((decimal)_config.ServiceIntervalMinutes, _serviceInterval.Minimum, _serviceInterval.Maximum);
+        _healthPort.Value = Math.Clamp((decimal)_config.HealthEndpointPort, _healthPort.Minimum, _healthPort.Maximum);
         _healthEnabled.Checked = _config.HealthEndpointEnabled;
         _serviceRunOnStart.Checked = _config.ServiceRunExportOnStart;
         _serviceCoverageEnabled.Checked = _config.ServiceCoverageEnabled;
         _serviceCoverageInterval.Value =
-            Math.Clamp(_config.ServiceCoverageIntervalMinutes, 15, 10080);
+            Math.Clamp((decimal)_config.ServiceCoverageIntervalMinutes, _serviceCoverageInterval.Minimum, _serviceCoverageInterval.Maximum);
         _serviceCoverageRunOnStart.Checked = _config.ServiceRunCoverageOnStart;
         _serviceIdentityMode.SelectedIndex =
             _config.ServiceIdentityMode.Equals("gMSA", StringComparison.OrdinalIgnoreCase)

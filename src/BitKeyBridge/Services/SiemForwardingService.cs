@@ -41,26 +41,53 @@ public sealed class SiemForwardingService
                 AppPaths.SiemStatusFile);
     }
 
-    public static void TryQueueFromAudit(
-        AuditEntry entry)
+    // A fail-closed SIEM policy must also govern the actual enqueue step,
+    // not merely an earlier readiness check. If enqueue fails AFTER the
+    // protected journal was flushed, do not issue a recovery read ACK.
+    // The no-secret journal event is intentionally retained for forensics.
+    public static bool TryQueueFromAudit(
+        AuditEntry entry,
+        bool requireProtectedStorage = false)
     {
         try
         {
-            var config =
-                ConfigService.LoadAppConfig();
-
-            if (!config.SiemEnabled)
-                return;
-
-            new SiemForwardingService(
-                config)
-                .Queue(
-                    entry);
+            var config = ConfigService.LoadAppConfig();
+            return TryQueueWithPolicy(entry, config, requireProtectedStorage);
         }
         catch
         {
-            // SIEM forwarding must never expose a recovery password or
-            // recursively break the local tamper-evident audit path.
+            // An unreadable policy cannot be interpreted as fail-open for
+            // recovery that explicitly requires durable, protected storage.
+            return !requireProtectedStorage;
+        }
+    }
+
+    internal static bool TryQueueWithPolicy(
+        AuditEntry entry,
+        AppConfig config,
+        bool requireProtectedStorage,
+        string? outboxDirectory = null,
+        string? statusPath = null)
+    {
+        if (!config.SiemEnabled)
+            return true;
+
+        try
+        {
+            new SiemForwardingService(config, outboxDirectory, statusPath)
+                .Queue(entry);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "SIEM event queue unavailable: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+
+            // Optional/legacy forwarding remains best effort. Strict
+            // recovery with explicit SiemFailClosed MUST deny the read if
+            // the local persistent outbox did not accept its audit event.
+            return !(requireProtectedStorage && config.SiemFailClosed);
         }
     }
 
