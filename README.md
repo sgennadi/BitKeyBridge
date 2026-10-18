@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Latest stable v0.30.5 (unsigned); upcoming opt-in preview v0.32.0-rc.1 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Latest stable v0.30.5 (unsigned); upcoming opt-in preview v0.32.0-rc.2 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,13 +10,17 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## v0.32.0-rc.1 release candidate
+## v0.32.0-rc.2 release candidate
 
 The prerelease combines the v0.31.0 Unified Search/Recovery Workflow, v0.32.0
 secret-free Fleet/GPO reporting, and stable v0.30.5 updater/audit foundations.
 It is a GitHub **prerelease** and will NOT replace Stable / Latest v0.30.5.
 All executables are **unsigned**. Do not deploy across managed computers
 before controlled AD/Entra/Intune, CyberArk EPM and Audit Broker acceptance.
+
+RC2 corrects the daily SYSTEM updater's async lock so a staged download is
+not reported as failed when the continuation runs on another .NET thread.
+`--self-test` now checks cross-thread release and concurrent exclusion.
 
 Test machines may enable prerelease checks in Settings > Updates. Merely
 allowing prereleases does not grant permission to install automatically.
@@ -25,7 +29,7 @@ trust or conscious unsigned consent for the official GitHub repository; GPO
 can always deny automatic installation. `--check-update --no-elevation`
 checks for updates without installing them.
 
-[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.1.md).
+[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.2.md).
 
 ## v0.32.0 fleet inventory (development)
 

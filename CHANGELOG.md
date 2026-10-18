@@ -1,3 +1,12 @@
+## 0.32.0-rc.2
+
+**Unsigned, opt-in prerelease. Supersedes RC1 for the daily background updater.**
+
+- Fix the scheduled SYSTEM updater's cross-process lock: asynchronous network/download continuations cannot safely release a Windows thread-affine Mutex; use an asynchronous-safe named Semaphore instead, with exactly-once disposal.
+- Add Windows runtime self-test for concurrent invocation and cross-thread release. The separate exclusive privileged apply gate and all original rollback, hash, issuer-trust and centrally managed policy checks remain in effect.
+- Rebuild and publish all three architecture ZIPs and SHA256SUMS only after pinned-source CI completes Windows x64/x86/ARM64, LAPS, CodeQL, two-standard-user audit broker tests, GPO/XML and actual legacy migration and rollback.
+- Neither consent to unsigned packages nor registration of the daily SYSTEM task is enabled silently. Stable/Latest stays v0.30.5.
+
 ## 0.32.0-rc.1
 
 **Opt-in, unsigned Windows prerelease for technician testing; NOT a production-approved stable release.**
