@@ -98,14 +98,15 @@ if errorlevel 1 goto bad_version
 
 rem Avoid accidental downgrade/same-version overwrite if another deployment
 rem mechanism has already installed a different build or a newer release.
-if exist "%BKB_TARGET%" (
-  "%BKB_TARGET%" --version > "%BKB_CURRENTFILE%" 2>nul
-  if errorlevel 1 goto version_conflict
-  set "BKB_CURRENT_VERSION="
-  for /f "usebackq delims=" %%V in ("%BKB_CURRENTFILE%") do if not defined BKB_CURRENT_VERSION set "BKB_CURRENT_VERSION=%%V"
-  call :IsCurrentOlder "%BKB_CURRENT_VERSION%" "%BKB_VERSION%"
-  if errorlevel 1 goto version_conflict
-)
+if not exist "%BKB_TARGET%" goto backup_and_install
+"%BKB_TARGET%" --version > "%BKB_CURRENTFILE%" 2>nul
+if errorlevel 1 goto version_conflict
+set "BKB_CURRENT_VERSION="
+for /f "usebackq delims=" %%V in ("%BKB_CURRENTFILE%") do if not defined BKB_CURRENT_VERSION set "BKB_CURRENT_VERSION=%%V"
+call :IsCurrentOlder "%BKB_CURRENT_VERSION%" "%BKB_VERSION%"
+if errorlevel 1 goto version_conflict
+
+:backup_and_install
 
 rem A backup is written before touching the installed executable. A locked
 rem executable must fail without terminating operators' active recovery work.
