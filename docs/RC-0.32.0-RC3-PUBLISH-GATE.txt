@@ -1,0 +1,13 @@
+BitKeyBridge v0.32.0-rc.3 — explicit prerelease publication gate
+2026-10-18
+
+Source includes the per-user startup connection wizard opt-in from reviewed PR #87.
+Publish only from the exact release branch and explicit release-commit message
+after GitHub Actions verifies x64/x86/ARM64, source version, ZIP SHA-256,
+native offline/UI HiDPI, LAPS, CodeQL, two-user Protected Audit Broker
+and real pinned legacy migration/rollback tests.
+
+This is UNSIGNED and OPT-IN. GitHub prerelease only, never stable Latest.
+No fleet enrollment, GPO linking, implicit unsigned consent, local admin
+elevation, cloud tenant consent, recovery key retrieval or retained AD
+password is authorized by this publication.
