@@ -7,9 +7,13 @@ On each endpoint, an approved management job can capture **only**:
 
     BitKeyBridge.exe --fleet-status --no-elevation
 
-Collect each output as a separate JSON file in an administrator-controlled
-directory using your existing Intune/GPO collection mechanism. On the central
-technician/administrator workstation run:
+Collect each output as an exact machine-scoped `MACHINE.json` file in
+an administrator-controlled directory. Historical duplicates are accepted
+only as `MACHINE.yyyyMMddTHHmmssZ.json` (UTC timestamp), e.g.
+`PC-DEMO.20261017T080000Z.json`. An otherwise valid JSON whose embedded
+machine name does not match its filename is rejected. Use per-computer
+write ACLs on the share; the filename by itself is **not authentication**.
+On the central technician/administrator workstation run:
 
     BitKeyBridge.exe --fleet-aggregate "C:\\Inventory\\Reports" "C:\\Inventory\\fleet.csv"
 
@@ -40,6 +44,6 @@ committed audit ACK. Use the protected broker checks separately.
 
 This is offline ingestion, not authenticated central telemetry. Validate
 machine/report provenance through your approved deployment tooling, use
-access-controlled shares, retain and clean files according to institutional
+per-device filename ACLs and access-controlled shares, retain and clean files according to institutional
 policy, and do not treat a reported healthy service as permission to read a
 key. CSV fields are quoted and protected from formula evaluation in Excel.
