@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -89,6 +90,9 @@ internal static class FleetAggregateService
 
                 var content = File.ReadAllText(file, Encoding.UTF8);
                 var report = ParseValidatedReport(content);
+                // Bind reported identity to the per-computer share filename.
+                if (!HasMachineScopedFilename(file, report.Machine))
+                    throw new InvalidDataException("Filename and machine identity disagree.");
                 if (selected.TryGetValue(report.Machine, out var existing))
                 {
                     duplicates++;
@@ -113,6 +117,26 @@ internal static class FleetAggregateService
             selected.Values.OrderBy(x => x.Machine,
                 StringComparer.OrdinalIgnoreCase).ToArray(),
             scanned, invalid, duplicates, DateTime.UtcNow);
+    }
+
+    // GPO uses MACHINE.json; UTC-suffixed archives preserve historical dedup.
+    private static bool HasMachineScopedFilename(string path, string machine)
+    {
+        var leaf = Path.GetFileName(path);
+        if (string.Equals(leaf, machine + ".json", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var prefix = machine + ".";
+        if (!leaf.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+            !leaf.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var stamp = leaf.Substring(prefix.Length,
+            leaf.Length - prefix.Length - ".json".Length);
+        return stamp.Length == 16 &&
+            DateTime.TryParseExact(stamp, "yyyyMMdd'T'HHmmss'Z'",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var archivedAt) &&
+            archivedAt.Year >= 2020;
     }
 
     private static FleetInventoryService.FleetReport ParseValidatedReport(
@@ -151,9 +175,9 @@ internal static class FleetAggregateService
         if (report.SchemaVersion != FleetInventoryService.SchemaVersion ||
             report.DataClassification != "NonSecretMetadataOnly" ||
             string.IsNullOrWhiteSpace(report.Machine) ||
-            report.Machine.Length > 255 ||
+            report.Machine.Length > 63 ||
             report.Machine.Any(c =>
-                !(char.IsLetterOrDigit(c) || c is '-' or '_' or '.')) ||
+                !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')) ||
             string.IsNullOrWhiteSpace(report.Version) ||
             report.Version.Length > 80 ||
             report.Version.Any(c =>
@@ -261,9 +285,13 @@ internal static class FleetAggregateService
                 CollectedUtc = DateTime.UtcNow,
                 Version = "0.32.0"
             };
-            File.WriteAllText(Path.Combine(root, "older.json"),
+            var archiveLeaf = "PC-DEMO." +
+                DateTime.UtcNow.AddHours(-2)
+                    .ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture) +
+                ".json";
+            File.WriteAllText(Path.Combine(root, archiveLeaf),
                 FleetInventoryService.Serialize(previous));
-            File.WriteAllText(Path.Combine(root, "newer.json"),
+            File.WriteAllText(Path.Combine(root, "PC-DEMO.json"),
                 FleetInventoryService.Serialize(current));
 
             var invalid = FleetInventoryService.Serialize(current);
@@ -281,10 +309,14 @@ internal static class FleetAggregateService
                 {
                     OsArchitecture = "SECRET_ARCH_VALUE_FORBIDDEN"
                 }));
+            File.WriteAllText(Path.Combine(root, "OTHER-MACHINE.json"),
+                FleetInventoryService.Serialize(current));
+            File.WriteAllText(Path.Combine(root, "PC-DEMO.badarchive.json"),
+                FleetInventoryService.Serialize(current));
 
             var aggregate = ReadDirectory(root);
-            if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 5 ||
-                aggregate.RejectedFiles != 3 ||
+            if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 7 ||
+                aggregate.RejectedFiles != 5 ||
                 aggregate.DuplicateFiles != 1 ||
                 aggregate.Rows[0].Version != "0.32.0")
                 failures.Add("Fleet aggregation dedupe/schema rejection failed.");
@@ -296,7 +328,8 @@ internal static class FleetAggregateService
                 !exported.Contains("0.32.0", StringComparison.Ordinal) ||
                 exported.Contains("SECRET_DO_NOT_INCLUDE", StringComparison.Ordinal) ||
                 exported.Contains("=HYPERLINK", StringComparison.Ordinal) ||
-                exported.Contains("SECRET_ARCH_VALUE_FORBIDDEN", StringComparison.Ordinal))
+                exported.Contains("SECRET_ARCH_VALUE_FORBIDDEN", StringComparison.Ordinal) ||
+                exported.Contains("OTHER-MACHINE", StringComparison.Ordinal))
                 failures.Add("Fleet CSV leaked invalid JSON values or lost valid records.");
         }
         catch (Exception ex)
