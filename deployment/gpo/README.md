@@ -55,6 +55,11 @@ On an administrator workstation, create the consolidated CSV with:
 The aggregator reads at most 5,000 JSON files, rejects unknown or
 unexpected fields and untrusted OS architecture values, preserves the newest
 UTC report per machine, and flags samples older than seven days as Stale.
+The aggregator verifies that each JSON filename matches the embedded machine:
+use `MACHINE.json` for live GPO exports, or the UTC-only archived form
+`MACHINE.yyyyMMddTHHmmssZ.json` for older samples. Renaming a report to
+another computer name without editing the content will be rejected; filename
+checks supplement, but do not replace, per-computer SMB/NTFS ACLs.
 
 Do not run the older, incompatible `FleetSnapshotTransport --fleet-aggregate`
 JSON-summary implementation from the superseded draft PR #67. The supported
