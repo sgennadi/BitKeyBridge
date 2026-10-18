@@ -67,6 +67,42 @@ internal static class UiWorkspacePreferenceService
         });
     }
 
+    internal static Rectangle? RestoreToVisibleArea(
+        Rectangle previousBounds, IEnumerable<Rectangle> workAreas,
+        Size minimumSize)
+    {
+        if (minimumSize.Width < 1 || minimumSize.Height < 1 ||
+            previousBounds.Width < 680 || previousBounds.Height < 460 ||
+            previousBounds.Width > 16384 || previousBounds.Height > 16384)
+            return null;
+
+        // RDP reconnection, scaling changes and monitor removal can leave
+        // most of the old window off-screen. Never reuse that rectangle as-is.
+        // Choose the monitor with the largest overlap, then clamp all edges.
+        var best = workAreas
+            .Where(a => a.Width >= minimumSize.Width &&
+                        a.Height >= minimumSize.Height)
+            .Select(a => new
+            {
+                Work = a,
+                Overlap = Rectangle.Intersect(previousBounds, a)
+            })
+            .Where(x => x.Overlap.Width >= 160 &&
+                        x.Overlap.Height >= 120)
+            .OrderByDescending(x => (long)x.Overlap.Width * x.Overlap.Height)
+            .FirstOrDefault();
+        if (best is null)
+            return null;
+
+        var area = best.Work;
+        var width = Math.Min(previousBounds.Width, area.Width);
+        var height = Math.Min(previousBounds.Height, area.Height);
+        return new Rectangle(
+            Math.Clamp(previousBounds.Left, area.Left, area.Right - width),
+            Math.Clamp(previousBounds.Top, area.Top, area.Bottom - height),
+            width, height);
+    }
+
     internal static IEnumerable<string> RunOfflineTests(string directory)
     {
         var errors = new List<string>();
@@ -77,6 +113,21 @@ internal static class UiWorkspacePreferenceService
                 FitsAnyScreen(new Rectangle(5000, 5000, 1100, 750), [screen]) ||
                 FitsAnyScreen(new Rectangle(0, 0, 90, 60), [screen]))
                 errors.Add("Workspace restore accepted invalid/off-screen window bounds.");
+
+            var moved = RestoreToVisibleArea(
+                new Rectangle(1600, 740, 1800, 1200), [screen],
+                new Size(780, 550));
+            if (moved is null || moved.Value.Right > screen.Right ||
+                moved.Value.Bottom > screen.Bottom || moved.Value.Left < 0 ||
+                moved.Value.Top < 0 || moved.Value.Width != 1800 ||
+                moved.Value.Height != 1080)
+                errors.Add("Workspace restore failed to clamp a former 4K/RDP window.");
+
+            if (RestoreToVisibleArea(new Rectangle(5000, 5000, 1200, 900),
+                    [screen], new Size(780, 550)) is not null ||
+                RestoreToVisibleArea(new Rectangle(100, 50, 1100, 750),
+                    [new Rectangle(0, 0, 640, 480)], new Size(780, 550)) is not null)
+                errors.Add("Workspace restore accepted a removed or too-small monitor.");
 
             var path = Path.Combine(directory, "ui-workspace-test.json");
             Save(new UiWorkspacePreferences
