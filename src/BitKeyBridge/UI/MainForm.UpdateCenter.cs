@@ -329,7 +329,20 @@ public sealed partial class MainForm
                 (string.IsNullOrEmpty(status.Task.LastResult)
                     ? "N/A" : status.Task.LastResult) +
                 Environment.NewLine +
-                T("UpdateCenterTrust") + ": " + status.TrustMode;
+                T("UpdateCenterTrust") + ": " + status.TrustMode +
+                Environment.NewLine +
+                T("UpdateCenterLastSuccess") + ": " +
+                (status.LastSuccessfulUpdateUtc.HasValue
+                    ? status.LastSuccessfulUpdateUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") +
+                      " (" + status.LastSuccessfulVersion + ")"
+                    : T("UpdateCenterNever")) +
+                Environment.NewLine +
+                T("UpdateCenterLastFailure") + ": " +
+                (status.LastFailedUpdateUtc.HasValue
+                    ? status.LastFailedUpdateUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") +
+                      (string.IsNullOrWhiteSpace(status.LastFailureSummary)
+                          ? string.Empty : " — " + status.LastFailureSummary)
+                    : T("UpdateCenterNever"));
 
             _updateCenterMain.ForeColor = status.RollbackOrFailureHold ||
                 status.CheckError.Length > 0
