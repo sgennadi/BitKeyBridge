@@ -54,6 +54,43 @@ internal static class UiLanguageService
             ["UpdateCenterTask"] = ["Scheduled task", "Задание", "משימה מתוזמנת"],
             ["UpdateCenterNextRun"] = ["Next run", "Следующий запуск", "הרצה הבאה"],
             ["UpdateCenterNever"] = ["Never / unknown", "Нет данных", "לא ידוע"],
+            ["UpdateCenterStable"] = ["Stable", "Стабильный", "יציב"],
+            ["UpdateCenterPreview"] = ["Prerelease (opt-in)", "Предварительный", "גרסת קדם"],
+            ["UpdateCenterChecksOff"] =
+                ["Automatic checks disabled", "Автопроверка отключена", "בדיקה אוטומטית כבויה"],
+            ["UpdateCenterInstallOff"] =
+                ["Auto-install paused", "Автоустановка приостановлена", "התקנה אוטומטית מושהית"],
+            ["UpdateCenterHeld"] =
+                ["Blocked: update/rollback hold; review and explicitly resume",
+                 "Блокировка после ошибки/отката — проверьте причину перед возобновлением",
+                 "חסימה בעקבות כשל או שחזור — יש לבדוק לפני חידוש"],
+            ["UpdateCenterPolicyBlocked"] =
+                ["Blocked: signature, unsigned consent or GPO restriction",
+                 "Заблокировано: подпись, разрешение неподписанных версий или GPO",
+                 "חסימה: חתימה, הסכמה לעדכון לא חתום או מדיניות GPO"],
+            ["UpdateCenterInstallReady"] =
+                ["Auto-install enabled under active trust/GPO policy",
+                 "Автоустановка разрешена действующей политикой доверия/GPO",
+                 "התקנה אוטומטית מותרת לפי מדיניות האמון וה-GPO"],
+            ["UpdateCenterTaskSafe"] =
+                ["Installed: verified SYSTEM task", "Установлено: SYSTEM-задание проверено",
+                 "מותקן: משימת SYSTEM אומתה"],
+            ["UpdateCenterTaskMissing"] =
+                ["Not installed", "Не установлено", "לא מותקן"],
+            ["UpdateCenterTaskUnsafe"] =
+                ["WARNING: unexpected task action", "ВНИМАНИЕ: задание изменено",
+                 "אזהרה: המשימה שונתה"],
+            ["UpdateCenterLastTask"] =
+                ["Last task run", "Последний запуск задания", "הפעלת משימה אחרונה"],
+            ["UpdateCenterTaskResult"] =
+                ["Task result", "Результат задания", "תוצאת המשימה"],
+            ["UpdateCenterTrust"] = ["Trust", "Доверие", "אמון"],
+            ["UpdateCenterNoHistory"] =
+                ["None recorded", "История отсутствует", "אין היסטוריה"],
+            ["UpdateCenterInstallAction"] = ["Install", "Установка", "התקנה"],
+            ["UpdateCenterRollbackAction"] = ["Rollback", "Откат", "שחזור"],
+            ["UpdateCenterSuccess"] = ["Success", "Успешно", "הצלחה"],
+            ["UpdateCenterFailed"] = ["Failed", "Ошибка", "כשל"],
             ["ConnectionSettings"] =
                 ["Open Start / connection settings",
                  "Открыть главную / настройки подключения",
@@ -191,6 +228,12 @@ internal static class UiLanguageService
                     "UpdateCenterCompact", "UpdateCenterVersion", "UpdateCenterLatest",
                     "UpdateCenterChannel", "UpdateCenterLastCheck", "UpdateCenterLastResult",
                     "UpdateCenterTask", "UpdateCenterNextRun", "UpdateCenterNever",
+                    "UpdateCenterStable", "UpdateCenterPreview", "UpdateCenterChecksOff",
+                    "UpdateCenterInstallOff", "UpdateCenterHeld", "UpdateCenterPolicyBlocked",
+                    "UpdateCenterInstallReady", "UpdateCenterTaskSafe", "UpdateCenterTaskMissing",
+                    "UpdateCenterTaskUnsafe", "UpdateCenterLastTask", "UpdateCenterTaskResult",
+                    "UpdateCenterTrust", "UpdateCenterNoHistory", "UpdateCenterInstallAction",
+                    "UpdateCenterRollbackAction", "UpdateCenterSuccess", "UpdateCenterFailed",
                     "RecoveryStepsShortcut", "AccessHealthShortcut",
                     "RecoveryDialogTitle", "RecoveryDialogHeading",
                     "RecoveryDeviceLabel", "RecoverySourceLabel",
