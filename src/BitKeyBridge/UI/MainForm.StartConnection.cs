@@ -121,6 +121,11 @@ public sealed partial class MainForm
         {
             if (_initializingStartSource)
                 return;
+
+            // A quick source switch must not silently re-target the remembered
+            // unattended connection. Re-enable it deliberately in the wizard.
+            _startConnectionPreferences.RememberLastConnectionOnStart = false;
+            _startConnectionPreferences.PreferOtherAdAccountOnStart = false;
             await OnStartConnectionSourceSelectedAsync();
         };
         _homeConfigureCloudButton.Click += async (_, _) =>
