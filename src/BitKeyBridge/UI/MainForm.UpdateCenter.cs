@@ -259,42 +259,77 @@ public sealed partial class MainForm
         try
         {
             string T(string key) => UiLanguageService.Translate(_uiLanguageCode, key);
+            var state = !status.AutomaticChecksEnabled
+                ? T("UpdateCenterChecksOff")
+                : !status.AutomaticInstallConfigured
+                ? T("UpdateCenterInstallOff")
+                : status.RollbackOrFailureHold
+                ? T("UpdateCenterHeld")
+                : !status.AutomaticInstallationPermitted
+                ? T("UpdateCenterPolicyBlocked")
+                : T("UpdateCenterInstallReady");
+            var channel = status.Channel.StartsWith("Prerelease", StringComparison.Ordinal)
+                ? T("UpdateCenterPreview") : T("UpdateCenterStable");
+            var taskStatus = status.Task.Status switch
+            {
+                "Installed (verified SYSTEM action)" => T("UpdateCenterTaskSafe"),
+                "Not installed" => T("UpdateCenterTaskMissing"),
+                "WARNING: task principal/action differs from installed BitKeyBridge" =>
+                    T("UpdateCenterTaskUnsafe"),
+                _ => status.Task.Status
+            };
+            var nextRun = string.IsNullOrEmpty(status.Task.NextRunLocal)
+                ? T("UpdateCenterNever") : status.Task.NextRunLocal;
             var checkTime = status.LastCheckUtc.HasValue
                 ? status.LastCheckUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                 : T("UpdateCenterNever");
             _updateCenterMain.Text =
                 T("UpdateCenterVersion") + ": " + status.CurrentVersion +
-                "    " + T("UpdateCenterChannel") + ": " + status.Channel +
+                "    " + T("UpdateCenterChannel") + ": " + channel +
                 Environment.NewLine +
                 T("UpdateCenterLatest") + ": " + status.LatestCheckedVersion +
                 "    " + T("UpdateCenterLastCheck") + ": " + checkTime +
-                Environment.NewLine +
-                status.InstallationState +
-                (status.RollbackOrFailureHold
-                    ? Environment.NewLine + "Rollback/failure hold is active." : string.Empty) +
+                Environment.NewLine + state +
+                (status.RollbackOrFailureHold && !status.AutomaticInstallConfigured
+                    ? Environment.NewLine + T("UpdateCenterHeld") : string.Empty) +
                 (string.IsNullOrWhiteSpace(status.CheckError)
-                    ? string.Empty : Environment.NewLine + status.CheckError);
+                    ? string.Empty : Environment.NewLine + status.CheckError) +
+                Environment.NewLine +
+                T("UpdateCenterTask") + ": " + taskStatus +
+                "    " + T("UpdateCenterNextRun") + ": " + nextRun;
 
             var last = status.LastUpdateUtc.HasValue
                 ? status.LastUpdateUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                 : T("UpdateCenterNever");
+            var lastAction = status.LastUpdateAction switch
+            {
+                "None recorded" => T("UpdateCenterNoHistory"),
+                _ when status.LastUpdateAction.StartsWith("Rollback",
+                    StringComparison.Ordinal) =>
+                    T("UpdateCenterRollbackAction") + status.LastUpdateAction["Rollback".Length..],
+                _ when status.LastUpdateAction.StartsWith("Install",
+                    StringComparison.Ordinal) =>
+                    T("UpdateCenterInstallAction") + status.LastUpdateAction["Install".Length..],
+                _ => status.LastUpdateAction
+            };
+            var lastResult = status.LastUpdateResult switch
+            {
+                "Success" => T("UpdateCenterSuccess"),
+                "Failed" => T("UpdateCenterFailed"),
+                _ => status.LastUpdateResult
+            };
             _updateCenterExtra.Text =
-                T("UpdateCenterLastResult") + ": " + status.LastUpdateAction +
-                "  " + status.LastUpdateResult + "  (" + last + ")" +
+                T("UpdateCenterLastResult") + ": " + lastAction +
+                "  " + lastResult + "  (" + last + ")" +
                 Environment.NewLine +
-                T("UpdateCenterTask") + ": " + status.Task.Status +
-                "    " + T("UpdateCenterNextRun") + ": " +
-                (string.IsNullOrEmpty(status.Task.NextRunLocal)
-                    ? T("UpdateCenterNever") : status.Task.NextRunLocal) +
-                Environment.NewLine +
-                "Last task run: " +
+                T("UpdateCenterLastTask") + ": " +
                 (string.IsNullOrEmpty(status.Task.LastRunLocal)
                     ? T("UpdateCenterNever") : status.Task.LastRunLocal) +
-                "    Result: " +
+                "    " + T("UpdateCenterTaskResult") + ": " +
                 (string.IsNullOrEmpty(status.Task.LastResult)
                     ? "N/A" : status.Task.LastResult) +
                 Environment.NewLine +
-                "Trust: " + status.TrustMode;
+                T("UpdateCenterTrust") + ": " + status.TrustMode;
 
             _updateCenterMain.ForeColor = status.RollbackOrFailureHold ||
                 status.CheckError.Length > 0
