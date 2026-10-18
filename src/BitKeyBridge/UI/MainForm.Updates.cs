@@ -158,11 +158,9 @@ public sealed partial class MainForm
             ConfigService.SaveAppConfig(
                 _config);
 
-            if (_config.AutoInstallUpdatesOnStart &&
-                UpdateRollbackHoldService.IsActiveForCurrentBuild())
-            {
-                UpdateRollbackHoldService.Clear();
-            }
+            // Persisting ordinary settings never resumes a held automatic update.
+            // Only the explicitly confirmed "Resume Auto-Install" action may clear
+            // a deliberate rollback or automatic-failure hold.
 
             _audit.Write(
                 "SaveUpdateSettings",
