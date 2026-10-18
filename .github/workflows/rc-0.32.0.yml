@@ -163,6 +163,7 @@ jobs:
             }
           }
           ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable $exe
+          ./tests/windows/UpdateCenterSmoke.ps1 -Executable $exe
       - name: Upload test package
         uses: actions/upload-artifact@v7
         with:
