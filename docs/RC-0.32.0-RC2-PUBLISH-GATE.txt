@@ -1,0 +1,12 @@
+BitKeyBridge v0.32.0-rc.2 - explicit prerelease publication authorization
+2026-10-18
+
+Publish only as a GitHub prerelease from this exact release branch and
+this exact explicit commit message, after the workflow's source, LAPS,
+CodeQL, architecture, update migration/rollback, ZIP, GPO and two-standard-user
+Protected Audit Broker Windows checks all complete successfully.
+
+The RC2 revision fixes the thread-affinity bug in background auto-update.
+Do not mark stable/latest, install on managed machines, deploy GPO, modify
+Windows trust settings, or silently accept unsigned update risk.
+Production acceptance and institutional Authenticode signing remain separate.
