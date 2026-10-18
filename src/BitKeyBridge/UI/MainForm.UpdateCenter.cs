@@ -59,6 +59,9 @@ public sealed partial class MainForm
         grid.Controls.Add(_updateCenterExtra, 0, 2);
 
         var buttons = CreateActionFlow();
+        // The action bar must wrap instead of expanding beyond the visible
+        // Updates tab on RDP, 200% text scaling or a narrow restored window.
+        buttons.Dock = DockStyle.Top;
         var refresh = NewActionButton(T("UpdateCenterRefresh"));
         refresh.Name = "UpdateCenterRefreshButton";
         var retry = NewActionButton(T("UpdateCenterRetry"));
@@ -80,6 +83,25 @@ public sealed partial class MainForm
 
         buttons.Controls.AddRange([refresh, retry, pause, enable, _compactUpdateCenter]);
         grid.Controls.Add(buttons, 0, 3);
+
+        void ResizeReadableText()
+        {
+            // Shared workspace constrains this table's width; cap wrapped
+            // labels to that actual width, not a fixed 960px/4K assumption.
+            var available = Math.Max(260,
+                grid.ClientSize.Width - grid.Padding.Horizontal -
+                UiStyle.ControlGap * 2);
+            if (_updateCenterMain.MaximumSize.Width != available)
+                _updateCenterMain.MaximumSize = new Size(available, 0);
+            if (_updateCenterExtra.MaximumSize.Width != available)
+                _updateCenterExtra.MaximumSize = new Size(available, 0);
+            if (_updateCenterDescription is not null &&
+                _updateCenterDescription.MaximumSize.Width != available)
+                _updateCenterDescription.MaximumSize = new Size(available, 0);
+        }
+
+        grid.SizeChanged += (_, _) => ResizeReadableText();
+        ResizeReadableText();
         _updateCenterBuilt = true;
 
         refresh.Click += (_, _) => RefreshUpdateCenter();
