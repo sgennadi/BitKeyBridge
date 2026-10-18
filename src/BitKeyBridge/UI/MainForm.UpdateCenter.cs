@@ -86,41 +86,103 @@ public sealed partial class MainForm
             await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
             RefreshUpdateCenter();
         };
-        pause.Click += (_, _) =>
-        {
-            var original = _autoInstallUpdatesOnStart.Checked;
-            _autoInstallUpdatesOnStart.Checked = false;
-            if (!SaveUpdateSettings(showConfirmation: true))
-                _autoInstallUpdatesOnStart.Checked = original;
-            RefreshUpdateCenter();
-        };
-        enable.Click += (_, _) =>
-        {
-            // Never use this short path to bypass a failed-update hold.
-            if (UpdateRollbackHoldService.HasRecordedHold())
-            {
-                UiStyle.SetStatus(_updateStatus,
-                    "An update hold exists. Investigate the rollback and use " +
-                    "the separate Resume Auto-Install control.",
-                    UiStatusKind.Warning);
-                return;
-            }
-
-            var oldChecks = _checkUpdatesOnStart.Checked;
-            var oldInstall = _autoInstallUpdatesOnStart.Checked;
-            _checkUpdatesOnStart.Checked = true;
-            _autoInstallUpdatesOnStart.Checked = true;
-            if (!SaveUpdateSettings(showConfirmation: true))
-            {
-                _autoInstallUpdatesOnStart.Checked = oldInstall;
-                _checkUpdatesOnStart.Checked = oldChecks;
-            }
-            RefreshUpdateCenter();
-        };
+        pause.Click += (_, _) => TrySetUpdateCenterAutoInstall(enabled: false);
+        enable.Click += (_, _) => TrySetUpdateCenterAutoInstall(enabled: true);
         _compactUpdateCenter.CheckedChanged += (_, _) =>
             ApplyUpdateCenterDensity(_compactUpdateCenter.Checked);
 
         return grid;
+    }
+
+    private void TrySetUpdateCenterAutoInstall(bool enabled)
+    {
+        // Auto-install is a MACHINE configuration, not a per-user GUI toggle.
+        // Never save unrelated, possibly unsaved controls (publisher pin,
+        // repository, unsigned consent, prerelease channel) from this shortcut.
+        if (!SecurityContext.IsAdministrator())
+        {
+            UiStyle.SetStatus(_updateStatus,
+                "Changing machine automatic updates requires administrator rights.",
+                UiStatusKind.Warning);
+            return;
+        }
+
+        try
+        {
+            var active = ConfigService.LoadAppConfig();
+            if (enabled)
+            {
+                if (UpdateRollbackHoldService.HasRecordedHold())
+                {
+                    UiStyle.SetStatus(_updateStatus,
+                        "A rollback/failure hold exists. Review the failure and use " +
+                        "the separate confirmed Resume Auto-Install action.",
+                        UiStatusKind.Warning);
+                    return;
+                }
+                if (!UpdateTrustPolicy.CanInstallUnattended(active))
+                {
+                    UiStyle.SetStatus(_updateStatus,
+                        "Cannot enable auto-install: current trusted signing, " +
+                        "explicit unsigned consent or managed GPO policy blocks it. " +
+                        "Review and Save Update Settings first.",
+                        UiStatusKind.Warning);
+                    return;
+                }
+
+                var confirmation = MessageBox.Show(
+                    this,
+                    "Enable automatic BitKeyBridge installation using the currently " +
+                    "saved and approved update channel and trust settings?\n\n" +
+                    "This can install an updated executable during the next " +
+                    "GUI start or scheduled SYSTEM run. No unsigned consent " +
+                    "or prerelease access will be granted by this action.",
+                    "Enable Automatic Updates",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+                if (confirmation != DialogResult.Yes)
+                    return;
+
+                // Re-read after the human confirmation: policy or consent may
+                // have been revoked while the dialog was open.
+                active = ConfigService.LoadAppConfig();
+                if (UpdateRollbackHoldService.HasRecordedHold() ||
+                    !UpdateTrustPolicy.CanInstallUnattended(active))
+                    throw new InvalidOperationException(
+                        "Update authorization changed. Automatic installation remains disabled.");
+
+                active.CheckForUpdatesOnStart = true;
+            }
+
+            active.AutoInstallUpdatesOnStart = enabled;
+            ConfigService.SaveAppConfig(active);
+
+            // Keep in-memory configuration and GUI controls in sync only AFTER
+            // the atomic file save succeeded; never lift an update hold here.
+            _config.CheckForUpdatesOnStart = active.CheckForUpdatesOnStart;
+            _config.AutoInstallUpdatesOnStart = active.AutoInstallUpdatesOnStart;
+            _checkUpdatesOnStart.Checked = active.CheckForUpdatesOnStart;
+            _autoInstallUpdatesOnStart.Checked = active.AutoInstallUpdatesOnStart;
+            UiStyle.SetStatus(_updateStatus,
+                enabled
+                    ? "Automatic installation enabled under the existing signed/unsigned and GPO policy."
+                    : "Automatic installation paused. Manual checks and the configured task remain available.",
+                UiStatusKind.Success);
+            _audit.Write(enabled ? "UpdateCenterEnableAutomatic" : "UpdateCenterPauseAutomatic",
+                source: "Local");
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(_updateStatus,
+                "Could not change automatic installation: " +
+                DiagnosticRedaction.Sanitize(ex.Message),
+                UiStatusKind.Warning);
+        }
+        finally
+        {
+            RefreshUpdateCenter();
+        }
     }
 
     private void ApplyUpdateCenterLanguage()
