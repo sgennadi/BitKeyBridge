@@ -244,6 +244,9 @@ public sealed partial class MainForm : DpiAwareForm
 
         Shown += async (_, _) =>
         {
+            // Local update status is loaded on a worker, never blocking the
+            // source chooser or the WinForms message loop.
+            RefreshUpdateCenter();
             // Show the source chooser promptly. Network update checks must not
             // hold the connection wizard hostage while GitHub is unavailable.
             await ShowStartupConnectionWizardAsync();
