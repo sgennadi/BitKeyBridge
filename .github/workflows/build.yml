@@ -415,6 +415,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          # A deliberately rejected CLI operation must be inspected via $LASTEXITCODE.
+          $PSNativeCommandUseErrorActionPreference = $false
           $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
           $folder = Join-Path $env:RUNNER_TEMP ('bkb-fleet-' + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $folder | Out-Null
@@ -423,6 +425,7 @@ jobs:
             $target = Join-Path $folder ($machine + '.json')
             & $exe --fleet-export $target --no-elevation | Out-Null
             $status = $LASTEXITCODE
+            Write-Host "Fleet export exit code: $status; JSON present: $(Test-Path -LiteralPath $target -PathType Leaf)"
             if ($status -notin @(0, 2) -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
               throw 'Native fleet export did not write a machine-scoped JSON report.'
             }
@@ -434,7 +437,9 @@ jobs:
             }
             $csv = Join-Path $folder 'fleet.csv'
             & $exe --fleet-aggregate $folder $csv --no-elevation | Out-Null
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $csv -PathType Leaf)) {
+            $aggregateExit = $LASTEXITCODE
+            Write-Host "Fleet aggregation exit code: $aggregateExit; CSV present: $(Test-Path -LiteralPath $csv -PathType Leaf)"
+            if ($aggregateExit -ne 0 -or -not (Test-Path -LiteralPath $csv -PathType Leaf)) {
               throw 'Fleet roundtrip aggregation failed.'
             }
             $rows = @(Get-Content -LiteralPath $csv -Encoding UTF8)
@@ -444,7 +449,9 @@ jobs:
             }
             $denied = Join-Path $folder 'OTHER-COMPUTER.json'
             & $exe --fleet-export $denied --no-elevation 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $denied)) {
+            $deniedExit = $LASTEXITCODE
+            Write-Host "Wrong-machine export exit code: $deniedExit; output absent: $(!(Test-Path -LiteralPath $denied))"
+            if ($deniedExit -eq 0 -or (Test-Path -LiteralPath $denied)) {
               throw 'Fleet export allowed overwriting another computer identity.'
             }
           }
