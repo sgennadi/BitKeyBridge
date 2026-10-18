@@ -318,6 +318,24 @@ public sealed partial class MainForm
         resumeAutoInstall.Click +=
             (_, _) =>
             {
+                // Clearing a failed-update hold is an administrative security
+                // decision, never a side effect of Save Settings or Enable.
+                if (!SecurityContext.IsAdministrator())
+                {
+                    UiStyle.SetStatus(_updateStatus,
+                        "Administrator rights are required to resume " +
+                        "installation after rollback or failure.",
+                        UiStatusKind.Warning);
+                    return;
+                }
+
+                if (!UpdateRollbackHoldService.HasRecordedHold())
+                {
+                    RefreshAutomaticControls();
+                    RefreshUpdateCenter();
+                    return;
+                }
+
                 if (!UpdateTrustPolicy.CanEnableUnattended(
                         _requireTrustedUpdateSignature.Checked,
                         _trustedUpdatePublisher.Text,
@@ -331,8 +349,34 @@ public sealed partial class MainForm
                     return;
                 }
 
+                // A single click must never undo an intentional rollback.
+                var answer = MessageBox.Show(
+                    this,
+                    "The previous automatic installation failed or was rolled back. " +
+                    "Inspect the update history, application logs and trust policy first.\n\n" +
+                    "Do you want to clear the safety hold and allow automatic updates " +
+                    "from the selected channel on the next GUI/SYSTEM task run?",
+                    "Resume Automatic Installation",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+                if (answer != DialogResult.Yes)
+                    return;
+
                 if (!SaveUpdateSettings(showConfirmation: false))
                     return;
+
+                // Saving GUI consent is insufficient when HKLM GPO/Intune
+                // restrictions deny unattended installation.
+                if (!UpdateTrustPolicy.CanInstallUnattended(_config))
+                {
+                    UiStyle.SetStatus(_updateStatus,
+                        "Centrally managed update policy or trusted publisher " +
+                        "requirements block automatic installation. " +
+                        "Rollback hold remains active.",
+                        UiStatusKind.Warning);
+                    return;
+                }
 
                 try
                 {
@@ -344,7 +388,7 @@ public sealed partial class MainForm
                     UpdateRollbackHoldService.Clear();
                     UiStyle.SetStatus(
                         _updateStatus,
-                        "Rollback hold removed and automatic updates re-enabled. " +
+                        "Rollback hold explicitly removed and automatic updates re-enabled. " +
                         "Newer releases may install on the next startup.",
                         UiStatusKind.Success);
                     _audit.Write(
@@ -357,7 +401,8 @@ public sealed partial class MainForm
                 {
                     UiStyle.SetStatus(
                         _updateStatus,
-                        "Could not resume automatic updates: " + ex.Message,
+                        "Could not resume automatic updates: " +
+                        DiagnosticRedaction.Sanitize(ex.Message),
                         UiStatusKind.Error);
                 }
             };
