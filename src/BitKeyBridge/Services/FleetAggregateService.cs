@@ -88,7 +88,9 @@ internal static class FleetAggregateService
                     info.Length == 0 || info.Length > MaximumReportBytes)
                     throw new InvalidDataException("Invalid inventory JSON file size or identity.");
 
-                var content = File.ReadAllText(file, Encoding.UTF8);
+                // Read under a hard byte cap even if a network file grows
+                // after FileInfo.Length was checked (TOCTOU-safe bound).
+                var content = ReadBoundedUtf8(file);
                 var report = ParseValidatedReport(content);
                 // Bind reported identity to the per-computer share filename.
                 if (!HasMachineScopedFilename(file, report.Machine))
@@ -117,6 +119,26 @@ internal static class FleetAggregateService
             selected.Values.OrderBy(x => x.Machine,
                 StringComparer.OrdinalIgnoreCase).ToArray(),
             scanned, invalid, duplicates, DateTime.UtcNow);
+    }
+
+    private static string ReadBoundedUtf8(string file)
+    {
+        using var stream = new FileStream(file, FileMode.Open, FileAccess.Read,
+            FileShare.Read, bufferSize: 8192, FileOptions.SequentialScan);
+        using var memory = new MemoryStream();
+        var buffer = new byte[8192];
+        var total = 0L;
+        int count;
+        while ((count = stream.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            total += count;
+            if (total > MaximumReportBytes)
+                throw new InvalidDataException("Fleet JSON input exceeds its safe byte limit.");
+            memory.Write(buffer, 0, count);
+        }
+        if (total == 0)
+            throw new InvalidDataException("Fleet report is empty.");
+        return new UTF8Encoding(false, true).GetString(memory.ToArray());
     }
 
     // GPO uses MACHINE.json; UTC-suffixed archives preserve historical dedup.
@@ -313,10 +335,12 @@ internal static class FleetAggregateService
                 FleetInventoryService.Serialize(current));
             File.WriteAllText(Path.Combine(root, "PC-DEMO.badarchive.json"),
                 FleetInventoryService.Serialize(current));
+            File.WriteAllText(Path.Combine(root, "PC-DEMO.oversized.json"),
+                new string('X', (int)MaximumReportBytes + 1));
 
             var aggregate = ReadDirectory(root);
-            if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 7 ||
-                aggregate.RejectedFiles != 5 ||
+            if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 8 ||
+                aggregate.RejectedFiles != 6 ||
                 aggregate.DuplicateFiles != 1 ||
                 aggregate.Rows[0].Version != "0.32.0")
                 failures.Add("Fleet aggregation dedupe/schema rejection failed.");
