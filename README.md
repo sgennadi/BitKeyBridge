@@ -10,6 +10,22 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## Unreleased: startup connection wizard with remembered source
+
+The first interactive launch presents **Active Directory**, **Microsoft Entra /
+Intune**, **Both** and **Choose later**. Check **Remember this connection** in
+the wizard to reuse your chosen source and automatically reconnect on the next
+launch (subject to the machine's AutoConnectOnStart setting). Otherwise the
+wizard appears each time; the previously selected source is still prefilled.
+
+This is a per-user opt-in, not a machine deployment or a permission change.
+Alternate AD passwords are **never remembered**; fresh credentials and cloud
+MFA are requested when needed. Select **Reconnect / Change connection...** on
+Start to uncheck the box; a quick source change also disables auto-reconnect
+until explicitly reapproved. The feature is not in the published RC2 binary.
+
+[Remembered startup connection guide](docs/startup-remember-connection.md).
+
 ## v0.32.0-rc.2 release candidate
 
 The prerelease combines the v0.31.0 Unified Search/Recovery Workflow, v0.32.0

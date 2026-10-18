@@ -1070,6 +1070,54 @@ public static class UiLayoutSelfTest
             failures.Add("Start connection source must isolate AD from cloud-only searches.");
         }
 
+        // Source persistence is per-user and opt-in. Existing saved
+        // preferences from earlier builds must still show the chooser.
+        failures.AddRange(StartConnectionPolicy.RunOfflineTests());
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.ActiveDirectory))
+        {
+            if (wizard.Controls.Find("StartupRememberLastConnection", true)
+                is not [CheckBox { Checked: false, Enabled: true }])
+            {
+                failures.Add("Remembered startup connection must be unchecked by default.");
+            }
+        }
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.Both, rememberLastConnection: true))
+        {
+            if (!wizard.RememberLastConnectionOnStart ||
+                wizard.Controls.Find("StartupRememberLastConnection", true)
+                    is not [CheckBox { Checked: true, Enabled: true }])
+            {
+                failures.Add("Remember-last startup selection was not restored in the wizard.");
+            }
+        }
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.Choose, rememberLastConnection: true))
+        {
+            if (wizard.RememberLastConnectionOnStart ||
+                wizard.Controls.Find("StartupRememberLastConnection", true)
+                    is not [CheckBox { Checked: false, Enabled: false }])
+            {
+                failures.Add("Choose-later must disable remembered automatic connection.");
+            }
+        }
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.ActiveDirectory,
+            rememberLastConnection: true, automaticConnectionsAllowed: false))
+        {
+            if (wizard.RememberLastConnectionOnStart ||
+                wizard.Controls.Find("StartupRememberLastConnection", true)
+                    is not [CheckBox { Checked: false, Enabled: false }])
+            {
+                failures.Add("Machine configuration must disable automatic reconnection.");
+            }
+        }
+
         // Detect wrong passwords using error codes (not only English text).
         // Network outages and unrelated LDAP errors must not trigger
         // an automatic credential prompt.
