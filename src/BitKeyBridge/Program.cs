@@ -1856,6 +1856,7 @@ internal static class Program
             failures.AddRange(FleetAggregateService.RunOfflineTests(tempDirectory));
             failures.AddRange(FleetSnapshotExportService.RunOfflineTests(tempDirectory));
             failures.AddRange(ManagedUpdatePolicy.RunOfflineTests());
+            failures.AddRange(StartConnectionPolicy.RunOfflineTests());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
             failures.AddRange(AccessHealthLocalService.RunOfflineTests());
