@@ -127,9 +127,24 @@ try {
 
     # Synthetic, non-functional settings and credential ciphertext only.
     # Preserve the bytes AND the NTFS ACL across the executable update.
-    '{"SchemaVersion":5,"UpdateRepository":"sgennadi/BitKeyBridge","RequireTrustedUpdateSignature":false,"TrustedUpdatePublisher":"","AutoInstallUpdatesOnStart":false}' |
+    # Since RC5 now enforces prerelease consent at the final privileged apply
+    # boundary (including MANUAL upgrades), a disposable CI fixture must
+    # explicitly authorize that preview channel. Stable candidates still
+    # test the default stable-only policy. Never relax the production gate.
+    $allowPreviewCandidate = [bool]($ExpectedCandidateVersion -match '-')
+    $testMachineSettings = @{
+        SchemaVersion = 5
+        UpdateRepository = 'sgennadi/BitKeyBridge'
+        RequireTrustedUpdateSignature = $false
+        TrustedUpdatePublisher = ''
+        AutoInstallUpdatesOnStart = $false
+        AllowPrereleaseUpdates = $allowPreviewCandidate
+    }
+    $testMachineSettings | ConvertTo-Json -Depth 5 |
         Set-Content -LiteralPath $machineConfig -Encoding utf8
     $createdMachineConfig = $true
+    Write-Host ('Legacy migration uses explicit prerelease consent={0} on disposable CI only.' -f
+        $allowPreviewCandidate)
     '{"AuthMode":"DeviceCode","TenantId":"synthetic-fixture.invalid"}' |
         Set-Content -LiteralPath $profileConfig -Encoding utf8
     $createdProfileConfig = $true
