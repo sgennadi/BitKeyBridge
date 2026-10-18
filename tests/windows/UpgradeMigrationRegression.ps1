@@ -8,6 +8,8 @@ Only runs on a disposable GitHub-hosted Windows CI runner.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$CandidateZip,
+    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$')]
+    [string]$ExpectedCandidateVersion = '0.30.5',
     [switch]$EphemeralHostedRunner
 )
 
@@ -118,8 +120,8 @@ try {
         throw 'Candidate x64 executable is missing.'
     }
     $candidateVersion = ((& $current --version --no-elevation | Out-String).Trim())
-    if ($LASTEXITCODE -ne 0 -or $candidateVersion -ne '0.30.5') {
-        throw "Expected a v0.30.5 candidate. Received $candidateVersion."
+    if ($LASTEXITCODE -ne 0 -or $candidateVersion -ne $ExpectedCandidateVersion) {
+        throw "Expected candidate $ExpectedCandidateVersion. Received $candidateVersion."
     }
     $currentHash = Hash-Of $current
 

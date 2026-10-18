@@ -1,3 +1,14 @@
+## 0.32.0-rc.1
+
+**Opt-in, unsigned Windows prerelease for technician testing; NOT a production-approved stable release.**
+
+- Integrate v0.31.0 source-qualified Unified Search, Access Health, seven-step secret-free Recovery Workflow, EN/RU/HE responsive UI, and v0.32.0 bounded Fleet/GPO inventory on the v0.30.5 hardened updater/audit foundation.
+- Use 0.32.0-rc.1 as .NET ProductVersion/InformationalVersion; retain numeric Windows FileVersion 0.32.0.0.
+- Deliver canonical single-root-EXE x64/x86/ARM64 ZIPs from a separate prerelease workflow, guarded by Windows and LAPS regressions, GPO template checks, CodeQL, SHA-256 verification, post-build version/architecture checks, protected audit and ZIP layout tests.
+- Prerelease is NOT GitHub Stable/Latest. A client must independently opt into prerelease checks; automatic installation still requires its existing explicit publisher-pinned trust or unsigned opt-in, and centrally managed GPO may deny it.
+- The EXEs are unsigned; same-account SHA-256 and GitHub asset digests do not establish a genuine publisher identity. No silent enrollment, automatic GPO linking, privileged secret access, or deployment are performed by publication.
+- Real non-admin AD/Entra/Intune, RDP/4K, CyberArk EPM, GPMC, NTFS/SMB ACL and service/rollback acceptance remain mandatory before stable v0.32.0.
+
 ## 0.32.0-dev.1
 
 **Internal integration preview only; not a public release.**

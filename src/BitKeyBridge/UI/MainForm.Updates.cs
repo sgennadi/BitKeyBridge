@@ -158,11 +158,9 @@ public sealed partial class MainForm
             ConfigService.SaveAppConfig(
                 _config);
 
-            if (_config.AutoInstallUpdatesOnStart &&
-                UpdateRollbackHoldService.IsActiveForCurrentBuild())
-            {
-                UpdateRollbackHoldService.Clear();
-            }
+            // Persisting ordinary settings never resumes a held automatic update.
+            // Only the explicitly confirmed "Resume Auto-Install" action may clear
+            // a deliberate rollback or automatic-failure hold.
 
             _audit.Write(
                 "SaveUpdateSettings",
@@ -174,7 +172,10 @@ public sealed partial class MainForm
             {
                 UiStyle.SetStatus(
                     _updateStatus,
-                    downgradedLegacyAutoinstall
+                    _config.AutoInstallUpdatesOnStart &&
+                    UpdateRollbackHoldService.IsActiveForCurrentBuild()
+                        ? "Settings saved. Automatic installation is still paused after a rollback or failed update. Use Resume Auto-Install explicitly after investigating."
+                        : downgradedLegacyAutoinstall
                         ? "Previous unsigned/unpinned auto-install setting was safely disabled. " +
                           "Startup checks and manual updates remain available."
                         : _config.CheckForUpdatesOnStart
@@ -182,7 +183,10 @@ public sealed partial class MainForm
                             ? "Auto-install enabled: " + UpdateTrustPolicy.DescribeMode(_config) + "."
                             : "Update settings saved. Startup checks are enabled; installation remains manual."
                         : "Update settings saved. Automatic startup checks are disabled; manual checks remain available.",
-                    UiStatusKind.Success);
+                    _config.AutoInstallUpdatesOnStart &&
+                    UpdateRollbackHoldService.IsActiveForCurrentBuild()
+                        ? UiStatusKind.Warning
+                        : UiStatusKind.Success);
             }
 
             return true;

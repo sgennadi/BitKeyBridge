@@ -86,7 +86,11 @@ internal static class ManagedUpdatePolicy
             policy.DisableAutomaticUpdates,
             policy.DisableUnsignedAutomaticUpdates,
             policy.RequireSignedAutomaticUpdates,
-            AutomaticInstallationPermitted = UpdateTrustPolicy.CanInstallUnattended(config),
+            AutomaticInstallationPermitted =
+                config.CheckForUpdatesOnStart &&
+                config.AutoInstallUpdatesOnStart &&
+                UpdateTrustPolicy.CanInstallUnattended(config) &&
+                !UpdateRollbackHoldService.IsActiveForCurrentBuild(),
             Note = "Machine restrictions can deny auto-install; they never consent to unsigned updates."
         }, new JsonSerializerOptions { WriteIndented = true }));
         return policy.Readable ? 0 : 2;
