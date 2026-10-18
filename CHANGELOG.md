@@ -1,10 +1,12 @@
-## Unreleased (after 0.32.0-rc.2)
+## 0.32.0-rc.3
 
 - Add a startup connection wizard checkbox **Remember this connection**; explicitly opt in to automatic reuse of the last selected AD, Microsoft Entra/Intune or combined source.
 - Save only per-user source and selected authentication method in LocalAppData; never store alternate AD passwords or bypass delegated Microsoft Graph MFA.
 - Keep the wizard visible by default on first run and after upgrading legacy source preferences. Respect machine AutoConnectOnStart=false, Choose later, and explicit opt-out in the wizard.
 - Allow the Start source drop-down to change sources without silently retargeting remembered auto-connect; reconnect and revise the preference from the existing wizard button.
-- Add offline policy and Windows HiDPI wizard regressions. This change is **not** in the public v0.32.0-rc.2 release.
+- Add offline policy and Windows HiDPI wizard regressions to the release-gated test suite.
+- RC3 remains an unsigned opt-in GitHub prerelease, not Stable/Latest; GitHub Release creation requires all architecture builds, LAPS, CodeQL, protected audit, and legacy migration/rollback tests to pass at the exact promoted source SHA.
+- The existing v0.30.5 stable and v0.32.0-rc.2 prerelease binaries are not changed.
 
 ## 0.32.0-rc.2
 
