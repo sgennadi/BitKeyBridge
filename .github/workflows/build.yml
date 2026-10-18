@@ -259,6 +259,10 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Controlled GPO/Intune rollout regression (dry-run only)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/ControlledDeploymentRegression.ps1
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
