@@ -106,6 +106,7 @@ internal static class Program
             x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-center-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
@@ -308,6 +309,7 @@ internal static class Program
             x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-center-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
@@ -1103,6 +1105,15 @@ internal static class Program
         if (args.Any(x => x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase)))
             return ShowAutomaticUpdateSettings(config);
 
+        if (args.Any(x => x.Equals("--update-center-status", StringComparison.OrdinalIgnoreCase)))
+        {
+            // Read-only JSON; no GitHub request or unattended installation.
+            var status = UpdateCenterStatusService.Capture(config);
+            Console.WriteLine(JsonSerializer.Serialize(status,
+                new JsonSerializerOptions { WriteIndented = true }));
+            return 0;
+        }
+
         if (args.Any(x => x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase)))
             return SetAutomaticUpdateSettings(config, enabled: true, args);
 
@@ -1862,6 +1873,8 @@ internal static class Program
             failures.AddRange(AccessHealthLocalService.RunOfflineTests());
             failures.AddRange(AccessHealthGuidanceService.RunOfflineTests());
             failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
+            failures.AddRange(UiWorkspacePreferenceService.RunOfflineTests(tempDirectory));
+            failures.AddRange(UpdateCenterStatusService.RunOfflineTests());
             failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
             failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
             failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
@@ -4358,6 +4371,7 @@ internal static class Program
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");
         Console.WriteLine("  --auto-update-status       Show auto-install and unsigned trust settings");
+        Console.WriteLine("  --update-center-status     Show read-only JSON: versions, task, rollback and policy state");
         Console.WriteLine("  --managed-update-policy   Show HKLM GPO/Intune update restrictions");
         Console.WriteLine("  --auto-update-enable       Enable trusted auto-installation (requires opt-in)");
         Console.WriteLine("  --accept-unsigned-update-risk  With --auto-update-enable: permit unsigned official GitHub auto-installation");
