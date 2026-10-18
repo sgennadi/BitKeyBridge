@@ -9,8 +9,9 @@ public sealed partial class MainForm
     private bool _adRetryWizardPending;
 
     /// <summary>
-    /// On every interactive launch present the source chooser after the updater.
-    /// The same wizard can be reopened any time without restarting BitKeyBridge.
+    /// Show the connection chooser at startup unless the current user has
+    /// deliberately checked Remember this connection. Existing saved sources
+    /// (from older versions) never implicitly enable automatic connection.
     /// </summary>
     private async Task ShowStartupConnectionWizardAsync()
     {
@@ -21,10 +22,14 @@ public sealed partial class MainForm
         RestoreRecoveryUiState();
         RefreshHomeConnectionUi();
         UpdateStartConnectionSourceControls();
-        await ShowConnectionWizardAsync();
+
+        await ShowConnectionWizardAsync(
+            automaticallyUseRemembered: StartConnectionPolicy.ShouldAutoConnect(
+                _startConnectionPreferences, _config.AutoConnectOnStart));
     }
 
-    private async Task ShowConnectionWizardAsync(bool preferOtherAdAccount = false)
+    private async Task ShowConnectionWizardAsync(
+        bool preferOtherAdAccount = false, bool automaticallyUseRemembered = false)
     {
         if (_connectionWizardOpening || _directoryConnecting ||
             _cloudConnecting || IsDisposed)
@@ -34,60 +39,74 @@ public sealed partial class MainForm
         UpdateStartConnectionSourceControls();
         try
         {
-            using var dialog = new StartupConnectionWizardDialog(
-                SelectedStartSource, preferOtherAdAccount);
-            if (dialog.ShowDialog(this) != DialogResult.OK || IsDisposed)
-                return;
-
-            var source = dialog.SelectedSource;
-            _initializingStartSource = true;
-            try
+            string source;
+            bool anotherAccount;
+            if (automaticallyUseRemembered)
             {
-                _homeConnectionSource.SelectedIndex = source switch
-                {
-                    StartConnectionPolicy.ActiveDirectory => 1,
-                    StartConnectionPolicy.MicrosoftCloud => 2,
-                    StartConnectionPolicy.Both => 3,
-                    _ => 0
-                };
+                // The saved source selects only the connection flow. It NEVER
+                // represents a credential, authorization or Graph consent.
+                source = StartConnectionPolicy.Normalize(SelectedStartSource);
+                anotherAccount = _startConnectionPreferences.PreferOtherAdAccountOnStart &&
+                    StartConnectionPolicy.NeedsActiveDirectory(source);
             }
-            finally
+            else
             {
-                _initializingStartSource = false;
-            }
-
-            // Switching source cancels old searches and erases all secrets.
-            await OnStartConnectionSourceSelectedAsync(openCloudWizardIfNeeded: false);
-            if (source == StartConnectionPolicy.Choose || IsDisposed)
-            {
-                UiStyle.SetStatus(_homeCloudConnectionStatus,
-                    "Connection postponed. Select AD or Microsoft 365 when ready.",
-                    UiStatusKind.Neutral);
-                return;
-            }
-
-            if (StartConnectionPolicy.NeedsActiveDirectory(source))
-            {
-                var anotherAccount = dialog.UseOtherAdAccount;
-                _homeUseOtherAccount.Checked = anotherAccount;
-                _homeUseWindowsIdentity.Checked = !anotherAccount;
-                _adExplicitCredentials.Checked = anotherAccount;
-                UpdateDirectoryConnectionUi();
-
-                // The explicit account path always asks for a FRESH password.
-                await TestDirectoryConnectionAsync(
-                    promptForOu: false,
-                    promptForSessionCredentials: anotherAccount,
-                    forceManualCredentials: anotherAccount);
-                if (IsDisposed)
+                using var dialog = new StartupConnectionWizardDialog(
+                    SelectedStartSource,
+                    preferOtherAdAccount ||
+                        _startConnectionPreferences.PreferOtherAdAccountOnStart,
+                    _startConnectionPreferences.RememberLastConnectionOnStart,
+                    _config.AutoConnectOnStart);
+                if (dialog.ShowDialog(this) != DialogResult.OK || IsDisposed)
                     return;
+
+                source = dialog.SelectedSource;
+                anotherAccount = dialog.UseOtherAdAccount;
+
+                // Store only the source and chosen authentication METHOD.
+                // Checking the box explicitly opts this user into startup
+                // reconnection; unchecking disables it immediately.
+                _startConnectionPreferences.RememberLastConnectionOnStart =
+                    dialog.RememberLastConnectionOnStart;
+                _startConnectionPreferences.PreferOtherAdAccountOnStart =
+                    dialog.RememberLastConnectionOnStart && anotherAccount;
+
+                _initializingStartSource = true;
+                try
+                {
+                    _homeConnectionSource.SelectedIndex = source switch
+                    {
+                        StartConnectionPolicy.ActiveDirectory => 1,
+                        StartConnectionPolicy.MicrosoftCloud => 2,
+                        StartConnectionPolicy.Both => 3,
+                        _ => 0
+                    };
+                }
+                finally
+                {
+                    _initializingStartSource = false;
+                }
+
+                // Source changes also invalidate old searches and revealed
+                // secrets; persist the opt-in with the confirmed choice.
+                await OnStartConnectionSourceSelectedAsync(
+                    openCloudWizardIfNeeded: false);
             }
 
-            if (StartConnectionPolicy.NeedsMicrosoftCloud(source))
+            await ConnectSelectedSourceAsync(source, anotherAccount);
+        }
+        catch (Exception ex) when (automaticallyUseRemembered)
+        {
+            WindowsEventLogService.TryWrite(
+                "BitKeyBridge remembered startup connection failed: " +
+                DiagnosticRedaction.Sanitize(ex.Message),
+                EventLogSeverity.Warning, 4190, "Connection");
+            if (!IsDisposed)
             {
-                // Delegated Device Code + MFA, using the existing consent and
-                // Graph permission checks. No silent admin elevation.
-                await ConnectStartCloudAsync();
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "Remembered connection failed. Use Reconnect / Change connection " +
+                    "to review the source or account.",
+                    UiStatusKind.Warning);
             }
         }
         finally
@@ -103,6 +122,44 @@ public sealed partial class MainForm
                     QueueAdRetryWizard();
                 }
             }
+        }
+    }
+
+    private async Task ConnectSelectedSourceAsync(string source, bool anotherAccount)
+    {
+        if (source == StartConnectionPolicy.Choose || IsDisposed)
+        {
+            if (!IsDisposed)
+            {
+                UiStyle.SetStatus(_homeCloudConnectionStatus,
+                    "Connection postponed. Select AD or Microsoft 365 when ready.",
+                    UiStatusKind.Neutral);
+            }
+            return;
+        }
+
+        if (StartConnectionPolicy.NeedsActiveDirectory(source))
+        {
+            _homeUseOtherAccount.Checked = anotherAccount;
+            _homeUseWindowsIdentity.Checked = !anotherAccount;
+            _adExplicitCredentials.Checked = anotherAccount;
+            UpdateDirectoryConnectionUi();
+
+            // Never reuse an alternate AD password on the next launch.
+            // This requests fresh credentials when another account was chosen.
+            await TestDirectoryConnectionAsync(
+                promptForOu: false,
+                promptForSessionCredentials: anotherAccount,
+                forceManualCredentials: anotherAccount);
+            if (IsDisposed)
+                return;
+        }
+
+        if (StartConnectionPolicy.NeedsMicrosoftCloud(source))
+        {
+            // Delegated Device Code + MFA and existing Graph RBAC/consent,
+            // not a silent tenant-admin or application-only login.
+            await ConnectStartCloudAsync();
         }
     }
 
