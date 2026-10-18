@@ -12,6 +12,8 @@ set "BKB_VERSION=%~4"
 set "BKB_MODE=%~5"
 set "BKB_RESULT=0"
 
+if /I "%~1"=="/test-version-order" goto test_version_order
+
 if not defined BKB_SOURCE goto usage
 if not defined BKB_PIN goto usage
 if not defined BKB_ALLOW goto usage
@@ -60,6 +62,7 @@ set "BKB_STATE=%ProgramData%\BitKeyBridgeDeployment"
 set "BKB_LOCK=%ProgramData%\BitKeyBridgeDeployment\_install-lock"
 set "BKB_BACKUP=%ProgramData%\BitKeyBridgeDeployment\BitKeyBridge.previous.exe"
 set "BKB_VERSIONFILE=%ProgramData%\BitKeyBridgeDeployment\stage-version.txt"
+set "BKB_CURRENTFILE=%ProgramData%\BitKeyBridgeDeployment\installed-version.txt"
 set "BKB_LOG=%SystemRoot%\Logs\BitKeyBridge-Deploy.log"
 
 if not exist "%BKB_STATE%\." mkdir "%BKB_STATE%" >nul 2>&1
@@ -93,6 +96,17 @@ if errorlevel 1 goto bad_version
 findstr /I /L /X /C:"%BKB_VERSION%" "%BKB_VERSIONFILE%" >nul 2>&1
 if errorlevel 1 goto bad_version
 
+rem Avoid accidental downgrade/same-version overwrite if another deployment
+rem mechanism has already installed a different build or a newer release.
+if exist "%BKB_TARGET%" (
+  "%BKB_TARGET%" --version > "%BKB_CURRENTFILE%" 2>nul
+  if errorlevel 1 goto version_conflict
+  set "BKB_CURRENT_VERSION="
+  for /f "usebackq delims=" %%V in ("%BKB_CURRENTFILE%") do if not defined BKB_CURRENT_VERSION set "BKB_CURRENT_VERSION=%%V"
+  call :IsCurrentOlder "%BKB_CURRENT_VERSION%" "%BKB_VERSION%"
+  if errorlevel 1 goto version_conflict
+)
+
 rem A backup is written before touching the installed executable. A locked
 rem executable must fail without terminating operators' active recovery work.
 if exist "%BKB_TARGET%" (
@@ -116,6 +130,11 @@ goto cleanup
 :already_installed
 call :Log "SKIP: Installed executable already matches approved SHA256."
 set "BKB_RESULT=0"
+goto cleanup
+
+:version_conflict
+call :Log "SKIP: Installed version is newer/equal or unrecognized; manual review required."
+set "BKB_RESULT=13"
 goto cleanup
 
 :bad_version
@@ -149,8 +168,50 @@ set "BKB_RESULT=10"
 :cleanup
 if exist "%BKB_STAGE%" del /f /q "%BKB_STAGE%" >nul 2>&1
 if exist "%BKB_VERSIONFILE%" del /f /q "%BKB_VERSIONFILE%" >nul 2>&1
+if exist "%BKB_CURRENTFILE%" del /f /q "%BKB_CURRENTFILE%" >nul 2>&1
 rmdir "%BKB_LOCK%" >nul 2>&1
 endlocal & exit /b %BKB_RESULT%
+
+:test_version_order
+call :IsCurrentOlder "%~2" "%~3"
+exit /b %ERRORLEVEL%
+
+:IsCurrentOlder
+rem Return success ONLY when the installed numeric SemVer is strictly older.
+rem Unknown/invalid/same/newer versions never overwrite an installed build.
+setlocal EnableExtensions DisableDelayedExpansion
+set "VER_OLD_M="
+set "VER_OLD_N="
+set "VER_OLD_P="
+set "VER_NEW_M="
+set "VER_NEW_N="
+set "VER_NEW_P="
+for /f "tokens=1-3 delims=.-" %%A in ("%~1") do (
+  set "VER_OLD_M=%%A"
+  set "VER_OLD_N=%%B"
+  set "VER_OLD_P=%%C"
+)
+for /f "tokens=1-3 delims=.-" %%A in ("%~2") do (
+  set "VER_NEW_M=%%A"
+  set "VER_NEW_N=%%B"
+  set "VER_NEW_P=%%C"
+)
+for %%C in (VER_OLD_M VER_OLD_N VER_OLD_P VER_NEW_M VER_NEW_N VER_NEW_P) do (
+  call :ValidateVersionComponent %%C
+  if errorlevel 1 (endlocal & exit /b 1)
+)
+if %VER_OLD_M% GTR %VER_NEW_M% (endlocal & exit /b 1)
+if %VER_OLD_M% LSS %VER_NEW_M% (endlocal & exit /b 0)
+if %VER_OLD_N% GTR %VER_NEW_N% (endlocal & exit /b 1)
+if %VER_OLD_N% LSS %VER_NEW_N% (endlocal & exit /b 0)
+if %VER_OLD_P% GEQ %VER_NEW_P% (endlocal & exit /b 1)
+endlocal & exit /b 0
+
+:ValidateVersionComponent
+call set "CHECK_VER=%%%~1%%"
+if not defined CHECK_VER exit /b 1
+echo(%CHECK_VER%| findstr /R /X /C:"[0-9][0-9]*" >nul 2>&1
+exit /b %ERRORLEVEL%
 
 :VerifyHash
 rem Verify fixed digest from separately approved GPO/Intune deployment.
