@@ -1,8 +1,9 @@
 namespace BitKeyBridge;
 
 /// <summary>
-/// Explicit connection choice at every interactive launch. Selecting a source
-/// alone cannot retrieve passwords, grant Graph consent, or elevate a user.
+/// Explicit connection choice on first launch and whenever the operator has
+/// not opted into a remembered source. Choosing one cannot retrieve secrets,
+/// grant Graph consent, persist passwords or elevate a user.
 /// </summary>
 public sealed class StartupConnectionWizardDialog : DpiAwareForm
 {
@@ -11,6 +12,7 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
     private readonly RadioButton _both = new();
     private readonly RadioButton _later = new();
     private readonly CheckBox _otherAdAccount = new();
+    private readonly CheckBox _rememberConnection = new();
     private readonly Label _explanation = new();
     private readonly Button _connect = UiStyle.CreateActionButton("Connect");
     private readonly Button _skip = UiStyle.CreateActionButton("Not now", DialogResult.Cancel);
@@ -24,8 +26,11 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
     public bool UseOtherAdAccount => _otherAdAccount.Checked &&
         StartConnectionPolicy.NeedsActiveDirectory(SelectedSource);
 
+    public bool RememberLastConnectionOnStart => _rememberConnection.Checked &&
+        SelectedSource != StartConnectionPolicy.Choose;
+
     public StartupConnectionWizardDialog(string? previouslySelectedSource,
-        bool preferOtherAdAccount = false)
+        bool preferOtherAdAccount = false, bool rememberLastConnection = false)
     {
         Name = "StartupConnectionWizardDialog";
         Text = "BitKeyBridge - Connect";
@@ -41,11 +46,11 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
             AutoScroll = true,
             AutoSize = false,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 7,
             Padding = new Padding(UiStyle.PagePadding)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -102,12 +107,21 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         _otherAdAccount.Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.SectionGap);
         root.Controls.Add(_otherAdAccount, 0, 3);
 
+        _rememberConnection.Name = "StartupRememberLastConnection";
+        _rememberConnection.AccessibleName =
+            "Remember selected connection and reconnect automatically on the next launch";
+        _rememberConnection.Text = "Remember this connection";
+        _rememberConnection.AutoSize = true;
+        _rememberConnection.Margin = new Padding(0, 0, 0, UiStyle.SectionGap);
+        root.Controls.Add(_rememberConnection, 0, 4);
+        _rememberConnection.CheckedChanged += (_, _) => UpdateOptions();
+
         _explanation.Name = "StartupConnectionExplanation";
         _explanation.AutoSize = true;
         _explanation.MaximumSize = new Size(710, 0);
         _explanation.Margin = new Padding(0, 0, 0, UiStyle.SectionGap);
         UiStyle.ConfigureWrappingLabel(_explanation);
-        root.Controls.Add(_explanation, 0, 4);
+        root.Controls.Add(_explanation, 0, 5);
 
         var footer = new FlowLayoutPanel
         {
@@ -122,7 +136,7 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         _skip.Name = "StartupConnectionSkip";
         footer.Controls.Add(_connect);
         footer.Controls.Add(_skip);
-        root.Controls.Add(footer, 0, 5);
+        root.Controls.Add(footer, 0, 6);
 
         Controls.Add(root);
         _connect.Click += (_, _) =>
@@ -143,6 +157,8 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         if (preferOtherAdAccount &&
             StartConnectionPolicy.NeedsActiveDirectory(SelectedSource))
             _otherAdAccount.Checked = true;
+        _rememberConnection.Checked = rememberLastConnection &&
+            SelectedSource != StartConnectionPolicy.Choose;
         UpdateOptions();
     }
 
@@ -153,10 +169,14 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         if (!ad)
             _otherAdAccount.Checked = false;
 
+        _rememberConnection.Enabled = SelectedSource != StartConnectionPolicy.Choose;
+        if (!_rememberConnection.Enabled)
+            _rememberConnection.Checked = false;
+
         _connect.Text = SelectedSource == StartConnectionPolicy.Choose
             ? "Continue to Start" : "Connect";
 
-        _explanation.Text = SelectedSource switch
+        var sourceExplanation = SelectedSource switch
         {
             StartConnectionPolicy.ActiveDirectory =>
                 "First try the current Windows account. No Domain Admin membership is needed " +
@@ -169,5 +189,12 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
                 "permissions; cloud application setup may require administrator approval.",
             _ => "No credentials are requested. You can select a connection source on Start later."
         };
+
+        _explanation.Text = sourceExplanation +
+            (RememberLastConnectionOnStart
+                ? " Next time, BitKeyBridge will use this source without showing the chooser. " +
+                  "An alternate AD password and Microsoft 365 MFA will still be requested when necessary."
+                : " Check Remember this connection to skip this chooser next time; " +
+                  "no account passwords are saved.");
     }
 }
