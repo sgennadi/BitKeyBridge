@@ -91,6 +91,10 @@ internal static class UiLanguageService
             ["UpdateCenterRollbackAction"] = ["Rollback", "Откат", "שחזור"],
             ["UpdateCenterSuccess"] = ["Success", "Успешно", "הצלחה"],
             ["UpdateCenterFailed"] = ["Failed", "Ошибка", "כשל"],
+            ["UpdateCenterLastSuccess"] =
+                ["Last successful update", "Последнее успешное обновление", "עדכון מוצלח אחרון"],
+            ["UpdateCenterLastFailure"] =
+                ["Last failed update", "Последняя ошибка обновления", "כשל עדכון אחרון"],
             ["ConnectionSettings"] =
                 ["Open Start / connection settings",
                  "Открыть главную / настройки подключения",
@@ -234,6 +238,7 @@ internal static class UiLanguageService
                     "UpdateCenterTaskUnsafe", "UpdateCenterLastTask", "UpdateCenterTaskResult",
                     "UpdateCenterTrust", "UpdateCenterNoHistory", "UpdateCenterInstallAction",
                     "UpdateCenterRollbackAction", "UpdateCenterSuccess", "UpdateCenterFailed",
+                    "UpdateCenterLastSuccess", "UpdateCenterLastFailure",
                     "RecoveryStepsShortcut", "AccessHealthShortcut",
                     "RecoveryDialogTitle", "RecoveryDialogHeading",
                     "RecoveryDeviceLabel", "RecoverySourceLabel",
