@@ -13,6 +13,9 @@ public sealed partial class MainForm
             CreateVerticalWorkspace();
         page.Controls.Add(root);
 
+        // The summary works without network access and never authorizes an update.
+        root.Controls.Add(BuildUpdateCenter());
+
         root.Controls.Add(
             CreateSectionTitle(
                 "Verified Updater",
@@ -219,6 +222,7 @@ public sealed partial class MainForm
                 code == 0 ? UiStatusKind.Success : UiStatusKind.Warning);
             if (code == 0)
                 _audit.Write("InstallScheduledUpdater", source: "Local");
+            RefreshUpdateCenter();
         };
 
         statusScheduled.Click += (_, _) =>
@@ -230,6 +234,7 @@ public sealed partial class MainForm
                       "for its next run and last exit status."
                     : "No accessible scheduled update task was found.",
                 code == 0 ? UiStatusKind.Neutral : UiStatusKind.Warning);
+            RefreshUpdateCenter();
         };
 
         removeScheduled.Click += (_, _) =>
@@ -249,6 +254,7 @@ public sealed partial class MainForm
                 code == 0 ? UiStatusKind.Success : UiStatusKind.Warning);
             if (code == 0)
                 _audit.Write("RemoveScheduledUpdater", source: "Local");
+            RefreshUpdateCenter();
         };
 
         root.Controls.Add(
@@ -345,6 +351,7 @@ public sealed partial class MainForm
                         "ResumeAutomaticUpdatesAfterRollback",
                         source: "Local");
                     RefreshAutomaticControls();
+                    RefreshUpdateCenter();
                 }
                 catch (Exception ex)
                 {
@@ -416,6 +423,7 @@ public sealed partial class MainForm
                 await InstallLatestUpdateGuiAsync();
 
         RefreshAutomaticControls();
+        ApplyUpdateCenterDensity(_compactUpdateCenter.Checked);
         return page;
     }
 
