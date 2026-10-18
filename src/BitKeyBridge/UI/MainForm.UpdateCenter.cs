@@ -9,6 +9,12 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly Label _updateCenterMain = new();
+    private Label? _updateCenterHeading;
+    private Label? _updateCenterDescription;
+    private Button? _updateCenterRefreshAction;
+    private Button? _updateCenterRetryAction;
+    private Button? _updateCenterPauseAction;
+    private Button? _updateCenterEnableAction;
     private readonly Label _updateCenterExtra = new();
     private readonly CheckBox _compactUpdateCenter = new();
     private bool _updateCenterBuilt;
@@ -28,9 +34,11 @@ public sealed partial class MainForm
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        grid.Controls.Add(
-            CreateSectionTitle(T("UpdateCenterTitle"), T("UpdateCenterSubtitle")),
-            0, 0);
+        var header = CreateSectionTitle(
+            T("UpdateCenterTitle"), T("UpdateCenterSubtitle"));
+        _updateCenterHeading = header.Controls.OfType<Label>().FirstOrDefault();
+        _updateCenterDescription = header.Controls.OfType<Label>().Skip(1).FirstOrDefault();
+        grid.Controls.Add(header, 0, 0);
 
         _updateCenterMain.Name = "UpdateCenterSummary";
         _updateCenterMain.AccessibleName = "Installed and available versions, update state";
@@ -57,6 +65,10 @@ public sealed partial class MainForm
         pause.Name = "UpdateCenterPauseButton";
         var enable = NewActionButton(T("UpdateCenterEnable"));
         enable.Name = "UpdateCenterEnableButton";
+        _updateCenterRefreshAction = refresh;
+        _updateCenterRetryAction = retry;
+        _updateCenterPauseAction = pause;
+        _updateCenterEnableAction = enable;
         _compactUpdateCenter.Name = "UpdateCenterCompact";
         _compactUpdateCenter.AccessibleName = "Compact Updates layout preference";
         _compactUpdateCenter.Text = T("UpdateCenterCompact");
@@ -109,6 +121,30 @@ public sealed partial class MainForm
             ApplyUpdateCenterDensity(_compactUpdateCenter.Checked);
 
         return grid;
+    }
+
+    private void ApplyUpdateCenterLanguage()
+    {
+        if (!_updateCenterBuilt)
+            return;
+
+        string T(string key) => UiLanguageService.Translate(_uiLanguageCode, key);
+        if (_updateCenterHeading is not null)
+            _updateCenterHeading.Text = T("UpdateCenterTitle");
+        if (_updateCenterDescription is not null)
+            _updateCenterDescription.Text = T("UpdateCenterSubtitle");
+        if (_updateCenterRefreshAction is not null)
+            _updateCenterRefreshAction.Text = T("UpdateCenterRefresh");
+        if (_updateCenterRetryAction is not null)
+            _updateCenterRetryAction.Text = T("UpdateCenterRetry");
+        if (_updateCenterPauseAction is not null)
+            _updateCenterPauseAction.Text = T("UpdateCenterPause");
+        if (_updateCenterEnableAction is not null)
+            _updateCenterEnableAction.Text = T("UpdateCenterEnable");
+        _compactUpdateCenter.Text = T("UpdateCenterCompact");
+
+        if (!_layoutSelfTest && IsHandleCreated)
+            RefreshUpdateCenter();
     }
 
     private void RefreshUpdateCenter()
