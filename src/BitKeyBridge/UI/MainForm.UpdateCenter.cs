@@ -19,6 +19,7 @@ public sealed partial class MainForm
     private readonly CheckBox _compactUpdateCenter = new();
     private bool _updateCenterBuilt;
     private int _updateCenterStatusRequestId;
+    private bool _updateCenterCheckingRelease;
 
     private Control BuildUpdateCenter()
     {
@@ -82,17 +83,59 @@ public sealed partial class MainForm
         _updateCenterBuilt = true;
 
         refresh.Click += (_, _) => RefreshUpdateCenter();
-        retry.Click += async (_, _) =>
-        {
-            await CheckForUpdatesGuiAsync(silentWhenCurrent: false);
-            RefreshUpdateCenter();
-        };
+        retry.Click += async (_, _) => await RetryUpdateCenterCheckAsync();
         pause.Click += (_, _) => TrySetUpdateCenterAutoInstall(enabled: false);
         enable.Click += (_, _) => TrySetUpdateCenterAutoInstall(enabled: true);
         _compactUpdateCenter.CheckedChanged += (_, _) =>
             ApplyUpdateCenterDensity(_compactUpdateCenter.Checked);
 
         return grid;
+    }
+
+    private async Task RetryUpdateCenterCheckAsync()
+    {
+        if (_updateCenterCheckingRelease)
+            return;
+
+        // Unlike the legacy Check button, this check never calls
+        // SaveUpdateSettings: "Retry" must not persist unrelated/unsaved
+        // publisher, channel, repository or unsigned-update consent.
+        _updateCenterCheckingRelease = true;
+        if (_updateCenterRetryAction is not null)
+            _updateCenterRetryAction.Enabled = false;
+
+        try
+        {
+            UiStyle.SetStatus(_updateStatus,
+                "Checking GitHub Releases using saved machine policy...",
+                UiStatusKind.Busy);
+            var savedPolicy = ConfigService.LoadAppConfig();
+            using var updater = new UpdateService(savedPolicy);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var latest = await updater.CheckAsync(timeout.Token);
+            if (IsDisposed || !IsHandleCreated)
+                return;
+            _lastUpdateInfo = latest;
+            DisplayUpdateInfo(latest);
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed && IsHandleCreated)
+                UiStyle.SetStatus(_updateStatus,
+                    "Update check failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message),
+                    UiStatusKind.Warning);
+        }
+        finally
+        {
+            _updateCenterCheckingRelease = false;
+            if (!IsDisposed && IsHandleCreated)
+            {
+                if (_updateCenterRetryAction is not null)
+                    _updateCenterRetryAction.Enabled = true;
+                RefreshUpdateCenter();
+            }
+        }
     }
 
     private void TrySetUpdateCenterAutoInstall(bool enabled)
