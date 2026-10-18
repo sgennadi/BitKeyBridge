@@ -62,19 +62,22 @@ try
         [Text.Encoding]::ASCII)
 
     Invoke-Installer -Arguments @($candidate, $pin, $allow,
-        '0.30.5', '/verify-only') -ExpectedExit 0 -ExpectedMessage 'PASS:'
+        '0.30.5', 'win-x64', '/verify-only') -ExpectedExit 0 -ExpectedMessage 'PASS:'
     Invoke-Installer -Arguments @($candidate, ('0' * 64), $allow,
-        '0.30.5', '/verify-only') -ExpectedExit 2 -ExpectedMessage 'SHA256'
+        '0.30.5', 'win-x64', '/verify-only') -ExpectedExit 2 -ExpectedMessage 'SHA256'
+
+    Invoke-Installer -Arguments @($candidate, $pin, $allow,
+        '0.30.5', 'win-arm64', '/verify-only') -ExpectedExit 2 -ExpectedMessage 'architecture'
 
     $other = Join-Path $root 'OtherDevices.txt'
     [IO.File]::WriteAllText($other, 'ANOTHER-COMPUTER' + [Environment]::NewLine,
         [Text.Encoding]::ASCII)
     Invoke-Installer -Arguments @($candidate, $pin, $other,
-        '0.30.5', '/verify-only') -ExpectedExit 0 -ExpectedMessage 'SKIP:'
+        '0.30.5', 'win-x64', '/verify-only') -ExpectedExit 0 -ExpectedMessage 'SKIP:'
 
     [IO.File]::AppendAllText($candidate, '-TAMPERED')
     Invoke-Installer -Arguments @($candidate, $pin, $allow,
-        '0.30.5', '/verify-only') -ExpectedExit 2 -ExpectedMessage 'SHA256'
+        '0.30.5', 'win-x64', '/verify-only') -ExpectedExit 2 -ExpectedMessage 'SHA256'
 
     foreach ($test in @(
         @{Old='0.30.3'; New='0.30.5'; Code=0},
