@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
 rem BitKeyBridge controlled unattended GPO/Intune install (native CMD only).
-rem Usage: Deploy-BitKeyBridge.cmd "<approved BitKeyBridge.exe>" "<pinned SHA256>" "<allowlist.txt>" "0.30.5" [/verify-only]
+rem Usage: Deploy-BitKeyBridge.cmd "<approved BitKeyBridge.exe>" "<pinned SHA256>" "<allowlist.txt>" "0.30.5" "win-x64|win-x86|win-arm64" [/verify-only]
 rem Script does not enable unsigned update consent, register a SYSTEM updater,
 rem modify protected audit or fetch arbitrary public releases.
 
@@ -9,7 +9,8 @@ set "BKB_SOURCE=%~1"
 set "BKB_PIN=%~2"
 set "BKB_ALLOW=%~3"
 set "BKB_VERSION=%~4"
-set "BKB_MODE=%~5"
+set "BKB_ARCH=%~5"
+set "BKB_MODE=%~6"
 set "BKB_RESULT=0"
 
 if /I "%~1"=="/test-version-order" goto test_version_order
@@ -18,11 +19,18 @@ if not defined BKB_SOURCE goto usage
 if not defined BKB_PIN goto usage
 if not defined BKB_ALLOW goto usage
 if not defined BKB_VERSION goto usage
+if not defined BKB_ARCH goto usage
 if defined BKB_MODE if /I not "%BKB_MODE%"=="/verify-only" goto usage
 if not "%BKB_PIN:~64,1%"=="" goto usage
 if "%BKB_PIN:~63,1%"=="" goto usage
 echo(%BKB_PIN%| findstr /R /I /X /C:"[0-9a-f][0-9a-f]*" >nul 2>&1
 if errorlevel 1 goto usage
+set "BKB_OS_ARCH=%PROCESSOR_ARCHITECTURE%"
+if defined PROCESSOR_ARCHITEW6432 set "BKB_OS_ARCH=%PROCESSOR_ARCHITEW6432%"
+if /I "%BKB_ARCH%"=="win-x64" if /I not "%BKB_OS_ARCH%"=="AMD64" goto wrong_arch
+if /I "%BKB_ARCH%"=="win-arm64" if /I not "%BKB_OS_ARCH%"=="ARM64" goto wrong_arch
+if /I "%BKB_ARCH%"=="win-x86" if /I not "%BKB_OS_ARCH%"=="x86" goto wrong_arch
+if /I not "%BKB_ARCH%"=="win-x64" if /I not "%BKB_ARCH%"=="win-x86" if /I not "%BKB_ARCH%"=="win-arm64" goto wrong_arch
 if not exist "%BKB_ALLOW%" (
   echo ERROR: Approved device allowlist unavailable.
   exit /b 2
@@ -224,6 +232,10 @@ exit /b %ERRORLEVEL%
 >>"%BKB_LOG%" echo [%DATE% %TIME%] %~1
 exit /b 0
 
+:wrong_arch
+echo ERROR: Approved package architecture does not match operating system architecture.
+exit /b 2
+
 :usage
-echo Usage: Deploy-BitKeyBridge.cmd ^<EXE path^> ^<64-hex SHA256 pin^> ^<device allowlist^> ^<version^> [/verify-only]
+echo Usage: Deploy-BitKeyBridge.cmd ^<EXE path^> ^<64-hex SHA256 pin^> ^<device allowlist^> ^<version^> ^<win-x64^|win-x86^|win-arm64^> [/verify-only]
 exit /b 2
