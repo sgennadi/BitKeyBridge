@@ -12,7 +12,6 @@ namespace BitKeyBridge;
 internal static class ScheduledUpdateService
 {
     internal const string TaskName = "BitKeyBridge-AutoUpdate";
-    private const string UpdateMutexName = @"Global\BitKeyBridge-AutomaticUpdate";
 
     internal static bool IsEligible(AppConfig config) =>
         config.CheckForUpdatesOnStart &&
@@ -87,11 +86,11 @@ internal static class ScheduledUpdateService
             return 0;
         }
 
-        using var gate = new Mutex(false, UpdateMutexName);
-        bool acquired;
-        try { acquired = gate.WaitOne(TimeSpan.FromSeconds(2)); }
-        catch (AbandonedMutexException) { acquired = true; }
-        if (!acquired)
+        // Mutexes are thread-affine. The downloader awaits network and disk I/O,
+        // so the continuation can run on another thread. Use the cross-process
+        // semaphore guard instead; it remains owned until the async method exits.
+        using var gate = ScheduledUpdateGate.TryAcquire();
+        if (gate is null)
         {
             Console.WriteLine("Another automatic BitKeyBridge updater is running.");
             return 0;
@@ -142,7 +141,6 @@ internal static class ScheduledUpdateService
                 EventLogSeverity.Warning, 4105, "Update");
             return Fail("Background update failed: " + reason, 1);
         }
-        finally { gate.ReleaseMutex(); }
     }
 
     private static bool IsMachineInstalledExecutable()
