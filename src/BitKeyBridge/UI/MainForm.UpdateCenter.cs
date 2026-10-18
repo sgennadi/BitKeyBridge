@@ -18,6 +18,7 @@ public sealed partial class MainForm
     private readonly Label _updateCenterExtra = new();
     private readonly CheckBox _compactUpdateCenter = new();
     private bool _updateCenterBuilt;
+    private int _updateCenterStatusRequestId;
 
     private Control BuildUpdateCenter()
     {
@@ -211,12 +212,52 @@ public sealed partial class MainForm
 
     private void RefreshUpdateCenter()
     {
-        if (!_updateCenterBuilt || _layoutSelfTest || IsDisposed)
+        if (!_updateCenterBuilt || _layoutSelfTest ||
+            IsDisposed || !IsHandleCreated)
             return;
 
+        // The Task Scheduler COM API and ProgramData may stall when the
+        // scheduler service is slow or a network profile is redirected.
+        // Never perform those reads on the WinForms message-pump thread.
+        var requestId = Interlocked.Increment(ref _updateCenterStatusRequestId);
+        _ = RefreshUpdateCenterAsync(requestId);
+    }
+
+    private async Task RefreshUpdateCenterAsync(int requestId)
+    {
         try
         {
-            var status = UpdateCenterStatusService.Capture(_config);
+            var status = await Task.Run(() =>
+            {
+                // Re-read effective machine settings: another process or
+                // central policy can change them while this GUI is open.
+                var config = ConfigService.LoadAppConfig();
+                return UpdateCenterStatusService.Capture(config);
+            });
+
+            // Two refreshes may overlap (Retry, Save, task registration).
+            // Only the last request may paint the screen.
+            if (IsDisposed || !IsHandleCreated ||
+                requestId != Volatile.Read(ref _updateCenterStatusRequestId))
+                return;
+
+            RenderUpdateCenter(status);
+        }
+        catch (Exception ex)
+        {
+            if (IsDisposed || !IsHandleCreated ||
+                requestId != Volatile.Read(ref _updateCenterStatusRequestId))
+                return;
+
+            _updateCenterMain.Text = "Update Center status unavailable: " +
+                DiagnosticRedaction.Sanitize(ex.GetType().Name);
+        }
+    }
+
+    private void RenderUpdateCenter(UpdateCenterSnapshot status)
+    {
+        try
+        {
             string T(string key) => UiLanguageService.Translate(_uiLanguageCode, key);
             var checkTime = status.LastCheckUtc.HasValue
                 ? status.LastCheckUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
@@ -262,7 +303,7 @@ public sealed partial class MainForm
         }
         catch (Exception ex)
         {
-            _updateCenterMain.Text = "Update Center status unavailable: " +
+            _updateCenterMain.Text = "Update Center display unavailable: " +
                 DiagnosticRedaction.Sanitize(ex.GetType().Name);
         }
     }
