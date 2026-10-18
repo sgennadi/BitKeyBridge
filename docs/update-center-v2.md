@@ -24,16 +24,20 @@ sending a network request. **Retry check** queries GitHub again, but does not
 install, change policy, enroll a task or clear a rollback hold.
 **Pause auto-install** disables automatic installation without deleting the
 scheduled task, changing publisher trust, or disabling manual checks.
-**Enable auto-install** uses the existing Save Update Settings trust and
-explicit unsigned-risk confirmation; it NEVER clears a failed-update hold.
-Use the existing **Resume Auto-Install** after operator investigation of a
-held update. Daily Task Scheduler registration/removal still requires the
+**Enable auto-install** requires an elevated administrator, uses only the
+already-saved signing/unsigned consent and a separate Yes/No confirmation. It
+does not save other unsaved fields, grant unsigned consent or bypass GPO, and
+NEVER clears a failed-update hold.
+Use the existing **Resume Auto-Install** only after administrator
+investigation, explicit warning confirmation and fresh signed/unsigned and
+GPO validation of a held update. Daily Task Scheduler registration/removal still requires the
 machine-installed Program Files executable and administrator authorization.
 
 ## Compact layout, EN/RU/HE and 4K
 
-The compact switch hides supplementary history/schedule details, but leaves
-current version, last check and pause/enable actions visible. Expand to inspect
+The compact switch hides supplementary history/task results, but still shows
+current version, last check, effective installation state, task safety/next
+scheduled run and Pause/Enable/Retry actions. Expand to inspect
 task dates and diagnostic state. New controls are translated for English,
 Russian and Hebrew; language switches update the buttons immediately.
 Sensitive passwords, GUIDs, user identifiers and recovery keys are never
@@ -42,8 +46,9 @@ of older dialogs is a separate localization effort.
 
 The main window saves **per user**: restored bounds, normal/maximized state,
 and Update Center density beneath
-`%LocalAppData%\BitKeyBridge\ui-workspace.json`. Invalid, tiny and
-off-screen bounds are ignored on RDP reconnect or monitor change.
+`%LocalAppData%\BitKeyBridge\ui-workspace.json`. Invalid, tiny and fully off-screen bounds are ignored; partially visible
+windows are clamped to the available monitor after RDP reconnect or a DPI
+or monitor change.
 No credentials, tokens or keys are saved there.
 
 ## CLI for helpdesk diagnostics
@@ -54,7 +59,10 @@ From the published single-file EXE after this feature is released:
 
 Returns read-only JSON for scripting. This does not trigger a network check
 or update; call `--check-update --no-elevation` separately to request a
-live GitHub check. Task Scheduler state uses Windows COM as a read-only query.
+live GitHub check. Task Scheduler state uses Windows COM as a read-only query outside the
+WinForms UI thread. The task principal (SYSTEM), executable path, highest
+run level, single action and arguments must match the expected updater;
+otherwise the dashboard explicitly warns of an unexpected task definition.
 
 ## Pilot acceptance
 
@@ -67,7 +75,9 @@ live GitHub check. Task Scheduler state uses Windows COM as a read-only query.
 4. Test Pause and Enable with a machine policy denying unsigned updates;
    there must be no installation or policy bypass.
 5. Activate a synthetic rollback/failure hold; ordinary Save and Enable
-   must never clear it. Only explicit Resume after investigation may clear.
+   must never clear it. Only administrator-confirmed Resume after investigation
+   and GPO/trust checks may clear it. Revoke prerelease permission mid-download;
+   the scheduled worker and privileged helper must reject that preview.
 6. Check task state as a standard Helpdesk user and SYSTEM. Confirm
    inaccessible task returns unavailable, not falsely missing/healthy.
 7. Validate local JSON CLI status without GitHub access. Test GitHub Retry
