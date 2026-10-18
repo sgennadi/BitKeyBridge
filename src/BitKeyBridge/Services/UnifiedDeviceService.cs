@@ -89,11 +89,11 @@ public sealed class UnifiedDeviceService
         }
 
         using var graph = new CloudGraphService();
-        var intuneTask = MetadataSourceIsolation.ExecuteAsync(
+        var intuneTask = MetadataSourceIsolation.ExecuteWithTransientRetryAsync(
             () => graph.SearchManagedDevicesAsync(
                 accessToken, query, maximumItems, ct),
             ct);
-        var entraTask = MetadataSourceIsolation.ExecuteAsync(
+        var entraTask = MetadataSourceIsolation.ExecuteWithTransientRetryAsync(
             () => graph.SearchAsync(accessToken, query, ct),
             ct);
 

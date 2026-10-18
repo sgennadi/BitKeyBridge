@@ -1831,6 +1831,13 @@ internal static class Program
             failures.AddRange(LapsSelfTest.Run());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
+            failures.AddRange(AccessHealthLocalService.RunOfflineTests());
+            failures.AddRange(AccessHealthGuidanceService.RunOfflineTests());
+            failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
+            failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
+            failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
+            failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
+            failures.AddRange(HomeRecoverySelectionGuard.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(

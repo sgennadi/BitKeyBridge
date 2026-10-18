@@ -633,6 +633,24 @@ public sealed partial class MainForm
             true;
         _accessHealthResults.GridLines =
             true;
+        // At 175-200% DPI, long permission advice may exceed the
+        // available table width. Keep every diagnostic readable with
+        // tooltips and keyboard/double-click activation.
+        _accessHealthResults.ShowItemToolTips = true;
+        _accessHealthResults.AccessibleName = "Source-specific Access Health results";
+        _accessHealthResults.AccessibleDescription =
+            "Select a diagnostic and press Enter or double-click to read the complete remediation guidance.";
+        _accessHealthResults.ItemActivate += (_, _) =>
+        {
+            if (_accessHealthResults.SelectedItems.Count != 1)
+                return;
+            var row = _accessHealthResults.SelectedItems[0];
+            if (row.SubItems.Count < 4)
+                return;
+            _appDiagnostics.ShowMessage(
+                "Access Health: " + row.SubItems[0].Text + " / " + row.SubItems[1].Text,
+                row.SubItems[3].Text);
+        };
         _accessHealthResults.Dock =
             DockStyle.Fill;
         AddColumns(
@@ -666,8 +684,10 @@ public sealed partial class MainForm
             check);
         item.SubItems.Add(
             state);
-        item.SubItems.Add(
-            detail);
+        var fullDetail = AccessHealthGuidanceService.Enrich(
+            source, check, state, detail);
+        item.SubItems.Add(fullDetail);
+        item.ToolTipText = fullDetail;
         _accessHealthResults.Items.Add(
             item);
     }
@@ -700,6 +720,37 @@ public sealed partial class MainForm
 
         try
         {
+            // Local policy, Windows-token RBAC and protected audit readiness
+            // are checked without a pipe probe, secret read or elevation.
+            // These findings use the operator's OWN enabled Windows token.
+            try
+            {
+                var localFindings = await Task.Run(
+                    () => AccessHealthLocalService.ReadOnly(_config));
+                if (IsDisposed)
+                    return;
+
+                foreach (var finding in localFindings)
+                {
+                    AddAccessHealthRow(finding.Source, finding.Check,
+                        finding.State, finding.Detail);
+                    if (finding.State == "Failed")
+                        errors++;
+                    else if (finding.State == "Warning")
+                        warnings++;
+                }
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                AddAccessHealthRow(
+                    "Local",
+                    "RBAC / Audit Broker preflight",
+                    "Failed",
+                    "Local access checks failed: " +
+                    DiagnosticRedaction.Sanitize(ex.Message));
+            }
+
             string? dc =
                 null;
 
@@ -1759,7 +1810,7 @@ public sealed partial class MainForm
             .FirstOrDefault();
     }
 
-    private async Task<(string Key, RecoverySearchResult Row, RecoveryAccessContext Context)?>
+    private async Task<(string Key, RecoverySearchResult Row, RecoveryAccessContext Context, HomeSearchResult Selected)?>
         GetHomeBitLockerSecretAsync(
             string action)
     {
@@ -1767,7 +1818,8 @@ public sealed partial class MainForm
             GetSelectedHomeSearchResult();
 
         if (selected is null ||
-            selected.BitLockerKeyCount <= 0)
+            selected.BitLockerKeyCount <= 0 ||
+            selected.IdentityAmbiguous || selected.IsCloudRecord)
         {
             UiStyle.SetStatus(
                 _homeSearchStatus,
@@ -1780,11 +1832,12 @@ public sealed partial class MainForm
             await GetLatestHomeRecoveryRowAsync(
                 selected);
 
-        if (row is null)
+        if (!HomeRecoverySelectionGuard.IsCurrent(
+                selected, GetSelectedHomeSearchResult(), row))
         {
             UiStyle.SetStatus(
                 _homeSearchStatus,
-                "The selected BitLocker recovery record could not be resolved.",
+                "Selected computer or recovery ID changed during lookup. Search again before retrieving the key.",
                 UiStatusKind.Warning);
             return null;
         }
@@ -1807,16 +1860,28 @@ public sealed partial class MainForm
                 allowRotationReminder:
                     false);
 
-        if (context is null ||
-            !AuthorizePrivilegedRecoveryAccess(
+        if (context is null)
+            return null;
+
+        // A ticket prompt can remain open while the operator switches tabs.
+        // Reject the old identity BEFORE any privileged pre-read audit ACK.
+        if (!HomeRecoverySelectionGuard.IsCurrent(
+                selected, GetSelectedHomeSearchResult(), row))
+        {
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Computer selection changed during the ticket prompt. Start a new recovery.",
+                UiStatusKind.Warning);
+            return null;
+        }
+
+        if (!AuthorizePrivilegedRecoveryAccess(
                 context,
                 action,
                 row.ComputerName,
                 row.RecoveryId,
                 "AD"))
-        {
             return null;
-        }
 
         _startCurrentKey =
             null;
@@ -1825,16 +1890,25 @@ public sealed partial class MainForm
             await EnsureStartRecoveryKeyAsync(
                 row);
 
-        if (string.IsNullOrWhiteSpace(
-                key))
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        if (!HomeRecoverySelectionGuard.IsCurrent(
+                selected, GetSelectedHomeSearchResult(), row))
         {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(
+                _homeSearchStatus,
+                "Selection changed during the confidential AD read. Stale key was discarded.",
+                UiStatusKind.Warning);
             return null;
         }
 
         return (
             key,
             row,
-            context);
+            context,
+            selected);
     }
 
     private async Task RevealHomeBitLockerAsync()
@@ -1845,6 +1919,16 @@ public sealed partial class MainForm
 
         if (access is null)
             return;
+
+        if (!HomeRecoverySelectionGuard.IsCurrent(
+                access.Value.Selected, GetSelectedHomeSearchResult(), access.Value.Row))
+        {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(_homeSearchStatus,
+                "Selection changed before displaying/copying the recovered key. Operation canceled.",
+                UiStatusKind.Warning);
+            return;
+        }
 
         WriteRecoveryAudit(
             "RevealHomeRecoveryKey",
@@ -1888,6 +1972,16 @@ public sealed partial class MainForm
 
         if (access is null)
             return;
+
+        if (!HomeRecoverySelectionGuard.IsCurrent(
+                access.Value.Selected, GetSelectedHomeSearchResult(), access.Value.Row))
+        {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(_homeSearchStatus,
+                "Selection changed before displaying/copying the recovered key. Operation canceled.",
+                UiStatusKind.Warning);
+            return;
+        }
 
         WriteRecoveryAudit(
             "CopyHomeRecoveryKey",
@@ -1971,12 +2065,12 @@ public sealed partial class MainForm
         foreach (TabPage page in
                  _mainTabs.TabPages)
         {
-            if (page.Text.Equals(
-                    "Devices",
-                    StringComparison.OrdinalIgnoreCase))
+            // Displayed tab captions are translated (Russian/Hebrew).
+            // Navigate by an invariant control name, never English text.
+            if (string.Equals(page.Name, "DevicesWorkspace",
+                    StringComparison.Ordinal))
             {
-                _mainTabs.SelectedTab =
-                    page;
+                _mainTabs.SelectedTab = page;
                 break;
             }
         }
