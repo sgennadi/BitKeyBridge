@@ -1,8 +1,8 @@
-name: BitKeyBridge v0.32.0 RC3
+name: BitKeyBridge v0.32.0 RC5
 
 on:
   push:
-    branches: [ "release/v0.32.0-rc.3" ]
+    branches: [ "release/v0.32.0-rc.5" ]
   pull_request:
     paths:
       - ".github/workflows/rc-0.32.0.yml"
@@ -11,7 +11,7 @@ on:
       - "deployment/gpo/**"
       - "CHANGELOG.md"
       - "README.md"
-      - "docs/release-candidate-v0.32.0-rc.3.md"
+      - "docs/release-candidate-v0.32.0-rc.5.md"
   workflow_dispatch:
 
 # Untrusted PR builds cannot create releases or read signing secrets.
@@ -33,21 +33,21 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          grep -Fq '<Version>0.32.0-rc.3</Version>' src/BitKeyBridge/BitKeyBridge.csproj
-          grep -Fq '<InformationalVersion>0.32.0-rc.3</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
+          grep -Fq '<Version>0.32.0-rc.5</Version>' src/BitKeyBridge/BitKeyBridge.csproj
+          grep -Fq '<InformationalVersion>0.32.0-rc.5</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
           grep -Fq '<FileVersion>0.32.0.0</FileVersion>' src/BitKeyBridge/BitKeyBridge.csproj
-          grep -Fxq '## 0.32.0-rc.3' CHANGELOG.md
+          grep -Fxq '## 0.32.0-rc.5' CHANGELOG.md
           # Inspect only the actual PowerShell version-check line. A grep
           # negative against the entire workflow would match its own source
           # and could silently pass due to Bash's !/errexit exceptions.
           python3 - <<'PY'
           from pathlib import Path
           lines = Path('.github/workflows/rc-0.32.0.yml').read_text().splitlines()
-          expected = r"          if ($version -notmatch '^0\.32\.0-rc\.3(?:\+[^ ]+)?$' -or"
+          expected = r"          if ($version -notmatch '^0\.32\.0-rc\.5(?:\+[^ ]+)?$' -or"
           if lines.count(expected) != 1:
               raise SystemExit("Stale or duplicate candidate ProductVersion gate")
           PY
-          test -s docs/release-candidate-v0.32.0-rc.3.md
+          test -s docs/release-candidate-v0.32.0-rc.5.md
           test -f tests/windows/ProtectedAuditBrokerIntegration.ps1
           test -f tests/windows/UpgradeMigrationRegression.ps1
           test -f tests/windows/Verify-UpdateZipLayout.ps1
@@ -126,7 +126,7 @@ jobs:
           $item = Get-Item -LiteralPath $exe
           if ($item.Length -le 0 -or $item.Length -gt 536870912) { throw 'Invalid executable size.' }
           $version = $item.VersionInfo.ProductVersion
-          if ($version -notmatch '^0\.32\.0-rc\.3(?:\+[^ ]+)?$' -or
+          if ($version -notmatch '^0\.32\.0-rc\.5(?:\+[^ ]+)?$' -or
               $item.VersionInfo.FileVersion -ne '0.32.0.0') {
             throw "Wrong executable version: ProductVersion=$version FileVersion=$($item.VersionInfo.FileVersion)"
           }
@@ -163,6 +163,7 @@ jobs:
             }
           }
           ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable $exe
+          ./tests/windows/UpdateCenterSmoke.ps1 -Executable $exe
       - name: Upload test package
         uses: actions/upload-artifact@v7
         with:
@@ -209,14 +210,14 @@ jobs:
           if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
             throw 'Refusing legacy upgrade regression on a non-disposable runner.'
           }
-          ./tests/windows/UpgradeMigrationRegression.ps1 -CandidateZip 'legacy-package/BitKeyBridge-win-x64.zip' -ExpectedCandidateVersion '0.32.0-rc.3' -EphemeralHostedRunner
+          ./tests/windows/UpgradeMigrationRegression.ps1 -CandidateZip 'legacy-package/BitKeyBridge-win-x64.zip' -ExpectedCandidateVersion '0.32.0-rc.5' -EphemeralHostedRunner
 
   publish-prerelease:
     if: >-
       github.event_name == 'push' &&
       github.repository == 'sgennadi/BitKeyBridge' &&
-      github.ref == 'refs/heads/release/v0.32.0-rc.3' &&
-      github.event.head_commit.message == 'Release candidate v0.32.0-rc.3'
+      github.ref == 'refs/heads/release/v0.32.0-rc.5' &&
+      github.event.head_commit.message == 'Release candidate v0.32.0-rc.5'
     needs: [source-gate, laps-regression, codeql, build, protected-audit-integration, legacy-upgrade-rollback]
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -245,9 +246,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag='v0.32.0-rc.3'
+          tag='v0.32.0-rc.5'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$GITHUB_REF" = 'refs/heads/release/v0.32.0-rc.3'
+          test "$GITHUB_REF" = 'refs/heads/release/v0.32.0-rc.5'
           test "$GH_REPO" = 'sgennadi/BitKeyBridge'
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
             echo 'Release already exists; refusing overwrite' >&2
@@ -269,7 +270,7 @@ jobs:
           cd release
           sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
-          printf 'Version: 0.32.0-rc.3\nSourceSHA: %s\nArchitecture: Windows x64, x86, ARM64\nSigning: UNSIGNED, OPT-IN PRERELEASE\n' "$GITHUB_SHA" > BUILD-INFO.txt
+          printf 'Version: 0.32.0-rc.5\nSourceSHA: %s\nArchitecture: Windows x64, x86, ARM64\nSigning: UNSIGNED, OPT-IN PRERELEASE\n' "$GITHUB_SHA" > BUILD-INFO.txt
           test "$(wc -l < SHA256SUMS.txt)" -eq 3
       - name: Publish unsigned, opt-in GitHub prerelease (never Latest)
         shell: bash
@@ -278,7 +279,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release create v0.32.0-rc.3 \
+          gh release create v0.32.0-rc.5 \
             release/BitKeyBridge-win-x64.zip \
             release/BitKeyBridge-win-x86.zip \
             release/BitKeyBridge-win-arm64.zip \
@@ -286,6 +287,6 @@ jobs:
             release/BUILD-INFO.txt \
             --repo "$GH_REPO" \
             --target "$GITHUB_SHA" \
-            --title 'BitKeyBridge v0.32.0-rc.3 (unsigned opt-in preview)' \
-            --notes-file docs/release-candidate-v0.32.0-rc.3.md \
+            --title 'BitKeyBridge v0.32.0-rc.5 (unsigned opt-in preview)' \
+            --notes-file docs/release-candidate-v0.32.0-rc.5.md \
             --prerelease

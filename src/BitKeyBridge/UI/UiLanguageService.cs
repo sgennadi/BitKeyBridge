@@ -36,6 +36,65 @@ internal static class UiLanguageService
             ["Language"] = ["Language", "Язык", "שפה"],
             ["Search"] = ["Search", "Поиск", "חיפוש"],
             ["Cancel"] = ["Cancel", "Отмена", "ביטול"],
+            ["UpdateCenterTitle"] = ["Update Center 2.0", "Центр обновлений 2.0", "מרכז עדכונים 2.0"],
+            ["UpdateCenterSubtitle"] =
+                ["Versions, update policy, last result and scheduled task, without connecting to GitHub.",
+                 "Версии, политика, история и задание планировщика без подключения к GitHub.",
+                 "גרסאות, מדיניות, היסטוריה ומשימה מתוזמנת ללא חיבור ל-GitHub."],
+            ["UpdateCenterRefresh"] = ["Refresh status", "Обновить статус", "רענון מצב"],
+            ["UpdateCenterRetry"] = ["Retry check", "Проверить снова", "בדיקה חוזרת"],
+            ["UpdateCenterPause"] = ["Pause auto-install", "Приостановить", "השהיית התקנה"],
+            ["UpdateCenterEnable"] = ["Enable auto-install", "Включить установку", "הפעלת התקנה"],
+            ["UpdateCenterCompact"] = ["Compact layout", "Компактный вид", "תצוגה מצומצמת"],
+            ["UpdateCenterVersion"] = ["Installed", "Установлено", "מותקן"],
+            ["UpdateCenterLatest"] = ["Last checked", "Последняя проверенная", "גרסה שנבדקה"],
+            ["UpdateCenterChannel"] = ["Channel", "Канал", "ערוץ"],
+            ["UpdateCenterLastCheck"] = ["Checked", "Проверено", "נבדק"],
+            ["UpdateCenterLastResult"] = ["Last update", "Последнее обновление", "עדכון אחרון"],
+            ["UpdateCenterTask"] = ["Scheduled task", "Задание", "משימה מתוזמנת"],
+            ["UpdateCenterNextRun"] = ["Next run", "Следующий запуск", "הרצה הבאה"],
+            ["UpdateCenterNever"] = ["Never / unknown", "Нет данных", "לא ידוע"],
+            ["UpdateCenterStable"] = ["Stable", "Стабильный", "יציב"],
+            ["UpdateCenterPreview"] = ["Prerelease (opt-in)", "Предварительный", "גרסת קדם"],
+            ["UpdateCenterChecksOff"] =
+                ["Automatic checks disabled", "Автопроверка отключена", "בדיקה אוטומטית כבויה"],
+            ["UpdateCenterInstallOff"] =
+                ["Auto-install paused", "Автоустановка приостановлена", "התקנה אוטומטית מושהית"],
+            ["UpdateCenterHeld"] =
+                ["Blocked: update/rollback hold; review and explicitly resume",
+                 "Блокировка после ошибки/отката — проверьте причину перед возобновлением",
+                 "חסימה בעקבות כשל או שחזור — יש לבדוק לפני חידוש"],
+            ["UpdateCenterPolicyBlocked"] =
+                ["Blocked: signature, unsigned consent or GPO restriction",
+                 "Заблокировано: подпись, разрешение неподписанных версий или GPO",
+                 "חסימה: חתימה, הסכמה לעדכון לא חתום או מדיניות GPO"],
+            ["UpdateCenterInstallReady"] =
+                ["Auto-install enabled under active trust/GPO policy",
+                 "Автоустановка разрешена действующей политикой доверия/GPO",
+                 "התקנה אוטומטית מותרת לפי מדיניות האמון וה-GPO"],
+            ["UpdateCenterTaskSafe"] =
+                ["Installed: verified SYSTEM task", "Установлено: SYSTEM-задание проверено",
+                 "מותקן: משימת SYSTEM אומתה"],
+            ["UpdateCenterTaskMissing"] =
+                ["Not installed", "Не установлено", "לא מותקן"],
+            ["UpdateCenterTaskUnsafe"] =
+                ["WARNING: unexpected task action", "ВНИМАНИЕ: задание изменено",
+                 "אזהרה: המשימה שונתה"],
+            ["UpdateCenterLastTask"] =
+                ["Last task run", "Последний запуск задания", "הפעלת משימה אחרונה"],
+            ["UpdateCenterTaskResult"] =
+                ["Task result", "Результат задания", "תוצאת המשימה"],
+            ["UpdateCenterTrust"] = ["Trust", "Доверие", "אמון"],
+            ["UpdateCenterNoHistory"] =
+                ["None recorded", "История отсутствует", "אין היסטוריה"],
+            ["UpdateCenterInstallAction"] = ["Install", "Установка", "התקנה"],
+            ["UpdateCenterRollbackAction"] = ["Rollback", "Откат", "שחזור"],
+            ["UpdateCenterSuccess"] = ["Success", "Успешно", "הצלחה"],
+            ["UpdateCenterFailed"] = ["Failed", "Ошибка", "כשל"],
+            ["UpdateCenterLastSuccess"] =
+                ["Last successful update", "Последнее успешное обновление", "עדכון מוצלח אחרון"],
+            ["UpdateCenterLastFailure"] =
+                ["Last failed update", "Последняя ошибка обновления", "כשל עדכון אחרון"],
             ["ConnectionSettings"] =
                 ["Open Start / connection settings",
                  "Открыть главную / настройки подключения",
@@ -168,6 +227,18 @@ internal static class UiLanguageService
                     "Start", "BitLocker", "LAPS", "Devices",
                     "Helpdesk", "Diagnostics", "Settings", "Tools",
                     "Language", "Search", "Cancel", "ConnectionSettings",
+                    "UpdateCenterTitle", "UpdateCenterSubtitle", "UpdateCenterRefresh",
+                    "UpdateCenterRetry", "UpdateCenterPause", "UpdateCenterEnable",
+                    "UpdateCenterCompact", "UpdateCenterVersion", "UpdateCenterLatest",
+                    "UpdateCenterChannel", "UpdateCenterLastCheck", "UpdateCenterLastResult",
+                    "UpdateCenterTask", "UpdateCenterNextRun", "UpdateCenterNever",
+                    "UpdateCenterStable", "UpdateCenterPreview", "UpdateCenterChecksOff",
+                    "UpdateCenterInstallOff", "UpdateCenterHeld", "UpdateCenterPolicyBlocked",
+                    "UpdateCenterInstallReady", "UpdateCenterTaskSafe", "UpdateCenterTaskMissing",
+                    "UpdateCenterTaskUnsafe", "UpdateCenterLastTask", "UpdateCenterTaskResult",
+                    "UpdateCenterTrust", "UpdateCenterNoHistory", "UpdateCenterInstallAction",
+                    "UpdateCenterRollbackAction", "UpdateCenterSuccess", "UpdateCenterFailed",
+                    "UpdateCenterLastSuccess", "UpdateCenterLastFailure",
                     "RecoveryStepsShortcut", "AccessHealthShortcut",
                     "RecoveryDialogTitle", "RecoveryDialogHeading",
                     "RecoveryDeviceLabel", "RecoverySourceLabel",

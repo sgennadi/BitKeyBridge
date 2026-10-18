@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.3 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.5 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,7 +10,24 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## v0.32.0-rc.3 release candidate
+## v0.32.0-rc.5 release candidate
+
+This unsigned prerelease supersedes RC4's initial Update Center 2.0 with
+read-only, cancellation-bounded Retry; GPO/trust-aware machine Pause/Enable;
+admin-confirmed recovery from rollback holds; and explicit prerelease revocation
+protection during scheduled staging and privileged apply. Version, channel,
+task safety, next run, last successful update and last failure are visible
+without querying BitLocker/LAPS secrets. Compact EN/RU/HE layouts and saved
+window bounds adapt to RDP/display changes without clipped status labels.
+
+The new `--update-center-status --no-elevation` CLI prints read-only JSON,
+including the exact SYSTEM task action check. Enabling unsigned auto-update
+continues to require separate, explicit risk consent on each approved test
+machine and is never performed by publication.
+
+[Update Center 2.0 operator guide](docs/update-center-v2.md).
+
+## v0.32.0-rc.3 feature foundation
 
 The prerelease combines the v0.31.0 Unified Search/Recovery Workflow, v0.32.0
 secret-free Fleet/GPO reporting, and stable v0.30.5 updater/audit foundations.
@@ -46,7 +63,7 @@ trust or conscious unsigned consent for the official GitHub repository; GPO
 can always deny automatic installation. `--check-update --no-elevation`
 checks for updates without installing them.
 
-[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.3.md).
+[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.5.md).
 
 ## v0.32.0 fleet inventory (development)
 

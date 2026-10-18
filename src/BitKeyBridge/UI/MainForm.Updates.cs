@@ -67,6 +67,7 @@ public sealed partial class MainForm
 
         if (!_layoutSelfTest)
             RefreshUpdateHistory();
+        RefreshUpdateCenter();
     }
 
     private bool SaveUpdateSettings(
@@ -189,6 +190,7 @@ public sealed partial class MainForm
                         : UiStatusKind.Success);
             }
 
+            RefreshUpdateCenter();
             return true;
         }
         catch (Exception ex)
@@ -380,6 +382,7 @@ public sealed partial class MainForm
                 $"Current: {info.CurrentVersion}{Environment.NewLine}" +
                 $"Update check failed: {info.Error}",
                 UiStatusKind.Error);
+            RefreshUpdateCenter();
             return;
         }
 
@@ -410,6 +413,7 @@ public sealed partial class MainForm
             cached || info.UpdateAvailable
                 ? UiStatusKind.Warning
                 : UiStatusKind.Success);
+        RefreshUpdateCenter();
     }
 
     private async Task InstallLatestUpdateGuiAsync()

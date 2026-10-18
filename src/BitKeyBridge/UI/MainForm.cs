@@ -219,9 +219,9 @@ public sealed partial class MainForm : DpiAwareForm
         if (layoutSelfTest)
             return;
 
-        // Default to a maximized workspace; responsive reflow also handles
-        // later restore/maximize operations and changing RDP resolutions.
-        WindowState = FormWindowState.Maximized;
+        // Per-user window preferences restore safely on monitor/RDP changes.
+        // First launch still defaults to a maximized responsive workspace.
+        RestoreWorkspace();
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -238,11 +238,15 @@ public sealed partial class MainForm : DpiAwareForm
                 _startSearchDebounceTimer?.Stop();
                 _homeSearchDebounceTimer?.Stop();
                 _homeSearchCancellation?.Cancel();
+                SaveWorkspace();
                 ClearSensitiveState();
             };
 
         Shown += async (_, _) =>
         {
+            // Local update status is loaded on a worker, never blocking the
+            // source chooser or the WinForms message loop.
+            RefreshUpdateCenter();
             // Show the source chooser promptly. Network update checks must not
             // hold the connection wizard hostage while GitHub is unavailable.
             await ShowStartupConnectionWizardAsync();

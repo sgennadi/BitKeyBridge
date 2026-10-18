@@ -483,6 +483,7 @@ public sealed partial class MainForm
                 UiLanguageService.Translate(_uiLanguageCode, "Cancel");
             _globalConnectionStatus.ToolTipText =
                 UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+            ApplyUpdateCenterLanguage();
         }
         finally
         {

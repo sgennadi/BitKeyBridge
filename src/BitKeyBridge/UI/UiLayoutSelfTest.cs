@@ -487,6 +487,15 @@ public static class UiLayoutSelfTest
                 tabs.TabPages[3].Name != "DevicesWorkspace")
                 failures.Add("Hebrew mirrored navigation does not retain source-qualified tab identities.");
 
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensity ||
+                updateDensity.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
+                failures.Add("Hebrew Update Center switch did not localize.");
+            form.PreviewShellLanguageForLayoutTest("ru");
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox russianDensity ||
+                russianDensity.Text != UiLanguageService.Translate("ru", "UpdateCenterCompact"))
+                failures.Add("Russian Update Center switch did not localize.");
+            form.PreviewShellLanguageForLayoutTest("he");
+
             foreach (var name in new[]
             {
                 "HomeUnifiedQuery", "BitLockerSearchQuery",
@@ -1202,6 +1211,20 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: scheduled updater is missing " +
                     requiredBackgroundUpdaterControl);
+        }
+        // Every responsive size/DPI scenario must expose the Update Center
+        // without creating a task, clearing a rollback hold or installing.
+        foreach (var name in new[]
+                 {
+                     "UpdateCenterV2", "UpdateCenterSummary",
+                     "UpdateCenterTaskDetails", "UpdateCenterRefreshButton",
+                     "UpdateCenterRetryCheckButton", "UpdateCenterPauseButton",
+                     "UpdateCenterEnableButton", "UpdateCenterCompact"
+                 })
+        {
+            if (FindByName(form, name) is null)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Update Center control missing: " + name);
         }
         if (tabs.TabPages.Count > 3 &&
             tabs.TabPages[3].Name != "DevicesWorkspace")

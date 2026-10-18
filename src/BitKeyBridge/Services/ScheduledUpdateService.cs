@@ -117,11 +117,15 @@ internal static class ScheduledUpdateService
             if (!string.Equals(active.UpdateRepository, config.UpdateRepository,
                     StringComparison.OrdinalIgnoreCase))
                 return Fail("Background update canceled: configured repository changed.", 3);
+            if (active.AllowPrereleaseUpdates != config.AllowPrereleaseUpdates)
+                return Fail("Background update canceled: prerelease channel changed.", 3);
 
             var staged = await updater.PrepareAsync(info, limit.Token);
             active = ConfigService.LoadAppConfig();
             if (!IsEligible(active) || UpdateRollbackHoldService.IsActiveForCurrentBuild())
                 return Fail("Background update canceled: machine approval was revoked during staging.", 3);
+            if (active.AllowPrereleaseUpdates != config.AllowPrereleaseUpdates)
+                return Fail("Background update canceled: prerelease permission changed during download.", 3);
 
             // SYSTEM task launches helper in the same privileged identity;
             // the helper rechecks plan hash, executable hash, active policy,
