@@ -14,14 +14,17 @@ Open **Settings > Updates > Update Center 2.0**. The view shows:
 - UTC-captured check time displayed in the technician's local time zone.
 - Effective auto-install state: startup check flag, automatic install flag,
   rollback/failure hold, active trust mode and machine policy.
-- Latest local installation / rollback result and timestamp.
+- Latest local installation / rollback result and timestamp, separately
+  showing the last successful update and latest sanitized failure.
 - Background task installed/unknown status, next and last execution times,
   and last Windows Task Scheduler result (hex). Missing task and unavailable
   scheduler permissions are distinct conditions.
 
 **Refresh status** reads existing files, policy and Task Scheduler without
-sending a network request. **Retry check** queries GitHub again, but does not
-install, change policy, enroll a task or clear a rollback hold.
+sending a network request. **Retry check** reads the SAVED machine policy and
+queries GitHub for at most 30 seconds, without saving any unsaved Settings
+fields, changing publisher/unsigned consent, installing, enrolling a task or
+clearing a rollback hold. Concurrent Retry clicks are ignored.
 **Pause auto-install** disables automatic installation without deleting the
 scheduled task, changing publisher trust, or disabling manual checks.
 **Enable auto-install** requires an elevated administrator, uses only the
