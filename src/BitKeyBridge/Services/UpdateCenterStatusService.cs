@@ -138,7 +138,26 @@ internal static class UpdateCenterStatusService
                 return status;
             }
 
-            status.Status = "Installed";
+            // "Installed" must not imply that an unexpected task action is
+            // safe: a different executable running as SYSTEM is material.
+            dynamic definition = ((dynamic)registered).Definition;
+            dynamic principal = definition.Principal;
+            dynamic actions = definition.Actions;
+            var user = (string)principal.UserId;
+            var highest = Convert.ToInt32(principal.RunLevel) == 1;
+            var actionCount = Convert.ToInt32(actions.Count);
+            string actionPath = string.Empty;
+            string actionArgs = string.Empty;
+            if (actionCount == 1)
+            {
+                dynamic action = actions.Item(1);
+                actionPath = (string)action.Path;
+                actionArgs = (string)action.Arguments;
+            }
+            status.Status = IsExpectedBackgroundTask(
+                user, highest, actionCount, actionPath, actionArgs)
+                ? "Installed (verified SYSTEM action)"
+                : "WARNING: task principal/action differs from installed BitKeyBridge";
             var next = (DateTime)((dynamic)registered).NextRunTime;
             var last = (DateTime)((dynamic)registered).LastRunTime;
             status.NextRunLocal = FormatTaskDate(next);
@@ -163,6 +182,32 @@ internal static class UpdateCenterStatusService
         return status;
     }
 
+    internal static bool IsExpectedBackgroundTask(
+        string? principal, bool highest, int actionCount,
+        string? executable, string? arguments)
+    {
+        var account = principal?.Trim() ?? string.Empty;
+        var isSystem = account.Equals("S-1-5-18", StringComparison.OrdinalIgnoreCase) ||
+            account.Equals("SYSTEM", StringComparison.OrdinalIgnoreCase) ||
+            account.Equals(@"NT AUTHORITY\SYSTEM", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem || !highest || actionCount != 1 ||
+            !string.Equals(arguments?.Trim(), "--scheduled-update --no-elevation",
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(executable?.Trim().Trim('"') ?? string.Empty),
+                Path.GetFullPath(AppPaths.ServiceExecutable),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or
+                                   PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     private static string FormatTaskDate(DateTime value) =>
         value.Year < 2000 ? string.Empty : value.ToString("yyyy-MM-dd HH:mm");
 
@@ -184,6 +229,25 @@ internal static class UpdateCenterStatusService
             !ResolveInstallationState(config, false, false).Contains("Blocked", StringComparison.Ordinal) ||
             !ResolveInstallationState(config, false, true).Contains("Enabled", StringComparison.Ordinal))
             errors.Add("Update Center missed rollback/policy blocking precedence.");
+        if (!IsExpectedBackgroundTask(
+                "S-1-5-18", true, 1,
+                AppPaths.ServiceExecutable, "--scheduled-update --no-elevation") ||
+            IsExpectedBackgroundTask(
+                "BUILTIN\\Administrators", true, 1,
+                AppPaths.ServiceExecutable, "--scheduled-update --no-elevation") ||
+            IsExpectedBackgroundTask(
+                "SYSTEM", false, 1,
+                AppPaths.ServiceExecutable, "--scheduled-update --no-elevation") ||
+            IsExpectedBackgroundTask(
+                "SYSTEM", true, 1,
+                "C:\\Temp\\FakeUpdater.exe", "--scheduled-update --no-elevation") ||
+            IsExpectedBackgroundTask(
+                "SYSTEM", true, 1,
+                AppPaths.ServiceExecutable, "--scheduled-update --no-elevation --extra") ||
+            IsExpectedBackgroundTask(
+                "SYSTEM", true, 2,
+                AppPaths.ServiceExecutable, "--scheduled-update --no-elevation"))
+            errors.Add("Update Center accepted a modified/unsafe scheduled task.");
         return errors;
     }
 }
