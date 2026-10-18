@@ -78,6 +78,13 @@ if not exist "%BKB_STATE%\." (
   echo ERROR: Cannot create deployment state directory.
   exit /b 5
 )
+rem Protect previous executable and diagnostics from ordinary users. Use
+rem well-known SIDs so this works on English/Russian/Hebrew Windows builds.
+icacls.exe "%BKB_STATE%" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" >nul 2>&1
+if errorlevel 1 (
+  echo ERROR: Could not enforce SYSTEM/Administrators-only deployment state ACL.
+  exit /b 5
+)
 mkdir "%BKB_LOCK%" >nul 2>&1
 if errorlevel 1 (
   call :Log "SKIP: Installer lock already held; next scheduled run will retry."
