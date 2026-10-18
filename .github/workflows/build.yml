@@ -458,6 +458,10 @@ jobs:
           finally {
             Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
           }
+          # The final native invocation intentionally returned 2 (denied).
+          # Explicitly report success after assertions: pwsh otherwise returns
+          # the last native exit code even when every safety assertion passed.
+          exit 0
 
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'
