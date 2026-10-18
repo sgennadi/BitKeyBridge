@@ -37,6 +37,8 @@ jobs:
           grep -Fq '<InformationalVersion>0.32.0-rc.2</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
           grep -Fq '<FileVersion>0.32.0.0</FileVersion>' src/BitKeyBridge/BitKeyBridge.csproj
           grep -Fxq '## 0.32.0-rc.2' CHANGELOG.md
+          grep -Fq '0\.32\.0-rc\.2(?:' .github/workflows/rc-0.32.0.yml
+          ! grep -Fq 'rc\.1' .github/workflows/rc-0.32.0.yml
           test -s docs/release-candidate-v0.32.0-rc.2.md
           test -f tests/windows/ProtectedAuditBrokerIntegration.ps1
           test -f tests/windows/UpgradeMigrationRegression.ps1
@@ -116,7 +118,7 @@ jobs:
           $item = Get-Item -LiteralPath $exe
           if ($item.Length -le 0 -or $item.Length -gt 536870912) { throw 'Invalid executable size.' }
           $version = $item.VersionInfo.ProductVersion
-          if ($version -notmatch '^0\.32\.0-rc\.1(?:\+[^ ]+)?$' -or
+          if ($version -notmatch '^0\.32\.0-rc\.2(?:\+[^ ]+)?$' -or
               $item.VersionInfo.FileVersion -ne '0.32.0.0') {
             throw "Wrong executable version: ProductVersion=$version FileVersion=$($item.VersionInfo.FileVersion)"
           }
