@@ -1,7 +1,7 @@
 # Startup connection chooser — remember last source
 
-**Status: unreleased development change, after v0.32.0-rc.2.** This feature
-is not included in the public v0.32.0-rc.2 binary.
+**Available in the unsigned, opt-in v0.32.0-rc.3 prerelease.** The earlier
+v0.32.0-rc.2 and stable v0.30.5 binaries do not include this checkbox.
 
 ## First launch and existing installations
 
