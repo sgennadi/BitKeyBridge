@@ -1,0 +1,14 @@
+BitKeyBridge v0.32.0-rc.4 - deliberate opt-in prerelease publication
+2026-10-18
+
+This commit explicitly authorizes a GitHub PRERELEASE only after all
+pinned-source CI gates pass on the exact release branch:
+- Windows x64, x86 and ARM64 ZIP, machine architecture and ProductVersion
+- SHA256SUMS and single-root executable package validation
+- Offline core tests, Update Center JSON smoke, HiDPI EN/RU/HE GUI tests
+- LAPS regression, CodeQL analysis, protected audit two-user integration
+- Pinned legacy upgrades, synthetic secure config, complete rollback
+
+DO NOT change Stable/Latest v0.30.5 or promote RC4 to the fleet.
+No signing identity, AD permission, GPO/Intune rollout, scheduled update task,
+unsigned update consent, recovery secret read or policy bypass is granted.
