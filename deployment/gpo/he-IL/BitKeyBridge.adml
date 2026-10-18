@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources revision="1.0" schemaVersion="1.0" xmlns="http://www.microsoft.com/GroupPolicy/PolicyDefinitions">
+  <displayName>BitKeyBridge</displayName>
+  <description>BitKeyBridge machine update restrictions</description>
+  <resources>
+    <stringTable>
+      <string id="BitKeyBridgeCategory">BitKeyBridge</string>
+      <string id="DisableAutomaticUpdates">השבתת עדכונים אוטומטיים</string>
+      <string id="ExplainDisableAutomaticUpdates">חוסם התקנה אוטומטית של עדכוני BitKeyBridge. המדיניות אינה מעניקה הרשאות.</string>
+      <string id="DisableUnsignedAutomaticUpdates">השבתת עדכונים אוטומטיים לא חתומים</string>
+      <string id="ExplainDisableUnsignedAutomaticUpdates">חוסם עדכונים לא חתומים גם אם מנהל מערכת אישר אותם מקומית בעבר.</string>
+      <string id="RequireSignedAutomaticUpdates">דרישה לעדכונים אוטומטיים חתומים</string>
+      <string id="ExplainRequireSignedAutomaticUpdates">מאפשר התקנה אוטומטית רק כאשר כבר מוגדר מפרסם מהימן מקומי. המדיניות אינה מגדירה מפרסם.</string>
+    </stringTable>
+    <presentationTable />
+  </resources>
+</policyDefinitionResources>

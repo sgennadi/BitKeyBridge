@@ -1,3 +1,15 @@
+## 0.32.0-dev.1
+
+**Internal integration preview only; not a public release.**
+
+- Add non-secret, schema-versioned native `--fleet-status` metadata for a managed Windows machine.
+- Add strict, bounded offline `--fleet-aggregate <input-folder> <output.csv>` using newest valid UTC report per machine, 7-day staleness indicator and CSV injection mitigation. Invalid, duplicate and unsafe fields are rejected.
+- Add native `--fleet-export <MACHINE.json> --no-elevation`: export the existing fleet JSON contract using a new local temporary file and atomic replacement, with matching-machine filename requirement and reparse-target checks. SCM permission failure is never interpreted as healthy service.
+- Supply optional machine-scoped GPO restrictions in EN/RU/HE Administrative Templates and a CMD-only device-identity collection wrapper using existing share permissions. GPO restrictions cannot grant unsigned-update consent.
+- Validate the Microsoft PolicyDefinitions namespace, exact machine policy DWORD values and matching localized ADML resources in Windows CI, alongside native export/aggregation roundtrips and wrong-machine denial.
+- Keep the earlier conflicting `FleetSnapshotTransport` JSON-summary CLI from draft PR #67 out of this integration: the official command produces CSV consistently.
+- No central remote execution, recovery passwords, tokens, new privileged daemon, automatic policy link or production deployment is included. Real GPMC and GPO share ACL verification remain required.
+
 ## 0.31.0-rc.1
 
 **Development release candidate only — not published or production-approved.** Based on the v0.30.5 updater/protected-audit hotfix and the full v0.31.0 WinForms feature integration.

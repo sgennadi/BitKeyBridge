@@ -10,6 +10,14 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## v0.32.0 fleet inventory (development)
+
+`--fleet-status` produces secret-free machine metadata;
+`--fleet-export <MACHINE.json> --no-elevation` atomically writes an approved
+report, and `--fleet-aggregate <folder> <output.csv>` creates bounded offline
+CSV. Optional GPO templates (EN/RU/HE) can only restrict auto-updates.
+No remote agent, secret retrieval or production deployment is included.
+
 ## v0.31.0 search UX (in development)
 
 `Ctrl+F` focuses the metadata query in the current Start, BitLocker, LAPS,
