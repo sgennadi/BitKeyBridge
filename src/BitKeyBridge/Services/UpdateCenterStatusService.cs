@@ -25,6 +25,10 @@ internal sealed class UpdateCenterSnapshot
     public string LastUpdateAction { get; set; } = "None recorded";
     public string LastUpdateResult { get; set; } = string.Empty;
     public DateTime? LastUpdateUtc { get; set; }
+    public DateTime? LastSuccessfulUpdateUtc { get; set; }
+    public string LastSuccessfulVersion { get; set; } = string.Empty;
+    public DateTime? LastFailedUpdateUtc { get; set; }
+    public string LastFailureSummary { get; set; } = string.Empty;
     public ScheduledTaskSnapshot Task { get; set; } = new();
 }
 
@@ -79,7 +83,7 @@ internal static class UpdateCenterStatusService
                 DiagnosticRedaction.Sanitize(ex.GetType().Name) + ").";
         }
 
-        var history = new UpdateHistoryService().Read(30);
+        var history = new UpdateHistoryService().Read(200);
         var last = history.FirstOrDefault(x =>
             x.Action is "Install" or "Rollback" or "RollbackRequested");
         if (last is not null)
@@ -89,6 +93,25 @@ internal static class UpdateCenterStatusService
                     ? string.Empty : " " + last.ToVersion);
             result.LastUpdateResult = last.Result;
             result.LastUpdateUtc = last.TimestampUtc;
+        }
+
+        var successful = history.FirstOrDefault(x =>
+            x.Action is "Install" or "Rollback" &&
+            x.Result == "Success");
+        if (successful is not null)
+        {
+            result.LastSuccessfulUpdateUtc = successful.TimestampUtc;
+            result.LastSuccessfulVersion = successful.ToVersion;
+        }
+        var failed = history.FirstOrDefault(x =>
+            x.Action is "Install" or "Rollback" &&
+            x.Result == "Failed");
+        if (failed is not null)
+        {
+            result.LastFailedUpdateUtc = failed.TimestampUtc;
+            var sanitized = DiagnosticRedaction.Sanitize(failed.Details);
+            result.LastFailureSummary = sanitized.Length > 240
+                ? sanitized[..240] + "..." : sanitized;
         }
         return result;
     }
