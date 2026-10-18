@@ -97,3 +97,7 @@ finally
 {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# The final native invocation deliberately returns 1 for a denied downgrade.
+# All assertions have passed; do not inherit that expected native exit code.
+exit 0
