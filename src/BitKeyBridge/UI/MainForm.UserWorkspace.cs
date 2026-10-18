@@ -13,14 +13,18 @@ public sealed partial class MainForm
             _workspacePreferences.X, _workspacePreferences.Y,
             _workspacePreferences.Width, _workspacePreferences.Height);
         var screens = Screen.AllScreens.Select(s => s.WorkingArea);
+        var restored = UiWorkspacePreferenceService.RestoreToVisibleArea(
+            saved, screens, MinimumSize);
 
-        if (UiWorkspacePreferenceService.FitsAnyScreen(saved, screens))
+        if (restored is not null)
         {
             StartPosition = FormStartPosition.Manual;
-            Bounds = saved;
+            Bounds = restored.Value;
         }
 
-        WindowState = _workspacePreferences.Maximized
+        // A removed display or a smaller RDP session must never reopen as
+        // an enormous, unreachable restored window.
+        WindowState = _workspacePreferences.Maximized || restored is null
             ? FormWindowState.Maximized
             : FormWindowState.Normal;
 
