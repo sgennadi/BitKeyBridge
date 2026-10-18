@@ -96,7 +96,7 @@ internal static class UpdateCenterStatusService
         }
 
         var successful = history.FirstOrDefault(x =>
-            x.Action is "Install" or "Rollback" &&
+            (x.Action is "Install" or "Rollback") &&
             x.Result == "Success");
         if (successful is not null)
         {
@@ -104,7 +104,7 @@ internal static class UpdateCenterStatusService
             result.LastSuccessfulVersion = successful.ToVersion;
         }
         var failed = history.FirstOrDefault(x =>
-            x.Action is "Install" or "Rollback" &&
+            (x.Action is "Install" or "Rollback") &&
             x.Result == "Failed");
         if (failed is not null)
         {
