@@ -34,7 +34,23 @@ try {
         -not $json.automaticInstallConfigured) {
         throw 'Update Center incorrectly reported automatic install permission.'
     }
-    Write-Host 'Update Center CLI JSON, task query and effective policy passed.'
+    # Non-mutating manual Retry is security-relevant: it must not save any
+    # unrelated unsigned consent, publisher or channel fields from the GUI.
+    $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../src/BitKeyBridge/UI/MainForm.UpdateCenter.cs') -Raw
+    $start = $source.IndexOf('private async Task RetryUpdateCenterCheckAsync()', [StringComparison]::Ordinal)
+    $end = $source.IndexOf('private void TrySetUpdateCenterAutoInstall(', $start + 1, [StringComparison]::Ordinal)
+    if ($start -lt 0 -or $end -le $start) {
+        throw 'Update Center Retry handler could not be isolated.'
+    }
+    $body = $source.Substring($start, $end - $start)
+    if ($body -match 'SaveUpdateSettings\s*\(' -or
+        $body -match 'ConfigService\.SaveAppConfig\s*\(' -or
+        $body -notmatch 'ConfigService\.LoadAppConfig\s*\(' -or
+        $body -notmatch 'updater\.CheckAsync\s*\(') {
+        throw 'Update Center Retry must read saved configuration and never rewrite policy.'
+    }
+
+    Write-Host 'Update Center CLI JSON, task query and non-mutating Retry passed.'
 }
 finally {
     Remove-Item -LiteralPath $out, $err -Force -ErrorAction SilentlyContinue
