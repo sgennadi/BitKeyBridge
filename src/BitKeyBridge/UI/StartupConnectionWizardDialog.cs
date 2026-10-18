@@ -13,6 +13,7 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
     private readonly RadioButton _later = new();
     private readonly CheckBox _otherAdAccount = new();
     private readonly CheckBox _rememberConnection = new();
+    private readonly bool _automaticConnectionsAllowed;
     private readonly Label _explanation = new();
     private readonly Button _connect = UiStyle.CreateActionButton("Connect");
     private readonly Button _skip = UiStyle.CreateActionButton("Not now", DialogResult.Cancel);
@@ -30,8 +31,10 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         SelectedSource != StartConnectionPolicy.Choose;
 
     public StartupConnectionWizardDialog(string? previouslySelectedSource,
-        bool preferOtherAdAccount = false, bool rememberLastConnection = false)
+        bool preferOtherAdAccount = false, bool rememberLastConnection = false,
+        bool automaticConnectionsAllowed = true)
     {
+        _automaticConnectionsAllowed = automaticConnectionsAllowed;
         Name = "StartupConnectionWizardDialog";
         Text = "BitKeyBridge - Connect";
         StartPosition = FormStartPosition.CenterParent;
@@ -157,8 +160,8 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         if (preferOtherAdAccount &&
             StartConnectionPolicy.NeedsActiveDirectory(SelectedSource))
             _otherAdAccount.Checked = true;
-        _rememberConnection.Checked = rememberLastConnection &&
-            SelectedSource != StartConnectionPolicy.Choose;
+        _rememberConnection.Checked = automaticConnectionsAllowed &&
+            rememberLastConnection && SelectedSource != StartConnectionPolicy.Choose;
         UpdateOptions();
     }
 
@@ -169,7 +172,8 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         if (!ad)
             _otherAdAccount.Checked = false;
 
-        _rememberConnection.Enabled = SelectedSource != StartConnectionPolicy.Choose;
+        _rememberConnection.Enabled = _automaticConnectionsAllowed &&
+            SelectedSource != StartConnectionPolicy.Choose;
         if (!_rememberConnection.Enabled)
             _rememberConnection.Checked = false;
 
@@ -191,7 +195,10 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         };
 
         _explanation.Text = sourceExplanation +
-            (RememberLastConnectionOnStart
+            (!_automaticConnectionsAllowed
+                ? " Automatic reconnection is disabled by the machine configuration. " +
+                  "The connection wizard will continue to appear on startup."
+                : RememberLastConnectionOnStart
                 ? " Next time, BitKeyBridge will use this source without showing the chooser. " +
                   "An alternate AD password and Microsoft 365 MFA will still be requested when necessary."
                 : " Check Remember this connection to skip this chooser next time; " +
