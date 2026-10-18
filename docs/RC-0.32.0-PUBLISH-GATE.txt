@@ -1,0 +1,7 @@
+BitKeyBridge 0.32.0-rc.1 release-candidate trigger.
+This marker exists only on the isolated RC release branch, not main or any stable branch.
+The GitHub Actions rc-0.32.0.yml workflow must pass x64/x86/ARM64, CodeQL,
+LAPS, protected two-token audit, legacy update/rollback, UI and ZIP gates
+on this exact commit before creating a GitHub prerelease.
+UNSIGNED binaries; GitHub Stable/Latest remains v0.30.5.
+No GPO link, scheduled deployment, unsigned consent or secret retrieval.
