@@ -1,3 +1,14 @@
+## 0.32.0-rc.4
+
+**Unsigned, opt-in prerelease. Stable/Latest remains v0.30.5.**
+
+- Add localized EN/RU/HE Update Center 2.0: current and last-checked versions, channel, trust/GPO/rollback hold, last update, next/last Task Scheduler run and result.
+- Add explicit Refresh (local only), Retry Check (online metadata only), Pause and Enable Auto-Install; neither ordinary Save nor Enable clears a failed-update/rollback hold.
+- Expose `--update-center-status --no-elevation` as bounded, read-only JSON, with Windows Task Scheduler COM query that distinguishes not-installed from permission errors.
+- Save per-user window bounds, maximized state and compact Update Center preference with monitor/RDP off-screen guard. Do not store credentials or recovery secrets.
+- Include High DPI/4K layout checks, runtime RU/HE Update Center label checks, workspace round-trip and corruption tests, read-only CLI Windows smoke regression, x64/x86/ARM64, CodeQL, protected audit and legacy upgrade/rollback gates.
+- Maintain separate stable `main` (v0.30.5) and reviewed preview integration. Tag publication is restricted to an exact commit in the new RC4 release branch and cannot update existing tags or fleet deployment.
+
 ## 0.32.0-rc.3
 
 - Add a startup connection wizard checkbox **Remember this connection**; explicitly opt in to automatic reuse of the last selected AD, Microsoft Entra/Intune or combined source.

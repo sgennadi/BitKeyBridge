@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.3 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.4 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,13 +10,28 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## v0.32.0-rc.3 release candidate
+## v0.32.0-rc.4 release candidate
 
 The prerelease combines the v0.31.0 Unified Search/Recovery Workflow, v0.32.0
 secret-free Fleet/GPO reporting, and stable v0.30.5 updater/audit foundations.
 It is a GitHub **prerelease** and will NOT replace Stable / Latest v0.30.5.
 All executables are **unsigned**. Do not deploy across managed computers
 before controlled AD/Entra/Intune, CyberArk EPM and Audit Broker acceptance.
+
+## Update Center 2.0 (v0.32.0-rc.4)
+
+Settings > Updates now has a compact localized update status with
+effective signed/unsigned trust, managed policy, rollback hold, local
+history and Windows Task Scheduler next/last run. Refresh is offline,
+Retry Check contacts GitHub but never installs, Pause/Enable use existing
+settings safety and a failure hold cannot be cleared from this shortcut.
+Window placement and compact Update Center density are saved per user and
+restored safely across HiDPI/RDP monitor changes.
+
+`BitKeyBridge.exe --update-center-status --no-elevation` prints local JSON
+without retrieving keys, modifying policy or downloading an update.
+[Full Update Center / RDP pilot guide](docs/update-center-v2.md).
+[Branch and release policy](docs/branch-release-policy.md).
 
 ## Startup wizard in v0.32.0-rc.3
 
@@ -46,7 +61,7 @@ trust or conscious unsigned consent for the official GitHub repository; GPO
 can always deny automatic installation. `--check-update --no-elevation`
 checks for updates without installing them.
 
-[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.3.md).
+[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.4.md).
 
 ## v0.32.0 fleet inventory (development)
 
