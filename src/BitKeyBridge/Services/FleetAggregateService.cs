@@ -337,6 +337,11 @@ internal static class FleetAggregateService
                 FleetInventoryService.Serialize(current));
             File.WriteAllText(Path.Combine(root, "PC-DEMO.oversized.json"),
                 new string('X', (int)MaximumReportBytes + 1));
+            var rejectedByBoundedRead = false;
+            try { _ = ReadBoundedUtf8(Path.Combine(root, "PC-DEMO.oversized.json")); }
+            catch (InvalidDataException) { rejectedByBoundedRead = true; }
+            if (!rejectedByBoundedRead)
+                failures.Add("Fleet bounded reader accepted more than 64KiB.");
 
             var aggregate = ReadDirectory(root);
             if (aggregate.Rows.Count != 1 || aggregate.InputFiles != 8 ||
