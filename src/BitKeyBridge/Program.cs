@@ -1875,6 +1875,7 @@ internal static class Program
             failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
             failures.AddRange(UiWorkspacePreferenceService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateCenterStatusService.RunOfflineTests());
+            failures.AddRange(UpdateService.RunReleaseChannelOfflineTests());
             failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
             failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
             failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
