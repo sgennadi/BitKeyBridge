@@ -1,0 +1,16 @@
+BitKeyBridge v0.32.0-rc.5 - explicit opt-in prerelease publication gate
+2026-10-18
+
+Release as UNSIGNED, OPT-IN PRERELEASE ONLY after the exact current source
+revision passes every mandatory GitHub Actions source, LAPS, x64/x86/ARM64,
+CodeQL, GPO/ZIP, Windows UI self-test, Update Center CLI safety,
+two-standard-user Protected Audit Broker and real legacy migration/rollback
+gate. Signing and physical AD/Entra/Intune/CyberArk approval remain separate.
+
+RC5 supersedes the earlier RC4 Update Center preview with safer admin-only
+Pause/Enable/Resume semantics, cancelled prerelease staging after channel
+revocation, read-only bounded Retry, trustworthy SYSTEM task inspection and
+responsive localized 4K/RDP windows.
+
+Never replace Stable v0.30.5, mutate existing RC tags, deploy Intune/GPO,
+create scheduled tasks, grant unsigned consent or access recovery secrets.
