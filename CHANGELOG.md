@@ -1,3 +1,15 @@
+## 0.32.0-rc.6
+
+**Unsigned, opt-in smoother Windows GUI preview. Stable/Latest remains v0.30.5.**
+
+- Polish the native Windows 11-inspired interface: consistent accent styling for the primary non-secret actions, selected-tab indicator, clean native text input/grid outlines, original accessible controls and unchanged password reveal/copy styling.
+- Remove full-tree theme refresh, repeated shell/tab/page PerformLayout and Win32 rounded Region recreation on each WM_SIZE; preserve automatic Dock=Fill and theme refresh on actual monitor-DPI change.
+- Coalesce rapid MainForm RDP/window resize events (55 ms), other form label measurement (65 ms) and DPI/font layout refresh (65 ms), without any global WS_EX_COMPOSITED window that would slow remote rendering.
+- Guard nested vertical workspace Layout callbacks against reentrancy, batch width changes and restore one ordinary AutoSize layout so translated captions and controls remain visible at 150-200% scaling.
+- Theme only previously unseen controls and apply styles to dynamically added children. Avoid native Region clipping on TextBox/ComboBox/DataGridView/ListView/ProgressBar.
+- Extend real WinForms runtime --ui-self-test for accent and secret-action semantics, and add Windows UI-rendering source regressions to x64 CI.
+- Publish only after exact pinned RC6 source passes x64/x86/ARM64, CodeQL, all offline/UI/GPO checks, actual two-standard-user protected audit and legacy upgrade/rollback. No managed machine enrollment, signature bypass, or promotion to Stable/Latest.
+
 ## 0.32.0-rc.5
 
 **Unsigned, opt-in hardened Update Center 2.0 preview. Stable Latest stays v0.30.5.**
