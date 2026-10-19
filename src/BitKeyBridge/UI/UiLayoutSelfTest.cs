@@ -67,6 +67,8 @@ public static class UiLayoutSelfTest
         var failures =
             new List<string>();
 
+        VerifyModernAccentAndDynamicTheme(failures);
+
         VerifyStatusGlyphScaling(
             failures);
 
@@ -198,6 +200,49 @@ public static class UiLayoutSelfTest
         return failures.Count == 0
             ? 0
             : 1;
+    }
+
+    private static void VerifyModernAccentAndDynamicTheme(List<string> failures)
+    {
+        if (SystemInformation.HighContrast)
+            return; // Native high contrast colors must always win.
+
+        try
+        {
+            using var host = new Panel();
+            var search = UiStyle.CreateActionButton("Search");
+            search.Name = "HomeUnifiedSearchButton";
+            var reveal = UiStyle.CreateActionButton("Reveal Key");
+            reveal.Name = "HomeRevealBitLockerButton";
+            host.Controls.Add(search);
+            host.Controls.Add(reveal);
+
+            UiModernTheme.Apply(host);
+            if (!UiModernTheme.IsPrimaryAction(search) ||
+                UiModernTheme.IsPrimaryAction(reveal) ||
+                search.BackColor != UiStyle.ModernAccent ||
+                search.ForeColor != Color.White ||
+                reveal.BackColor != UiStyle.ModernSurface)
+            {
+                failures.Add("Modern accent incorrectly styled a recovery-secret action " +
+                    "or failed to distinguish the main Search action.");
+            }
+
+            // An idempotent second application must preserve already-themed
+            // controls, while ControlAdded styles dynamic buttons.
+            UiModernTheme.Apply(host);
+            var retry = UiStyle.CreateActionButton("Retry check");
+            retry.Name = "UpdateCenterRetryCheckButton";
+            host.Controls.Add(retry);
+            if (retry.BackColor != UiStyle.ModernAccent ||
+                search.BackColor != UiStyle.ModernAccent)
+                failures.Add("Theme failed to style dynamically added primary controls.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Modern theme actions: " + ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private static IReadOnlyList<(

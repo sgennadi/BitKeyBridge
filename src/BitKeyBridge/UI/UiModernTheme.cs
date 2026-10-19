@@ -25,13 +25,16 @@ internal static class UiModernTheme
         if (root.IsDisposed)
             return;
 
-        if (!Markers.TryGetValue(root, out _))
-        {
-            var marker = new ThemeMarker();
-            Markers.Add(root, marker);
-            root.ControlAdded += (_, args) => Apply(args.Control);
-            Install(root, marker);
-        }
+        // Once themed, new children are installed through ControlAdded.
+        // Repeated full-tree Apply() traversals were O(all WinForms controls)
+        // on every DPI/layout refresh even when nothing had changed.
+        if (Markers.TryGetValue(root, out _))
+            return;
+
+        var marker = new ThemeMarker();
+        Markers.Add(root, marker);
+        root.ControlAdded += (_, args) => Apply(args.Control);
+        Install(root, marker);
 
         foreach (Control child in root.Controls)
             Apply(child);
@@ -94,6 +97,7 @@ internal static class UiModernTheme
                     UiStyle.ModernTabVerticalPadding);
                 tabs.DrawItem += DrawTab;
                 tabs.FontChanged += (_, _) => tabs.Invalidate();
+                tabs.SelectedIndexChanged += (_, _) => tabs.Invalidate();
                 break;
 
             case GroupBox group:
@@ -108,14 +112,19 @@ internal static class UiModernTheme
                 // with glyphs and measured, full-width captions.
                 if (!InsideRecoveryCard(button))
                 {
+                    var primary = IsPrimaryAction(button);
                     button.FlatStyle = FlatStyle.Flat;
-                    button.FlatAppearance.BorderSize = 1;
+                    button.FlatAppearance.BorderSize = primary ? 0 : 1;
                     button.FlatAppearance.BorderColor = UiStyle.ModernBorder;
-                    button.FlatAppearance.MouseOverBackColor = UiStyle.ModernHover;
-                    button.FlatAppearance.MouseDownBackColor = UiStyle.ModernPressed;
+                    button.FlatAppearance.MouseOverBackColor = primary
+                        ? UiStyle.ModernAccentHover : UiStyle.ModernHover;
+                    button.FlatAppearance.MouseDownBackColor = primary
+                        ? UiStyle.ModernAccentPressed : UiStyle.ModernPressed;
                     button.UseVisualStyleBackColor = false;
-                    button.BackColor = UiStyle.ModernSurface;
-                    button.ForeColor = UiStyle.ModernForeground;
+                    button.BackColor = primary
+                        ? UiStyle.ModernAccent : UiStyle.ModernSurface;
+                    button.ForeColor = primary
+                        ? Color.White : UiStyle.ModernForeground;
                 }
                 SetupRoundedRegion(button, marker, UiStyle.ModernButtonRadius);
                 break;
@@ -123,22 +132,22 @@ internal static class UiModernTheme
             case ComboBox combo:
                 combo.BackColor = UiStyle.ModernSurface;
                 combo.ForeColor = UiStyle.ModernForeground;
-                SetupRoundedRegion(combo, marker, UiStyle.ModernInputRadius);
+                // Editing controls are native child HWNDs. Setting Regions
+                // on every resize recreates native GDI handles and clips
+                // caret/borders at mixed DPI; use clean native outlines.
                 break;
 
             case TextBoxBase edit:
                 edit.BackColor = UiStyle.ModernSurface;
                 edit.ForeColor = UiStyle.ModernForeground;
-                SetupRoundedRegion(edit, marker, UiStyle.ModernInputRadius);
                 break;
 
             case UpDownBase numeric:
                 numeric.BackColor = UiStyle.ModernSurface;
-                SetupRoundedRegion(numeric, marker, UiStyle.ModernInputRadius);
                 break;
 
-            case DateTimePicker date:
-                SetupRoundedRegion(date, marker, UiStyle.ModernInputRadius);
+            case DateTimePicker:
+                // Preserve Windows native hit-testing, calendar border and caret.
                 break;
 
             case DataGridView grid:
@@ -152,14 +161,14 @@ internal static class UiModernTheme
                 grid.ColumnHeadersDefaultCellStyle.ForeColor = UiStyle.ModernForeground;
                 grid.DefaultCellStyle.BackColor = UiStyle.ModernSurface;
                 grid.AlternatingRowsDefaultCellStyle.BackColor = UiStyle.ModernAlternateRow;
-                SetupRoundedRegion(grid, marker, UiStyle.ModernSurfaceRadius);
+                // Grid scrolling and virtualized rows do not benefit from a
+                // clipped Window Region; preserve inexpensive rectangular HWND.
                 break;
 
             case ListView list:
                 list.BackColor = UiStyle.ModernSurface;
                 list.ForeColor = UiStyle.ModernForeground;
                 list.BorderStyle = BorderStyle.FixedSingle;
-                SetupRoundedRegion(list, marker, UiStyle.ModernSurfaceRadius);
                 break;
 
             case UiStatusLabel status:
@@ -167,8 +176,7 @@ internal static class UiModernTheme
                     SetupRoundedRegion(status, marker, UiStyle.ModernSmallRadius);
                 break;
 
-            case ProgressBar progress:
-                SetupRoundedRegion(progress, marker, UiStyle.ModernSmallRadius);
+            case ProgressBar:
                 break;
 
             case StatusStrip statusBar:
@@ -207,6 +215,19 @@ internal static class UiModernTheme
                 group.Invalidate();
         };
     }
+
+    /// <summary>
+    /// Only the most prominent non-secret action in a workflow receives
+    /// accent treatment; it remains a normal accessible WinForms button.
+    /// Avoid rewriting buttons that disclose/copy recovery passwords.
+    /// </summary>
+    internal static bool IsPrimaryAction(Button button) =>
+        button.Name is
+            "HomeConnectAdButton" or
+            "HomeUnifiedSearchButton" or
+            "SaveUpdateSettingsButton" or
+            "UpdateNowButton" or
+            "UpdateCenterRetryCheckButton";
 
     private static bool InsideRecoveryCard(Control control)
     {
@@ -281,6 +302,16 @@ internal static class UiModernTheme
         {
             using var border = new Pen(UiStyle.ModernBorder, 1f);
             args.Graphics.DrawPath(border, path);
+            // Fluent-style slim accent indicator helps recognition without
+            // painting an entire new tab control or animating the workspace.
+            using var accent = new SolidBrush(UiStyle.ModernAccent);
+            var markerHeight = Math.Max(2,
+                UiStyle.ScaleLogicalPixels(2, tabs.DeviceDpi));
+            var markerWidth = Math.Max(12, rect.Width / 3);
+            args.Graphics.FillRectangle(accent,
+                rect.Left + (rect.Width - markerWidth) / 2,
+                rect.Bottom - markerHeight - 1,
+                markerWidth, markerHeight);
         }
 
         TextRenderer.DrawText(args.Graphics,
