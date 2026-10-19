@@ -51,6 +51,7 @@ jobs:
           test -f tests/windows/ProtectedAuditBrokerIntegration.ps1
           test -f tests/windows/UpgradeMigrationRegression.ps1
           test -f tests/windows/Verify-UpdateZipLayout.ps1
+          test -f tests/windows/UiRenderingRegression.ps1
 
   laps-regression:
     needs: source-gate
@@ -109,6 +110,7 @@ jobs:
           ./tests/windows/Validate-GpoTemplates.ps1
           ./tests/windows/UpdateZipLayoutRegression.ps1
           ./tests/windows/UpdateHoldSettingsRegression.ps1
+          ./tests/windows/UiRenderingRegression.ps1
       - name: Restore and publish
         shell: pwsh
         run: |
