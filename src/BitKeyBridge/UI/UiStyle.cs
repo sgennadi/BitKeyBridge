@@ -51,6 +51,10 @@ public static class UiStyle
     public static Color ModernForeground => SystemColors.WindowText;
     public static Color ModernAccent =>
         SystemInformation.HighContrast ? SystemColors.HotTrack : Color.FromArgb(27, 91, 164);
+    public static Color ModernAccentHover =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(21, 78, 145);
+    public static Color ModernAccentPressed =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(18, 64, 122);
     public static Color ModernMuted =>
         SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(100, 106, 113);
     public static Color ModernBorder =>
