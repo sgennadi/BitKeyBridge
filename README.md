@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.5 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.6 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,7 +10,20 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## v0.32.0-rc.5 release candidate
+## v0.32.0-rc.6 — smoother, cleaner Windows UI
+
+RC6 adds a polished native WinForms interface with selective accent-colored
+actions, a clearer selected-tab indicator and fewer expensive redraw passes.
+Window resizing and RDP/4K monitor changes no longer trigger a full theme and
+rounded-region refresh for every control. Layout is batched while Dock=Fill
+remains immediate; translated text still wraps and the real form test matrix
+covers 100%-200% scaling. Secrets, AD/Graph authorization and automatic-update
+trust policies are unchanged.
+
+See [UI responsiveness and 4K/RDP validation](docs/ui-rendering-performance-2026-10.md)
+and the [RC6 release/acceptance guide](docs/release-candidate-v0.32.0-rc.6.md).
+
+## v0.32.0-rc.5 security and updater foundation
 
 This unsigned prerelease supersedes RC4's initial Update Center 2.0 with
 read-only, cancellation-bounded Retry; GPO/trust-aware machine Pause/Enable;
@@ -63,7 +76,7 @@ trust or conscious unsigned consent for the official GitHub repository; GPO
 can always deny automatic installation. `--check-update --no-elevation`
 checks for updates without installing them.
 
-[Release candidate / acceptance guide](docs/release-candidate-v0.32.0-rc.5.md).
+[Previous RC5 security and updater release guide](docs/release-candidate-v0.32.0-rc.5.md).
 
 ## v0.32.0 fleet inventory (development)
 
