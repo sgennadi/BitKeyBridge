@@ -1,0 +1,15 @@
+BitKeyBridge v0.32.0-rc.6 — explicit prerelease publication authorization
+2026-10-19
+
+Publish an unsigned, opt-in prerelease only from this exact branch with
+this exact final commit message, after source, Windows x64/x86/ARM64,
+UI/HiDPI regression, CodeQL, LAPS, GPO, rollback migration and protected
+two-standard-user audit checks all succeed on the same commit.
+
+RC6 polishes WinForms and removes redundant WM_SIZE / RDP / 4K repaint.
+Do not publish as Stable/Latest, sign as Ariel University without a genuine
+organizational certificate, alter machine consent, link a GPO, enroll a
+scheduled updater or deploy to production computers.
+
+Artifacts: BitKeyBridge-win-{x64,x86,arm64}.zip, SHA256SUMS.txt,
+BUILD-INFO.txt with immutable exact GitHub source commit hash.
