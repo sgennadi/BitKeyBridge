@@ -264,6 +264,11 @@ jobs:
         shell: pwsh
         run: ./tests/windows/Validate-GpoTemplates.ps1
 
+      - name: Reject WinForms recursive repaint regressions at 100-200% DPI
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/UiRenderingRegression.ps1
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
