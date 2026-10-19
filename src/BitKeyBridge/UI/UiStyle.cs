@@ -872,8 +872,15 @@ public static class UiStyle
         panel.WrapContents =
             false;
 
+        var updatingWidths = false;
         void ResizeChildren()
         {
+            // A child.Width assignment raises another Layout event. Guard
+            // against re-entrancy and avoid rewriting properties whose
+            // measured width has not changed during the same WM_SIZE burst.
+            if (updatingWidths || panel.IsDisposed || panel.Disposing)
+                return;
+
             var scrollbar =
                 panel.VerticalScroll.Visible
                     ? SystemInformation.VerticalScrollBarWidth
@@ -887,49 +894,42 @@ public static class UiStyle
                     scrollbar -
                     2);
 
-            foreach (Control child in
-                     panel.Controls)
+            updatingWidths = true;
+            panel.SuspendLayout();
+            try
             {
-                var width =
-                    Math.Max(
-                        0,
-                        available -
-                        child.Margin.Horizontal);
-
-                if (width <= 0)
-                    continue;
-
-                if (child is TableLayoutPanel table &&
-                    table.AutoSize)
+                foreach (Control child in panel.Controls)
                 {
-                    // AutoSize tables otherwise grow back to their preferred
-                    // content width and can overflow the workspace at high DPI
-                    // or with enlarged text. Keep the width responsive while
-                    // allowing the height to continue growing naturally.
-                    table.MinimumSize =
-                        new Size(
-                            width,
-                            0);
-                    table.MaximumSize =
-                        new Size(
-                            width,
-                            0);
-                }
+                    var width = Math.Max(
+                        0, available - child.Margin.Horizontal);
+                    if (width <= 0 || child.IsDisposed)
+                        continue;
 
-                if (child.Width != width)
-                {
-                    child.Width =
-                        width;
+                    if (child is TableLayoutPanel { AutoSize: true } table)
+                    {
+                        // Keep the width responsive while allowing height to
+                        // grow naturally at 150/200% text and Hebrew RTL.
+                        var limit = new Size(width, 0);
+                        if (table.MinimumSize != limit)
+                            table.MinimumSize = limit;
+                        if (table.MaximumSize != limit)
+                            table.MaximumSize = limit;
+                    }
+
+                    if (child.Width != width)
+                        child.Width = width;
                 }
+            }
+            finally
+            {
+                // Only the necessary properties were changed. Never force a
+                // second PerformLayout for each nested child or status label.
+                panel.ResumeLayout(performLayout: false);
+                updatingWidths = false;
             }
         }
 
-        panel.Layout +=
-            (_, _) =>
-                ResizeChildren();
-
-        panel.ClientSizeChanged +=
-            (_, _) =>
-                ResizeChildren();
+        panel.Layout += (_, _) => ResizeChildren();
+        panel.ClientSizeChanged += (_, _) => ResizeChildren();
     }
 }
