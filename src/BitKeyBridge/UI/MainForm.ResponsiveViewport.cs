@@ -2,7 +2,12 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
-    private bool _mainViewportReflowQueued;
+    // Frequent WM_SIZE events during RDP/4K window drags must not trigger
+    // recursive full-tree layout and GDI region regeneration on every frame.
+    private readonly System.Windows.Forms.Timer _mainViewportIdleTimer = new()
+    {
+        Interval = 55
+    };
     private bool _mainViewportReflowRunning;
     private bool _homeResultsReflowRunning;
     private string _homeResultsLayoutKey = string.Empty;
@@ -13,22 +18,29 @@ public sealed partial class MainForm
     {
         AutoScroll = false;
         InitializeHomeStatusGlyphAlignment();
+        _mainViewportIdleTimer.Tick += (_, _) =>
+        {
+            _mainViewportIdleTimer.Stop();
+            if (!IsDisposed && IsHandleCreated)
+                ReflowMainViewport();
+        };
         ClientSizeChanged += (_, _) => QueueMainViewportReflow();
+        DpiChanged += (_, _) => QueueMainViewportReflow();
+        FontChanged += (_, _) => QueueMainViewportReflow();
         Shown += (_, _) => QueueMainViewportReflow();
+        FormClosed += (_, _) => _mainViewportIdleTimer.Dispose();
     }
 
     private void QueueMainViewportReflow()
     {
-        if (_mainViewportReflowQueued || !IsHandleCreated || IsDisposed)
+        if (!IsHandleCreated || IsDisposed || Disposing)
             return;
 
-        _mainViewportReflowQueued = true;
-        BeginInvoke(new MethodInvoker(() =>
-        {
-            _mainViewportReflowQueued = false;
-            if (!IsDisposed)
-                ReflowMainViewport();
-        }));
+        // A 55-ms quiet-period batch is imperceptible when dragging, but
+        // eliminates dozens of layout passes for one native WM_SIZE burst.
+        // Dock=Fill still updates immediately through normal WinForms layout.
+        _mainViewportIdleTimer.Stop();
+        _mainViewportIdleTimer.Start();
     }
 
 
@@ -195,53 +207,66 @@ public sealed partial class MainForm
         }
         finally
         {
+            // ResumeLayout(true) already lays out the modified card grid once.
+            // A second forced PerformLayout repaints all recovery children.
             _homeServiceCards.ResumeLayout(true);
             _homeResultsReflowRunning = false;
         }
-        _homeServiceCards.PerformLayout();
     }
 
     internal void ReflowMainViewport()
     {
-        if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width == 0)
+        if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width <= 0)
             return;
 
         _mainViewportReflowRunning = true;
         try
         {
-            AutoScroll = false;
+            if (AutoScroll)
+                AutoScroll = false;
+
             var shell = Controls.OfType<TableLayoutPanel>()
                 .FirstOrDefault(x => x.Name == "MainLayoutRoot");
             if (shell is null)
                 return;
 
-            // Do not let a pre-maximize preferred width constrain the entire
-            // application to the top-left of a 4K / Remote Desktop screen.
-            shell.Dock = DockStyle.Fill;
-            if (shell.Bounds != ClientRectangle)
-                shell.Bounds = ClientRectangle;
-
-            shell.PerformLayout();
-            ReflowConnectionsRecent();
-            shell.PerformLayout();
-            ReflowHomeResultsArea();
-            _mainTabs.Dock = DockStyle.Fill;
-            _mainTabs.PerformLayout();
-
-            if (_mainTabs.SelectedTab is TabPage page)
+            // Docking is automatic during WM_SIZE. Only repair actual geometry
+            // mismatches, instead of forcing 6+ nested PerformLayout passes.
+            var geometryChanged = false;
+            if (shell.Dock != DockStyle.Fill)
             {
-                page.PerformLayout();
-                if (page.Controls.Count > 0 &&
-                    page.Controls[0].Dock == DockStyle.Fill)
-                {
-                    var content = page.Controls[0];
-                    if (content.Bounds != page.DisplayRectangle)
-                        content.Bounds = page.DisplayRectangle;
-                    content.PerformLayout();
-                }
+                shell.Dock = DockStyle.Fill;
+                geometryChanged = true;
+            }
+            if (shell.Bounds != ClientRectangle)
+            {
+                shell.Bounds = ClientRectangle;
+                geometryChanged = true;
+            }
+            if (_mainTabs.Dock != DockStyle.Fill)
+            {
+                _mainTabs.Dock = DockStyle.Fill;
+                geometryChanged = true;
             }
 
-            UiModernTheme.Refresh(shell);
+            ReflowConnectionsRecent();
+            ReflowHomeResultsArea();
+
+            if (_mainTabs.SelectedTab is TabPage page &&
+                page.Controls.Count > 0 &&
+                page.Controls[0] is { Dock: DockStyle.Fill } content &&
+                content.Bounds != page.DisplayRectangle)
+            {
+                content.Bounds = page.DisplayRectangle;
+                geometryChanged = true;
+            }
+            if (geometryChanged)
+                shell.PerformLayout();
+
+            // Theme controls subscribe to SizeChanged and DpiChanged already.
+            // UiModernTheme.Refresh(shell) rebuilt every rounded HWND region and
+            // invalidated all tab controls on each window resize. It belongs
+            // only in the shared theme/DPI refresh path, NOT in WM_SIZE.
             AlignHomeStatusGlyphs();
         }
         finally
