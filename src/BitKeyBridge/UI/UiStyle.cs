@@ -926,9 +926,10 @@ public static class UiStyle
             }
             finally
             {
-                // Only the necessary properties were changed. Never force a
-                // second PerformLayout for each nested child or status label.
-                panel.ResumeLayout(performLayout: false);
+                // One normal layout after all width changes is needed for
+                // AutoSize height and scrolling. The re-entrancy guard remains
+                // active during ResumeLayout(true), avoiding the former loop.
+                panel.ResumeLayout(performLayout: true);
                 updatingWidths = false;
             }
         }
