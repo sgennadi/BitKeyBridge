@@ -89,9 +89,19 @@ public sealed partial class MainForm
             var audit = _config.RequireProtectedAuditForRecovery
                 ? "Protected audit required"
                 : "Protected audit not required by current policy";
-            var connection = _directoryConnected
-                ? "AD connected"
-                : "AD not connected";
+            // Reflect the selected connection source. A cloud-only Helpdesk
+            // session must not be presented as simply "AD disconnected".
+            // HasCloudSearchSession checks in-memory token state only.
+            var adStatus = _directoryConnected ? "AD connected" : "AD disconnected";
+            var cloudStatus = HasCloudSearchSession()
+                ? "Microsoft 365 connected" : "Microsoft 365 disconnected";
+            var connection = StartConnectionPolicy.Normalize(SelectedStartSource) switch
+            {
+                StartConnectionPolicy.ActiveDirectory => adStatus,
+                StartConnectionPolicy.MicrosoftCloud => cloudStatus,
+                StartConnectionPolicy.Both => adStatus + " / " + cloudStatus,
+                _ => "Choose a connection source on Start"
+            };
             UiStyle.SetStatus(status,
                 $"{connection} | {audit} | Search: {(searchAllowed ? "permitted" : "denied")}. " +
                 "Use Access Health for detailed checks; status alone does not authorize secret reads.",
