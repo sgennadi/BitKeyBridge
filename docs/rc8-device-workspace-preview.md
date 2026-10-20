@@ -17,7 +17,9 @@ RC7 source/release branch. RC7 is separately awaiting interactive acceptance.
 - Ctrl+F in Helpdesk switches to Start's canonical search field.
 - Navigating back to Start preserves an already selected exact result even
   when the query text is only a fragment of the selected computer name.
-  A genuinely changed query still cancels stale work and invalidates results.
+  The selected row receives focus when available; without a selection the
+  regular Start search input receives focus. A genuinely changed query still
+  cancels stale work and invalidates results.
 
 ## Security boundaries
 
