@@ -871,32 +871,47 @@ public static class UiStyle
     public static void MakeVerticalWorkspaceResponsive(
         FlowLayoutPanel panel)
     {
-        panel.FlowDirection =
-            FlowDirection.TopDown;
-        panel.WrapContents =
-            false;
+        panel.FlowDirection = FlowDirection.TopDown;
+        panel.WrapContents = false;
 
         var updatingWidths = false;
+
+        void SizeWorkspaceFromVisibleTab()
+        {
+            if (panel.IsDisposed || panel.Disposing ||
+                !panel.Visible || panel.Parent is not TabPage tab ||
+                panel.Dock != DockStyle.Fill)
+                return;
+
+            var expected = tab.DisplayRectangle;
+            // Hidden WinForms TabPages can begin at 200x100; after the tab is
+            // selected they must use the real page display rectangle.
+            if (expected.Width >= 320 && expected.Height >= 160 &&
+                panel.Bounds != expected)
+                panel.Bounds = expected;
+        }
+
         void ResizeChildren()
         {
-            // A child.Width assignment raises another Layout event. Guard
-            // against re-entrancy and avoid rewriting properties whose
-            // measured width has not changed during the same WM_SIZE burst.
             if (updatingWidths || panel.IsDisposed || panel.Disposing)
                 return;
 
-            var scrollbar =
-                panel.VerticalScroll.Visible
-                    ? SystemInformation.VerticalScrollBarWidth
-                    : 0;
+            // A hidden tab has no reliable width. Never clamp an AutoSize
+            // section to a 100px initial/hidden-page preferred size: that
+            // persisted into the expanded tab and clipped Diagnostics/Tools.
+            var width = panel.ClientSize.Width;
+            if (panel.Visible && panel.Parent is TabPage tab &&
+                tab.DisplayRectangle.Width >= 320 &&
+                panel.Dock == DockStyle.Fill)
+            {
+                width = Math.Max(width, tab.DisplayRectangle.Width);
+            }
 
-            var available =
-                Math.Max(
-                    0,
-                    panel.ClientSize.Width -
-                    panel.Padding.Horizontal -
-                    scrollbar -
-                    2);
+            var scrollbar = panel.VerticalScroll.Visible
+                ? SystemInformation.VerticalScrollBarWidth : 0;
+            var available = width - panel.Padding.Horizontal - scrollbar - 2;
+            if (available < 280)
+                return;
 
             updatingWidths = true;
             panel.SuspendLayout();
@@ -904,37 +919,59 @@ public static class UiStyle
             {
                 foreach (Control child in panel.Controls)
                 {
-                    var width = Math.Max(
-                        0, available - child.Margin.Horizontal);
-                    if (width <= 0 || child.IsDisposed)
+                    if (child.IsDisposed)
+                        continue;
+
+                    var childWidth = available - child.Margin.Horizontal;
+                    if (childWidth <= 0)
                         continue;
 
                     if (child is TableLayoutPanel { AutoSize: true } table)
                     {
-                        // Keep the width responsive while allowing height to
-                        // grow naturally at 150/200% text and Hebrew RTL.
-                        var limit = new Size(width, 0);
-                        if (table.MinimumSize != limit)
-                            table.MinimumSize = limit;
-                        if (table.MaximumSize != limit)
-                            table.MaximumSize = limit;
+                        // Only the maximum WIDTH should follow the viewport.
+                        // A fixed MinimumSize=MaximumSize from the first
+                        // (sometimes hidden) layout trapped tables at ~120px.
+                        var minimum = new Size(0, table.MinimumSize.Height);
+                        var maximum = new Size(childWidth, table.MaximumSize.Height);
+                        if (table.MinimumSize != minimum)
+                            table.MinimumSize = minimum;
+                        if (table.MaximumSize != maximum)
+                            table.MaximumSize = maximum;
                     }
 
-                    if (child.Width != width)
-                        child.Width = width;
+                    if (child.Width != childWidth)
+                        child.Width = childWidth;
                 }
             }
             finally
             {
-                // One normal layout after all width changes is needed for
-                // AutoSize height and scrolling. The re-entrancy guard remains
-                // active during ResumeLayout(true), avoiding the former loop.
                 panel.ResumeLayout(performLayout: true);
                 updatingWidths = false;
             }
         }
 
+        void QueueVisibleRefresh()
+        {
+            if (panel.IsDisposed || panel.Disposing ||
+                !panel.IsHandleCreated || !panel.Visible)
+                return;
+
+            // Tab selection is completed by the WinForms message loop.
+            // Repair only this page, not the whole application/theme tree.
+            panel.BeginInvoke(new MethodInvoker(() =>
+            {
+                if (panel.IsDisposed || panel.Disposing || !panel.Visible)
+                    return;
+                SizeWorkspaceFromVisibleTab();
+                ResizeChildren();
+            }));
+        }
+
         panel.Layout += (_, _) => ResizeChildren();
         panel.ClientSizeChanged += (_, _) => ResizeChildren();
+        panel.ControlAdded += (_, _) => ResizeChildren();
+        panel.VisibleChanged += (_, _) => QueueVisibleRefresh();
+        panel.HandleCreated += (_, _) => QueueVisibleRefresh();
+        panel.ParentChanged += (_, _) => QueueVisibleRefresh();
     }
 }
