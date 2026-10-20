@@ -10,6 +10,16 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
+## Next preview: unified Helpdesk Device Workspace (development only)
+
+The post-RC7 [Device Workspace prototype](docs/rc8-device-workspace-preview.md)
+keeps a **single** Start search. Helpdesk reuses the selected non-secret device
+metadata, links straight back to the Start workspace, and focuses the same
+search with Ctrl+F. Returning from Helpdesk no longer drops an exact selected
+computer when the original query was abbreviated. Dedicated authorized
+BitLocker/LAPS views, permission checks and audit remain unchanged.
+This prototype is **not published** and does not change RC7 release preparation.
+
 ## v0.32.0-rc.7 — release candidate in preparation (not published)
 
 RC7 carries the verified [Diagnostics > Tools / nested-tab viewport fix](https://github.com/sgennadi/BitKeyBridge/pull/98) beyond the previously published RC6 tag. It repairs stale Dock=Fill bounds on selected nested WinForms pages, bounds AutoSize FlowLayoutPanel action rows to available width, and avoids competing scroll containers. Existing BitLocker/LAPS secret authorization, RBAC, protected-audit and updater trust/rollback behavior are unchanged.
