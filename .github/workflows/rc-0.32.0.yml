@@ -166,6 +166,14 @@ jobs:
           foreach ($test in @('--self-test', '--ui-self-test')) {
             $process = Start-Process -FilePath $exe -ArgumentList @($test, '--no-elevation') -PassThru -Wait
             if ($process.ExitCode -ne 0) {
+              # WinExe runs without a console; print the synthetic layout report
+              # so failures can be diagnosed without downloading binaries.
+              $report = Join-Path (Split-Path -Parent $exe) 'ui-self-test.log'
+              if ($test -eq '--ui-self-test' -and
+                  (Test-Path -LiteralPath $report -PathType Leaf)) {
+                Write-Host '--- UI SELF-TEST REPORT (first 120 lines) ---'
+                Get-Content -LiteralPath $report -TotalCount 120 | ForEach-Object { Write-Host $_ }
+              }
               throw "RC $test failed with exit code $($process.ExitCode)."
             }
           }
