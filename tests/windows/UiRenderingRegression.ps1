@@ -20,6 +20,9 @@ $base = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DpiAwareF
 $style = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStyle.cs') -Raw
 $shell = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Shell.cs') -Raw
 $diagnostics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DiagnosticNavigation.cs') -Raw
+$helpdesk = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskDashboard.cs') -Raw
+$deviceWorkspace = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DeviceWorkspace.cs') -Raw
+$computerContext = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.ComputerContext.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 
@@ -54,5 +57,12 @@ Assert-Source ($shell.Contains('nested.SelectedIndexChanged += (_, _) => QueueMa
 Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnostics.Contains('DiagnosticToolsActions')) 'Diagnostics layout must expose stable regression targets.'
 Assert-Source ($layoutSelfTest.Contains('VerifyNestedWorkspaceViewport(main, formName, scenario, failures)')) 'WinForms runtime must test real nested sizes after tab switches.'
 Assert-Source ($layoutSelfTest.Contains('content.Size = new Size(') -and $layoutSelfTest.Contains('main.ReflowMainViewport()')) 'Runtime must reproduce a stale 200x100-style content viewport.'
+
+Assert-Source ($helpdesk.Contains('HelpdeskOpenDeviceWorkspaceButton') -and $helpdesk.Contains('HelpdeskSelectedDeviceSummary')) 'Helpdesk must offer the canonical Start workspace and its selected-device metadata.'
+Assert-Source (-not $helpdesk.Contains('HelpdeskQuickSearch')) 'Helpdesk must not have its own duplicate search input.'
+Assert-Source ($shell.Contains('4 => _homeQuery')) 'Ctrl+F on Helpdesk must route to the canonical Start search.'
+Assert-Source ($computerContext.Contains('GetSelectedHomeSearchResult() is { } selected')) 'Returning to Start must preserve an exact selected row, not clear its metadata after a partial query.'
+Assert-Source ($deviceWorkspace.Contains('selected.IdentityAmbiguous') -and $deviceWorkspace.Contains('selected.SourceIdentity')) 'Cloud and ambiguous device identities must remain explicitly unverified.'
+Assert-Source ($layoutSelfTest.Contains('PreviewHelpdeskDeviceWorkspaceForUiSelfTest()') -and $layoutSelfTest.Contains('returning from Helpdesk lost the source-qualified Start selection')) 'Runtime must verify Helpdesk navigation retains an exact selected Start record.'
 
 Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
