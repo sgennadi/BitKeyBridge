@@ -2000,6 +2000,42 @@ public static class UiLayoutSelfTest
                     failures.Add($"{formName}/{scenario.Name}: returning from Helpdesk lost the source-qualified Start selection.");
                 }
 
+                // The same selected row can become ambiguous when the
+                // metadata result includes another AD object with this name.
+                // Helpdesk must never imply it can authorize recovery by name.
+                if (results.Rows[index].Tag is HomeSearchResult tested)
+                {
+                    tested.IdentityAmbiguous = true;
+                    tabs.SelectedTab = helpdesk;
+                    if (selectedSummary is null ||
+                        selectedSummary.StatusKind != UiStatusKind.Warning ||
+                        !selectedSummary.Text.Contains("ambiguous",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        failures.Add($"{formName}/{scenario.Name}: ambiguous AD device must be clearly unverified in Helpdesk.");
+                    }
+
+                    // Likewise, a cloud result lacking its source-qualified
+                    // Entra identity must not be displayed as verified.
+                    tested.IdentityAmbiguous = false;
+                    tested.IsCloudRecord = true;
+                    tested.SourceIdentity = string.Empty;
+                    tabs.SelectedTab = start;
+                    tabs.SelectedTab = helpdesk;
+                    if (selectedSummary is null ||
+                        selectedSummary.StatusKind != UiStatusKind.Warning ||
+                        !selectedSummary.Text.Contains("unverified",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        failures.Add($"{formName}/{scenario.Name}: cloud device without an exact identity must remain unverified in Helpdesk.");
+                    }
+
+                    // Restore normal AD metadata before the existing
+                    // BitLocker/LAPS query navigation regression.
+                    tested.IsCloudRecord = false;
+                    tabs.SelectedTab = start;
+                }
+
                 tabs.SelectedTab = recovery;
                 if (recoveryQuery.Text != "PC-SELECTED")
                     failures.Add($"{formName}/{scenario.Name}: selected Start computer was not retained.");
