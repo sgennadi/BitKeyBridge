@@ -17,7 +17,20 @@ public sealed partial class MainForm
             return;
 
         _mainTabs.SelectedTab = _homeWorkspaceTab;
-        if (!_layoutSelfTest && _homeQuery.CanFocus)
+        if (_layoutSelfTest)
+            return;
+
+        // A selected result is the workspace, not a new search. Returning
+        // from Helpdesk focuses the actual row instead of highlighting
+        // the query and inviting an accidental second lookup.
+        if (GetSelectedHomeSearchResult() is not null &&
+            _homeSearchResults.CanFocus)
+        {
+            _homeSearchResults.Focus();
+            return;
+        }
+
+        if (_homeQuery.CanFocus)
         {
             _homeQuery.Focus();
             _homeQuery.SelectAll();
