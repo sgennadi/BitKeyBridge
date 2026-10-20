@@ -213,11 +213,13 @@ public sealed partial class MainForm
                     1 => _startQuery,
                     2 => _lapsQuery,
                     3 => _unifiedQuery,
-                    4 => _mainTabs.TabPages[4].Controls
-                            .Find("HelpdeskQuickSearch", searchAllChildren: true)
-                            .OfType<TextBox>().FirstOrDefault(),
+                    // Helpdesk reuses the one Start query, never a second
+                    // textbox or a second metadata request.
+                    4 => _homeQuery,
                     _ => null
                 };
+                if (_mainTabs.SelectedTab?.Name == "HelpdeskDashboardTab")
+                    OpenHelpdeskDeviceWorkspace();
                 if (query is { Visible: true, Enabled: true })
                 {
                     query.Focus();
