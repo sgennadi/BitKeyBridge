@@ -1,4 +1,6 @@
-## 0.32.0-rc.7 (prepared, not yet published)
+## 0.32.0-rc.7
+
+**Status: Prepared, not yet published.**
 
 **Unsigned opt-in candidate; v0.30.5 remains Stable/Latest. The existing RC6 tag/assets are immutable.**
 
