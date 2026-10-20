@@ -1983,8 +1983,9 @@ public static class UiLayoutSelfTest
                 results.Rows[index].Selected = true;
                 results.CurrentCell = results.Rows[index].Cells[0];
                 tabs.SelectedTab = helpdesk;
-                if (FindByName(helpdesk, "HelpdeskSelectedDeviceSummary")
-                        is not UiStatusLabel selectedSummary ||
+                var selectedSummary = FindByName(
+                    helpdesk, "HelpdeskSelectedDeviceSummary") as UiStatusLabel;
+                if (selectedSummary is null ||
                     !selectedSummary.Text.Contains("PC-SELECTED",
                         StringComparison.Ordinal))
                 {
