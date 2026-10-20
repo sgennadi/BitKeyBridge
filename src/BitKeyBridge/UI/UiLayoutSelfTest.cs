@@ -797,6 +797,7 @@ public static class UiLayoutSelfTest
             }
 
             VerifyMainViewportFill(main, formName, scenario, failures);
+            VerifyNestedWorkspaceViewport(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
             var healthResults = FindByName(main, "AccessHealthResults") as ListView;
             if (healthResults is not null && !healthResults.ShowItemToolTips)
@@ -881,6 +882,177 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: maximized window leaves a small top-left workspace instead of filling the client area.");
+        }
+    }
+
+    /// <summary>
+    /// Recreate the real screenshot failure: leave a selected Dock=Fill child
+    /// at a provisional narrow size even though its outer tab is full width.
+    /// Verify that one production reflow (not test-only normalization) repairs
+    /// Start, BitLocker, LAPS, Helpdesk, Devices, Diagnostics, Settings, and
+    /// every selected nested page at compact and maximized RDP viewport sizes.
+    /// </summary>
+    private static void VerifyNestedWorkspaceViewport(
+        MainForm main,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        if (FindByName(main, "MainWorkspaceTabs") is not TabControl tabs)
+            return;
+
+        var originalSize = main.ClientSize;
+        var originalTab = tabs.SelectedTab;
+        try
+        {
+            var testSizes = new[]
+            {
+                scenario.ClientSize,
+                new Size(
+                    Math.Max(1500, scenario.ClientSize.Width + 240),
+                    Math.Max(900, scenario.ClientSize.Height + 140))
+            };
+
+            foreach (var size in testSizes)
+            {
+                main.ClientSize = size;
+                main.PerformLayout();
+                NormalizeDockFillSizes(main);
+
+                foreach (TabPage page in tabs.TabPages)
+                {
+                    tabs.SelectedTab = page;
+                    Application.DoEvents();
+                    NormalizeDockFillSizes(main);
+                    main.ReflowMainViewport();
+                    VerifySelectedPage(page, page.Text, size.Width);
+                }
+            }
+        }
+        finally
+        {
+            if (originalTab is not null)
+                tabs.SelectedTab = originalTab;
+            main.ClientSize = originalSize;
+            main.ReflowMainViewport();
+        }
+
+        void VerifySelectedPage(TabPage page, string route, int windowWidth)
+        {
+            page.CreateControl();
+            var content = page.Controls.Cast<Control>()
+                .FirstOrDefault(child => child.Dock == DockStyle.Fill);
+
+            if (content is null)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}/{route}: selected page has no full-size workspace.");
+                return;
+            }
+
+            var available = page.ClientSize;
+            if (available.Width < 240 || available.Height < 150)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}/{route}: tab content viewport is too small " +
+                    $"({available.Width}x{available.Height} in {windowWidth}px window).");
+                return;
+            }
+
+            // This deliberately poisons a currently selected, docked child.
+            // A test-side NormalizeDockFillSizes after this point would hide
+            // the defect, so the real MainForm routine must repair it.
+            content.Size = new Size(
+                Math.Min(128, available.Width / 4),
+                Math.Min(86, available.Height / 4));
+            main.ReflowMainViewport();
+
+            if (content.Width < available.Width * 0.80 ||
+                content.Height < available.Height * 0.80)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}/{route}: selected nested content remains " +
+                    $"at {content.Width}x{content.Height} inside " +
+                    $"{available.Width}x{available.Height} tab after ReflowMainViewport.");
+            }
+
+            if (content is FlowLayoutPanel
+                { FlowDirection: FlowDirection.TopDown } flow)
+            {
+                flow.PerformLayout();
+                var rightLimit = flow.ClientSize.Width - flow.Padding.Right + 3;
+                var minimumSectionWidth = Math.Max(
+                    0, flow.ClientSize.Width - flow.Padding.Horizontal -
+                    SystemInformation.VerticalScrollBarWidth - 4);
+
+                foreach (Control child in flow.Controls)
+                {
+                    if (child is not TableLayoutPanel { AutoSize: true } &&
+                        child is not FlowLayoutPanel { AutoSize: true })
+                        continue;
+
+                    if (minimumSectionWidth > 100 &&
+                        child.Width < minimumSectionWidth * 0.78)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}/{route}: AutoSize section " +
+                            $"'{ControlName(child)}' remained narrow " +
+                            $"({child.Width} of {minimumSectionWidth}px).");
+                    }
+                    if (child.Right > rightLimit)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}/{route}: AutoSize section " +
+                            $"'{ControlName(child)}' is horizontally clipped " +
+                            $"(Right={child.Right}, Limit={rightLimit}).");
+                    }
+                }
+
+                if (page.Name == "DiagnosticToolsTab")
+                {
+                    if (FindByName(page, "DiagnosticToolsActions")
+                        is not FlowLayoutPanel actions ||
+                        actions.Controls.OfType<Button>().Count() != 5)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}: Diagnostics > Tools actions are missing.");
+                    }
+                    else
+                    {
+                        foreach (var button in actions.Controls.OfType<Button>())
+                        {
+                            if (button.Right > actions.ClientSize.Width + 3 ||
+                                button.Bottom > actions.ClientSize.Height + 3)
+                            {
+                                failures.Add(
+                                    $"{formName}/{scenario.Name}: Diagnostics > Tools " +
+                                    $"button '{button.Text}' is clipped at {windowWidth}px.");
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (content is not TabControl nested)
+                return;
+
+            var originalNestedTab = nested.SelectedTab;
+            try
+            {
+                foreach (TabPage child in nested.TabPages)
+                {
+                    nested.SelectedTab = child;
+                    Application.DoEvents();
+                    NormalizeDockFillSizes(main);
+                    main.ReflowMainViewport();
+                    VerifySelectedPage(child, route + " > " + child.Text, windowWidth);
+                }
+            }
+            finally
+            {
+                if (originalNestedTab is not null)
+                    nested.SelectedTab = originalNestedTab;
+            }
         }
     }
 

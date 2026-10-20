@@ -14,6 +14,7 @@ public sealed partial class MainForm
         };
 
         var workspace = CreateVerticalWorkspace();
+        workspace.Name = "DiagnosticToolsWorkspace";
         page.Controls.Add(workspace);
         workspace.Controls.Add(CreateSectionTitle(
             "Connection and recovery diagnostics",
@@ -22,6 +23,7 @@ public sealed partial class MainForm
             "No secret is retrieved by opening a diagnostic tool."));
 
         var buttons = CreateActionFlow();
+        buttons.Name = "DiagnosticToolsActions";
 
         var environment = NewActionButton("Environment Check...");
         environment.Name = "RunEnvironmentCheckButton";

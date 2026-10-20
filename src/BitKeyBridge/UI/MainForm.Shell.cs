@@ -150,12 +150,11 @@ public sealed partial class MainForm
         if (AdministrationAllowed)
             _mainTabs.TabPages.Add(BuildAdministrationWorkspaceTab());
 
-        foreach (TabPage page in
-                 _mainTabs.TabPages)
-        {
-            page.AutoScroll =
-                true;
-        }
+        // Scrolling belongs to each workspace's inner viewport. An
+        // AutoScroll TabPage can leave Dock=Fill nested tabs at an obsolete
+        // virtual width after DPI or RDP resolution changes.
+        foreach (TabPage page in _mainTabs.TabPages)
+            page.AutoScroll = false;
 
         _mainTabs.SelectedIndexChanged +=
             (_, _) =>
@@ -2287,6 +2286,9 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
 
         nested.TabPages.Add(BuildDeviceSearchPage());
 
@@ -2606,6 +2608,9 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
 
         // Everyday settings are immediately visible; enterprise features live
         // under a single explicit group instead of competing at the top level.
@@ -2622,6 +2627,7 @@ public sealed partial class MainForm
             Name = "EnterpriseSettingsSections",
             Dock = DockStyle.Fill
         };
+        enterpriseSections.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
         enterpriseSections.TabPages.Add(BuildSecuritySettingsResponsiveTab());
         enterpriseSections.TabPages.Add(BuildExportAutomationResponsiveTab());
         enterprise.Controls.Add(enterpriseSections);
@@ -2638,6 +2644,9 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
 
         nested.TabPages.Add(BuildDiagnosticToolsPage());
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());

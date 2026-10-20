@@ -19,6 +19,14 @@ audit integration. The functional privilege and secret-handling paths are unchan
 - A 65-ms debounce reduces repeated DPI/font layout and wrapping-label work.
 - Vertical FlowLayoutPanel child-width changes are guarded against recursive
   Layout events; one final layout still recalculates proper AutoSize height.
+- Diagnostics > Tools and other nested tabs now repair selected TabPage
+  geometry after switching or RDP resizing; the top-level TabPages no longer
+  compete with inner scrolling surfaces. AutoSize action flows have bounded
+  width, allowing buttons to wrap and sections to grow in height instead of
+  remaining compressed at the top-left. Runtime regression tests deliberately
+  collapse selected nested content, then verify that the production reflow
+  restores actual widths at compact and maximized 100-200% font/DPI scenarios.
+  A physical RDP/4K pilot is still required before deployment.
 - The theme now treats existing controls once, with ControlAdded handling
   dynamic controls. Native text boxes, drop-downs, grid/list views and
   progress bars retain their standard lightweight unclipped Windows HWNDs.
