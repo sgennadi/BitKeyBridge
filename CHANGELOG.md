@@ -1,3 +1,14 @@
+## 0.32.0-rc.7 (prepared, not yet published)
+
+**Unsigned opt-in candidate; v0.30.5 remains Stable/Latest. The existing RC6 tag/assets are immutable.**
+
+- Roll forward the tested WinForms viewport fix from PR #98: Diagnostics > Tools, Start, BitLocker, LAPS, Helpdesk, Devices and Settings, including nested Enterprise and Diagnostics sections.
+- Bound AutoSize vertical-workspace section tables and action flows to the current viewport width, preserving wrapping heights and avoiding expensive no-op layout passes.
+- Repair stale selected nested TabPage Dock=Fill bounds after tab switches, resizing, DPI changes and RDP reconnects without rebuilding controls, accessing secrets or changing updater/security policy.
+- Keep regression coverage for deliberately collapsed viewports at compact/maximized 100%, 150%, 175% and 200% font/DPI scenarios; require real-device RDP/HiDPI signoff before external prerelease publication.
+- Pin new 0.32.0-rc.7 ProductVersion/InformationalVersion and exact independent release branch/tag gating, three single-file x64/x86/ARM64 ZIPs, SHA256SUMS and BUILD-INFO; require LAPS, CodeQL, protected-audit and verified legacy migration/rollback.
+- No new endpoint enrollment, automatic task, GPO change, unsigned consent, institutional-signing claim or Stable promotion.
+
 ## 0.32.0-rc.6
 
 **Unsigned, opt-in smoother Windows GUI preview. Stable/Latest remains v0.30.5.**

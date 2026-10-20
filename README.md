@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Latest stable v0.30.5 (unsigned); opt-in prerelease v0.32.0-rc.6 (not production-approved).** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Latest stable v0.30.5 (unsigned); published opt-in prerelease v0.32.0-rc.6; v0.32.0-rc.7 is prepared but NOT published.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,14 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+## v0.32.0-rc.7 — release candidate in preparation (not published)
+
+RC7 carries the verified [Diagnostics > Tools / nested-tab viewport fix](https://github.com/sgennadi/BitKeyBridge/pull/98) beyond the previously published RC6 tag. It repairs stale Dock=Fill bounds on selected nested WinForms pages, bounds AutoSize FlowLayoutPanel action rows to available width, and avoids competing scroll containers. Existing BitLocker/LAPS secret authorization, RBAC, protected-audit and updater trust/rollback behavior are unchanged.
+
+Only the **unsigned opt-in prerelease** pipeline is staged. The candidate must pass all Windows x64/x86/ARM64, UI 100–200%/RDP, LAPS, CodeQL, protected-audit and pinned upgrade/rollback checks **on its final source commit**, followed by manual real-device DPI/RDP and helpdesk acceptance before publication. Stable/Latest remains v0.30.5; there is no automatic deployment, GPO enrollment or unsigned-consent change.
+
+[RC7 release plan and acceptance checklist](docs/release-candidate-v0.32.0-rc.7.md).
 
 ## v0.32.0-rc.6 — smoother, cleaner Windows UI
 
