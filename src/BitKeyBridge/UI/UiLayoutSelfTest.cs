@@ -1474,13 +1474,29 @@ public static class UiLayoutSelfTest
                 (0, "HomeUnifiedQuery"),
                 (1, "BitLockerSearchQuery"),
                 (2, "LapsLiveSearchQuery"),
-                (3, "UnifiedDeviceSearchQuery"),
-                (4, "HelpdeskQuickSearch")
+                (3, "UnifiedDeviceSearchQuery")
             })
             {
                 if (FindByName(tabs.TabPages[tabIndex], queryName) is not TextBox)
                     failures.Add(
                         $"{formName}/{scenario.Name}: Ctrl+F search input {queryName} is missing.");
+            }
+        }
+
+        // The Helpdesk landing tab reuses Start rather than maintaining
+        // a separate query, duplicate BitLocker/LAPS buttons or AD/Graph work.
+        if (tabs.TabPages.Count > 4)
+        {
+            var helpdeskPage = tabs.TabPages[4];
+            if (FindByName(helpdeskPage, "HelpdeskOpenDeviceWorkspaceButton") is not Button ||
+                FindByName(helpdeskPage, "HelpdeskSelectedDeviceSummary") is not UiStatusLabel ||
+                FindByName(helpdeskPage, "HelpdeskRecoveryStepsButton") is not Button ||
+                FindByName(helpdeskPage, "HelpdeskDashboardStatus") is not UiStatusLabel ||
+                FindByName(helpdeskPage, "HelpdeskQuickSearch") is not null ||
+                helpdeskPage.Controls.OfType<FlowLayoutPanel>()
+                    .SelectMany(panel => panel.Controls.OfType<TextBox>()).Any())
+            {
+                failures.Add($"{formName}/{scenario.Name}: Helpdesk must reuse Start search and display selected-device metadata.");
             }
         }
 
@@ -1883,6 +1899,7 @@ public static class UiLayoutSelfTest
             checkRecoveryConnection: true);
 
         VerifyComputerQueryNavigation(
+            (MainForm)form,
             tabs,
             formName,
             scenario,
@@ -1890,6 +1907,7 @@ public static class UiLayoutSelfTest
     }
 
     private static void VerifyComputerQueryNavigation(
+        MainForm main,
         TabControl tabs,
         string formName,
         Scenario scenario,
@@ -1901,6 +1919,8 @@ public static class UiLayoutSelfTest
             .FirstOrDefault(page => page.Name == "RecoveryWorkspace");
         var laps = tabs.TabPages.Cast<TabPage>()
             .FirstOrDefault(page => page.Name == "LapsWorkspace");
+        var helpdesk = tabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "HelpdeskDashboardTab");
 
         var homeQuery = start is null
             ? null : FindByName(start, "HomeUnifiedQuery") as TextBox;
@@ -1909,7 +1929,7 @@ public static class UiLayoutSelfTest
         var lapsQuery = laps is null
             ? null : FindByName(laps, "LapsLiveSearchQuery") as TextBox;
 
-        if (start is null || recovery is null || laps is null ||
+        if (start is null || recovery is null || laps is null || helpdesk is null ||
             homeQuery is null || recoveryQuery is null || lapsQuery is null)
         {
             failures.Add(
@@ -1962,6 +1982,24 @@ public static class UiLayoutSelfTest
                 results.ClearSelection();
                 results.Rows[index].Selected = true;
                 results.CurrentCell = results.Rows[index].Cells[0];
+                tabs.SelectedTab = helpdesk;
+                if (FindByName(helpdesk, "HelpdeskSelectedDeviceSummary")
+                        is not UiStatusLabel selectedSummary ||
+                    !selectedSummary.Text.Contains("PC-SELECTED",
+                        StringComparison.Ordinal))
+                {
+                    failures.Add($"{formName}/{scenario.Name}: Helpdesk must show the exact selected Start metadata without a second search.");
+                }
+
+                main.PreviewHelpdeskDeviceWorkspaceForUiSelfTest();
+                if (!ReferenceEquals(tabs.SelectedTab, start) ||
+                    results.SelectedRows.Count != 1 ||
+                    results.SelectedRows[0].Tag is not HomeSearchResult selected ||
+                    selected.ComputerName != "PC-SELECTED")
+                {
+                    failures.Add($"{formName}/{scenario.Name}: returning from Helpdesk lost the source-qualified Start selection.");
+                }
+
                 tabs.SelectedTab = recovery;
                 if (recoveryQuery.Text != "PC-SELECTED")
                     failures.Add($"{formName}/{scenario.Name}: selected Start computer was not retained.");
