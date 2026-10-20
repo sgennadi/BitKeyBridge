@@ -2007,6 +2007,14 @@ public static class UiLayoutSelfTest
         }
         finally
         {
+            // The synthetic result was added only to check navigation.
+            // Clear its selection before the next assertion checks that
+            // Recovery Steps starts disabled without a selected computer.
+            // Otherwise the test itself leaves a false-positive enabled
+            // action behind, even though production navigation is correct.
+            var testGrid = FindByName(start, "HomeUnifiedSearchResults") as DataGridView;
+            testGrid?.Rows.Clear();
+            homeQuery.Clear();
             tabs.SelectedTab = initialTab;
         }
     }
