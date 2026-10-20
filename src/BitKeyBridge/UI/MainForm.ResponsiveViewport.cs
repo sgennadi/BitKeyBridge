@@ -214,6 +214,49 @@ public sealed partial class MainForm
         }
     }
 
+    private static void RepairSelectedTabHierarchy(TabControl tabs)
+    {
+        if (tabs.IsDisposed || tabs.Disposing ||
+            tabs.SelectedTab is not TabPage page)
+            return;
+
+        var display = tabs.DisplayRectangle;
+        if (display.Width <= 0 || display.Height <= 0)
+            return;
+
+        // Do not continuously fight native tab borders (a few pixels).
+        // Only correct an obviously stale page after a hidden-tab resize.
+        var widthTolerance = Math.Max(16, display.Width / 8);
+        var heightTolerance = Math.Max(16, display.Height / 8);
+        if (Math.Abs(page.Width - display.Width) > widthTolerance ||
+            Math.Abs(page.Height - display.Height) > heightTolerance)
+        {
+            page.Bounds = display;
+        }
+
+        foreach (Control content in page.Controls)
+        {
+            if (content.IsDisposed || content.Dock != DockStyle.Fill)
+                continue;
+
+            var viewport = page.DisplayRectangle;
+            if (viewport.Width <= 0 || viewport.Height <= 0)
+                continue;
+
+            if (content.Bounds != viewport)
+                content.Bounds = viewport;
+
+            if (content is TabControl nested)
+                RepairSelectedTabHierarchy(nested);
+            else if (content is FlowLayoutPanel
+                     { FlowDirection: FlowDirection.TopDown } flow)
+                // The panel's responsive Layout handler remeasures sections
+                // against its real, currently visible width, including when
+                // the Dock=Fill bounds were already correct at tab selection.
+                flow.PerformLayout();
+        }
+    }
+
     internal void ReflowMainViewport()
     {
         if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width <= 0)
@@ -249,19 +292,18 @@ public sealed partial class MainForm
                 geometryChanged = true;
             }
 
-            ReflowConnectionsRecent();
-            ReflowHomeResultsArea();
-
-            if (_mainTabs.SelectedTab is TabPage page &&
-                page.Controls.Count > 0 &&
-                page.Controls[0] is { Dock: DockStyle.Fill } content &&
-                content.Bounds != page.DisplayRectangle)
-            {
-                content.Bounds = page.DisplayRectangle;
-                geometryChanged = true;
-            }
             if (geometryChanged)
                 shell.PerformLayout();
+
+            // TabPage sizes are lazily calculated by WinForms. After switching
+            // Diagnostics > Tools, Settings > Enterprise, or reconnecting RDP,
+            // nested Dock=Fill content can retain a 200x100 provisional size
+            // even though the outer workspace fills the window. Repair only
+            // the visible tab chain; never rebuild its controls or re-theme.
+            RepairSelectedTabHierarchy(_mainTabs);
+
+            ReflowConnectionsRecent();
+            ReflowHomeResultsArea();
 
             // Theme controls subscribe to SizeChanged and DpiChanged already.
             // UiModernTheme.Refresh(shell) rebuilt every rounded HWND region and
