@@ -24,6 +24,15 @@ public sealed partial class MainForm
         }
     }
 
+    // A harmless navigation-only test hook. The actual control uses the same
+    // handler; this exercises it when a headless WinForms button cannot focus.
+    internal void PreviewHelpdeskDeviceWorkspaceForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Only available in UI tests.");
+        OpenHelpdeskDeviceWorkspace();
+    }
+
     private void UpdateHelpdeskSelectedDeviceSummary()
     {
         if (_helpdeskSelectedDeviceSummary is null ||
