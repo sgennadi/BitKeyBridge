@@ -18,6 +18,9 @@ $viewport = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainF
 $theme = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiModernTheme.cs') -Raw
 $base = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DpiAwareForm.cs') -Raw
 $style = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStyle.cs') -Raw
+$shell = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Shell.cs') -Raw
+$diagnostics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DiagnosticNavigation.cs') -Raw
+$layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 
 function Assert-Source([bool] $condition, [string] $reason) {
@@ -41,5 +44,15 @@ Assert-Source ($base.Contains('ClientSize.Width == lastMeasuredWidth')) 'Height-
 Assert-Source ($style.Contains('var updatingWidths = false')) 'Vertical workspace resize must guard nested Layout callbacks.'
 Assert-Source ($style.Contains('panel.ResumeLayout(performLayout: true)')) 'AutoSize sections must receive one final stable layout.'
 Assert-Source (-not [regex]::IsMatch($theme + $viewport + $base, 'WS_EX_COMPOSITED')) 'Do not force global composited windows: this hurts Remote Desktop.'
+Assert-Source ($viewport.Contains('RepairSelectedTabHierarchy(_mainTabs)')) 'MainForm must reflow the selected visible tab chain.'
+Assert-Source ($viewport.Contains('RepairSelectedTabHierarchy(nested)')) 'Diagnostics, Settings and Devices nested tabs must be repaired recursively.'
+Assert-Source ($viewport.Contains('flow.PerformLayout()')) 'Visible vertical flow sections must be measured after nested-tab activation.'
+Assert-Source ($style.Contains('child is TableLayoutPanel || child is FlowLayoutPanel')) 'AutoSize action flows must be horizontally constrained as well as table sections.'
+Assert-Source ($style.Contains('panel.VisibleChanged += (_, _) => ResizeChildren()')) 'Previously hidden pages must remeasure widths on selection.'
+Assert-Source ($shell.Contains('page.AutoScroll = false')) 'Outer TabPage AutoScroll must not fight nested Dock=Fill viewports.'
+Assert-Source ($shell.Contains('nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow()')) 'Nested tab switches must schedule geometry repair.'
+Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnostics.Contains('DiagnosticToolsActions')) 'Diagnostics layout must expose stable regression targets.'
+Assert-Source ($layoutSelfTest.Contains('VerifyNestedWorkspaceViewport(main, formName, scenario, failures)')) 'WinForms runtime must test real nested sizes after tab switches.'
+Assert-Source ($layoutSelfTest.Contains('content.Size = new Size(') -and $layoutSelfTest.Contains('main.ReflowMainViewport()')) 'Runtime must reproduce a stale 200x100-style content viewport.'
 
-Write-Host 'UI-RENDERING-REGRESSION OK: batched resize, cached theme, native controls, HiDPI and safe layout.'
+Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
