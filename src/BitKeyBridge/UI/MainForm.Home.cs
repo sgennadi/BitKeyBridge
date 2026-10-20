@@ -623,6 +623,9 @@ public sealed partial class MainForm
 
         UpdateHomeServiceCards(selected);
         RefreshHomeSelectionSummary();
+        // Helpdesk reflects this exact selected record, without a duplicate
+        // query, background lookup or new credential request.
+        UpdateHelpdeskSelectedDeviceSummary();
         // Selection changes the Start split layout immediately. A selected
         // computer must never be hidden below an oversized empty result grid.
         QueueMainViewportReflow();
