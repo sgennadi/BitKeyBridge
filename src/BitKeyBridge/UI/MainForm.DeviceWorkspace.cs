@@ -17,8 +17,11 @@ public sealed partial class MainForm
             return;
 
         _mainTabs.SelectedTab = _homeWorkspaceTab;
-        if (!_layoutSelfTest)
+        if (!_layoutSelfTest && _homeQuery.CanFocus)
+        {
             _homeQuery.Focus();
+            _homeQuery.SelectAll();
+        }
     }
 
     private void UpdateHelpdeskSelectedDeviceSummary()
