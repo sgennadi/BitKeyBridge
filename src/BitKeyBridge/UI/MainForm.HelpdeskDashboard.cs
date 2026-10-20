@@ -9,34 +9,37 @@ public sealed partial class MainForm
         var page = new TabPage("Helpdesk")
         {
             Name = "HelpdeskDashboardTab",
-            AutoScroll = true
+            AutoScroll = false
         };
         var root = CreateVerticalWorkspace();
         page.Controls.Add(root);
         root.Controls.Add(CreateSectionTitle(
             "Helpdesk workspace",
-            "Find a device, review recovery options, or diagnose access. No administrator rights are required to open this page."));
+            "Search and select a device once on Start. Helpdesk contains access checks, recovery guidance and support tools; it never performs a second device search."));
 
         var actions = CreateActionFlow();
-        var search = NewActionButton("Find Device");
+        var search = NewActionButton("Device Workspace");
+        search.Name = "HelpdeskOpenDeviceWorkspaceButton";
+        search.AccessibleName = "Open the existing Start device search and selection";
         var prepare = NewActionButton("Recovery Steps");
         prepare.Name = "HelpdeskRecoveryStepsButton";
         prepare.AccessibleName = "Review recovery steps without revealing a password";
-        var bitlocker = NewActionButton("BitLocker");
-        var laps = NewActionButton("LAPS");
+        // BitLocker and LAPS already have main tabs and selected-device
+        // cards on Start; do not duplicate those navigation controls here.
         var access = NewActionButton("Access Health");
         var support = NewActionButton("Support Bundle");
-        actions.Controls.AddRange([search, prepare, bitlocker, laps, access, support]);
+        actions.Controls.AddRange([search, prepare, access, support]);
         root.Controls.Add(actions);
 
-        var quickQuery = new TextBox
+        _helpdeskSelectedDeviceSummary = new UiStatusLabel
         {
-            Name = "HelpdeskQuickSearch",
-            AccessibleName = "Find a computer or device",
-            PlaceholderText = "Computer name or device ID",
-            Dock = DockStyle.Top
+            Name = "HelpdeskSelectedDeviceSummary",
+            AccessibleName = "Selected device metadata from Start; no recovery secrets",
+            AutoSize = true,
+            MaximumSize = new Size(1000, 0)
         };
-        root.Controls.Add(quickQuery);
+        UiStyle.ConfigureStatusLabel(_helpdeskSelectedDeviceSummary);
+        root.Controls.Add(_helpdeskSelectedDeviceSummary);
 
         var status = new UiStatusLabel
         {
@@ -95,40 +98,10 @@ public sealed partial class MainForm
                 searchAllowed ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
 
-        void OpenSearch()
-        {
-            if (_homeWorkspaceTab is null)
-                return;
-            _mainTabs.SelectedTab = _homeWorkspaceTab;
-            var query = quickQuery.Text.Trim();
-            if (!string.IsNullOrWhiteSpace(query))
-                _homeQuery.Text = query;
-            _homeQuery.Focus();
-            // A deliberate Find Device click/Enter must execute a metadata
-            // search instead of only transferring keyboard focus. The Start
-            // handler remains authoritative for source and RBAC checks.
-            if (query.Length >= SearchText.MinimumLiveSearchCharacters)
-                _homeSearchButton.PerformClick();
-        }
-        search.Click += (_, _) => OpenSearch();
+        // The same selected HomeSearchResult and source identity are reused.
+        // Helpdesk does not create an independent query or fetch secrets.
+        search.Click += (_, _) => OpenHelpdeskDeviceWorkspace();
         prepare.Click += (_, _) => ShowRecoveryWorkflowSteps();
-        quickQuery.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Enter)
-                return;
-            e.SuppressKeyPress = true;
-            OpenSearch();
-        };
-        bitlocker.Click += (_, _) =>
-        {
-            if (_recoveryWorkspaceTab is not null)
-                _mainTabs.SelectedTab = _recoveryWorkspaceTab;
-        };
-        laps.Click += (_, _) =>
-        {
-            if (_lapsWorkspaceTab is not null)
-                _mainTabs.SelectedTab = _lapsWorkspaceTab;
-        };
         access.Click += (_, _) => OpenHelpdeskAccessHealth();
         support.Click += (_, _) =>
         {
@@ -144,8 +117,13 @@ public sealed partial class MainForm
             if (!_layoutSelfTest && _accessHealthRun.Enabled)
                 await RunAccessHealthAsync();
         };
-        page.Enter += (_, _) => UpdateStatus();
+        page.Enter += (_, _) =>
+        {
+            UpdateStatus();
+            UpdateHelpdeskSelectedDeviceSummary();
+        };
         UpdateStatus();
+        UpdateHelpdeskSelectedDeviceSummary();
         return page;
     }
 
