@@ -63,6 +63,7 @@ Assert-Source (-not $helpdesk.Contains('HelpdeskQuickSearch')) 'Helpdesk must no
 Assert-Source ($shell.Contains('4 => _homeQuery')) 'Ctrl+F on Helpdesk must route to the canonical Start search.'
 Assert-Source ($computerContext.Contains('GetSelectedHomeSearchResult() is { } selected')) 'Returning to Start must preserve an exact selected row, not clear its metadata after a partial query.'
 Assert-Source ($deviceWorkspace.Contains('selected.IdentityAmbiguous') -and $deviceWorkspace.Contains('selected.SourceIdentity')) 'Cloud and ambiguous device identities must remain explicitly unverified.'
+Assert-Source ($deviceWorkspace.Contains('GetSelectedHomeSearchResult() is not null') -and $deviceWorkspace.Contains('_homeSearchResults.Focus()')) 'Returning to Start with a selected device must focus its row, not restart the search.'
 Assert-Source ($layoutSelfTest.Contains('PreviewHelpdeskDeviceWorkspaceForUiSelfTest()') -and $layoutSelfTest.Contains('returning from Helpdesk lost the source-qualified Start selection')) 'Runtime must verify Helpdesk navigation retains an exact selected Start record.'
 
 Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
