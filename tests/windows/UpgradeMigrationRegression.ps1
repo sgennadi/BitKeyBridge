@@ -92,6 +92,42 @@ function Invoke-Apply([string]$Tool, [string]$Stage, [string]$Version,
             throw 'BitKeyBridge apply helper exceeded four-minute test timeout.'
         }
         if ($process.ExitCode -ne 0) {
+            # On an ephemeral CI machine, show only the updater's already
+            # sanitized failure reason and synthetic executable hash state.
+            # Do not dump appsettings, cloud config, DPAPI blobs or raw logs.
+            # Never retry a rejected update here: a trust/policy rejection
+            # must remain a hard regression failure.
+            $historyPath = Join-Path $env:ProgramData 'BitKeyBridge\Updates\update-history.json'
+            try {
+                if (Test-Path -LiteralPath $historyPath) {
+                    $rows = @(Get-Content -LiteralPath $historyPath -Raw | ConvertFrom-Json)
+                    $action = if ($Rollback) { 'Rollback' } else { 'Install' }
+                    $failed = $rows |
+                        Where-Object { $_.Result -eq 'Failed' -and $_.Action -eq $action } |
+                        Sort-Object TimestampUtc -Descending |
+                        Select-Object -First 1
+                    if ($null -ne $failed) {
+                        # The application sanitized Details before writing
+                        # it. Further redact absolute paths and cap output.
+                        $reason = [string]$failed.Details
+                        $reason = $reason -replace '(?i)[A-Z]:\\[^;\s]+', '[PATH]'
+                        $reason = $reason -replace '(?i)(password|token|secret|credential)\s*[:=]\s*[^;\s]+', '$1=[REDACTED]'
+                        if ($reason.Length -gt 350) { $reason = $reason.Substring(0, 350) }
+                        Write-Host ("CI-only sanitized apply failure: {0}" -f $reason)
+                    }
+                    else {
+                        Write-Host 'CI-only apply failure: no matching persisted failure entry.'
+                    }
+                }
+            }
+            catch {
+                Write-Host ("CI-only update failure history unavailable: {0}" -f
+                    $_.Exception.GetType().Name)
+            }
+            $targetPresent = Test-Path -LiteralPath $Target
+            $backupPresent = Test-Path -LiteralPath ($Target + '.bak')
+            Write-Host ("CI-only file state: TargetPresent={0} BackupPresent={1}" -f
+                $targetPresent, $backupPresent)
             throw "Actual BitKeyBridge apply helper failed. Rollback=$Rollback Version=$Version ExitCode=$($process.ExitCode)"
         }
     }
