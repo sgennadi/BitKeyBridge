@@ -30,6 +30,9 @@ $cloudWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge
 $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
+$telemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutTelemetry.cs') -Raw
+$cleanup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\UpdateStagingCleanupService.cs') -Raw
+$housekeeping = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\HousekeepingService.cs') -Raw
 
 function Assert-Source([bool] $condition, [string] $reason) {
     if (-not $condition) { throw "UI repaint regression: $reason" }
@@ -60,6 +63,11 @@ Assert-Source ($style.Contains('panel.VisibleChanged += (_, _) => ResizeChildren
 Assert-Source ($shell.Contains('page.AutoScroll = false')) 'Outer TabPage AutoScroll must not fight nested Dock=Fill viewports.'
 Assert-Source ($shell.Contains('nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow()')) 'Nested tab switches must schedule geometry repair.'
 Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnostics.Contains('DiagnosticToolsActions')) 'Diagnostics layout must expose stable regression targets.'
+Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and $base.Contains('UiLayoutTelemetry.RecordResponsiveForm(started)')) 'Full-tree DPI and font refresh must not run twice on first show; counters must track it.'
+Assert-Source ($style.Contains('if (label.StatusKind == kind') -and $layoutSelfTest.Contains('Unchanged status text/kind forced a repaint')) 'Repeated unchanged status polls must not repaint.'
+Assert-Source ($viewport.Contains('_lastRepairedTabPath') -and $viewport.Contains('UiLayoutTelemetry.RecordViewport(viewportStarted)')) 'Selected-tab layout must avoid repeat repair and expose timing metrics.'
+Assert-Source ($diagnostics.Contains('RunUiPerformanceDiagnosticsButton') -and $telemetry.Contains('Interlocked.Increment')) 'Diagnostics must expose allocation-light, non-secret repaint metrics.'
+Assert-Source ($cleanup.Contains('LastModifiedTreeUtcOrRejectReparse') -and $cleanup.Contains('UpdateRollbackHoldService.IsActiveForVersion') -and $housekeeping.Contains('UpdateStagingCleanupService.Run(')) 'Daily housekeeping must safely prune only old updater staging folders, preserving rollback and reparse-point protections.'
 Assert-Source ($layoutSelfTest.Contains('VerifyNestedWorkspaceViewport(main, formName, scenario, failures)')) 'WinForms runtime must test real nested sizes after tab switches.'
 Assert-Source ($layoutSelfTest.Contains('content.Size = new Size(') -and $layoutSelfTest.Contains('main.ReflowMainViewport()')) 'Runtime must reproduce a stale 200x100-style content viewport.'
 
