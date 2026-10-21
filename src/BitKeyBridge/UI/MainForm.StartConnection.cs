@@ -146,7 +146,7 @@ public sealed partial class MainForm
         UiStyle.ConfigureStatusLabel(_homeCloudConnectionStatus);
         _homeCloudConnectionStatus.MaximumSize = new Size(1100, 0);
         UiStyle.SetStatus(_homeCloudConnectionStatus,
-            "Select AD, Microsoft Entra / Intune, or both to begin.",
+            "Use Connect / Change to select AD, Microsoft 365 or both.",
             UiStatusKind.Neutral);
         layout.Controls.Add(_homeCloudConnectionStatus, 0, 2);
 
@@ -260,15 +260,15 @@ public sealed partial class MainForm
                 HasCloudSearchSession()
                     ? "Connected to Microsoft Entra / Intune using delegated Graph permissions."
                     : StartCloudAppConfigured()
-                        ? "Cloud is configured. Click Connect to Microsoft 365 to sign in with MFA."
-                        : "No cloud application configured. The connection wizard will open.",
+                        ? "Cloud is configured. Use Connect / Change for delegated MFA sign-in."
+                        : "Cloud app not configured. Connect / Change opens guided setup.",
                 HasCloudSearchSession() ? UiStatusKind.Success :
                 StartCloudAppConfigured() ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
         else if (SelectedStartSource == StartConnectionPolicy.Choose)
         {
             UiStyle.SetStatus(_homeCloudConnectionStatus,
-                "Choose where recovery data is stored. No AD or cloud credential prompt is required yet.",
+                "Use Connect / Change to choose a source. No credentials are requested until Connect.",
                 UiStatusKind.Neutral);
         }
     }
