@@ -1889,12 +1889,24 @@ public static class UiLayoutSelfTest
             var compact = FindByName(form, "UpdateCenterCompact") as CheckBox;
             if (compact is not null)
                 compact.Checked = false;
+            visualMain.PreviewSetConnectionOptionsExpandedForUiTest(true);
+            visualMain.PreviewSetHelpdeskProfilesExpandedForUiTest(true);
+            visualMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(true);
             visualMain.PreviewResetVisualLayoutForUiSelfTest();
             if (visualMain.PreviewHomePaneOrderForUiSelfTest() !=
                 "BitLocker,Laps,Computers")
                 failures.Add($"{formName}/{scenario.Name}: reset did not restore the default three-pane order.");
             if (compact is not { Checked: true })
                 failures.Add($"{formName}/{scenario.Name}: reset did not restore compact Updates.");
+            if (FindByName(form, "HomeConnectionOptionsToggle") is not Button
+                { Text: "More connection options..." } ||
+                FindByName(form, "HelpdeskProfilesToggle") is not Button
+                { Text: "Show environment profiles..." } ||
+                FindByName(form, "HelpdeskRecoveryPolicyToggle") is not Button
+                { Text: "Show recovery access policy..." })
+            {
+                failures.Add($"{formName}/{scenario.Name}: visual reset did not collapse optional Connection and Settings sections.");
+            }
             if (securityBefore !=
                 visualMain.PreviewNonVisualSettingsForUiSelfTest())
                 failures.Add($"{formName}/{scenario.Name}: visual reset changed authentication source or recovery policy.");
