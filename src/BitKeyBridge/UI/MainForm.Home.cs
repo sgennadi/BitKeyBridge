@@ -2,23 +2,61 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
+    // Editing the Start query invalidates the old device selection *now*,
+    // even if the user clears the input or no source is connected. Never let
+    // stale BitLocker/LAPS actions point at a previous computer while a new
+    // query is waiting for the debounce timer.
+    private void InvalidateHomeSelectionOnQueryEdit()
+    {
+        if (_homeSearchResults.IsDisposed)
+            return;
+
+        var hadRows = _homeSearchResults.Rows.Count > 0;
+        if (hadRows)
+        {
+            // Any revealed secret belongs to the previous device context.
+            // This uses the established clipboard/password lifetime cleanup.
+            if (!_layoutSelfTest)
+                ClearVisibleSecretsNow();
+
+            _updatingHomeSearchResults = true;
+            try
+            {
+                _homeSearchResults.Rows.Clear();
+            }
+            finally
+            {
+                _updatingHomeSearchResults = false;
+            }
+            UpdateHomeSearchSelection();
+            UiStyle.SetStatus(_homeSearchStatus,
+                "Search text changed. Previous device selection cleared.",
+                UiStatusKind.Neutral);
+        }
+    }
+
     private void QueueHomeSearch()
     {
         if (_layoutSelfTest)
             return;
 
         _homeSearchDebounceTimer?.Stop();
+        // Stop old LDAP/Graph work immediately, not only at the start of the
+        // next search. A short or empty query must not strand a busy spinner.
+        _homeSearchCancellation?.Cancel();
         _homeSearchGeneration++;
+        _homeSearchCancelButton.Enabled = false;
+        _homeSearchProgress.Visible = false;
+        _homeSearchButton.Enabled =
+            _directoryConnected || HasCloudSearchSession();
 
-        var query =
-            _homeQuery.Text.Trim();
-
-        if (query.Length <
-            SearchText.MinimumLiveSearchCharacters ||
-            !_directoryConnected)
-        {
+        var query = _homeQuery.Text.Trim();
+        // Live keystrokes remain AD-only; Microsoft Graph queries require
+        // an explicit Search / Enter action to avoid excess Graph requests.
+        if (query.Length < SearchText.MinimumLiveSearchCharacters ||
+            !_directoryConnected ||
+            !StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource))
             return;
-        }
 
         _homeSearchDebounceTimer?.Start();
     }
