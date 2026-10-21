@@ -506,15 +506,19 @@ public sealed partial class MainForm
                         : (Kind: MetadataFailureKind.Unknown, Source: "Cloud");
 
             var statusText = failedSources.Count > 0
-                ? $"Partial search ({MetadataFailureGuidance.Label(primaryFailure.Kind)}): " +
-                  $"{names.Count} result(s) visible. " +
-                  MetadataFailureGuidance.ShortAction(primaryFailure.Kind, primaryFailure.Source) +
-                  " See diagnostics."
+                ? UiLanguageService.Translate(_uiLanguageCode, "MetadataPartial") +
+                  " (" + UiLanguageService.Translate(_uiLanguageCode,
+                      "MetadataKind" + primaryFailure.Kind) + "): " +
+                  names.Count + " " +
+                  UiLanguageService.Translate(_uiLanguageCode, "MetadataVisible") + " " +
+                  UiLanguageService.Translate(_uiLanguageCode,
+                      "MetadataAction" + primaryFailure.Kind) + " " +
+                  UiLanguageService.Translate(_uiLanguageCode, "MetadataSeeDiagnostics")
                 : ambiguousNames.Count > 0
                     ? $"{names.Count} result(s); {ambiguousNames.Count} ambiguous computer name(s). " +
                       "Use an exact AD object GUID or OU in LAPS/Recovery."
                     : names.Count == 0
-                        ? "No matching record visible. Check device identity, selected source and scope; backup absence is not proven."
+                        ? UiLanguageService.Translate(_uiLanguageCode, "MetadataNoAdRecords")
                         : names.Count == 1
                             ? "One computer found. BitLocker and LAPS actions are below."
                             : $"Found {names.Count} computers. Select one to view its recovery cards.";
