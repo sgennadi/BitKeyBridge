@@ -72,6 +72,8 @@ public static class UiLayoutSelfTest
         VerifyStatusGlyphScaling(
             failures);
 
+        VerifyUnchangedStatusDoesNotRepaint(failures);
+
         VerifyWrappingStatusMeasurement(
             failures);
 
@@ -200,6 +202,38 @@ public static class UiLayoutSelfTest
         return failures.Count == 0
             ? 0
             : 1;
+    }
+
+    private static void VerifyUnchangedStatusDoesNotRepaint(
+        List<string> failures)
+    {
+        using var status = new UiStatusLabel { Text = "Ready" };
+        UiStyle.ConfigureStatusLabel(status);
+        UiStyle.SetStatus(status, "Ready", UiStatusKind.Success);
+        status.CreateControl();
+
+        var original = status.Image;
+        var invalidations = 0;
+        status.Invalidated += (_, _) => invalidations++;
+
+        // UI polling can repeat identical status updates many times.
+        // There must be no Image replacement or forced repaint.
+        UiStyle.SetStatus(status, "Ready", UiStatusKind.Success);
+        UiStyle.RefreshStatusLabel(status);
+        if (!ReferenceEquals(original, status.Image) ||
+            invalidations != 0)
+        {
+            failures.Add(
+                "Unchanged status text/kind forced a repaint or image replacement.");
+        }
+
+        UiStyle.SetStatus(status, "Disconnected", UiStatusKind.Warning);
+        if (status.Text != "Disconnected" ||
+            status.StatusKind != UiStatusKind.Warning)
+        {
+            failures.Add(
+                "Status optimization suppressed an actual state change.");
+        }
     }
 
     private static void VerifyModernAccentAndDynamicTheme(List<string> failures)
