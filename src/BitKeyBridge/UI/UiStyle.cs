@@ -320,13 +320,17 @@ public static class UiStyle
         string text,
         UiStatusKind kind)
     {
-        label.StatusKind =
-            kind;
-        label.Text =
-            text;
+        // Frequent progress and connection polls often repeat the same
+        // status. Writing Label.Text when unchanged causes a new layout pass.
+        if (label.StatusKind == kind &&
+            string.Equals(label.Text, text, StringComparison.Ordinal))
+            return;
 
-        RefreshStatusLabel(
-            label);
+        label.StatusKind = kind;
+        if (!string.Equals(label.Text, text, StringComparison.Ordinal))
+            label.Text = text;
+
+        RefreshStatusLabel(label);
     }
 
     public static void ApplyStatusLabel(
@@ -343,34 +347,44 @@ public static class UiStyle
     public static void RefreshStatusLabel(
         UiStatusLabel label)
     {
-        var kind =
-            label.StatusKind;
-
-        (label.BackColor, label.ForeColor) =
-            ResolveStatusColors(
-                kind,
-                SystemInformation.HighContrast);
-
-        label.Image =
-            UiStatusGlyphs.Get(
-                kind,
-                label.DeviceDpi,
-                label.ForeColor);
-
-        if (string.IsNullOrWhiteSpace(
-                label.AccessibleName))
+        var kind = label.StatusKind;
+        var (background, foreground) = ResolveStatusColors(
+            kind, SystemInformation.HighContrast);
+        // Status images are cached per kind / DPI / color. Changing their
+        // property on EVERY responsive refresh invalidated many AutoSize
+        // labels and their parents even when there was no visual change.
+        var glyph = UiStatusGlyphs.Get(kind, label.DeviceDpi, foreground);
+        var changed = false;
+        if (label.BackColor != background)
         {
-            label.AccessibleName =
-                "Status";
+            label.BackColor = background;
+            changed = true;
+        }
+        if (label.ForeColor != foreground)
+        {
+            label.ForeColor = foreground;
+            changed = true;
+        }
+        if (!ReferenceEquals(label.Image, glyph))
+        {
+            label.Image = glyph;
+            changed = true;
         }
 
-        label.AccessibleDescription =
-            string.IsNullOrWhiteSpace(
-                label.Text)
-                ? $"{kind} status."
-                : $"{kind} status. {label.Text}";
+        if (string.IsNullOrWhiteSpace(label.AccessibleName))
+            label.AccessibleName = "Status";
 
-        label.Invalidate();
+        var description = string.IsNullOrWhiteSpace(label.Text)
+            ? $"{kind} status."
+            : $"{kind} status. {label.Text}";
+        if (!string.Equals(label.AccessibleDescription, description,
+                StringComparison.Ordinal))
+            label.AccessibleDescription = description;
+
+        // Property setters already invalidate when changed. The unchanged
+        // case deliberately schedules no new paint/measurement at all.
+        if (changed && label.IsHandleCreated)
+            label.Invalidate();
     }
 
     internal static (
