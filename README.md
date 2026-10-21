@@ -12,6 +12,8 @@ Release packages are self-contained single-file Windows builds for **x64**, **x8
 
 ## Consolidated RC8 security changes (not published)
 
+[RC8 single-source release acceptance checklist](docs/release-candidate-v0.32.0-rc.8.md). This integrated candidate is isolated from the stacked RC7/RC8 draft pull requests.
+
 This branch removes Graph username/password (ROPC) sign-in from GUI, CLI and token services. Existing `Password` profile choices migrate to `DeviceCode` and require a new interactive sign-in. Tenant, client and certificate identifiers remain; legacy username fields are no longer persisted. The optional Remote API remains disabled by default. Protected audit and release-signing gates are unchanged. **Do not deploy this candidate until its combined CI and real Windows/Entra/RDP pilot pass.**
 
 ## Next preview: unified Helpdesk Device Workspace (development only)

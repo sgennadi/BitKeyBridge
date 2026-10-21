@@ -1,16 +1,17 @@
-## 0.32.0-rc.8 — development preview (not published)
+## 0.32.0-rc.8
 
-**Work in progress (PRs #100 and #101); builds still identify as RC7 until a separate RC8 release gate is accepted.**
+**Consolidated single-source candidate (unpublished).** Includes RC7/RC8 UI/updater fixes and Graph ROPC removal on one independent integration branch. The exact candidate requires full CI, manual Windows/RDP/AD/Entra acceptance, and explicit release approval; stable v0.30.5 remains unchanged.
 
 - Await diagnostic actions and log sanitized failures once; explicitly deny missing audit-broker identities; preserve blank grid dates and annotate the recovery-selection null contract.
 - Load the verified Authenticode leaf certificate through X509CertificateLoader and support an optional exact TrustedUpdateSignerThumbprint pin in administrator-owned appsettings.json. A configured pin requires Windows trust even when unsigned consent exists. Keep existing publisher policy and unsigned defaults.
-- Pin Linux CI to Ubuntu 24.04 and label the workflow as RC8 development checks; binary versions remain under the existing RC7 release gate. Add production-verifier signed, tampered, unsigned and wrong-pin regression coverage.
+- Pin Linux CI to Ubuntu 24.04 and gate an independent RC8 branch/tag, without publishing from an integration PR. Add production-verifier signed, tampered, unsigned and wrong-pin regression coverage.
 - Consolidate Start and Helpdesk device search into one source-qualified selection. Preserve the selected AD/Entra record across Helpdesk navigation; require existing per-source authorization for BitLocker/LAPS.
 - Simplify the connection chooser to a primary Connect / Change action, optional direct connection tools and expandable cloud permissions guidance; retain administrator-only application provisioning and no saved passwords.
 - Collapse seldom-used profile and recovery policy editors while keeping the saved protected-audit/ticket status visible, and add visual-only Reset Layout with preserved credentials, audit and selection.
 - Avoid repeated status paints, full-form DPI layout passes and unnecessary nested-tab FlowLayoutPanel remeasurement; add on-demand Diagnostics > Tools > UI Performance counters showing WinForms layout count, average and worst duration without secret/device data.
 - Automatically remove stale updater staging versions and abandoned helper/rollback GUID directories during enabled housekeeping using the existing 7-day temporary retention setting. Restrict removal to named folders under ProgramData/BitKeyBridge/Updates; preserve current/held versions, live helpers, symlinks, .bak, update history, settings, protected audit and recovery secrets.
-- Expand offline WinForms 100-200%/RDP, status redraw, protected-update staging and rollback regressions. The preview remains Draft until full CI and interactive AD/Entra/RDP/security acceptance.
+- Remove Microsoft Graph ROPC grant and password UI/CLI. Migrate legacy AuthMode=Password to interactive DeviceCode and omit obsolete usernames from saved settings/profiles. Keep certificate auth for unattended jobs and Remote API disabled by default.
+- Expand offline WinForms 100-200%/RDP, status redraw, protected-update staging and rollback regressions. Do not publish until full CI and interactive AD/Entra/RDP/security acceptance.
 
 ## 0.32.0-rc.7
 

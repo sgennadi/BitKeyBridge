@@ -81,7 +81,8 @@ public static class HelpdeskIntegrationSelfTest
 
                 var oldConfig = JsonSerializer.Deserialize<CloudAuthConfig>(
                     "{\"AuthMode\":\"Password\",\"Username\":\"legacy-user\"}");
-                Assert(oldConfig is not null, "Legacy cloud JSON failed to load.");
+                if (oldConfig is null)
+                    throw new InvalidOperationException("Legacy cloud JSON failed to load.");
                 oldConfig.AuthMode = CloudAuthenticationPolicy.Normalize(oldConfig.AuthMode);
                 var roundTrip = JsonSerializer.Serialize(oldConfig);
                 Assert(
@@ -91,7 +92,8 @@ public static class HelpdeskIntegrationSelfTest
 
                 var oldProfile = JsonSerializer.Deserialize<HelpdeskProfile>(
                     "{\"Name\":\"Legacy\",\"CloudAuthMode\":\"Password\",\"CloudUsername\":\"legacy-user\"}");
-                Assert(oldProfile is not null, "Legacy profile JSON failed to load.");
+                if (oldProfile is null)
+                    throw new InvalidOperationException("Legacy profile JSON failed to load.");
                 oldProfile.CloudAuthMode = CloudAuthenticationPolicy.Normalize(oldProfile.CloudAuthMode);
                 Assert(
                     oldProfile.CloudAuthMode == "DeviceCode" &&
