@@ -54,7 +54,7 @@ internal static class UpdateStagingCleanupService
                     return;
                 }
                 Prune(updatesRoot, retentionDays, dryRun, report,
-                    currentVersion, utcNow);
+                    currentVersion, utcNow, respectRollbackHold: true);
             }
             catch (Exception ex)
             {
@@ -68,12 +68,13 @@ internal static class UpdateStagingCleanupService
         // Used by isolated --self-test fixtures only, never by the
         // production service or its privileged update pathway.
         Prune(updatesRoot, retentionDays, dryRun, report,
-            currentVersion, utcNow);
+            currentVersion, utcNow, respectRollbackHold: false);
     }
 
     private static void Prune(
         string updatesRoot, int retentionDays, bool dryRun,
-        HousekeepingStatus report, string? currentVersion, DateTime? utcNow)
+        HousekeepingStatus report, string? currentVersion, DateTime? utcNow,
+        bool respectRollbackHold)
     {
         var root = Path.GetFullPath(updatesRoot);
         var cutoff = (utcNow ?? DateTime.UtcNow).AddDays(-retentionDays);
@@ -119,7 +120,7 @@ internal static class UpdateStagingCleanupService
 
             // A deliberate rollback hold is critical recovery state.
             // If its metadata is damaged, IsActiveForVersion fails closed.
-            if (VersionName.IsMatch(name) &&
+            if (respectRollbackHold && VersionName.IsMatch(name) &&
                 UpdateRollbackHoldService.IsActiveForVersion(name[1..]))
                 continue;
 
