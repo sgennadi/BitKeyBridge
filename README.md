@@ -20,6 +20,13 @@ computer when the original query was abbreviated. Dedicated authorized
 BitLocker/LAPS views, permission checks and audit remain unchanged.
 This prototype is **not published** and does not change RC7 release preparation.
 
+The next [compact Connection and Settings preview](docs/rc8-settings-connection-preview.md)
+keeps one primary connection action, moves seldom-used direct source/cloud
+controls behind an explicit expansion, and provides collapsible Helpdesk
+profiles and recovery policies with a visible summary of the **saved** protected
+audit and ticket requirements. Enterprise authorization gates are unchanged.
+
+
 ## v0.32.0-rc.7 — release candidate in preparation (not published)
 
 RC7 carries the verified [Diagnostics > Tools / nested-tab viewport fix](https://github.com/sgennadi/BitKeyBridge/pull/98) beyond the previously published RC6 tag. It repairs stale Dock=Fill bounds on selected nested WinForms pages, bounds AutoSize FlowLayoutPanel action rows to available width, and avoids competing scroll containers. Existing BitLocker/LAPS secret authorization, RBAC, protected-audit and updater trust/rollback behavior are unchanged.
