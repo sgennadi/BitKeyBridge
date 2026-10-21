@@ -12,6 +12,9 @@ public sealed partial class MainForm
         ConfigService.LoadStartConnectionPreferences();
 
     private Control? _startAdIdentityPanel;
+    private Control? _startDirectActionsPanel;
+    private Control? _startDirectHint;
+    private bool _connectionOptionsExpanded;
     private bool _initializingStartSource;
     private bool _cloudWizardOpening;
 
@@ -110,9 +113,11 @@ public sealed partial class MainForm
         layout.Controls.Add(primary, 0, 0);
         showOptions.Click += (_, _) =>
         {
-            row.Visible = !row.Visible;
-            showOptions.Text = row.Visible
+            _connectionOptionsExpanded = !_connectionOptionsExpanded;
+            row.Visible = _connectionOptionsExpanded;
+            showOptions.Text = _connectionOptionsExpanded
                 ? "Hide connection options" : "More connection options...";
+            UpdateStartConnectionSourceControls();
             QueueMainViewportReflow();
         };
         _homeReconnectWizardButton.Click += async (_, _) =>
@@ -219,9 +224,15 @@ public sealed partial class MainForm
         _homeUseWindowsIdentity.Visible = ad;
         _homeUseOtherAccount.Visible = ad;
         if (_startAdIdentityPanel is not null)
-            _startAdIdentityPanel.Visible = ad;
-        // Diagnostic tools remain available while disconnected or using
-        // Microsoft 365. Only the AD-specific advanced settings are scoped.
+            _startAdIdentityPanel.Visible = ad && _connectionOptionsExpanded;
+        // Direct operations are opt-in visual details only. Permission and
+        // source checks on the underlying actions remain unchanged.
+        if (_startDirectActionsPanel is not null)
+            _startDirectActionsPanel.Visible = _connectionOptionsExpanded;
+        if (_startDirectHint is not null)
+            _startDirectHint.Visible = _connectionOptionsExpanded;
+        // Diagnostic tools remain discoverable even when disconnected or
+        // cloud-only: reveal the direct actions through More options.
         _homeConnectionToolsButton.Visible = true;
         _homeAdvancedConnectionMenuItem.Visible = ad;
         // Never leave AD credential and server fields visible while
