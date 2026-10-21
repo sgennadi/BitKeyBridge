@@ -89,8 +89,7 @@ internal static class UiTabNavigationTelemetry
             if (result.SampleSize == 0)
                 continue;
             lines.Add(FormattableString.Invariant(
-                $"{Pages[index]}: runs={result.Count}, window={result.SampleSize}, " +
-                $"p50={result.P50:F1} ms, p95={result.P95:F1} ms, max={result.Max:F1} ms"));
+                $"{Pages[index]}: runs={result.Count}, window={result.SampleSize}, p50={result.P50:F1} ms, p95={result.P95:F1} ms, max={result.Max:F1} ms"));
         }
         if (lines.Count == 2)
             lines.Add("No completed workspace switches recorded yet.");
