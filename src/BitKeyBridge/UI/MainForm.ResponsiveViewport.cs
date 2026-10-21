@@ -14,6 +14,7 @@ public sealed partial class MainForm
     private string _homeConnectionsRecentLayoutKey = string.Empty;
     private bool _homeConnectionsRecentReflowRunning;
     private string _lastRepairedTabPath = string.Empty;
+    private int _navigationReflowSequence;
 
     private void InitializeMainViewport()
     {
@@ -44,6 +45,41 @@ public sealed partial class MainForm
         _mainViewportIdleTimer.Start();
     }
 
+
+    // Actual tab navigation is discrete, unlike high-frequency WM_SIZE bursts.
+    // Post exactly one pass after WinForms activates the selected page. Rapid
+    // navigation cancels stale posted callbacks rather than laying out tabs
+    // that are already hidden. This does not make LDAP/Graph calls.
+    private void QueueNavigationViewportReflow(long navigationStarted = 0)
+    {
+        if (!IsHandleCreated || IsDisposed || Disposing)
+            return;
+
+        _mainViewportIdleTimer.Stop();
+        var sequence = ++_navigationReflowSequence;
+        var selectedIndex = _mainTabs.SelectedIndex;
+        try
+        {
+            BeginInvoke((Action)(() =>
+            {
+                if (IsDisposed || Disposing || !_mainTabs.IsHandleCreated ||
+                    sequence != _navigationReflowSequence ||
+                    _mainTabs.SelectedIndex != selectedIndex)
+                    return;
+
+                ReflowMainViewport();
+                if (navigationStarted > 0)
+                    UiTabNavigationTelemetry.Record(selectedIndex, navigationStarted);
+            }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The handle can disappear between IsHandleCreated and BeginInvoke
+            // during shutdown or RDP teardown. A new Shown/resize will reflow.
+            System.Diagnostics.Debug.WriteLine(
+                "Navigation reflow was not scheduled: " + ex.GetType().Name);
+        }
+    }
 
     private double EffectiveHomeDpiScale() =>
         Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
@@ -336,14 +372,21 @@ public sealed partial class MainForm
             RepairSelectedTabHierarchy(_mainTabs, changedPath);
             _lastRepairedTabPath = selectedPath;
 
-            ReflowConnectionsRecent();
-            ReflowHomeResultsArea();
+            // Home cards and connection panes are not part of any other
+            // workspace. Do not update their geometry or glyph regions while
+            // a different page is selected. Returning to Start schedules an
+            // immediate reflow using the current RDP/window dimensions.
+            if (ReferenceEquals(_mainTabs.SelectedTab, _homeWorkspaceTab))
+            {
+                ReflowConnectionsRecent();
+                ReflowHomeResultsArea();
+                AlignHomeStatusGlyphs();
+            }
 
             // Theme controls subscribe to SizeChanged and DpiChanged already.
             // UiModernTheme.Refresh(shell) rebuilt every rounded HWND region and
             // invalidated all tab controls on each window resize. It belongs
             // only in the shared theme/DPI refresh path, NOT in WM_SIZE.
-            AlignHomeStatusGlyphs();
         }
         finally
         {
