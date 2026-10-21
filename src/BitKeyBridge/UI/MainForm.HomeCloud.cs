@@ -4,7 +4,8 @@ public sealed partial class MainForm
 {
     private sealed record HomeCloudLookupStatus(
         int RecordsAdded, bool IsPartial, string SourceDiagnostics,
-        string? Failure);
+        string? Failure,
+        MetadataFailureKind FailureKind = MetadataFailureKind.None);
 
     private bool HasCloudSearchSession() =>
         _cloudToken is not null &&
@@ -18,7 +19,8 @@ public sealed partial class MainForm
     {
         if (!HasCloudSearchSession())
             return new HomeCloudLookupStatus(
-                0, false, string.Empty, "Cloud session unavailable.");
+                0, false, string.Empty, "Cloud session unavailable.",
+                MetadataFailureKind.SignInRequired);
 
         try
         {
@@ -70,7 +72,8 @@ public sealed partial class MainForm
             ct.ThrowIfCancellationRequested();
             return new HomeCloudLookupStatus(
                 0, false, string.Empty,
-                DiagnosticRedaction.Sanitize(ex.Message));
+                DiagnosticRedaction.Sanitize(ex.Message),
+                MetadataFailureGuidance.Classify(ex));
         }
     }
 
@@ -100,16 +103,27 @@ public sealed partial class MainForm
             if (result.Failure is not null || result.IsPartial)
                 _appDiagnostics.ShowMessage(
                     "Cloud metadata search was incomplete.",
-                    result.Failure ?? result.SourceDiagnostics);
+                    (result.Failure ?? result.SourceDiagnostics) +
+                    Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(
+                        result.Failure is null
+                            ? MetadataFailureKind.Unknown
+                            : result.FailureKind, "Cloud"));
 
-            UiStyle.SetStatus(
-                _homeSearchStatus,
-                result.Failure is not null
-                    ? "Cloud lookup failed. See diagnostics; no backup absence is proven."
+            var resultStatus = result.Failure is not null
+                ? MetadataFailureGuidance.Label(result.FailureKind) + ". " +
+                  MetadataFailureGuidance.ShortAction(result.FailureKind, "Cloud") +
+                  " No backup absence is proven."
+                : result.RecordsAdded == 0 && !result.IsPartial
+                    ? "No matching Entra/Intune record visible. Verify tenant, " +
+                      "exact identity and scope; backup absence is not proven."
                     : $"Cloud: {result.RecordsAdded} record(s). " +
-                      "Select a source-qualified row for Device 360." +
-                      (result.IsPartial ? " Some metadata is unverified." : ""),
-                result.Failure is not null || result.IsPartial
+                      "Select an exact row for Device 360." +
+                      (result.IsPartial ? " Some metadata is unverified." : "");
+            UiStyle.SetStatus(
+                _homeSearchStatus, resultStatus,
+                result.Failure is not null || result.IsPartial ||
+                    result.RecordsAdded == 0
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
         }
