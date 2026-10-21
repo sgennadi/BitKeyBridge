@@ -55,7 +55,7 @@ internal static class MetadataFailureGuidance
                 {
                     ResultCode.NoSuchObject => MetadataFailureKind.NoRecord,
                     ResultCode.InsufficientAccessRights => MetadataFailureKind.AccessDenied,
-                    ResultCode.InvalidCredentials => MetadataFailureKind.SignInRequired,
+                    (ResultCode)49 => MetadataFailureKind.SignInRequired, // LDAP invalidCredentials
                     ResultCode.TimeLimitExceeded => MetadataFailureKind.Timeout,
                     ResultCode.Unavailable => MetadataFailureKind.SourceOffline,
                     _ => MetadataFailureKind.Unknown
