@@ -431,6 +431,20 @@ public sealed partial class MainForm
                     if (section.Name == "HelpdeskBasicsTab")
                     {
                         nested.SelectedTab = section;
+                        // "Setup & Permissions" must land on the requested
+                        // policy controls even though ordinary Settings opens
+                        // in a compact read-only overview.
+                        if (!_layoutSelfTest &&
+                            section.Controls.Find("HelpdeskRecoveryPolicyGrid",
+                                searchAllChildren: true).FirstOrDefault()
+                                is Control { Visible: false } &&
+                            section.Controls.Find("HelpdeskRecoveryPolicyToggle",
+                                searchAllChildren: true).FirstOrDefault()
+                                is Button policyToggle)
+                        {
+                            policyToggle.PerformClick();
+                        }
+                        QueueMainViewportReflow();
                         return;
                     }
                 }
