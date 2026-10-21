@@ -1224,6 +1224,25 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: visual reset lost the exact selected device metadata.");
             }
+            // Validate actual WinForms grid coordinates, not only the
+            // persisted pane-order string. It must work both in 3 columns
+            // and in the vertically stacked compact/RDP layout.
+            var resetCells = new[]
+            {
+                cards.GetPositionFromControl(bitLocker),
+                cards.GetPositionFromControl(laps),
+                cards.GetPositionFromControl(computers)
+            };
+            var resetLayoutCorrect = expectedThree
+                ? resetCells.Select(x => x.Column).SequenceEqual([0, 1, 2]) &&
+                  resetCells.All(x => x.Row == 0)
+                : resetCells.Select(x => x.Row).SequenceEqual([0, 1, 2]) &&
+                  resetCells.All(x => x.Column == 0);
+            if (!resetLayoutCorrect)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: visual reset left overlapping or incorrectly ordered WinForms panes.");
+            }
 
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
                 FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true } ||
