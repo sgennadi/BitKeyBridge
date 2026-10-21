@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace BitKeyBridge;
@@ -260,43 +259,11 @@ public static class CoverageCliService
                 ct);
         }
 
-        if (mode.Equals("Password", StringComparison.OrdinalIgnoreCase) ||
-            mode.Equals("ROPC", StringComparison.OrdinalIgnoreCase))
-        {
-            RequireCloudValue(cloud.TenantId, "--tenant-id / saved Tenant ID");
-            RequireCloudValue(cloud.ClientId, "--client-id / saved Client ID");
-            RequireCloudValue(cloud.Username, "--cloud-user / saved cloud user");
-
-            if (!Environment.UserInteractive || Console.IsInputRedirected)
-            {
-                throw new InvalidOperationException(
-                    "Password authentication requires an interactive password prompt. " +
-                    "Use certificate authentication for unattended coverage jobs.");
-            }
-
-            var password = ReadSecretFromConsole(
-                "Microsoft Entra password (session only): ");
-            if (string.IsNullOrEmpty(password))
-                throw new InvalidOperationException(
-                    "Microsoft Entra password is required.");
-
-            try
-            {
-                return await graph.AcquirePasswordTokenAsync(
-                    cloud.TenantId,
-                    cloud.ClientId,
-                    cloud.Username,
-                    password,
-                    ct);
-            }
-            finally
-            {
-                password = string.Empty;
-            }
-        }
-
+        // Explicit legacy ROPC modes are rejected, not silently changed
+        // to another identity. Saved legacy preferences are normalized
+        // separately by ConfigService.LoadCloudConfig().
         throw new ArgumentException(
-            "--cloud-auth must be DeviceCode, Certificate, or Password.");
+            "--cloud-auth must be DeviceCode or Certificate; password/ROPC is unsupported.");
     }
 
     private static void ApplyCloudOverrides(
@@ -306,7 +273,6 @@ public static class CoverageCliService
         var tenantId = GetOptionValue(args, "--tenant-id");
         var clientId = GetOptionValue(args, "--client-id");
         var thumbprint = GetOptionValue(args, "--cert-thumbprint");
-        var username = GetOptionValue(args, "--cloud-user");
         var authMode = GetOptionValue(args, "--cloud-auth");
 
         if (!string.IsNullOrWhiteSpace(tenantId))
@@ -316,8 +282,9 @@ public static class CoverageCliService
         if (!string.IsNullOrWhiteSpace(thumbprint))
             cloud.CertificateThumbprint =
                 thumbprint.Replace(" ", string.Empty).Trim();
-        if (!string.IsNullOrWhiteSpace(username))
-            cloud.Username = username.Trim();
+        if (args.Any(x => x.Equals("--cloud-user", StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException(
+                "--cloud-user is removed. Use DeviceCode or Certificate authentication.");
         if (!string.IsNullOrWhiteSpace(authMode))
             cloud.AuthMode = authMode.Trim();
     }
@@ -394,29 +361,4 @@ public static class CoverageCliService
         }
     }
 
-    private static string ReadSecretFromConsole(string prompt)
-    {
-        Console.Write(prompt);
-        var secret = new StringBuilder();
-
-        while (true)
-        {
-            var key = Console.ReadKey(intercept: true);
-            if (key.Key == ConsoleKey.Enter)
-            {
-                Console.WriteLine();
-                return secret.ToString();
-            }
-
-            if (key.Key == ConsoleKey.Backspace)
-            {
-                if (secret.Length > 0)
-                    secret.Length--;
-                continue;
-            }
-
-            if (!char.IsControl(key.KeyChar))
-                secret.Append(key.KeyChar);
-        }
-    }
 }

@@ -103,7 +103,11 @@ public static class ConfigService
     {
         try
         {
-            return JsonStore.Read<CloudAuthConfig>(AppPaths.CloudConfigFile) ?? new CloudAuthConfig();
+            var config =
+                JsonStore.Read<CloudAuthConfig>(AppPaths.CloudConfigFile) ??
+                new CloudAuthConfig();
+            config.AuthMode = CloudAuthenticationPolicy.Normalize(config.AuthMode);
+            return config;
         }
         catch
         {
@@ -115,10 +119,11 @@ public static class ConfigService
     {
         try
         {
-            return JsonStore.Read<CloudAuthConfig>(AppPaths.MachineCloudConfigFile) ?? new CloudAuthConfig
-            {
-                AuthMode = "Certificate"
-            };
+            var config =
+                JsonStore.Read<CloudAuthConfig>(AppPaths.MachineCloudConfigFile) ??
+                new CloudAuthConfig { AuthMode = "Certificate" };
+            config.AuthMode = CloudAuthenticationPolicy.Normalize(config.AuthMode);
+            return config;
         }
         catch
         {
@@ -129,11 +134,17 @@ public static class ConfigService
         }
     }
 
-    public static void SaveCloudConfig(CloudAuthConfig config) =>
+    public static void SaveCloudConfig(CloudAuthConfig config)
+    {
+        config.AuthMode = CloudAuthenticationPolicy.Normalize(config.AuthMode);
         JsonStore.WriteAtomic(AppPaths.CloudConfigFile, config);
+    }
 
-    public static void SaveMachineCloudConfig(CloudAuthConfig config) =>
+    public static void SaveMachineCloudConfig(CloudAuthConfig config)
+    {
+        config.AuthMode = CloudAuthenticationPolicy.Normalize(config.AuthMode);
         JsonStore.WriteAtomic(AppPaths.MachineCloudConfigFile, config);
+    }
 
     public static void DeleteMachineCloudConfig()
     {

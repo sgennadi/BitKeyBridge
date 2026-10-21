@@ -125,6 +125,8 @@ public sealed class CloudAuthConfig
 {
     public string TenantId { get; set; } = string.Empty;
     public string ClientId { get; set; } = string.Empty;
+    // Retained for source compatibility only. Legacy ROPC usernames are never serialized.
+    [JsonIgnore]
     public string Username { get; set; } = string.Empty;
     public string CertificateThumbprint { get; set; } = string.Empty;
     public string AuthMode { get; set; } = "DeviceCode";

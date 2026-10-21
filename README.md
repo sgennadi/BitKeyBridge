@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Latest stable v0.30.5 (unsigned); published opt-in prerelease v0.32.0-rc.6; v0.32.0-rc.7 is prepared but NOT published.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable v0.30.5 (unsigned); published opt-in prerelease v0.32.0-rc.6. Consolidated RC8 is under development and NOT published.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -9,6 +9,10 @@ It provides live AD recovery lookup, Legacy Microsoft LAPS and Windows LAPS curr
 BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, Microsoft Graph, Windows APIs, DPAPI-NG, Credential Manager, and the Windows certificate store. Runtime operation does **not** use PowerShell, the ActiveDirectory PowerShell module, the Microsoft Graph PowerShell SDK, or shell fallbacks.
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
+
+## Consolidated RC8 security changes (not published)
+
+This branch removes Graph username/password (ROPC) sign-in from GUI, CLI and token services. Existing `Password` profile choices migrate to `DeviceCode` and require a new interactive sign-in. Tenant, client and certificate identifiers remain; legacy username fields are no longer persisted. The optional Remote API remains disabled by default. Protected audit and release-signing gates are unchanged. **Do not deploy this candidate until its combined CI and real Windows/Entra/RDP pilot pass.**
 
 ## Next preview: unified Helpdesk Device Workspace (development only)
 
@@ -294,7 +298,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - In v0.26.9, AD, Intune and Entra BitLocker metadata are independently queried. Partial results remain available with per-source failure diagnostics; `?` means recovery metadata was not verified, never proof that no backup exists.
 - Device identity is source-qualified: AD objectGUID/DN, Entra deviceId and Intune managedDeviceId. Same-name AD/Cloud records are displayed separately until authoritative linkage is verified; ambiguous recovery/rotation actions are disabled.
 - Optional Entra/Intune enrichment and recovery-key rotation.
-- Device Code and app-registration + certificate Graph authentication. Password/ROPC remains available only as a **deprecated compatibility mode** and is not recommended.
+- Microsoft Graph authentication supports delegated Device Code and app-registration certificate. The consolidated RC8 source removes legacy username/password (ROPC); published v0.30.5 remains unchanged.
 - Zero-registration first-run Entra setup with native Graph calls.
 - Role-aware GUI navigation.
 - Responsive WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, text scaling, and smaller displays.
@@ -493,7 +497,7 @@ Configure Microsoft Graph under **Administration → Cloud**.
 Authentication modes:
 
 - **Device Code** — recommended interactive mode for MFA / Conditional Access.
-- **Username + Password (ROPC)** — **deprecated compatibility mode**. It doesn't support MFA, is commonly blocked by Conditional Access, and should be replaced by Device Code or certificate authentication.
+- **Username + Password (ROPC)** — removed from the consolidated RC8 source. Saved legacy selections migrate to interactive Device Code; unattended operation requires certificate authentication.
 - **App registration + certificate** — recommended unattended/service mode.
 
 Runtime Graph permissions are limited to the permissions required by the tool, including BitLocker metadata/key access, device reads, and Intune managed-device rotation.

@@ -173,11 +173,12 @@ BitKeyBridge.exe --dry-run --search-base "OU=Computers,DC=example,DC=com"
 
 ## Entra / Intune
 
-Есть три режима:
+В разрабатываемой ветке безопасности доступны два режима (стабильная v0.30.5 пока содержит устаревший ROPC):
 
 1. **Device Code** — основной интерактивный режим; поддерживает MFA и Conditional Access.
-2. **Username + Password (ROPC)** — **deprecated compatibility mode**; MFA не поддерживается, Conditional Access часто блокирует этот режим. Для новых настроек используй Device Code или certificate authentication.
-3. **App Registration + certificate** — режим для unattended/автоматизации.
+2. **App Registration + certificate** — режим для unattended/автоматизации.
+
+Сохранённый ранее режим `Password` переводится на `DeviceCode`; сохранённые идентификаторы tenant/client/certificate не удаляются.
 
 Поиск в облаке получает metadata. Сам recovery password запрашивается только после **Get Key from Entra**.
 
@@ -212,7 +213,7 @@ Recovery CSV содержит секреты. Не клади его в GitHub. 
 ## Новое в 0.2.0
 
 - **Device Code** — основной интерактивный вход в Microsoft Entra; поддерживает MFA и Conditional Access.
-- ROPC оставлен как legacy-режим.
+- Исторически ROPC оставался в версии 0.2.0; в разрабатываемой ветке безопасности этот режим удалён.
 - **Unified Devices** объединяет данные компьютера из локального AD, Entra BitLocker metadata и Intune managedDevice.
 - Поиск работает по имени ПК, serial number, UPN/пользователю и device ID.
 - **Rotate BitLocker Key** отправляет подтверждённый запрос ротации ключа через Intune.
