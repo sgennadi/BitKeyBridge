@@ -6,7 +6,9 @@ namespace BitKeyBridge;
 /// A failure of one metadata source must not discard results from another.
 /// Cancellation is never converted into an empty result.
 /// </summary>
-public sealed record MetadataLookupResult<T>(List<T> Rows, string? Error)
+public sealed record MetadataLookupResult<T>(
+    List<T> Rows, string? Error,
+    MetadataFailureKind FailureKind = MetadataFailureKind.None)
 {
     public bool Succeeded => Error is null;
 }
@@ -76,7 +78,8 @@ public static class MetadataSourceIsolation
                     new HttpRequestException("Synthetic 403", null,
                         HttpStatusCode.Forbidden));
             }, CancellationToken.None).GetAwaiter().GetResult();
-        if (deniedCalls != 1 || denied.Succeeded)
+        if (deniedCalls != 1 || denied.Succeeded ||
+            denied.FailureKind != MetadataFailureKind.AccessDenied)
             failures.Add("Permission-denied metadata query was retried.");
 
         var repeatedCalls = 0;
@@ -88,7 +91,8 @@ public static class MetadataSourceIsolation
                     new HttpRequestException("Synthetic 429", null,
                         HttpStatusCode.TooManyRequests));
             }, CancellationToken.None).GetAwaiter().GetResult();
-        if (repeatedCalls != 2 || repeated.Succeeded)
+        if (repeatedCalls != 2 || repeated.Succeeded ||
+            repeated.FailureKind != MetadataFailureKind.RateLimited)
             failures.Add("Transient metadata failure exceeded retry budget.");
 
         using var cancelled = new CancellationTokenSource();
@@ -131,7 +135,8 @@ public static class MetadataSourceIsolation
             cancellationToken.ThrowIfCancellationRequested();
             return new MetadataLookupResult<T>(
                 [],
-                DiagnosticRedaction.Sanitize(ex.Message));
+                DiagnosticRedaction.Sanitize(ex.Message),
+                MetadataFailureGuidance.Classify(ex));
         }
     }
 }
