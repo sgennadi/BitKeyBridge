@@ -36,8 +36,9 @@ public sealed partial class MainForm
         if (!_layoutSelfTest)
         {
             var answer = MessageBox.Show(this,
-                "Restore default panel order, compact Update Center and window layout? " +
-                "Connections, passwords, recovery permissions and audit policies will not change.",
+                "Restore default panel order, compact Update Center, collapsed " +
+                "optional sections and window layout? Connections, passwords, recovery " +
+                "permissions and audit policies will not change.",
                 "Reset visual layout", MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
             if (answer != DialogResult.Yes)
@@ -45,6 +46,11 @@ public sealed partial class MainForm
         }
 
         RestoreDefaultHomePaneOrder();
+        // Expanded panels are purely visual state. Reset by explicit
+        // idempotent setters rather than clicking hidden WinForms controls.
+        _setConnectionOptionsExpanded?.Invoke(false);
+        _setHelpdeskProfilesExpanded?.Invoke(false);
+        _setHelpdeskRecoveryPolicyExpanded?.Invoke(false);
         ApplyUpdateCenterDensity(compact: true);
         _workspacePreferences = new UiWorkspacePreferences();
         if (!_layoutSelfTest)
