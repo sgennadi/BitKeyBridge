@@ -71,7 +71,7 @@ public sealed class HousekeepingService
 
             UpdateStagingCleanupService.Run(
                 Path.Combine(_machineConfigDirectory, "Updates"),
-                config.TemporaryFileRetentionDays,
+                Math.Clamp(config.TemporaryFileRetentionDays, 0, 3650),
                 dryRun,
                 result);
 
