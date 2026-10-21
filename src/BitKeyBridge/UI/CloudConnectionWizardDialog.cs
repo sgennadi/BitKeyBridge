@@ -141,10 +141,14 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
             "an approved app alone does not grant password access.";
         UiStyle.ConfigureWrappingLabel(_requiredPermissions);
         root.Controls.Add(_requiredPermissions, 0, 5);
+        var permissionsExpanded = false;
         showPermissions.Click += (_, _) =>
         {
-            _requiredPermissions.Visible = !_requiredPermissions.Visible;
-            showPermissions.Text = _requiredPermissions.Visible
+            // The form may be created but not shown when onboarding is
+            // invoked; Control.Visible alone is not reliable until display.
+            permissionsExpanded = !permissionsExpanded;
+            _requiredPermissions.Visible = permissionsExpanded;
+            showPermissions.Text = permissionsExpanded
                 ? "Hide required permissions" : "Show required permissions...";
             root.PerformLayout();
         };
