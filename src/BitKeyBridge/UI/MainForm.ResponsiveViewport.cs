@@ -131,6 +131,7 @@ public sealed partial class MainForm
         if (_homeResultsLayoutKey == desiredKey)
             return;
 
+        var cardsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         _homeResultsReflowRunning = true;
         _homeServiceCards.SuspendLayout();
         try
@@ -212,6 +213,7 @@ public sealed partial class MainForm
             // A second forced PerformLayout repaints all recovery children.
             _homeServiceCards.ResumeLayout(true);
             _homeResultsReflowRunning = false;
+            UiLayoutTelemetry.RecordHomeCards(cardsStarted);
         }
     }
 
@@ -289,6 +291,7 @@ public sealed partial class MainForm
         if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width <= 0)
             return;
 
+        var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         _mainViewportReflowRunning = true;
         try
         {
@@ -345,6 +348,7 @@ public sealed partial class MainForm
         finally
         {
             _mainViewportReflowRunning = false;
+            UiLayoutTelemetry.RecordViewport(viewportStarted);
         }
     }
 }
