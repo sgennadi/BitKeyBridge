@@ -74,6 +74,26 @@ public sealed partial class MainForm
         ResetVisualLayout();
     }
 
+    // Validate that the reset remains visual-only. Expose metadata and
+    // policy flags, never tokens, passwords or recovery-secret contents.
+    internal (string Source, bool RememberSource, bool UseOtherAccount,
+        string RecoverySource, string RecoveryScope, bool RequireProtectedAudit,
+        bool RequireTicket) PreviewNonVisualSettingsForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+
+        return (_startConnectionPreferences.Source,
+            _startConnectionPreferences.RememberLastConnectionOnStart,
+            _startConnectionPreferences.PreferOtherAdAccountOnStart,
+            _startConnectionPreferences.RecoverySearchSource,
+            _startConnectionPreferences.LastRecoveryScopeName,
+            _config.RequireProtectedAuditForRecovery,
+            _config.RequireRecoveryAccessReference);
+    }
+
+
+
     private void SaveWorkspace()
     {
         if (_layoutSelfTest || WindowState == FormWindowState.Minimized)
