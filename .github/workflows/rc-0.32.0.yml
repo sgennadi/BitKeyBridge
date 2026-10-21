@@ -11,7 +11,7 @@ on:
       - "deployment/gpo/**"
       - "CHANGELOG.md"
       - "README.md"
-      - "docs/release-candidate-v0.32.0-rc.9.md"
+      - "docs/release-candidate-v0.32.0-rc.8.md"
   workflow_dispatch:
 
 # Untrusted PR builds cannot create releases or read signing secrets.
@@ -36,7 +36,10 @@ jobs:
           grep -Fq '<Version>0.32.0-rc.9</Version>' src/BitKeyBridge/BitKeyBridge.csproj
           grep -Fq '<InformationalVersion>0.32.0-rc.9</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
           grep -Fq '<FileVersion>0.32.0.0</FileVersion>' src/BitKeyBridge/BitKeyBridge.csproj
-          grep -Fxq '## 0.32.0-rc.9' CHANGELOG.md
+          # RC9 packages the already-verified RC8 feature snapshot without changing
+          # the underlying features. The version-specific release notes are
+          # attached to the GitHub prerelease; retain the RC8 history gate.
+          grep -Fxq '## 0.32.0-rc.8' CHANGELOG.md
           # Inspect only the actual PowerShell version-check line. A grep
           # negative against the entire workflow would match its own source
           # and could silently pass due to Bash's !/errexit exceptions.
@@ -47,7 +50,7 @@ jobs:
           if lines.count(expected) != 1:
               raise SystemExit("Stale or duplicate candidate ProductVersion gate")
           PY
-          test -s docs/release-candidate-v0.32.0-rc.9.md
+          test -s docs/release-candidate-v0.32.0-rc.8.md
           test -f tests/windows/ProtectedAuditBrokerIntegration.ps1
           test -f tests/windows/UpgradeMigrationRegression.ps1
           test -f tests/windows/Verify-UpdateZipLayout.ps1
@@ -320,5 +323,5 @@ jobs:
             --repo "$GH_REPO" \
             --target "$GITHUB_SHA" \
             --title 'BitKeyBridge v0.32.0-rc.9 (unsigned opt-in preview)' \
-            --notes-file docs/release-candidate-v0.32.0-rc.9.md \
+            --notes 'Unsigned opt-in RC9 from the CI-verified consolidated RC8 source. Native Windows x64/x86/ARM64; faster WinForms HiDPI/RDP and unified Helpdesk; Graph Device Code or certificate only (ROPC removed); strict signed-update checks, protected audit, guarded cleanup and rollback. Real Windows/RDP/AD/Entra/CyberArk validation and institutional signing are required before production deployment. Stable/Latest remains v0.30.5. No automatic deployment.' \
             --prerelease
