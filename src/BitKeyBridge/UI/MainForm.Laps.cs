@@ -919,9 +919,6 @@ public sealed partial class MainForm
         _cloudClient.TextChanged +=
             (_, _) =>
                 ClearLapsResult();
-        _cloudUsername.TextChanged +=
-            (_, _) =>
-                ClearLapsResult();
         _cloudThumbprint.TextChanged +=
             (_, _) =>
                 ClearLapsResult();
