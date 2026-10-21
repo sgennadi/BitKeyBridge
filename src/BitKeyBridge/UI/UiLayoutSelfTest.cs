@@ -1813,6 +1813,57 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: compact Settings must display saved audit policy and retain both expandable sections.");
         }
 
+        // Verify the collapsed policy can be opened reliably even when its
+        // nested Settings TabPage started life at 200x100 (or was hidden
+        // during a DPI/RDP switch). Avoid Control.Visible as a state flag:
+        // WinForms combines it with visibility of all ancestors.
+        if (form is MainForm settingsMain &&
+            FindByName(form, "HelpdeskRecoveryPolicyToggle") is Button policyToggle &&
+            FindByName(form, "HelpdeskRecoveryPolicyGrid") is TableLayoutPanel policyGrid &&
+            tabs.TabPages.Cast<TabPage>().FirstOrDefault(
+                page => page.Name == "SettingsWorkspace") is TabPage settingsTab &&
+            settingsTab.Controls.OfType<TabControl>().FirstOrDefault() is TabControl settingsSections &&
+            settingsSections.TabPages.Cast<TabPage>().FirstOrDefault(
+                page => page.Name == "HelpdeskBasicsTab") is TabPage helpdeskSettings)
+        {
+            var previous = tabs.SelectedTab;
+            var previousSection = settingsSections.SelectedTab;
+            try
+            {
+                tabs.SelectedTab = settingsTab;
+                settingsSections.SelectedTab = helpdeskSettings;
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(true);
+                settingsMain.ReflowMainViewport();
+                if (policyToggle.Text != "Hide recovery access policy")
+                    failures.Add($"{formName}/{scenario.Name}: expanding recovery policy did not update its controls.");
+
+                // Calling Setup & Permissions twice is idempotent rather
+                // than accidentally hiding the policy on its second visit.
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(true);
+                if (policyToggle.Text != "Hide recovery access policy")
+                    failures.Add($"{formName}/{scenario.Name}: repeated Settings navigation collapsed an open policy.");
+
+                if (policyGrid.Parent is FlowLayoutPanel viewport &&
+                    viewport.ClientSize.Width > 600 &&
+                    (policyGrid.Width < viewport.ClientSize.Width / 2 ||
+                     policyGrid.Right > viewport.ClientSize.Width +
+                         SystemInformation.VerticalScrollBarWidth))
+                {
+                    failures.Add($"{formName}/{scenario.Name}: expanded policy was squeezed or clipped by its viewport.");
+                }
+
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(false);
+                if (policyToggle.Text != "Show recovery access policy...")
+                    failures.Add($"{formName}/{scenario.Name}: Settings policy could not be collapsed.");
+            }
+            finally
+            {
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(false);
+                settingsSections.SelectedTab = previousSection;
+                tabs.SelectedTab = previous;
+            }
+        }
+
         if (FindByName(
                 form,
                 "HelpdeskBasicsTab") is null)
