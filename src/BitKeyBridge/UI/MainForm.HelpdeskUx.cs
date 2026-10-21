@@ -324,6 +324,13 @@ public sealed partial class MainForm
         root.Controls.Add(
             _setupStatus);
 
+        var resetLayout = NewActionButton("Reset Visual Layout...");
+        resetLayout.Name = "ResetVisualLayoutButton";
+        resetLayout.AccessibleName =
+            "Restore default visual layout without changing connections or recovery policy";
+        root.Controls.Add(resetLayout);
+        resetLayout.Click += (_, _) => ResetVisualLayout();
+
         // Only status and everyday actions are shown by default.
         // Collapsing profiles or recovery policies never saves or alters them.
         var profileToggle = NewActionButton("Show environment profiles...");
