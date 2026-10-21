@@ -1214,6 +1214,17 @@ public static class UiLayoutSelfTest
                 }
             }
 
+            // Check reset while a real grid row is selected. Reordering
+            // its surrounding hosts must preserve the exact result object.
+            main.PreviewResetVisualLayoutForUiSelfTest();
+            main.ReflowMainViewport();
+            if (grid.SelectedRows.Count != 1 ||
+                !ReferenceEquals(grid.SelectedRows[0].Tag, computer))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: visual reset lost the exact selected device metadata.");
+            }
+
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
                 FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true } ||
                 FindByName(cards, "HomeLoadLapsHistoryButton") is Button { Enabled: true })
