@@ -43,7 +43,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           lines = Path('.github/workflows/rc-0.32.0.yml').read_text().splitlines()
-          expected = r"          if ($version -notmatch '^0\.32\.0-rc\.7(?:\+[^ ]+)?$' -or"
+          expected = r"          if ($version -notmatch '^0\.32\.0-rc\.8(?:\+[^ ]+)?$' -or"
           if lines.count(expected) != 1:
               raise SystemExit("Stale or duplicate candidate ProductVersion gate")
           PY
@@ -150,7 +150,7 @@ jobs:
           $item = Get-Item -LiteralPath $exe
           if ($item.Length -le 0 -or $item.Length -gt 536870912) { throw 'Invalid executable size.' }
           $version = $item.VersionInfo.ProductVersion
-          if ($version -notmatch '^0\.32\.0-rc\.7(?:\+[^ ]+)?$' -or
+          if ($version -notmatch '^0\.32\.0-rc\.8(?:\+[^ ]+)?$' -or
               $item.VersionInfo.FileVersion -ne '0.32.0.0') {
             throw "Wrong executable version: ProductVersion=$version FileVersion=$($item.VersionInfo.FileVersion)"
           }
