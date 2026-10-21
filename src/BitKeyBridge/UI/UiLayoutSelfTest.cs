@@ -1046,7 +1046,9 @@ public static class UiLayoutSelfTest
                 {
                     if (FindByName(page, "DiagnosticToolsActions")
                         is not FlowLayoutPanel actions ||
-                        actions.Controls.OfType<Button>().Count() != 5)
+                        actions.Controls.OfType<Button>().Count() != 6 ||
+                        FindByName(page, "RunUiPerformanceDiagnosticsButton")
+                            is not Button)
                     {
                         failures.Add(
                             $"{formName}/{scenario.Name}: Diagnostics > Tools actions are missing.");
@@ -1987,7 +1989,8 @@ public static class UiLayoutSelfTest
             FindByName(form, "RunEnvironmentCheckButton") is null ||
             FindByName(form, "RunAdvancedDeviceDiagnosticsButton") is null ||
             FindByName(form, "RunBitLockerCommandsButton") is null ||
-            FindByName(form, "RunLapsCommandsButton") is null)
+            FindByName(form, "RunLapsCommandsButton") is null ||
+            FindByName(form, "RunUiPerformanceDiagnosticsButton") is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Diagnostics must provide Access Health and the existing recovery runbooks.");
