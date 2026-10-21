@@ -159,8 +159,9 @@ public sealed partial class MainForm
         _mainTabs.SelectedIndexChanged +=
             (_, _) =>
             {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 ApplyComputerQueryToSelectedWorkspace();
-                QueueMainViewportReflow();
+                QueueNavigationViewportReflow(started);
 
                 if (ReferenceEquals(
                         _mainTabs.SelectedTab,
@@ -2295,7 +2296,7 @@ public sealed partial class MainForm
         };
         // Selection can activate a page created at WinForms' 200x100
         // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
-        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
+        nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
 
         nested.TabPages.Add(BuildDeviceSearchPage());
 
@@ -2617,7 +2618,7 @@ public sealed partial class MainForm
         };
         // Selection can activate a page created at WinForms' 200x100
         // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
-        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
+        nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
 
         // Everyday settings are immediately visible; enterprise features live
         // under a single explicit group instead of competing at the top level.
@@ -2634,7 +2635,7 @@ public sealed partial class MainForm
             Name = "EnterpriseSettingsSections",
             Dock = DockStyle.Fill
         };
-        enterpriseSections.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
+        enterpriseSections.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
         enterpriseSections.TabPages.Add(BuildSecuritySettingsResponsiveTab());
         enterpriseSections.TabPages.Add(BuildExportAutomationResponsiveTab());
         enterprise.Controls.Add(enterpriseSections);
@@ -2653,7 +2654,7 @@ public sealed partial class MainForm
         };
         // Selection can activate a page created at WinForms' 200x100
         // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
-        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
+        nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
 
         nested.TabPages.Add(BuildDiagnosticToolsPage());
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());
