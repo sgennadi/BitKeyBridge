@@ -313,13 +313,23 @@ public sealed partial class MainForm
         root.Controls.Add(
             _setupStatus);
 
-        root.Controls.Add(
-            CreateSectionTitle(
-                "Environment Profile",
-                "Profiles store non-secret AD/Cloud endpoints and preferences only. Passwords, tokens and recovery secrets are never saved in a profile."));
+        // Only status and everyday actions are shown by default.
+        // Collapsing profiles or recovery policies never saves or alters them.
+        var profileToggle = NewActionButton("Show environment profiles...");
+        profileToggle.Name = "HelpdeskProfilesToggle";
+        profileToggle.AccessibleName = "Show or hide non-secret environment profiles";
+        root.Controls.Add(profileToggle);
+
+        var profileHeading = CreateSectionTitle(
+            "Environment Profiles",
+            "Optional non-secret AD/Cloud endpoints. No passwords, tokens or recovery keys are saved.");
+        profileHeading.Visible = false;
+        root.Controls.Add(profileHeading);
 
         var profileGrid =
             CreateTwoColumnGrid();
+        profileGrid.Name = "HelpdeskProfilesGrid";
+        profileGrid.Visible = false;
 
         _helpdeskProfile.DropDownStyle =
             ComboBoxStyle.DropDownList;
@@ -363,13 +373,42 @@ public sealed partial class MainForm
         root.Controls.Add(
             profileGrid);
 
-        root.Controls.Add(
-            CreateSectionTitle(
-                "Recovery Access",
-                "Ticket/reference is optional by default. Turn it on only when your helpdesk process requires a case number."));
+        var policyOverview = new UiStatusLabel
+        {
+            Name = "HelpdeskRecoveryPolicyOverview",
+            AccessibleName = "Current saved recovery policy, not an access authorization",
+            AutoSize = true,
+            MaximumSize = new Size(1000, 0)
+        };
+        UiStyle.ConfigureStatusLabel(policyOverview);
+        root.Controls.Add(policyOverview);
+        void RefreshPolicyOverview()
+        {
+            var protectedAudit = _config.RequireProtectedAuditForRecovery;
+            UiStyle.SetStatus(policyOverview,
+                "Saved recovery policy: " +
+                (protectedAudit ? "Protected audit required" : "Protected audit not required") +
+                " | Ticket: " +
+                (_config.RequireRecoveryAccessReference ? "required" : "optional") +
+                ". This status does not grant secret access.",
+                protectedAudit ? UiStatusKind.Neutral : UiStatusKind.Warning);
+        }
+
+        var recoveryToggle = NewActionButton("Show recovery access policy...");
+        recoveryToggle.Name = "HelpdeskRecoveryPolicyToggle";
+        recoveryToggle.AccessibleName = "Show or hide recovery access and secret lifetime settings";
+        root.Controls.Add(recoveryToggle);
+
+        var recoveryHeading = CreateSectionTitle(
+            "Recovery Access Policy",
+            "Change ticket, audit and secret lifetime settings only when authorized. Unsaved changes do not affect the displayed policy overview.");
+        recoveryHeading.Visible = false;
+        root.Controls.Add(recoveryHeading);
 
         var recoveryGrid =
             CreateTwoColumnGrid();
+        recoveryGrid.Name = "HelpdeskRecoveryPolicyGrid";
+        recoveryGrid.Visible = false;
 
         _requireRecoveryReference.Text =
             "Require a ticket/reference before recovery-key access";
@@ -455,6 +494,25 @@ public sealed partial class MainForm
         root.Controls.Add(
             recoveryGrid);
 
+        profileToggle.Click += (_, _) =>
+        {
+            profileHeading.Visible = !profileHeading.Visible;
+            profileGrid.Visible = profileHeading.Visible;
+            profileToggle.Text = profileHeading.Visible
+                ? "Hide environment profiles" : "Show environment profiles...";
+            QueueMainViewportReflow();
+        };
+        recoveryToggle.Click += (_, _) =>
+        {
+            recoveryHeading.Visible = !recoveryHeading.Visible;
+            recoveryGrid.Visible = recoveryHeading.Visible;
+            recoveryToggle.Text = recoveryHeading.Visible
+                ? "Hide recovery access policy" : "Show recovery access policy...";
+            QueueMainViewportReflow();
+        };
+        RefreshPolicyOverview();
+        page.Enter += (_, _) => RefreshPolicyOverview();
+
         refreshSetup.Click +=
             (_, _) =>
                 RefreshSetupStatus();
@@ -473,9 +531,11 @@ public sealed partial class MainForm
         deleteProfile.Click +=
             (_, _) =>
                 DeleteSelectedHelpdeskProfile();
-        save.Click +=
-            (_, _) =>
-                SaveHelpdeskBasics();
+        save.Click += (_, _) =>
+        {
+            SaveHelpdeskBasics();
+            RefreshPolicyOverview();
+        };
 
         if (!_layoutSelfTest)
         {
