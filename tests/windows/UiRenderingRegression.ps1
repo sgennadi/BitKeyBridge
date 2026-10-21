@@ -45,7 +45,8 @@ Assert-Source ($viewport.Contains('DpiChanged += (_, _) => QueueMainViewportRefl
 Assert-Source (-not [regex]::IsMatch($viewport, '(?m)^\s*UiModernTheme\.Refresh\(shell\)\s*;')) 'WM_SIZE must not refresh every themed control and GDI region.'
 Assert-Source ([regex]::IsMatch($viewport, 'if\s*\(geometryChanged\)\s*shell\.PerformLayout\(\)\s*;')) 'Main layout must be forced only on true geometry changes.'
 Assert-Source ($theme.Contains('if (Markers.TryGetValue(root, out _))')) 'Repeat theme application must be O(1).'
-Assert-Source ($theme.Contains('root.ControlAdded += (_, args) => Apply(args.Control)')) 'Newly added controls must receive the theme.'
+Assert-Source ($theme.Contains('root.ControlAdded += (_, args) =>') -and
+               $theme.Contains('if (args.Control is { } child) Apply(child);')) 'Newly added controls must receive the theme through the null-safe, non-recursive handler.'
 Assert-Source ($theme.Contains('IsPrimaryAction(button)')) 'Primary actions must receive centralized accent styling.'
 Assert-Source ($theme.Contains('TextFormatFlags.EndEllipsis')) 'The active tab must remain bounded when translated captions do not fit.'
 Assert-Source (-not [regex]::IsMatch($theme, '(?s)case DataGridView grid:.*?SetupRoundedRegion\(grid')) 'Data grids must not recreate GDI clipping regions.'
