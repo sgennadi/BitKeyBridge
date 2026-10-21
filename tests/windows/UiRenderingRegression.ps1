@@ -81,7 +81,8 @@ Assert-Source ($startupWizardSource.Contains('Start without a connection') -and 
 Assert-Source ($cloudWizardSource.Contains('CloudWizardPermissionsToggle') -and $cloudWizardSource.Contains('if (_adminSetup.Checked)') -and $cloudWizardSource.Contains('_tenant.Enabled = _approvedApp.Checked')) 'Cloud permissions guidance must be expandable and administrator bootstrap cannot require an existing app.'
 Assert-Source ($helpdeskSettingsSource.Contains('HelpdeskProfilesToggle') -and $helpdeskSettingsSource.Contains('HelpdeskRecoveryPolicyToggle')) 'Infrequent settings must use compact expandable groups.'
 Assert-Source ($helpdeskSettingsSource.Contains('HelpdeskRecoveryPolicyOverview') -and $helpdeskSettingsSource.Contains('Saved recovery policy:')) 'Collapsed recovery policies must leave the saved audit gate visible.'
-Assert-Source ($helpdesk.Contains('HelpdeskRecoveryPolicyToggle')) 'Helpdesk Setup & Permissions navigation must reveal the policy section.'
+Assert-Source ($helpdesk.Contains('_setHelpdeskRecoveryPolicyExpanded?.Invoke(true)') -and $helpdeskSettingsSource.Contains('SetRecoveryPolicyExpanded(bool expanded)')) 'Helpdesk Setup & Permissions must reveal the policy without simulating a hidden-button click.'
+Assert-Source ($layoutSelfTest.Contains('expanded policy was squeezed or clipped by its viewport') -and $layoutSelfTest.Contains('repeated Settings navigation collapsed an open policy')) 'Native WinForms tests must verify expanded policy viewport and idempotent navigation at 100-200% scaling.'
 Assert-Source ($layoutSelfTest.Contains('compact Settings must display saved audit policy') -and $layoutSelfTest.Contains('Admin setup must not require existing tenant')) 'Native WinForms UI tests must cover new Settings and Cloud wizard behavior.'
 
 Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
