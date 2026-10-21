@@ -1,3 +1,14 @@
+## 0.32.0-rc.8 — development preview (not published)
+
+**Work in progress (PRs #100 and #101); builds still identify as RC7 until a separate RC8 release gate is accepted.**
+
+- Consolidate Start and Helpdesk device search into one source-qualified selection. Preserve the selected AD/Entra record across Helpdesk navigation; require existing per-source authorization for BitLocker/LAPS.
+- Simplify the connection chooser to a primary Connect / Change action, optional direct connection tools and expandable cloud permissions guidance; retain administrator-only application provisioning and no saved passwords.
+- Collapse seldom-used profile and recovery policy editors while keeping the saved protected-audit/ticket status visible, and add visual-only Reset Layout with preserved credentials, audit and selection.
+- Avoid repeated status paints, full-form DPI layout passes and unnecessary nested-tab FlowLayoutPanel remeasurement; add on-demand Diagnostics > Tools > UI Performance counters showing WinForms layout count, average and worst duration without secret/device data.
+- Automatically remove stale updater staging versions and abandoned helper/rollback GUID directories during enabled housekeeping using the existing 7-day temporary retention setting. Restrict removal to named folders under ProgramData/BitKeyBridge/Updates; preserve current/held versions, live helpers, symlinks, .bak, update history, settings, protected audit and recovery secrets.
+- Expand offline WinForms 100-200%/RDP, status redraw, protected-update staging and rollback regressions. The preview remains Draft until full CI and interactive AD/Entra/RDP/security acceptance.
+
 ## 0.32.0-rc.7
 
 **Status: Prepared, not yet published.**
