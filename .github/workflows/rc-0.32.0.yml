@@ -2,7 +2,7 @@ name: BitKeyBridge v0.32.0 RC9 prerelease checks
 
 on:
   push:
-    branches: [ "release/v0.32.0-rc.9" ]
+    branches: [ "release/v0.32.0-rc.9", "development/post-rc9-lookup-ux" ]
   pull_request:
     paths:
       - ".github/workflows/rc-0.32.0.yml"
