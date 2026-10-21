@@ -53,7 +53,7 @@ jobs:
           test -f tests/windows/Verify-UpdateZipLayout.ps1
           test -f tests/windows/UiRenderingRegression.ps1
           # Fail closed if the nested viewport fix is missing from release source.
-          grep -Fq 'RepairSelectedTabHierarchy(_mainTabs)' src/BitKeyBridge/UI/MainForm.ResponsiveViewport.cs
+          grep -Fq 'RepairSelectedTabHierarchy(_mainTabs, changedPath)' src/BitKeyBridge/UI/MainForm.ResponsiveViewport.cs
           grep -Fq 'DiagnosticToolsActions' src/BitKeyBridge/UI/MainForm.DiagnosticNavigation.cs
           grep -Fq 'VerifyNestedWorkspaceViewport' src/BitKeyBridge/UI/UiLayoutSelfTest.cs
           grep -Fq 'child is TableLayoutPanel || child is FlowLayoutPanel' src/BitKeyBridge/UI/UiStyle.cs
