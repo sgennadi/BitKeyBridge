@@ -13,6 +13,7 @@ public sealed partial class MainForm
     private string _homeResultsLayoutKey = string.Empty;
     private string _homeConnectionsRecentLayoutKey = string.Empty;
     private bool _homeConnectionsRecentReflowRunning;
+    private string _lastRepairedTabPath = string.Empty;
 
     private void InitializeMainViewport()
     {
@@ -214,7 +215,28 @@ public sealed partial class MainForm
         }
     }
 
-    private static void RepairSelectedTabHierarchy(TabControl tabs)
+    // Selection (including a nested tab) may expose panels initially built
+    // at WinForms' provisional 200x100 size. Only a new visible tab path,
+    // DPI change or genuinely repaired geometry needs an explicit reflow.
+    // A routine WM_SIZE with correctly docked controls does not.
+    private static string SelectedTabPath(TabControl root)
+    {
+        var path = new System.Text.StringBuilder();
+        var tabs = root;
+        while (tabs.SelectedTab is TabPage page)
+        {
+            path.Append('/').Append(page.Name);
+            var next = page.Controls.OfType<TabControl>()
+                .FirstOrDefault(control => control.Dock == DockStyle.Fill);
+            if (next is null)
+                break;
+            tabs = next;
+        }
+        return path.ToString();
+    }
+
+    private static void RepairSelectedTabHierarchy(
+        TabControl tabs, bool forceFlowLayout)
     {
         if (tabs.IsDisposed || tabs.Disposing ||
             tabs.SelectedTab is not TabPage page)
@@ -228,11 +250,11 @@ public sealed partial class MainForm
         // Only correct an obviously stale page after a hidden-tab resize.
         var widthTolerance = Math.Max(16, display.Width / 8);
         var heightTolerance = Math.Max(16, display.Height / 8);
-        if (Math.Abs(page.Width - display.Width) > widthTolerance ||
-            Math.Abs(page.Height - display.Height) > heightTolerance)
-        {
+        var pageRepaired =
+            Math.Abs(page.Width - display.Width) > widthTolerance ||
+            Math.Abs(page.Height - display.Height) > heightTolerance;
+        if (pageRepaired)
             page.Bounds = display;
-        }
 
         foreach (Control content in page.Controls)
         {
@@ -243,17 +265,22 @@ public sealed partial class MainForm
             if (viewport.Width <= 0 || viewport.Height <= 0)
                 continue;
 
-            if (content.Bounds != viewport)
+            var boundsRepaired = content.Bounds != viewport;
+            if (boundsRepaired)
                 content.Bounds = viewport;
 
             if (content is TabControl nested)
-                RepairSelectedTabHierarchy(nested);
+                RepairSelectedTabHierarchy(
+                    nested, forceFlowLayout || pageRepaired || boundsRepaired);
             else if (content is FlowLayoutPanel
-                     { FlowDirection: FlowDirection.TopDown } flow)
-                // The panel's responsive Layout handler remeasures sections
-                // against its real, currently visible width, including when
-                // the Dock=Fill bounds were already correct at tab selection.
+                     { FlowDirection: FlowDirection.TopDown } flow &&
+                     (forceFlowLayout || pageRepaired || boundsRepaired))
+            {
+                // Inactive pages still receive an initial explicit layout
+                // on selection. Stable pages are laid out by native docking
+                // and must not be forcibly measured on every WM_SIZE event.
                 flow.PerformLayout();
+            }
         }
     }
 
@@ -300,7 +327,11 @@ public sealed partial class MainForm
             // nested Dock=Fill content can retain a 200x100 provisional size
             // even though the outer workspace fills the window. Repair only
             // the visible tab chain; never rebuild its controls or re-theme.
-            RepairSelectedTabHierarchy(_mainTabs);
+            var selectedPath = SelectedTabPath(_mainTabs) + ":" + DeviceDpi;
+            var changedPath = !string.Equals(
+                selectedPath, _lastRepairedTabPath, StringComparison.Ordinal);
+            RepairSelectedTabHierarchy(_mainTabs, changedPath);
+            _lastRepairedTabPath = selectedPath;
 
             ReflowConnectionsRecent();
             ReflowHomeResultsArea();
