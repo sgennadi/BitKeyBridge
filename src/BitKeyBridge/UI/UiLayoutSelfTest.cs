@@ -1869,7 +1869,9 @@ public static class UiLayoutSelfTest
 
         if (form is MainForm visualMain)
         {
-            var priorOrder = visualMain.PreviewHomePaneOrderForUiSelfTest();
+            // Deliberately disturb the panel order first. No network call,
+            // secret retrieval or per-user preference write is allowed by
+            // the layout test's preview-only reset.
             visualMain.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
             visualMain.PreviewResetVisualLayoutForUiSelfTest();
             if (visualMain.PreviewHomePaneOrderForUiSelfTest() !=
@@ -1878,9 +1880,8 @@ public static class UiLayoutSelfTest
             if (FindByName(form, "UpdateCenterCompact") is not CheckBox
                 { Checked: true })
                 failures.Add($"{formName}/{scenario.Name}: reset did not restore compact Updates.");
-            visualMain.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
-            if (priorOrder != visualMain.PreviewHomePaneOrderForUiSelfTest())
-                failures.Add($"{formName}/{scenario.Name}: layout test did not restore its original pane order.");
+            // Do not swap again: that would undo the reset and introduce
+            // order-dependent failures when prior per-user settings differed.
         }
 
         if (FindByName(
