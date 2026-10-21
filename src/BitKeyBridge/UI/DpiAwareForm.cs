@@ -17,6 +17,9 @@ public class DpiAwareForm : Form
     private readonly System.Windows.Forms.Timer _responsiveLayoutTimer =
         new() { Interval = 65 };
     private bool _responsiveLayoutRunning;
+    private bool _responsiveLayoutInitialized;
+    private int _lastFullLayoutDpi;
+    private bool _lastHighContrast;
 
     public DpiAwareForm()
     {
@@ -76,7 +79,12 @@ public class DpiAwareForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        RefreshResponsiveLayout();
+        // OnLoad already measured the full control tree. A second full
+        // traversal here on every form show used to visibly freeze the UI.
+        // Newly added controls are themed through ControlAdded and ordinary
+        // WinForms docking handles their first layout.
+        if (!_responsiveLayoutInitialized)
+            RefreshResponsiveLayout();
     }
 
     protected override void OnDpiChanged(
@@ -126,6 +134,7 @@ public class DpiAwareForm : Form
         if (_responsiveLayoutRunning || IsDisposed || Disposing)
             return;
 
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         _responsiveLayoutRunning = true;
         _responsiveLabelTimer.Stop();
         try
@@ -135,15 +144,28 @@ public class DpiAwareForm : Form
             ApplyResponsiveDefaults(this);
             ConstrainToWorkingArea();
             PerformLayout();
+            // Label.MaximumSize setters automatically request WinForms layout
+            // only for labels whose available width truly changed.
+            // A second unconditional PerformLayout() of the entire form,
+            // followed by recursive theme invalidation, doubled the cost of
+            // every DPI and font update on densely populated Settings tabs.
             RefreshResponsiveLabelWidths();
-            PerformLayout();
-            // Native per-DPI regions are recalculated only after actual DPI
-            // changes or this rare full layout refresh, not on WM_SIZE.
-            UiModernTheme.Refresh(this);
+            var dpi = DeviceDpi;
+            var highContrast = SystemInformation.HighContrast;
+            if (_responsiveLayoutInitialized &&
+                (dpi != _lastFullLayoutDpi ||
+                 highContrast != _lastHighContrast))
+            {
+                UiModernTheme.Refresh(this);
+            }
+            _lastFullLayoutDpi = dpi;
+            _lastHighContrast = highContrast;
+            _responsiveLayoutInitialized = true;
         }
         finally
         {
             _responsiveLayoutRunning = false;
+            UiLayoutTelemetry.RecordResponsiveForm(started);
         }
     }
 

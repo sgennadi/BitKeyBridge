@@ -61,6 +61,8 @@ public sealed class AppConfig
     public bool AllowPrereleaseUpdates { get; set; } = false;
     public bool RequireTrustedUpdateSignature { get; set; } = false;
     public string TrustedUpdatePublisher { get; set; } = string.Empty;
+    // Optional exact signing-certificate pin; provision in administrator-owned appsettings.json.
+    public string TrustedUpdateSignerThumbprint { get; set; } = string.Empty;
 
     public bool RemoteApiEnabled { get; set; } = false;
     public int RemoteApiPort { get; set; } = 8751;

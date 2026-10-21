@@ -93,6 +93,8 @@ public sealed class UiRecoveryGlyph : Control
 public sealed class UiRecoveryBadge : Label
 {
     private UiStatusKind _kind = UiStatusKind.Neutral;
+    private Size _lastRoundedSize;
+    private int _lastRoundedDpi;
 
     [System.ComponentModel.DesignerSerializationVisibility(
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -101,6 +103,10 @@ public sealed class UiRecoveryBadge : Label
         get => _kind;
         set
         {
+            var colors = UiStyle.ResolveRecoveryBadgeColors(value);
+            if (_kind == value && BackColor == colors.Background &&
+                ForeColor == colors.Foreground)
+                return;
             _kind = value;
             RefreshPalette();
         }
@@ -117,6 +123,7 @@ public sealed class UiRecoveryBadge : Label
         Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.SectionGap);
         RefreshPalette();
         SizeChanged += (_, _) => RoundCorners();
+        DpiChangedAfterParent += (_, _) => RoundCorners();
     }
 
     private void RefreshPalette()
@@ -132,11 +139,15 @@ public sealed class UiRecoveryBadge : Label
     {
         if (Width < 2 || Height < 2)
             return;
+        if (_lastRoundedSize == Size && _lastRoundedDpi == DeviceDpi)
+            return;
         using var path = UiRecoveryGraphics.RoundRect(
             new RectangleF(0, 0, Width, Height), Height / 2f);
         var previous = Region;
         Region = new Region(path);
         previous?.Dispose();
+        _lastRoundedSize = Size;
+        _lastRoundedDpi = DeviceDpi;
     }
 }
 

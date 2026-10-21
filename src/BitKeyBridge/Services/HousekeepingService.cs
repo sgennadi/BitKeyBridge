@@ -69,11 +69,18 @@ public sealed class HousekeepingService
                 result,
                 dryRun);
 
+            UpdateStagingCleanupService.Run(
+                Path.Combine(_machineConfigDirectory, "Updates"),
+                Math.Clamp(config.TemporaryFileRetentionDays, 0, 3650),
+                dryRun,
+                result);
+
             result.Success =
                 result.Errors.Count == 0 &&
                 result.IncidentErrors == 0 &&
                 result.BackupErrors == 0 &&
-                result.TemporaryFileErrors == 0;
+                result.TemporaryFileErrors == 0 &&
+                result.UpdateFolderErrors == 0;
         }
         catch (Exception ex)
         {
@@ -92,7 +99,8 @@ public sealed class HousekeepingService
                 $"Housekeeping completed. Success={result.Success}; DryRun={result.DryRun}; " +
                 $"IncidentsDeleted={result.IncidentDeleted}; IncidentsPreserved={result.IncidentPreserved}; " +
                 $"BackupsDeleted={result.BackupDeleted}; TempDeleted={result.TemporaryFilesDeleted}; " +
-                $"BytesFreed={result.BytesFreed}; Errors={result.Errors.Count + result.IncidentErrors + result.BackupErrors + result.TemporaryFileErrors}.",
+                $"StaleUpdateFoldersDeleted={result.UpdateFoldersDeleted}; " +
+                $"BytesFreed={result.BytesFreed}; Errors={result.Errors.Count + result.IncidentErrors + result.BackupErrors + result.TemporaryFileErrors + result.UpdateFolderErrors}.",
                 result.Success
                     ? EventLogSeverity.Information
                     : EventLogSeverity.Warning,

@@ -150,12 +150,11 @@ public sealed partial class MainForm
         if (AdministrationAllowed)
             _mainTabs.TabPages.Add(BuildAdministrationWorkspaceTab());
 
-        foreach (TabPage page in
-                 _mainTabs.TabPages)
-        {
-            page.AutoScroll =
-                true;
-        }
+        // Scrolling belongs to each workspace's inner viewport. An
+        // AutoScroll TabPage can leave Dock=Fill nested tabs at an obsolete
+        // virtual width after DPI or RDP resolution changes.
+        foreach (TabPage page in _mainTabs.TabPages)
+            page.AutoScroll = false;
 
         _mainTabs.SelectedIndexChanged +=
             (_, _) =>
@@ -214,11 +213,13 @@ public sealed partial class MainForm
                     1 => _startQuery,
                     2 => _lapsQuery,
                     3 => _unifiedQuery,
-                    4 => _mainTabs.TabPages[4].Controls
-                            .Find("HelpdeskQuickSearch", searchAllChildren: true)
-                            .OfType<TextBox>().FirstOrDefault(),
+                    // Helpdesk reuses the one Start query, never a second
+                    // textbox or a second metadata request.
+                    4 => _homeQuery,
                     _ => null
                 };
+                if (_mainTabs.SelectedTab?.Name == "HelpdeskDashboardTab")
+                    OpenHelpdeskDeviceWorkspace();
                 if (query is { Visible: true, Enabled: true })
                 {
                     query.Focus();
@@ -740,6 +741,8 @@ public sealed partial class MainForm
         var connectionActions =
             new FlowLayoutPanel
             {
+                Name = "HomeConnectionDirectActions",
+                Visible = false,
                 Dock =
                     DockStyle.Top,
                 AutoSize =
@@ -814,16 +817,18 @@ public sealed partial class MainForm
             _homeDisconnectAdButton,
             _homeConnectionToolsButton
         ]);
+        _startDirectActionsPanel = connectionActions;
         connection.Controls.Add(
             connectionActions,
             0,
             4);
 
-        connection.Controls.Add(
-            new Label
+        var directConnectionHint = new Label
             {
+                Name = "HomeConnectionDirectHint",
+                Visible = false,
                 Text =
-                    "Sign in with your Windows account or choose another AD account. Advanced connection settings are under Connection tools.",
+                    "Direct AD actions and account selection are optional. Connect / Change opens the normal connection wizard.",
                 AutoSize =
                     true,
                 MaximumSize =
@@ -836,9 +841,9 @@ public sealed partial class MainForm
                         UiStyle.ControlGap,
                         0,
                         0)
-            },
-            0,
-            5);
+            };
+        _startDirectHint = directConnectionHint;
+        connection.Controls.Add(directConnectionHint, 0, 5);
 
         UiStyle.ConfigureStatusLabel(
             _startSetupStatus);
@@ -1362,6 +1367,7 @@ public sealed partial class MainForm
                     return;
 
                 RememberComputerQuery(_homeQuery.Text);
+                InvalidateHomeSelectionOnQueryEdit();
                 QueueHomeSearch();
             };
 
@@ -2287,6 +2293,9 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
 
         nested.TabPages.Add(BuildDeviceSearchPage());
 
@@ -2606,6 +2615,9 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
 
         // Everyday settings are immediately visible; enterprise features live
         // under a single explicit group instead of competing at the top level.
@@ -2622,6 +2634,7 @@ public sealed partial class MainForm
             Name = "EnterpriseSettingsSections",
             Dock = DockStyle.Fill
         };
+        enterpriseSections.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
         enterpriseSections.TabPages.Add(BuildSecuritySettingsResponsiveTab());
         enterpriseSections.TabPages.Add(BuildExportAutomationResponsiveTab());
         enterprise.Controls.Add(enterpriseSections);
@@ -2638,6 +2651,9 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueMainViewportReflow();
 
         nested.TabPages.Add(BuildDiagnosticToolsPage());
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());

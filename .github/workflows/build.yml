@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   laps-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -765,7 +765,7 @@ jobs:
       github.event_name == 'pull_request' &&
       (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:

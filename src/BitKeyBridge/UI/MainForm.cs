@@ -4568,7 +4568,7 @@ public sealed partial class MainForm : DpiAwareForm
                     _startResults.Rows.Add(
                         row.ComputerName,
                         row.RecoveryId,
-                        row.KeyDate,
+                        (object?)row.KeyDate ?? DBNull.Value,
                         row.IsLatest is null
                             ? "-"
                             : row.IsLatest.Value

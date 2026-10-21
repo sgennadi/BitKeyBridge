@@ -22,7 +22,7 @@ public static class HousekeepingCliService
             Console.WriteLine(
                 $"Minimum backup files: {config.BackupMinimumFiles}");
             Console.WriteLine(
-                $"Temporary-file retention days: {config.TemporaryFileRetentionDays} (0 = disabled)");
+                $"Temporary-file/update-staging retention days: {config.TemporaryFileRetentionDays} (0 = disabled)");
             Console.WriteLine(
                 $"Storage ACL enforcement: {config.StorageAclHardeningEnabled}");
 
