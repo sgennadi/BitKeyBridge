@@ -5,6 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>BitKeyBridge</AssemblyName>
     <RootNamespace>BitKeyBridge</RootNamespace>

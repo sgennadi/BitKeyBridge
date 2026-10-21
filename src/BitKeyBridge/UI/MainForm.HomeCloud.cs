@@ -39,8 +39,8 @@ public sealed partial class MainForm
                 {
                     var index = _homeSearchResults.Rows.Add(
                         result.ComputerName, result.SourceSummary,
-                        result.BitLockerStatus, result.LatestBitLockerKeyUtc,
-                        result.LapsStatus, result.LapsKeyDateUtc);
+                        result.BitLockerStatus, (object?)result.LatestBitLockerKeyUtc ?? DBNull.Value,
+                        result.LapsStatus, (object?)result.LapsKeyDateUtc ?? DBNull.Value);
                     _homeSearchResults.Rows[index].Tag = result;
                 }
 

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace BitKeyBridge;
 
 /// <summary>
@@ -9,7 +11,7 @@ internal static class HomeRecoverySelectionGuard
 {
     internal static bool IsCurrent(
         HomeSearchResult? original, HomeSearchResult? now,
-        RecoverySearchResult? recovery)
+        [NotNullWhen(true)] RecoverySearchResult? recovery)
     {
         if (original is null || recovery is null ||
             !ReferenceEquals(original, now) ||

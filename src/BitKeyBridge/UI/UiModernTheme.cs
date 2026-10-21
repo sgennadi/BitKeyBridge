@@ -33,7 +33,10 @@ internal static class UiModernTheme
 
         var marker = new ThemeMarker();
         Markers.Add(root, marker);
-        root.ControlAdded += (_, args) => Apply(args.Control);
+        root.ControlAdded += (_, args) =>
+        {
+            if (args.Control is { } child) Apply(child);
+        };
         Install(root, marker);
 
         foreach (Control child in root.Controls)

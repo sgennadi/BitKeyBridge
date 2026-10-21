@@ -412,10 +412,10 @@ public sealed partial class MainForm
                         result.ComputerName,
                         result.SourceSummary,
                         result.BitLockerStatus,
-                        result.LatestBitLockerKeyUtc,
+                        (object?)result.LatestBitLockerKeyUtc ?? DBNull.Value,
                         result.LapsStatus,
-                        result.LapsKeyDateUtc ??
-                        result.LapsExpiresAtUtc);
+                        (object?)(result.LapsKeyDateUtc ??
+                        result.LapsExpiresAtUtc) ?? DBNull.Value);
 
                 _homeSearchResults.Rows[rowIndex].Tag =
                     result;

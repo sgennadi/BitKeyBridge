@@ -1,4 +1,4 @@
-name: BitKeyBridge v0.32.0 RC7
+name: BitKeyBridge v0.32.0 RC8 development checks
 
 on:
   push:
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   source-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -60,13 +60,15 @@ jobs:
 
   laps-regression:
     needs: source-gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
+      - name: Authenticode pin regression
+        run: dotnet run --project tests/AuthenticodeRegression -c Release
       - name: LAPS lifecycle and encoding regression
         run: dotnet run --project tests/LapsRegression -c Release
 
@@ -234,7 +236,7 @@ jobs:
       github.ref == 'refs/heads/release/v0.32.0-rc.7' &&
       github.event.head_commit.message == 'Release candidate v0.32.0-rc.7'
     needs: [source-gate, laps-regression, codeql, build, protected-audit-integration, legacy-upgrade-rollback]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     permissions:
       contents: write

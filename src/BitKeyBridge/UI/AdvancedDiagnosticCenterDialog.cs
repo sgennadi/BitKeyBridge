@@ -17,7 +17,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
     private readonly RichTextBox _report = new();
     private readonly Button _cancel;
     private readonly Button _copy;
-    private readonly Button _useDc;
+    private readonly Button _useDc = UiStyle.CreateActionButton("Use suggested DC");
     private readonly Button _close;
     private readonly List<Button> _runActions = [];
     private CancellationTokenSource? _cancelToken;
@@ -99,7 +99,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
             WrapContents = true, FlowDirection = FlowDirection.LeftToRight,
             Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
         };
-        AddAction(tools, "Compare DCs", () => RunAsync(async ct =>
+        AddAsyncAction(tools, "Compare DCs", () => RunAsync(async ct =>
         {
             var report = await new AdvancedAdDiagnosticService(_config)
                 .CompareControllersAsync(_computer.Text.Trim(), ct);
@@ -126,7 +126,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
             AddFindings(lines, report.Findings);
             return string.Join(Environment.NewLine, lines);
         }));
-        AddAction(tools, "Permission analysis", () => RunAsync(async ct =>
+        AddAsyncAction(tools, "Permission analysis", () => RunAsync(async ct =>
         {
             var r = await new AdvancedAdDiagnosticService(_config)
                 .InspectPermissionsAsync(_computer.Text.Trim(), ct);
@@ -148,7 +148,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
             AddFindings(lines, r.Findings);
             return string.Join(Environment.NewLine, lines);
         }));
-        AddAction(tools, "Connection / LDAPS", () => RunAsync(async ct =>
+        AddAsyncAction(tools, "Connection / LDAPS", () => RunAsync(async ct =>
         {
             var rows = await new AdvancedConnectionDiagnosticService(_config).RunAsync(ct);
             var winner = rows.Where(x => x.Check == "Authenticated LDAP" &&
@@ -172,7 +172,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
             lines.Add("DC selection is never automatic; the operator must explicitly choose to apply the suggestion.");
             return string.Join(Environment.NewLine, lines);
         }));
-        AddAction(tools, "AD / Entra comparison", () => RunAsync(async ct =>
+        AddAsyncAction(tools, "AD / Entra comparison", () => RunAsync(async ct =>
         {
             var token = await _getGraphToken();
             var r = await new RecoverySourceConsistencyService(_config).CompareAsync(
@@ -190,7 +190,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
             AddFindings(lines, r.Findings);
             return string.Join(Environment.NewLine, lines);
         }));
-        AddAction(tools, "Collect endpoint ZIP", CollectEndpoint);
+        AddAsyncAction(tools, "Collect endpoint ZIP", CollectEndpointAsync);
         AddAction(tools, "Open endpoint ZIP", OpenEndpoint);
         AddAction(tools, "Protect recovery CSV", ProtectCache);
         AddAction(tools, "Verify EXE signature", VerifySignature);
@@ -201,7 +201,6 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
         _cancel.Click += (_, _) => _cancelToken?.Cancel();
         tools.Controls.Add(_cancel);
 
-        _useDc = UiStyle.CreateActionButton("Use suggested DC");
         _useDc.Name = "AdvancedDiagnosticUseDc";
         _useDc.Enabled = false;
         _useDc.Click += (_, _) =>
@@ -277,7 +276,38 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
         _runActions.Add(button);
     }
 
-    private async void CollectEndpoint()
+    private void AddAsyncAction(FlowLayoutPanel tools, string title, Func<Task> action)
+    {
+        var button = UiStyle.CreateActionButton(title);
+        button.Click += async (_, _) =>
+        {
+            try { await action(); }
+            catch (OperationCanceledException) when (IsDisposed || Disposing) { }
+            catch (Exception ex) { ReportFailure(ex); }
+        };
+        tools.Controls.Add(button);
+        _runActions.Add(button);
+    }
+
+    private void ReportFailure(Exception ex)
+    {
+        var reason = DiagnosticRedaction.Sanitize("Diagnostic failed: " + ex.Message);
+        try
+        {
+            var logger = new AppLogger(_config.ErrorLog, _config.MaxLogSizeMb);
+            logger.Initialize();
+            logger.Error(reason);
+        }
+        catch (Exception)
+        {
+            WindowsEventLogService.TryWrite(reason, EventLogSeverity.Error, 5212, "Diagnostics");
+        }
+        if (IsDisposed || Disposing) return;
+        _report.Text = reason;
+        UiStyle.SetStatus(_status, reason, UiStatusKind.Error);
+    }
+
+    private async Task CollectEndpointAsync()
     {
         using var chooser = new SaveFileDialog
         {
@@ -398,8 +428,7 @@ public sealed class AdvancedDiagnosticCenterDialog : DpiAwareForm
         }
         catch (Exception ex)
         {
-            if (!IsDisposed) UiStyle.SetStatus(_status,
-                "Diagnostic failed: " + DiagnosticRedaction.Sanitize(ex.Message), UiStatusKind.Error);
+            ReportFailure(ex);
         }
         finally
         {

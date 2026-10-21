@@ -57,7 +57,14 @@ internal sealed class ProtectedAuditBrokerServer
             throw new PlatformNotSupportedException("Audit broker requires Windows.");
 
         using var serviceIdentity = WindowsIdentity.GetCurrent();
-        if (!SystemSid.Equals(serviceIdentity.User))
+        var serviceSid = serviceIdentity.User;
+        if (serviceSid is null)
+        {
+            WindowsEventLogService.TryWrite("Audit broker startup denied: service identity has no SID.",
+                EventLogSeverity.Error, 5210, "Protected audit");
+            throw new InvalidOperationException("Audit broker service identity has no SID.");
+        }
+        if (!SystemSid.Equals(serviceSid))
             throw new InvalidOperationException(
                 "The protected audit broker must run as NT AUTHORITY\\SYSTEM.");
 
@@ -227,13 +234,18 @@ internal sealed class ProtectedAuditBrokerServer
             {
                 using var identity = WindowsIdentity.GetCurrent();
                 actorName = identity.Name;
-                actorSid = identity.User?.Value ?? string.Empty;
+                var clientSid = identity.User;
+                if (clientSid is null) return; // Deny; log only after reverting to SYSTEM.
+                actorSid = clientSid.Value;
                 var principal = new WindowsPrincipal(identity);
-                allowed = identity.User is not null &&
-                    _readers.Any(sid =>
-                        identity.User.Equals(sid) ||
+                allowed = _readers.Any(sid =>
+                        clientSid.Equals(sid) ||
                         principal.IsInRole(sid));
             });
+
+            if (actorSid.Length == 0)
+                WindowsEventLogService.TryWrite("Audit broker request denied: client identity has no SID.",
+                    EventLogSeverity.Warning, 5211, "Protected audit");
 
             // Do not keep trusting a policy file that becomes writable after
             // service startup. Every ACK is conditioned on current NTFS trust.

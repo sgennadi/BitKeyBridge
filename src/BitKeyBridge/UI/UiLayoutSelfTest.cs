@@ -2188,7 +2188,7 @@ public static class UiLayoutSelfTest
             if (results is not null)
             {
                 var index = results.Rows.Add(
-                    "PC-SELECTED", "AD", "Available", null, "Detected", null);
+                    "PC-SELECTED", "AD", "Available", DBNull.Value, "Detected", DBNull.Value);
                 results.Rows[index].Tag = new HomeSearchResult
                 {
                     ComputerName = "PC-SELECTED",
