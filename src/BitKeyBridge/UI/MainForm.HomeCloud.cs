@@ -111,12 +111,14 @@ public sealed partial class MainForm
                             : result.FailureKind, "Cloud"));
 
             var resultStatus = result.Failure is not null
-                ? MetadataFailureGuidance.Label(result.FailureKind) + ". " +
-                  MetadataFailureGuidance.ShortAction(result.FailureKind, "Cloud") +
-                  " No backup absence is proven."
+                ? UiLanguageService.Translate(_uiLanguageCode,
+                    "MetadataKind" + result.FailureKind) + ". " +
+                  UiLanguageService.Translate(_uiLanguageCode,
+                    "MetadataAction" + result.FailureKind) + " " +
+                  UiLanguageService.Translate(_uiLanguageCode,
+                    "MetadataBackupUnverified")
                 : result.RecordsAdded == 0 && !result.IsPartial
-                    ? "No matching Entra/Intune record visible. Verify tenant, " +
-                      "exact identity and scope; backup absence is not proven."
+                    ? UiLanguageService.Translate(_uiLanguageCode, "MetadataNoCloudRecords")
                     : $"Cloud: {result.RecordsAdded} record(s). " +
                       "Select an exact row for Device 360." +
                       (result.IsPartial ? " Some metadata is unverified." : "");
