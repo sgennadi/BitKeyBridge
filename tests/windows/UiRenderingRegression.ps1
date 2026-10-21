@@ -23,6 +23,7 @@ $diagnostics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\Ma
 $helpdesk = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskDashboard.cs') -Raw
 $deviceWorkspace = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DeviceWorkspace.cs') -Raw
 $computerContext = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.ComputerContext.cs') -Raw
+$home = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Home.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 
@@ -65,5 +66,9 @@ Assert-Source ($computerContext.Contains('GetSelectedHomeSearchResult() is { } s
 Assert-Source ($deviceWorkspace.Contains('selected.IdentityAmbiguous') -and $deviceWorkspace.Contains('selected.SourceIdentity')) 'Cloud and ambiguous device identities must remain explicitly unverified.'
 Assert-Source ($deviceWorkspace.Contains('GetSelectedHomeSearchResult() is not null') -and $deviceWorkspace.Contains('_homeSearchResults.Focus()')) 'Returning to Start with a selected device must focus its row, not restart the search.'
 Assert-Source ($layoutSelfTest.Contains('PreviewHelpdeskDeviceWorkspaceForUiSelfTest()') -and $layoutSelfTest.Contains('returning from Helpdesk lost the source-qualified Start selection')) 'Runtime must verify Helpdesk navigation retains an exact selected Start record.'
+
+Assert-Source ($shell.Contains('InvalidateHomeSelectionOnQueryEdit()')) 'Start search edits must drop previous selected-device metadata.'
+Assert-Source ($home.Contains('_homeSearchCancellation?.Cancel()') -and $home.Contains('Search text changed. Previous device selection cleared.')) 'Typing a new query must cancel old search work and remove stale device actions.'
+Assert-Source ($layoutSelfTest.Contains('editing Start search retained stale device metadata')) 'Runtime UI test must reject old device selection remaining after query edit.'
 
 Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
