@@ -44,8 +44,9 @@ independently accepted RC8 release candidate is prepared.
 
 - Settings > Helpdesk > **Reset Visual Layout...** asks for confirmation.
 - Restores the default BitLocker / LAPS / Computers card order, compact
-  Update Center and a maximized, visible main window. Only per-user visual
-  preferences are written.
+  Update Center and a maximized, visible main window. Collapses optional
+  Connection, Environment Profiles and Recovery Access Policy sections.
+  Only per-user visual preferences are written.
 - Does **not** change AD/Entra source, remembered authentication method,
   RBAC, recovery policy, tokens or recovery secrets. Existing card controls
   and selected metadata are preserved while the outer pane hosts move.
