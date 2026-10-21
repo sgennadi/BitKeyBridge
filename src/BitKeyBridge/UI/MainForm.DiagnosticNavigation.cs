@@ -85,12 +85,21 @@ public sealed partial class MainForm
             }
         };
 
+        var uiPerformance = NewActionButton("UI Performance...");
+        uiPerformance.Name = "RunUiPerformanceDiagnosticsButton";
+        uiPerformance.AccessibleName =
+            "Show in-memory layout timings without computer identities or secrets";
+        uiPerformance.Click += (_, _) =>
+            ShowAppMessage("UI performance (current session)",
+                UiLayoutTelemetry.Report());
+
         buttons.Controls.AddRange([
             environment,
             advanced,
             bitLocker,
             laps,
-            protectedAudit
+            protectedAudit,
+            uiPerformance
         ]);
         workspace.Controls.Add(buttons);
         return page;
