@@ -111,6 +111,9 @@ public static class MetadataSourceIsolation
         if (!cancellationReachedCaller)
             failures.Add("Canceled metadata retry was converted into a success.");
 
+        // Exercise the shared technician-facing typed classifier under the
+        // existing portable offline self-test, without calling a directory.
+        failures.AddRange(MetadataFailureGuidance.RunOfflineTests());
         return failures;
     }
 
