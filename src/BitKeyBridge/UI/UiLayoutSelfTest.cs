@@ -1869,19 +1869,25 @@ public static class UiLayoutSelfTest
 
         if (form is MainForm visualMain)
         {
-            // Deliberately disturb the panel order first. No network call,
-            // secret retrieval or per-user preference write is allowed by
-            // the layout test's preview-only reset.
+            // Disturb only visual preferences, then verify that a reset
+            // restores defaults without editing source authorization or
+            // saved recovery/audit policies.
+            var securityBefore =
+                visualMain.PreviewNonVisualSettingsForUiSelfTest();
             visualMain.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
+            var compact = FindByName(form, "UpdateCenterCompact") as CheckBox;
+            if (compact is not null)
+                compact.Checked = false;
             visualMain.PreviewResetVisualLayoutForUiSelfTest();
             if (visualMain.PreviewHomePaneOrderForUiSelfTest() !=
                 "BitLocker,Laps,Computers")
                 failures.Add($"{formName}/{scenario.Name}: reset did not restore the default three-pane order.");
-            if (FindByName(form, "UpdateCenterCompact") is not CheckBox
-                { Checked: true })
+            if (compact is not { Checked: true })
                 failures.Add($"{formName}/{scenario.Name}: reset did not restore compact Updates.");
-            // Do not swap again: that would undo the reset and introduce
-            // order-dependent failures when prior per-user settings differed.
+            if (securityBefore !=
+                visualMain.PreviewNonVisualSettingsForUiSelfTest())
+                failures.Add($"{formName}/{scenario.Name}: visual reset changed authentication source or recovery policy.");
+            // No second swap: that would silently undo the visual reset.
         }
 
         if (FindByName(
