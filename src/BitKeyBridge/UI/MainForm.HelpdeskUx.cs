@@ -5,6 +5,14 @@ public sealed partial class MainForm
     // Keep a direct expansion callback: Control.Visible depends on the
     // visibility of all parent tabs and is not a reliable expansion state.
     private Action<bool>? _setHelpdeskRecoveryPolicyExpanded;
+    private Action<bool>? _setHelpdeskProfilesExpanded;
+
+    internal void PreviewSetHelpdeskProfilesExpandedForUiTest(bool expanded)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        _setHelpdeskProfilesExpanded?.Invoke(expanded);
+    }
 
     internal void PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(bool expanded)
     {
@@ -517,15 +525,20 @@ public sealed partial class MainForm
         // makes the first expansion reliable after RDP/DPI tab switches.
         var profilesExpanded = false;
         var recoveryExpanded = false;
-        profileToggle.Click += (_, _) =>
+        void SetProfilesExpanded(bool expanded)
         {
-            profilesExpanded = !profilesExpanded;
-            profileHeading.Visible = profilesExpanded;
-            profileGrid.Visible = profilesExpanded;
-            profileToggle.Text = profilesExpanded
+            if (profilesExpanded == expanded)
+                return;
+            profilesExpanded = expanded;
+            profileHeading.Visible = expanded;
+            profileGrid.Visible = expanded;
+            profileToggle.Text = expanded
                 ? "Hide environment profiles" : "Show environment profiles...";
             QueueMainViewportReflow();
-        };
+        }
+        _setHelpdeskProfilesExpanded = SetProfilesExpanded;
+        profileToggle.Click += (_, _) =>
+            SetProfilesExpanded(!profilesExpanded);
         void SetRecoveryPolicyExpanded(bool expanded)
         {
             if (recoveryExpanded == expanded)
