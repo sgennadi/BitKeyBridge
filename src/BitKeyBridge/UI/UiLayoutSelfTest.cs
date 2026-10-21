@@ -1328,7 +1328,46 @@ public static class UiLayoutSelfTest
                 wizard.Controls.Find("StartupRememberLastConnection", true)
                     is not [CheckBox { Checked: false, Enabled: false }])
             {
-                failures.Add("Choose-later must disable remembered automatic connection.");
+                failures.Add("Offline Start must disable remembered automatic connection.");
+            }
+            if (wizard.Controls.Find("StartupConnectionConfirm", true)
+                    is not [Button { Text: "Open Start" }] ||
+                wizard.Controls.Find("StartupConnectionSkip", true)
+                    is not [Button { Text: "Cancel" }])
+            {
+                failures.Add("Offline Start must be a separate explicit action from Cancel.");
+            }
+        }
+
+        // Cloud setup is allowed without a pre-existing tenant/app registration:
+        // it opens the existing administrator-only setup wizard. No token,
+        // Graph consent or credential is ever created by changing radio modes.
+        using (var cloud = new CloudConnectionWizardDialog(new CloudAuthConfig()))
+        {
+            var approved = cloud.Controls.Find("CloudWizardExistingApp", true)
+                .OfType<RadioButton>().FirstOrDefault();
+            var admin = cloud.Controls.Find("CloudWizardAdministratorSetup", true)
+                .OfType<RadioButton>().FirstOrDefault();
+            var tenant = cloud.Controls.Find("CloudWizardTenant", true)
+                .OfType<TextBox>().FirstOrDefault();
+            var client = cloud.Controls.Find("CloudWizardClient", true)
+                .OfType<TextBox>().FirstOrDefault();
+            if (approved is null || admin is null || tenant is null || client is null ||
+                cloud.Controls.Find("CloudWizardPermissionsToggle", true)
+                    is not [Button] ||
+                cloud.Controls.Find("CloudWizardPermissions", true)
+                    is not [Label])
+            {
+                failures.Add("Cloud wizard must retain all sources and expandable delegated-permissions guidance.");
+            }
+            else
+            {
+                admin.Checked = true;
+                if (tenant.Enabled || client.Enabled || !cloud.RequestAdministrativeSetup)
+                    failures.Add("Admin setup must not require existing tenant or client IDs.");
+                approved.Checked = true;
+                if (!tenant.Enabled || !client.Enabled || cloud.RequestAdministrativeSetup)
+                    failures.Add("Existing-app sign-in must expose its tenant and client ID controls.");
             }
         }
 
@@ -1750,6 +1789,23 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Updates workspace is missing retry or Authenticode policy controls.");
+        }
+
+        // Compact Helpdesk settings still expose the actual policy state
+        // and always retain discoverable controls for profiles and audit.
+        if (FindByName(form, "HelpdeskProfilesToggle") is not Button ||
+            FindByName(form, "HelpdeskProfilesGrid") is not TableLayoutPanel ||
+            FindByName(form, "HelpdeskRecoveryPolicyToggle") is not Button ||
+            FindByName(form, "HelpdeskRecoveryPolicyGrid") is not TableLayoutPanel ||
+            FindByName(form, "HelpdeskRecoveryPolicyOverview")
+                is not UiStatusLabel overview ||
+            !overview.Text.Contains("Saved recovery policy:",
+                StringComparison.Ordinal) ||
+            !overview.Text.Contains("does not grant secret access",
+                StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: compact Settings must display saved audit policy and retain both expandable sections.");
         }
 
         if (FindByName(
