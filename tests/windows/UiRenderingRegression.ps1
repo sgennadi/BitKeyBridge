@@ -85,4 +85,10 @@ Assert-Source ($helpdesk.Contains('_setHelpdeskRecoveryPolicyExpanded?.Invoke(tr
 Assert-Source ($layoutSelfTest.Contains('expanded policy was squeezed or clipped by its viewport') -and $layoutSelfTest.Contains('repeated Settings navigation collapsed an open policy')) 'Native WinForms tests must verify expanded policy viewport and idempotent navigation at 100-200% scaling.'
 Assert-Source ($layoutSelfTest.Contains('compact Settings must display saved audit policy') -and $layoutSelfTest.Contains('Admin setup must not require existing tenant')) 'Native WinForms UI tests must cover new Settings and Cloud wizard behavior.'
 
+$layoutReset = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.UserWorkspace.cs') -Raw
+$paneDrag = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HomePaneDrag.cs') -Raw
+Assert-Source ($helpdeskSettingsSource.Contains('ResetVisualLayoutButton') -and $layoutReset.Contains('private void ResetVisualLayout()')) 'Settings must offer an explicit visual-only reset.'
+Assert-Source ($paneDrag.Contains('RestoreDefaultHomePaneOrder()') -and $layoutReset.Contains('UiWorkspacePreferenceService.Save(_workspacePreferences)')) 'Visual reset must restore pane order and persist the current-user window layout.'
+Assert-Source ($layoutSelfTest.Contains('reset did not restore the default three-pane order') -and $layoutSelfTest.Contains('reset did not restore compact Updates')) 'Native UI test must verify visual reset.'
+
 Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
