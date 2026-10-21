@@ -149,7 +149,46 @@ internal static class UiLanguageService
             ["RecoveryStatusPendingAck"] = ["Pending protected ACK", "Ожидается подтверждение аудита",
                                            "ממתין לאישור ביקורת מוגן"],
             ["RecoveryStatusPolicy"] = ["Policy-dependent", "По политике", "בהתאם למדיניות"],
-            ["RecoveryStatusExplicit"] = ["Explicit action only", "Только по команде", "פעולה מפורשת בלבד"]
+            ["RecoveryStatusExplicit"] = ["Explicit action only", "Только по команде", "פעולה מפורשת בלבד"],
+            // Technician-first metadata errors. No secrets, device names or
+            // server exception details are sent through localization.
+            ["MetadataPartial"] = ["Partial search", "Частичный поиск", "חיפוש חלקי"],
+            ["MetadataVisible"] = ["visible result(s).", "видимых результатов.", "רשומות גלויות."],
+            ["MetadataSeeDiagnostics"] = ["See diagnostics.", "См. диагностику.", "פרטים באבחון."],
+            ["MetadataNoAdRecords"] =
+                ["No matching record visible. Verify device, source and scope; backup absence is not proven.",
+                 "Совпадений не видно. Проверьте устройство, источник и область поиска; отсутствие резервной копии не доказано.",
+                 "לא נמצאה רשומה תואמת. בדקו מכשיר, מקור וטווח חיפוש; אין בכך הוכחה שאין גיבוי."],
+            ["MetadataNoCloudRecords"] =
+                ["No matching Entra/Intune record visible. Verify tenant, identity and scope; backup absence is not proven.",
+                 "В Entra/Intune не видно совпадений. Проверьте клиентскую организацию, идентификатор и область; отсутствие резервной копии не доказано.",
+                 "לא נמצאה רשומת Entra/Intune תואמת. בדקו דייר, זהות והיקף; אין בכך הוכחה שאין גיבוי."],
+            ["MetadataBackupUnverified"] =
+                ["No backup absence is proven.", "Отсутствие резервной копии не доказано.", "לא הוכח שאין גיבוי."],
+            ["MetadataKindUnknown"] = ["Lookup failed", "Ошибка поиска", "החיפוש נכשל"],
+            ["MetadataKindNoRecord"] = ["No record visible", "Запись не видна", "לא נמצאה רשומה גלויה"],
+            ["MetadataKindAccessDenied"] = ["Access denied", "Доступ запрещён", "הגישה נדחתה"],
+            ["MetadataKindSignInRequired"] = ["Sign-in required", "Требуется вход", "נדרשת התחברות"],
+            ["MetadataKindSourceOffline"] = ["Source unavailable", "Источник недоступен", "המקור אינו זמין"],
+            ["MetadataKindTimeout"] = ["Timeout", "Превышено время ожидания", "תם זמן ההמתנה"],
+            ["MetadataKindDecryptionFailed"] = ["Decryption failed", "Ошибка расшифровки", "הפענוח נכשל"],
+            ["MetadataKindRateLimited"] = ["Source throttled", "Ограничение запросов", "המקור מגביל בקשות"],
+            ["MetadataActionUnknown"] =
+                ["Open sanitized diagnostics.", "Откройте безопасную диагностику.", "פתחו אבחון ללא פרטים רגישים."],
+            ["MetadataActionNoRecord"] =
+                ["Check device identity and scope.", "Проверьте идентификатор и область.", "בדקו זהות מכשיר והיקף."],
+            ["MetadataActionAccessDenied"] =
+                ["Check rights in Access Health.", "Проверьте права в Access Health.", "בדקו הרשאות ב-Access Health."],
+            ["MetadataActionSignInRequired"] =
+                ["Reconnect the intended account.", "Подключитесь нужной учётной записью.", "התחברו מחדש עם החשבון המתאים."],
+            ["MetadataActionSourceOffline"] =
+                ["Check source connectivity.", "Проверьте доступность источника.", "בדקו קישוריות למקור."],
+            ["MetadataActionTimeout"] =
+                ["Verify connection and retry metadata.", "Проверьте связь и повторите запрос метаданных.", "בדקו את החיבור ונסו שוב להביא נתונים."],
+            ["MetadataActionDecryptionFailed"] =
+                ["Check authorized LAPS decrypt rights.", "Проверьте права расшифровки LAPS.", "בדקו הרשאות לפענוח LAPS."],
+            ["MetadataActionRateLimited"] =
+                ["Retry after source backoff.", "Повторите после паузы источника.", "נסו שוב לאחר ההמתנה הנדרשת."]
         };
 
     internal static string PreferenceFile =>
@@ -257,6 +296,32 @@ internal static class UiLanguageService
                     var text = Translate(code, key);
                     if (string.IsNullOrWhiteSpace(text))
                         failures.Add("Missing localized shell resource: " + key);
+                }
+            }
+
+            foreach (var language in SupportedLanguages.Select(x => x.Code))
+            {
+                foreach (var kind in Enum.GetValues<MetadataFailureKind>()
+                    .Where(x => x != MetadataFailureKind.None))
+                {
+                    foreach (var prefix in new[] { "MetadataKind", "MetadataAction" })
+                    {
+                        var key = prefix + kind;
+                        if (Translate(language, key) is var word &&
+                            (string.IsNullOrWhiteSpace(word) || word == key))
+                            failures.Add("Missing translated metadata failure: " + key +
+                                " (" + language + ")");
+                    }
+                }
+                foreach (var key in new[] {
+                    "MetadataPartial", "MetadataVisible",
+                    "MetadataSeeDiagnostics", "MetadataNoAdRecords",
+                    "MetadataNoCloudRecords", "MetadataBackupUnverified"
+                })
+                {
+                    if (Translate(language, key) is var word &&
+                        (string.IsNullOrWhiteSpace(word) || word == key))
+                        failures.Add("Missing translated metadata guidance: " + key);
                 }
             }
 
