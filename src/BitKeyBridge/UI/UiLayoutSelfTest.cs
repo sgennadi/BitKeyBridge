@@ -2040,6 +2040,18 @@ public static class UiLayoutSelfTest
                 tabs.SelectedTab = recovery;
                 if (recoveryQuery.Text != "PC-SELECTED")
                     failures.Add($"{formName}/{scenario.Name}: selected Start computer was not retained.");
+
+                // A *new* query must invalidate the selected old device
+                // immediately, even before the debounce or a network call.
+                tabs.SelectedTab = start;
+                homeQuery.Text = "PC-NEW-DEVICE";
+                if (results.Rows.Count != 0 ||
+                    (selectedSummary is not null &&
+                     selectedSummary.Text.Contains("PC-SELECTED",
+                         StringComparison.Ordinal)))
+                {
+                    failures.Add($"{formName}/{scenario.Name}: editing Start search retained stale device metadata or Helpdesk selection.");
+                }
             }
         }
         finally
