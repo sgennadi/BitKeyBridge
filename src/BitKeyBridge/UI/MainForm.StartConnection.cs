@@ -15,7 +15,15 @@ public sealed partial class MainForm
     private Control? _startDirectActionsPanel;
     private Control? _startDirectHint;
     private bool _connectionOptionsExpanded;
+    private Action<bool>? _setConnectionOptionsExpanded;
     private bool _initializingStartSource;
+
+    internal void PreviewSetConnectionOptionsExpandedForUiTest(bool expanded)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        _setConnectionOptionsExpanded?.Invoke(expanded);
+    }
     private bool _cloudWizardOpening;
 
     private Control BuildStartConnectionSourceChooser()
@@ -111,15 +119,20 @@ public sealed partial class MainForm
         primary.Controls.Add(_homeReconnectWizardButton);
         primary.Controls.Add(showOptions);
         layout.Controls.Add(primary, 0, 0);
-        showOptions.Click += (_, _) =>
+        void SetConnectionOptionsExpanded(bool expanded)
         {
-            _connectionOptionsExpanded = !_connectionOptionsExpanded;
-            row.Visible = _connectionOptionsExpanded;
-            showOptions.Text = _connectionOptionsExpanded
+            if (_connectionOptionsExpanded == expanded)
+                return;
+            _connectionOptionsExpanded = expanded;
+            row.Visible = expanded;
+            showOptions.Text = expanded
                 ? "Hide connection options" : "More connection options...";
             UpdateStartConnectionSourceControls();
             QueueMainViewportReflow();
-        };
+        }
+        _setConnectionOptionsExpanded = SetConnectionOptionsExpanded;
+        showOptions.Click += (_, _) =>
+            SetConnectionOptionsExpanded(!_connectionOptionsExpanded);
         _homeReconnectWizardButton.Click += async (_, _) =>
             await ShowConnectionWizardAsync(
                 preferOtherAdAccount: _lastAdConnectionFailed &&
