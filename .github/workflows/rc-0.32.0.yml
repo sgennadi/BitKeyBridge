@@ -57,6 +57,21 @@ jobs:
           grep -Fq 'DiagnosticToolsActions' src/BitKeyBridge/UI/MainForm.DiagnosticNavigation.cs
           grep -Fq 'VerifyNestedWorkspaceViewport' src/BitKeyBridge/UI/UiLayoutSelfTest.cs
           grep -Fq 'child is TableLayoutPanel || child is FlowLayoutPanel' src/BitKeyBridge/UI/UiStyle.cs
+          # Prevent accidental reintroduction of username/password OAuth grants.
+          test -f src/BitKeyBridge/Core/CloudAuthenticationPolicy.cs
+          grep -Fq 'CloudAuthenticationPolicy.Normalize' src/BitKeyBridge/Infrastructure/ConfigService.cs
+          if grep -Fq 'AcquirePasswordTokenAsync(' src/BitKeyBridge/Services/CloudGraphService.cs; then
+            echo 'ROPC method was reintroduced' >&2
+            exit 1
+          fi
+          if grep -Fq '"grant_type"] = "password"' src/BitKeyBridge/Services/CloudGraphService.cs; then
+            echo 'ROPC OAuth password grant was reintroduced' >&2
+            exit 1
+          fi
+          if grep -Fq '_cloudPassword' src/BitKeyBridge/UI/MainForm.cs; then
+            echo 'Legacy cloud password input was reintroduced' >&2
+            exit 1
+          fi
 
   laps-regression:
     needs: source-gate
