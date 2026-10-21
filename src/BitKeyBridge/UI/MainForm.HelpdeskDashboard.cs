@@ -435,7 +435,7 @@ public sealed partial class MainForm
                         // reliable way to infer child Visible state.
                         // Expand using the same idempotent method as the
                         // Settings button, without simulating a click.
-                        _expandHelpdeskRecoveryPolicy?.Invoke();
+                        _setHelpdeskRecoveryPolicyExpanded?.Invoke(true);
                         QueueMainViewportReflow();
                         return;
                     }
