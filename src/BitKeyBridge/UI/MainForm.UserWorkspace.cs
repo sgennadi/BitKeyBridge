@@ -31,6 +31,49 @@ public sealed partial class MainForm
         ApplyUpdateCenterDensity(_workspacePreferences.CompactUpdates);
     }
 
+    private void ResetVisualLayout()
+    {
+        if (!_layoutSelfTest)
+        {
+            var answer = MessageBox.Show(this,
+                "Restore default panel order, compact Update Center and window layout? " +
+                "Connections, passwords, recovery permissions and audit policies will not change.",
+                "Reset visual layout", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            if (answer != DialogResult.Yes)
+                return;
+        }
+
+        RestoreDefaultHomePaneOrder();
+        ApplyUpdateCenterDensity(compact: true);
+        _workspacePreferences = new UiWorkspacePreferences();
+        if (!_layoutSelfTest)
+        {
+            try
+            {
+                ConfigService.SaveStartConnectionPreferences(_startConnectionPreferences);
+                UiWorkspacePreferenceService.Save(_workspacePreferences);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException ||
+                                       ex is System.Security.SecurityException)
+            {
+                System.Diagnostics.Debug.WriteLine("Visual reset persistence failed: " +
+                    DiagnosticRedaction.Sanitize(ex.GetType().Name));
+                ShowAppMessage("Visual layout reset for this session, but preferences could not be saved.",
+                    "Reset visual layout");
+            }
+            WindowState = FormWindowState.Maximized;
+        }
+        QueueMainViewportReflow();
+    }
+
+    internal void PreviewResetVisualLayoutForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        ResetVisualLayout();
+    }
+
     private void SaveWorkspace()
     {
         if (_layoutSelfTest || WindowState == FormWindowState.Minimized)
