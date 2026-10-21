@@ -1864,6 +1864,25 @@ public static class UiLayoutSelfTest
             }
         }
 
+        if (FindByName(form, "ResetVisualLayoutButton") is not Button)
+            failures.Add($"{formName}/{scenario.Name}: visual-only layout reset action is missing.");
+
+        if (form is MainForm visualMain)
+        {
+            var priorOrder = visualMain.PreviewHomePaneOrderForUiSelfTest();
+            visualMain.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
+            visualMain.PreviewResetVisualLayoutForUiSelfTest();
+            if (visualMain.PreviewHomePaneOrderForUiSelfTest() !=
+                "BitLocker,Laps,Computers")
+                failures.Add($"{formName}/{scenario.Name}: reset did not restore the default three-pane order.");
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox
+                { Checked: true })
+                failures.Add($"{formName}/{scenario.Name}: reset did not restore compact Updates.");
+            visualMain.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
+            if (priorOrder != visualMain.PreviewHomePaneOrderForUiSelfTest())
+                failures.Add($"{formName}/{scenario.Name}: layout test did not restore its original pane order.");
+        }
+
         if (FindByName(
                 form,
                 "HelpdeskBasicsTab") is null)
