@@ -77,7 +77,8 @@ internal static class UpdateStagingCleanupService
         bool respectRollbackHold)
     {
         var root = Path.GetFullPath(updatesRoot);
-        var cutoff = (utcNow ?? DateTime.UtcNow).AddDays(-retentionDays);
+        var cutoff = (utcNow ?? DateTime.UtcNow).AddDays(
+            -Math.Clamp(retentionDays, 1, 3650));
         if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
         {
             report.UpdateFolderErrors++;
