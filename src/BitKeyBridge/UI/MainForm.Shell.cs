@@ -741,6 +741,8 @@ public sealed partial class MainForm
         var connectionActions =
             new FlowLayoutPanel
             {
+                Name = "HomeConnectionDirectActions",
+                Visible = false,
                 Dock =
                     DockStyle.Top,
                 AutoSize =
@@ -815,16 +817,18 @@ public sealed partial class MainForm
             _homeDisconnectAdButton,
             _homeConnectionToolsButton
         ]);
+        _startDirectActionsPanel = connectionActions;
         connection.Controls.Add(
             connectionActions,
             0,
             4);
 
-        connection.Controls.Add(
-            new Label
+        var directConnectionHint = new Label
             {
+                Name = "HomeConnectionDirectHint",
+                Visible = false,
                 Text =
-                    "Sign in with your Windows account or choose another AD account. Advanced connection settings are under Connection tools.",
+                    "Direct AD actions and account selection are optional. Connect / Change opens the normal connection wizard.",
                 AutoSize =
                     true,
                 MaximumSize =
@@ -837,9 +841,9 @@ public sealed partial class MainForm
                         UiStyle.ControlGap,
                         0,
                         0)
-            },
-            0,
-            5);
+            };
+        _startDirectHint = directConnectionHint;
+        connection.Controls.Add(directConnectionHint, 0, 5);
 
         UiStyle.ConfigureStatusLabel(
             _startSetupStatus);
