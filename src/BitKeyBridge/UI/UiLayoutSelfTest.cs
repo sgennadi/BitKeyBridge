@@ -1559,6 +1559,11 @@ public static class UiLayoutSelfTest
                 {
                     "HomeConnectionSourceChooser",
                     "HomeConnectionSource",
+                    "HomeConnectionPrimaryActions",
+                    "HomeConnectionOptionsToggle",
+                    "HomeConnectionExtraActions",
+                    "HomeConnectionDirectActions",
+                    "HomeConnectionDirectHint",
                     "HomeReconnectWizardButton",
                     "HomeBitLockerPaneHost",
                     "HomeLapsPaneHost",
