@@ -24,6 +24,10 @@ $helpdesk = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainF
 $deviceWorkspace = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DeviceWorkspace.cs') -Raw
 $computerContext = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.ComputerContext.cs') -Raw
 $homeSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Home.cs') -Raw
+$startConnectionSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.StartConnection.cs') -Raw
+$startupWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\StartupConnectionWizardDialog.cs') -Raw
+$cloudWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\CloudConnectionWizardDialog.cs') -Raw
+$helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 
@@ -70,5 +74,13 @@ Assert-Source ($layoutSelfTest.Contains('PreviewHelpdeskDeviceWorkspaceForUiSelf
 Assert-Source ($shell.Contains('InvalidateHomeSelectionOnQueryEdit()')) 'Start search edits must drop previous selected-device metadata.'
 Assert-Source ($homeSource.Contains('_homeSearchCancellation?.Cancel()') -and $homeSource.Contains('Search text changed. Previous device selection cleared.')) 'Typing a new query must cancel old search work and remove stale device actions.'
 Assert-Source ($layoutSelfTest.Contains('editing Start search retained stale device metadata')) 'Runtime UI test must reject old device selection remaining after query edit.'
+
+Assert-Source ($startConnectionSource.Contains('HomeConnectionPrimaryActions') -and $startConnectionSource.Contains('HomeConnectionOptionsToggle') -and $startConnectionSource.Contains('HomeConnectionExtraActions')) 'Connect must be the primary entry point; legacy direct actions must remain available behind More options.'
+Assert-Source ($startupWizardSource.Contains('Start without a connection') -and $startupWizardSource.Contains('UiStyle.CreateActionButton("Cancel", DialogResult.Cancel)')) 'Offline entry and cancellation must be distinct connection wizard actions.'
+Assert-Source ($cloudWizardSource.Contains('CloudWizardPermissionsToggle') -and $cloudWizardSource.Contains('if (_adminSetup.Checked)') -and $cloudWizardSource.Contains('_tenant.Enabled = _approvedApp.Checked')) 'Cloud permissions guidance must be expandable and administrator bootstrap cannot require an existing app.'
+Assert-Source ($helpdeskSettingsSource.Contains('HelpdeskProfilesToggle') -and $helpdeskSettingsSource.Contains('HelpdeskRecoveryPolicyToggle')) 'Infrequent settings must use compact expandable groups.'
+Assert-Source ($helpdeskSettingsSource.Contains('HelpdeskRecoveryPolicyOverview') -and $helpdeskSettingsSource.Contains('Saved recovery policy:')) 'Collapsed recovery policies must leave the saved audit gate visible.'
+Assert-Source ($helpdesk.Contains('HelpdeskRecoveryPolicyToggle')) 'Helpdesk Setup & Permissions navigation must reveal the policy section.'
+Assert-Source ($layoutSelfTest.Contains('compact Settings must display saved audit policy') -and $layoutSelfTest.Contains('Admin setup must not require existing tenant')) 'Native WinForms UI tests must cover new Settings and Cloud wizard behavior.'
 
 Write-Host 'UI-RENDERING-REGRESSION OK: bounded nested tab geometry, wrapping diagnostics, batched resize, native controls and HiDPI.'
