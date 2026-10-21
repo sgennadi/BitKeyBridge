@@ -134,6 +134,7 @@ public class DpiAwareForm : Form
         if (_responsiveLayoutRunning || IsDisposed || Disposing)
             return;
 
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         _responsiveLayoutRunning = true;
         _responsiveLabelTimer.Stop();
         try
@@ -164,6 +165,7 @@ public class DpiAwareForm : Form
         finally
         {
             _responsiveLayoutRunning = false;
+            UiLayoutTelemetry.RecordResponsiveForm(started);
         }
     }
 
