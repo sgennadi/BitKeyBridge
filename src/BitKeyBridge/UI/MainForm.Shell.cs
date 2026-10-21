@@ -1363,6 +1363,7 @@ public sealed partial class MainForm
                     return;
 
                 RememberComputerQuery(_homeQuery.Text);
+                InvalidateHomeSelectionOnQueryEdit();
                 QueueHomeSearch();
             };
 
