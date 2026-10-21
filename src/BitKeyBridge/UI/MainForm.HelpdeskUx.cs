@@ -4,13 +4,13 @@ public sealed partial class MainForm
 {
     // Keep a direct expansion callback: Control.Visible depends on the
     // visibility of all parent tabs and is not a reliable expansion state.
-    private Action? _expandHelpdeskRecoveryPolicy;
+    private Action<bool>? _setHelpdeskRecoveryPolicyExpanded;
 
-    internal void PreviewExpandHelpdeskRecoveryPolicyForUiTest()
+    internal void PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(bool expanded)
     {
         if (!_layoutSelfTest)
             throw new InvalidOperationException("UI-test-only action.");
-        _expandHelpdeskRecoveryPolicy?.Invoke();
+        _setHelpdeskRecoveryPolicyExpanded?.Invoke(expanded);
     }
 
     private readonly HashSet<string> _rotationSuggestionSessions =
@@ -534,8 +534,7 @@ public sealed partial class MainForm
             SetRecoveryPolicyExpanded(!recoveryExpanded);
         // Called from Helpdesk > Setup & Permissions even if Settings was
         // not previously visible: no synthesized click on a hidden button.
-        _expandHelpdeskRecoveryPolicy = () =>
-            SetRecoveryPolicyExpanded(true);
+        _setHelpdeskRecoveryPolicyExpanded = SetRecoveryPolicyExpanded;
         RefreshPolicyOverview();
         page.Enter += (_, _) => RefreshPolicyOverview();
 
