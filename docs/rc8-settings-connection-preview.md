@@ -53,6 +53,40 @@ independently accepted RC8 release candidate is prepared.
 - Use this after RDP session resizing, monitor removal or unexpected panel
   reordering. A new offline WinForms test covers the visual reset.
 
+## UI rendering performance
+
+- Repeated identical status values no longer set AutoSize text/images, avoiding
+  invalidation of surrounding panels on polling updates.
+- DpiAwareForm no longer repeats its entire layout on first Shown or triggers
+  a second unconditional full PerformLayout on DPI/font refresh. Theme regions
+  refresh when DPI/high-contrast state actually changes.
+- The selected chain of nested TabPages is explicitly repaired only after
+  selection/DPI changes or when geometry is genuinely stale. Normal WM_SIZE
+  relies on native Dock=Fill rather than forcing every flow section to layout.
+- Diagnostics > Tools > **UI Performance...** shows non-secret in-memory
+  counts, mean/worst milliseconds and >50 ms samples for viewport, recovery
+  cards and DPI reflow. It cannot measure slow AD/Graph operations or native
+  Windows painting; real user timing remains necessary.
+
+## Old ProgramData update folders
+
+- When enabled, existing housekeeping includes stale staging folders under
+  `%ProgramData%\\BitKeyBridge\\Updates` that match BitKeyBridge's version
+  (`v<semver>`) or helper/rollback (`helper-<GUID>`, `rollback-<GUID>`)
+  naming conventions. Default minimum age: 7 days, using the existing
+  `TemporaryFileRetentionDays` setting. A value of 0 disables deletion.
+- The cleanup does not touch other ProgramData folders, event/audit journals,
+  configurations, current or rollback-held versions, the running executable,
+  unknown directories, symlinks, `.bak` or pending newer staging.
+- Cross-process scheduled-download and apply/rollback gates are checked
+  before cleanup. A busy updater causes a safe skip, not a forced deletion.
+  Runs with the existing housekeeping worker (normally daily if the Windows
+  service is enabled) or its explicit administrative CLI command; neither
+  a new scheduled task nor a machine-wide policy change is introduced.
+- Offline --self-test now covers dry-run counts and preservation of current,
+  recent and unknown folders. Retained versions are never removed based on a
+  path wildcard or without the age check.
+
 ## Automated verification
 
 - Windows x64 / x86 / ARM64 compile and package checks.
