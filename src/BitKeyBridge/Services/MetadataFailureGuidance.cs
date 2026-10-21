@@ -136,6 +136,20 @@ internal static class MetadataFailureGuidance
         };
     }
 
+    internal static string ShortAction(MetadataFailureKind kind, string source) =>
+        kind switch
+        {
+            MetadataFailureKind.NoRecord => "Verify exact device identity and scope.",
+            MetadataFailureKind.AccessDenied => "Check effective rights in Access Health.",
+            MetadataFailureKind.SignInRequired => "Reconnect the intended account.",
+            MetadataFailureKind.SourceOffline => "Check source connectivity and service health.",
+            MetadataFailureKind.Timeout => "Verify connectivity and retry metadata.",
+            MetadataFailureKind.DecryptionFailed => "Check authorized LAPS decrypt access and GKDI.",
+            MetadataFailureKind.RateLimited => "Retry after the source backoff.",
+            MetadataFailureKind.None => string.Empty,
+            _ => "Open sanitized diagnostics for the next check."
+        };
+
     internal static string TechnicianSummary(MetadataFailureKind kind, string source) =>
         Label(kind) + ". " + NextAction(kind, source);
 
@@ -171,7 +185,8 @@ internal static class MetadataFailureGuidance
         {
             if (string.IsNullOrWhiteSpace(Label(kind)) ||
                 (kind != MetadataFailureKind.None &&
-                 string.IsNullOrWhiteSpace(NextAction(kind, "AD"))))
+                 (string.IsNullOrWhiteSpace(NextAction(kind, "AD")) ||
+                  string.IsNullOrWhiteSpace(ShortAction(kind, "AD")))))
                 failures.Add("Missing safe technician guidance for " + kind);
         }
 
