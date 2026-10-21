@@ -65,6 +65,41 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "legacy cloud password authentication is disabled",
+            () =>
+            {
+                Assert(
+                    CloudAuthenticationPolicy.Normalize("Password") == "DeviceCode" &&
+                    CloudAuthenticationPolicy.Normalize("Certificate") == "Certificate" &&
+                    CloudAuthenticationPolicy.Normalize("DeviceCode") == "DeviceCode" &&
+                    CloudAuthenticationPolicy.Normalize("other") == "DeviceCode",
+                    "Unsupported Graph authentication was not mapped to Device Code.");
+
+                Assert(
+                    typeof(CloudGraphService).GetMethod("AcquirePasswordTokenAsync") is null,
+                    "Password grant is still exposed on CloudGraphService.");
+
+                var oldConfig = JsonSerializer.Deserialize<CloudAuthConfig>(
+                    "{\"AuthMode\":\"Password\",\"Username\":\"legacy-user\"}");
+                Assert(oldConfig is not null, "Legacy cloud JSON failed to load.");
+                oldConfig.AuthMode = CloudAuthenticationPolicy.Normalize(oldConfig.AuthMode);
+                var roundTrip = JsonSerializer.Serialize(oldConfig);
+                Assert(
+                    oldConfig.AuthMode == "DeviceCode" &&
+                    !roundTrip.Contains("\"Username\"", StringComparison.OrdinalIgnoreCase),
+                    "Legacy password auth or username was persisted again.");
+
+                var oldProfile = JsonSerializer.Deserialize<HelpdeskProfile>(
+                    "{\"Name\":\"Legacy\",\"CloudAuthMode\":\"Password\",\"CloudUsername\":\"legacy-user\"}");
+                Assert(oldProfile is not null, "Legacy profile JSON failed to load.");
+                oldProfile.CloudAuthMode = CloudAuthenticationPolicy.Normalize(oldProfile.CloudAuthMode);
+                Assert(
+                    oldProfile.CloudAuthMode == "DeviceCode" &&
+                    !JsonSerializer.Serialize(oldProfile).Contains("\"CloudUsername\"", StringComparison.OrdinalIgnoreCase),
+                    "Legacy Helpdesk profile stored a removed ROPC field.");
+            });
+
+        Check(
             "schema 4 helpdesk prompt migration",
             () =>
             {

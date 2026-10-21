@@ -32,8 +32,6 @@ public sealed partial class MainForm : DpiAwareForm
 
     private readonly TextBox _cloudTenant = new();
     private readonly TextBox _cloudClient = new();
-    private readonly TextBox _cloudUsername = new();
-    private readonly TextBox _cloudPassword = new();
     private readonly TextBox _cloudThumbprint = new();
     private readonly ComboBox _cloudAuthMode = new();
     private readonly UiStatusLabel _cloudStatus = new();
@@ -614,7 +612,6 @@ public sealed partial class MainForm : DpiAwareForm
                 ComboBoxStyle.DropDownList;
             _cloudAuthMode.Items.AddRange([
                 "Device Code (MFA / Conditional Access)",
-                "DEPRECATED — Username + Password (ROPC, no MFA)",
                 "App registration + certificate"
             ]);
         }
@@ -624,11 +621,9 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudRotationPermissions.Checked = _cloudConfig.EnableIntuneRotationPermissions;
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
-        _cloudUsername.Text = _cloudConfig.Username;
         _cloudThumbprint.Text = _cloudConfig.CertificateThumbprint;
-        _cloudAuthMode.SelectedIndex = _cloudConfig.AuthMode.Equals("Certificate", StringComparison.OrdinalIgnoreCase)
-            ? 2
-            : _cloudConfig.AuthMode.Equals("Password", StringComparison.OrdinalIgnoreCase)
+        _cloudAuthMode.SelectedIndex =
+            CloudAuthenticationPolicy.Normalize(_cloudConfig.AuthMode) == "Certificate"
                 ? 1
                 : 0;
         UpdateCloudAuthUi();
@@ -645,50 +640,26 @@ public sealed partial class MainForm : DpiAwareForm
     {
         _cloudConfig.TenantId = _cloudTenant.Text.Trim();
         _cloudConfig.ClientId = _cloudClient.Text.Trim();
-        _cloudConfig.Username = _cloudUsername.Text.Trim();
         _cloudConfig.EnableLapsPermissions = _cloudLapsPermissions.Checked;
         _cloudConfig.EnableIntuneRotationPermissions = _cloudRotationPermissions.Checked;
         _cloudConfig.CertificateThumbprint = _cloudThumbprint.Text.Trim();
-        _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex switch
-        {
-            2 => "Certificate",
-            1 => "Password",
-            _ => "DeviceCode"
-        };
+        _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex == 1
+            ? "Certificate"
+            : "DeviceCode";
         ConfigService.SaveCloudConfig(_cloudConfig);
         UiStyle.SetStatus(
             _cloudStatus,
-            "Cloud config saved. Password was not saved.",
+            "Cloud config saved. Device Code or certificate authentication only.",
             UiStatusKind.Success);
     }
 
     private void UpdateCloudAuthUi()
     {
-        var deviceCode = _cloudAuthMode.SelectedIndex == 0;
-        var password = _cloudAuthMode.SelectedIndex == 1;
-        var cert = _cloudAuthMode.SelectedIndex == 2;
-        _cloudUsername.Enabled = password;
-        _cloudPassword.Enabled = password;
-        _cloudThumbprint.Enabled = cert;
-
-        if (!password)
-        {
-            _cloudPassword.Clear();
-        }
-        else
-        {
-            UiStyle.SetStatus(
-                _cloudStatus,
-                "Deprecated compatibility mode: ROPC doesn't support MFA and is commonly blocked by Conditional Access. Use Device Code or certificate authentication for new deployments.",
-                UiStatusKind.Warning);
-        }
+        _cloudThumbprint.Enabled = _cloudAuthMode.SelectedIndex == 1;
     }
 
     private async Task<bool> ConnectCloudAsync(bool forLaps = false, CancellationToken ct = default)
     {
-        var passwordMode =
-            _cloudAuthMode.SelectedIndex == 1;
-
         try
         {
             _cloudDiagnostics.Clear();
@@ -704,23 +675,13 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudToken =
                 _cloudAuthMode.SelectedIndex switch
                 {
-                    2 =>
+                    1 =>
                         await graph
                             .AcquireCertificateTokenAsync(
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
                                 _cloudThumbprint.Text,
                                 ct),
-                    1 =>
-                        await graph
-                            .AcquirePasswordTokenAsync(
-                                _cloudTenant.Text,
-                                _cloudClient.Text,
-                                _cloudUsername.Text,
-                                _cloudPassword.Text,
-                                ct,
-                                lapsOnly: forLaps,
-                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions),
                     _ =>
                         await graph
                             .AcquireDeviceCodeTokenAsync(
@@ -776,7 +737,6 @@ public sealed partial class MainForm : DpiAwareForm
                 ("Tenant", _cloudTenant.Text),
                 ("ClientId", _cloudClient.Text),
                 ("Authentication", _cloudAuthMode.Text),
-                ("Username", _cloudUsername.Text),
                 ("LapsOnly", forLaps.ToString()));
 
             if (forLaps)
@@ -787,16 +747,10 @@ public sealed partial class MainForm : DpiAwareForm
                     ex,
                     ("Tenant", _cloudTenant.Text),
                     ("ClientId", _cloudClient.Text),
-                    ("Authentication", _cloudAuthMode.Text),
-                    ("Username", _cloudUsername.Text));
+                    ("Authentication", _cloudAuthMode.Text));
             }
 
             return false;
-        }
-        finally
-        {
-            if (passwordMode)
-                _cloudPassword.Clear();
         }
     }
 
@@ -894,10 +848,6 @@ public sealed partial class MainForm : DpiAwareForm
 
         if (running)
         {
-            _cloudUsername.Enabled =
-                false;
-            _cloudPassword.Enabled =
-                false;
             _cloudThumbprint.Enabled =
                 false;
         }
@@ -933,39 +883,21 @@ public sealed partial class MainForm : DpiAwareForm
 
     private string BuildCloudTokenContext()
     {
-        var mode =
-            _cloudAuthMode.SelectedIndex switch
-            {
-                2 => "Certificate",
-                1 => "Password",
-                _ => "DeviceCode"
-            };
-
-        var identity =
-            mode.Equals(
-                "Password",
-                StringComparison.Ordinal)
-                ? _cloudUsername.Text.Trim()
-                : mode.Equals(
-                    "Certificate",
-                    StringComparison.Ordinal)
-                    ? new string(
-                        _cloudThumbprint.Text
-                            .Where(
-                                Uri.IsHexDigit)
-                            .Select(
-                                char.ToUpperInvariant)
-                            .ToArray())
-                    : string.Empty;
+        var certificate = _cloudAuthMode.SelectedIndex == 1;
+        var identity = certificate
+            ? new string(
+                _cloudThumbprint.Text
+                    .Where(Uri.IsHexDigit)
+                    .Select(char.ToUpperInvariant)
+                    .ToArray())
+            : string.Empty;
 
         return string.Join(
             "|",
-            _cloudTenant.Text.Trim()
-                .ToUpperInvariant(),
-            _cloudClient.Text.Trim()
-                .ToUpperInvariant(),
-            mode,
-            identity.ToUpperInvariant(),
+            _cloudTenant.Text.Trim().ToUpperInvariant(),
+            _cloudClient.Text.Trim().ToUpperInvariant(),
+            certificate ? "Certificate" : "DeviceCode",
+            identity,
             _cloudRotationPermissions.Checked ? "ROTATION" : "READ-ONLY");
     }
 
@@ -5900,7 +5832,6 @@ public sealed partial class MainForm : DpiAwareForm
         _connectedAdAuthentication = string.Empty;
         AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
-        _cloudPassword.Clear();
         _adPassword.Clear();
         _serviceIdentityPassword.Clear();
     }

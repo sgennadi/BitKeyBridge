@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable release channel: v0.30.4 — unsigned, with explicitly enabled automatic installation.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Published stable release: v0.30.5 — unsigned; unattended unsigned installation requires explicit administrator consent.** This version keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,7 +10,15 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## Stable v0.30.4
+## Unreleased security hardening
+
+The security-hardening PR removes Microsoft Graph username/password (ROPC) authentication. The supported sign-in methods are delegated Device Code and administrator-approved app-registration certificate. Saved `Password` mode choices load as `DeviceCode`; tenant/client/certificate settings remain intact. These code changes **are not part of the published v0.30.5 binaries**. The optional Remote API remains disabled by default.
+
+## Published stable v0.30.5
+
+[Official v0.30.5 release](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.30.5) fixes updater ZIP compatibility: the three unsigned x64, x86 and ARM64 architecture ZIPs each contain only `BitKeyBridge.exe` in the ZIP root, preventing the strict updater from rejecting extra test logs. SHA-256 validation and the existing explicit unsigned-install approval are still required.
+
+## Historical stable v0.30.4
 
 Windows x64, x86 and ARM64. Start opens first; navigate Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics / Settings (where permitted). Optional daily SYSTEM updater uses the existing verified/rollback-safe pipeline and requires explicit administrator-approved unsigned or pinned-signer trust. The release binaries are **unsigned**.
 
@@ -179,7 +187,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - In v0.26.9, AD, Intune and Entra BitLocker metadata are independently queried. Partial results remain available with per-source failure diagnostics; `?` means recovery metadata was not verified, never proof that no backup exists.
 - Device identity is source-qualified: AD objectGUID/DN, Entra deviceId and Intune managedDeviceId. Same-name AD/Cloud records are displayed separately until authoritative linkage is verified; ambiguous recovery/rotation actions are disabled.
 - Optional Entra/Intune enrichment and recovery-key rotation.
-- Device Code and app-registration + certificate Graph authentication. Password/ROPC remains available only as a **deprecated compatibility mode** and is not recommended.
+- Device Code and app-registration + certificate Graph authentication. The unreleased hardening branch removes the deprecated ROPC flow; published v0.30.5 still has the legacy option.
 - Zero-registration first-run Entra setup with native Graph calls.
 - Role-aware GUI navigation.
 - Responsive WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, text scaling, and smaller displays.
@@ -378,7 +386,7 @@ Configure Microsoft Graph under **Administration → Cloud**.
 Authentication modes:
 
 - **Device Code** — recommended interactive mode for MFA / Conditional Access.
-- **Username + Password (ROPC)** — **deprecated compatibility mode**. It doesn't support MFA, is commonly blocked by Conditional Access, and should be replaced by Device Code or certificate authentication.
+- **Username + Password (ROPC)** — removed in the unreleased security hardening branch. Older stored `Password` selections migrate to Device Code. Published v0.30.5 still contains this deprecated mode.
 - **App registration + certificate** — recommended unattended/service mode.
 
 Runtime Graph permissions are limited to the permissions required by the tool, including BitLocker metadata/key access, device reads, and Intune managed-device rotation.
