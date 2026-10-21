@@ -175,6 +175,8 @@ public sealed partial class MainForm
             var lapsRows = lapsOutcome.Rows;
             string? recoveryFailure = recoveryOutcome.Error;
             string? lapsFailure = lapsOutcome.Error;
+            var recoveryFailureKind = recoveryOutcome.FailureKind;
+            var lapsFailureKind = lapsOutcome.FailureKind;
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -203,6 +205,7 @@ public sealed partial class MainForm
                     if (!extra.Succeeded)
                     {
                         lapsFailure = extra.Error;
+                        lapsFailureKind = extra.FailureKind;
                         break;
                     }
 
@@ -236,6 +239,7 @@ public sealed partial class MainForm
                     if (!extra.Succeeded)
                     {
                         recoveryFailure = extra.Error;
+                        recoveryFailureKind = extra.FailureKind;
                         break;
                     }
 
@@ -253,6 +257,7 @@ public sealed partial class MainForm
                         if (!retried.Succeeded)
                         {
                             recoveryFailure = retried.Error;
+                            recoveryFailureKind = retried.FailureKind;
                             break;
                         }
 
@@ -455,18 +460,27 @@ public sealed partial class MainForm
             if (recoveryFailure is not null)
             {
                 failedSources.Add("BitLocker");
-                diagnosticDetails.Add("BitLocker metadata: " + recoveryFailure);
+                diagnosticDetails.Add("BitLocker metadata [" +
+                    MetadataFailureGuidance.Label(recoveryFailureKind) + "]: " +
+                    recoveryFailure + Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(recoveryFailureKind, "AD"));
             }
             if (lapsFailure is not null)
             {
                 failedSources.Add("LAPS");
-                diagnosticDetails.Add("LAPS metadata: " + lapsFailure);
+                diagnosticDetails.Add("LAPS metadata [" +
+                    MetadataFailureGuidance.Label(lapsFailureKind) + "]: " +
+                    lapsFailure + Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(lapsFailureKind, "AD"));
             }
 
             if (cloudOutcome is { Failure: not null })
             {
                 failedSources.Add("Cloud");
-                diagnosticDetails.Add("Graph metadata: " + cloudOutcome.Failure);
+                diagnosticDetails.Add("Graph metadata [" +
+                    MetadataFailureGuidance.Label(cloudOutcome.FailureKind) + "]: " +
+                    cloudOutcome.Failure + Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(cloudOutcome.FailureKind, "Cloud"));
             }
             else if (cloudOutcome is { IsPartial: true })
             {
@@ -483,14 +497,24 @@ public sealed partial class MainForm
                     "An LDAP error is not proof that a backup is absent.");
             }
 
+            var primaryFailure = recoveryFailure is not null
+                ? (Kind: recoveryFailureKind, Source: "AD")
+                : lapsFailure is not null
+                    ? (Kind: lapsFailureKind, Source: "AD")
+                    : cloudOutcome is { Failure: not null }
+                        ? (Kind: cloudOutcome.FailureKind, Source: "Cloud")
+                        : (Kind: MetadataFailureKind.Unknown, Source: "Cloud");
+
             var statusText = failedSources.Count > 0
-                ? $"Partial search: {string.Join(" and ", failedSources)} lookup failed. " +
-                  $"{names.Count} result(s) found; see diagnostics."
+                ? $"Partial search ({MetadataFailureGuidance.Label(primaryFailure.Kind)}): " +
+                  $"{names.Count} result(s) visible. " +
+                  MetadataFailureGuidance.ShortAction(primaryFailure.Kind, primaryFailure.Source) +
+                  " See diagnostics."
                 : ambiguousNames.Count > 0
                     ? $"{names.Count} result(s); {ambiguousNames.Count} ambiguous computer name(s). " +
                       "Use an exact AD object GUID or OU in LAPS/Recovery."
                     : names.Count == 0
-                        ? "No matching computer, Recovery ID or device ID was found."
+                        ? "No matching record visible. Check device identity, selected source and scope; backup absence is not proven."
                         : names.Count == 1
                             ? "One computer found. BitLocker and LAPS actions are below."
                             : $"Found {names.Count} computers. Select one to view its recovery cards.";
