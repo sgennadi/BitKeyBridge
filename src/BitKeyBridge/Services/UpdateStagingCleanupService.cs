@@ -127,6 +127,14 @@ internal static class UpdateStagingCleanupService
 
             try
             {
+                // Check the candidate itself before enumerating children.
+                // A junction named v0.30.0 must never direct cleanup outside
+                // the dedicated Updates root.
+                if ((File.GetAttributes(candidate) &
+                     FileAttributes.ReparsePoint) != 0)
+                    throw new IOException(
+                        "Updater staging directory is a reparse point; preserved.");
+
                 var lastWrite = LastModifiedTreeUtcOrRejectReparse(candidate);
                 if (lastWrite >= cutoff)
                     continue;
