@@ -2,6 +2,17 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
+    // Keep a direct expansion callback: Control.Visible depends on the
+    // visibility of all parent tabs and is not a reliable expansion state.
+    private Action? _expandHelpdeskRecoveryPolicy;
+
+    internal void PreviewExpandHelpdeskRecoveryPolicyForUiTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("UI-test-only action.");
+        _expandHelpdeskRecoveryPolicy?.Invoke();
+    }
+
     private readonly HashSet<string> _rotationSuggestionSessions =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -508,15 +519,23 @@ public sealed partial class MainForm
                 ? "Hide environment profiles" : "Show environment profiles...";
             QueueMainViewportReflow();
         };
-        recoveryToggle.Click += (_, _) =>
+        void SetRecoveryPolicyExpanded(bool expanded)
         {
-            recoveryExpanded = !recoveryExpanded;
-            recoveryHeading.Visible = recoveryExpanded;
-            recoveryGrid.Visible = recoveryExpanded;
-            recoveryToggle.Text = recoveryExpanded
+            if (recoveryExpanded == expanded)
+                return;
+            recoveryExpanded = expanded;
+            recoveryHeading.Visible = expanded;
+            recoveryGrid.Visible = expanded;
+            recoveryToggle.Text = expanded
                 ? "Hide recovery access policy" : "Show recovery access policy...";
             QueueMainViewportReflow();
-        };
+        }
+        recoveryToggle.Click += (_, _) =>
+            SetRecoveryPolicyExpanded(!recoveryExpanded);
+        // Called from Helpdesk > Setup & Permissions even if Settings was
+        // not previously visible: no synthesized click on a hidden button.
+        _expandHelpdeskRecoveryPolicy = () =>
+            SetRecoveryPolicyExpanded(true);
         RefreshPolicyOverview();
         page.Enter += (_, _) => RefreshPolicyOverview();
 
