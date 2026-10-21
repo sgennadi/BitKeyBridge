@@ -494,19 +494,26 @@ public sealed partial class MainForm
         root.Controls.Add(
             recoveryGrid);
 
+        // Use explicit state instead of reading Control.Visible: a child
+        // reports false while an outer tab is not yet displayed. This also
+        // makes the first expansion reliable after RDP/DPI tab switches.
+        var profilesExpanded = false;
+        var recoveryExpanded = false;
         profileToggle.Click += (_, _) =>
         {
-            profileHeading.Visible = !profileHeading.Visible;
-            profileGrid.Visible = profileHeading.Visible;
-            profileToggle.Text = profileHeading.Visible
+            profilesExpanded = !profilesExpanded;
+            profileHeading.Visible = profilesExpanded;
+            profileGrid.Visible = profilesExpanded;
+            profileToggle.Text = profilesExpanded
                 ? "Hide environment profiles" : "Show environment profiles...";
             QueueMainViewportReflow();
         };
         recoveryToggle.Click += (_, _) =>
         {
-            recoveryHeading.Visible = !recoveryHeading.Visible;
-            recoveryGrid.Visible = recoveryHeading.Visible;
-            recoveryToggle.Text = recoveryHeading.Visible
+            recoveryExpanded = !recoveryExpanded;
+            recoveryHeading.Visible = recoveryExpanded;
+            recoveryGrid.Visible = recoveryExpanded;
+            recoveryToggle.Text = recoveryExpanded
                 ? "Hide recovery access policy" : "Show recovery access policy...";
             QueueMainViewportReflow();
         };
