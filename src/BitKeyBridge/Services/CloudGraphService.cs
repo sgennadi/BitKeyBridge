@@ -50,33 +50,6 @@ public sealed partial class CloudGraphService : IDisposable
             version);
     }
 
-    public async Task<GraphToken> AcquirePasswordTokenAsync(
-        string tenantId,
-        string clientId,
-        string username,
-        string password,
-        CancellationToken ct = default,
-        bool lapsOnly = false,
-        bool allowIntuneRotation = false)
-    {
-        Require(tenantId, nameof(tenantId));
-        Require(clientId, nameof(clientId));
-        Require(username, nameof(username));
-        Require(password, nameof(password));
-
-        var body = new Dictionary<string, string>
-        {
-            ["client_id"] = clientId.Trim(),
-            ["grant_type"] = "password",
-            ["username"] = username.Trim(),
-            ["password"] = password,
-            ["scope"] = lapsOnly ? LapsDelegatedScopes :
-                "https://graph.microsoft.com/BitlockerKey.Read.All https://graph.microsoft.com/Device.Read.All " +
-                ManagedPermissionPolicy.DelegatedScope(allowIntuneRotation)
-        };
-        return await AcquireTokenAsync(tenantId, body, "Password", username.Trim(), ct);
-    }
-
     public async Task<GraphToken> AcquireDeviceCodeTokenAsync(
         string tenantId,
         string clientId,

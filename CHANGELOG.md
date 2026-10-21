@@ -1,3 +1,44 @@
+## 0.32.0-rc.8
+
+**Consolidated single-source candidate (unpublished).** Includes RC7/RC8 UI/updater fixes and Graph ROPC removal on one independent integration branch. The exact candidate requires full CI, manual Windows/RDP/AD/Entra acceptance, and explicit release approval; stable v0.30.5 remains unchanged.
+
+- Await diagnostic actions and log sanitized failures once; explicitly deny missing audit-broker identities; preserve blank grid dates and annotate the recovery-selection null contract.
+- Load the verified Authenticode leaf certificate through X509CertificateLoader and support an optional exact TrustedUpdateSignerThumbprint pin in administrator-owned appsettings.json. A configured pin requires Windows trust even when unsigned consent exists. Keep existing publisher policy and unsigned defaults.
+- Pin Linux CI to Ubuntu 24.04 and gate an independent RC8 branch/tag, without publishing from an integration PR. Add production-verifier signed, tampered, unsigned and wrong-pin regression coverage.
+- Consolidate Start and Helpdesk device search into one source-qualified selection. Preserve the selected AD/Entra record across Helpdesk navigation; require existing per-source authorization for BitLocker/LAPS.
+- Simplify the connection chooser to a primary Connect / Change action, optional direct connection tools and expandable cloud permissions guidance; retain administrator-only application provisioning and no saved passwords.
+- Collapse seldom-used profile and recovery policy editors while keeping the saved protected-audit/ticket status visible, and add visual-only Reset Layout with preserved credentials, audit and selection.
+- Avoid repeated status paints, full-form DPI layout passes and unnecessary nested-tab FlowLayoutPanel remeasurement; add on-demand Diagnostics > Tools > UI Performance counters showing WinForms layout count, average and worst duration without secret/device data.
+- Automatically remove stale updater staging versions and abandoned helper/rollback GUID directories during enabled housekeeping using the existing 7-day temporary retention setting. Restrict removal to named folders under ProgramData/BitKeyBridge/Updates; preserve current/held versions, live helpers, symlinks, .bak, update history, settings, protected audit and recovery secrets.
+- Remove Microsoft Graph ROPC grant and password UI/CLI. Migrate legacy AuthMode=Password to interactive DeviceCode and omit obsolete usernames from saved settings/profiles. Keep certificate auth for unattended jobs and Remote API disabled by default.
+- Expand offline WinForms 100-200%/RDP, status redraw, protected-update staging and rollback regressions. Do not publish until full CI and interactive AD/Entra/RDP/security acceptance.
+
+## 0.32.0-rc.7
+
+**Status: Prepared, not yet published.**
+
+**Unsigned opt-in candidate; v0.30.5 remains Stable/Latest. The existing RC6 tag/assets are immutable.**
+
+- Roll forward the tested WinForms viewport fix from PR #98: Diagnostics > Tools, Start, BitLocker, LAPS, Helpdesk, Devices and Settings, including nested Enterprise and Diagnostics sections.
+- Bound AutoSize vertical-workspace section tables and action flows to the current viewport width, preserving wrapping heights and avoiding expensive no-op layout passes.
+- Repair stale selected nested TabPage Dock=Fill bounds after tab switches, resizing, DPI changes and RDP reconnects without rebuilding controls, accessing secrets or changing updater/security policy.
+- Keep regression coverage for deliberately collapsed viewports at compact/maximized 100%, 150%, 175% and 200% font/DPI scenarios; require real-device RDP/HiDPI signoff before external prerelease publication.
+- Pin new 0.32.0-rc.7 ProductVersion/InformationalVersion and exact independent release branch/tag gating, three single-file x64/x86/ARM64 ZIPs, SHA256SUMS and BUILD-INFO; require LAPS, CodeQL, protected-audit and verified legacy migration/rollback.
+- No new endpoint enrollment, automatic task, GPO change, unsigned consent, institutional-signing claim or Stable promotion.
+
+## 0.32.0-rc.6
+
+**Unsigned, opt-in smoother Windows GUI preview. Stable/Latest remains v0.30.5.**
+
+- Polish the native Windows 11-inspired interface: consistent accent styling for the primary non-secret actions, selected-tab indicator, clean native text input/grid outlines, original accessible controls and unchanged password reveal/copy styling.
+- Remove full-tree theme refresh, repeated shell/tab/page PerformLayout and Win32 rounded Region recreation on each WM_SIZE; preserve automatic Dock=Fill and theme refresh on actual monitor-DPI change.
+- Coalesce rapid MainForm RDP/window resize events (55 ms), other form label measurement (65 ms) and DPI/font layout refresh (65 ms), without any global WS_EX_COMPOSITED window that would slow remote rendering.
+- Guard nested vertical workspace Layout callbacks against reentrancy, batch width changes and restore one ordinary AutoSize layout so translated captions and controls remain visible at 150-200% scaling.
+- Fix Diagnostics > Tools content stuck in the top-left corner: bound AutoSize action rows and section tables to the live viewport width, repair selected nested TabPages recursively, and remove competing top-level AutoScroll for Start, BitLocker, LAPS, Devices, Helpdesk, Diagnostics and Settings. Add compact/maximized 100-200% simulated DPI and RDP resize regression checks.
+- Theme only previously unseen controls and apply styles to dynamically added children. Avoid native Region clipping on TextBox/ComboBox/DataGridView/ListView/ProgressBar.
+- Extend real WinForms runtime --ui-self-test for accent and secret-action semantics, and add Windows UI-rendering source regressions to x64 CI.
+- Publish only after exact pinned RC6 source passes x64/x86/ARM64, CodeQL, all offline/UI/GPO checks, actual two-standard-user protected audit and legacy upgrade/rollback. No managed machine enrollment, signature bypass, or promotion to Stable/Latest.
+
 ## 0.32.0-rc.5
 
 **Unsigned, opt-in hardened Update Center 2.0 preview. Stable Latest stays v0.30.5.**

@@ -8,6 +8,7 @@ public sealed class AuthenticodeVerificationResult
 {
     public bool Signed { get; set; }
     public bool Trusted { get; set; }
+    public string SignerThumbprint { get; set; } = string.Empty;
     public string Publisher { get; set; } = string.Empty;
     public int StatusCode { get; set; }
     public string Status { get; set; } = string.Empty;
@@ -21,7 +22,8 @@ public static class AuthenticodeVerificationService
     private const uint WtdUiNone = 2;
     private const uint WtdRevokeNone = 0;
     private const uint WtdChoiceFile = 1;
-    private const uint WtdStateActionIgnore = 0;
+    private const uint WtdStateActionVerify = 1;
+    private const uint WtdStateActionClose = 2;
     private const uint WtdRevocationCheckNone = 0x00000010;
 
     public static AuthenticodeVerificationResult Verify(
@@ -37,9 +39,8 @@ public static class AuthenticodeVerificationService
                 path);
         }
 
-        var publisher =
-            GetPublisher(
-                path);
+        var publisher = string.Empty;
+        var thumbprint = string.Empty;
 
         if (!OperatingSystem.IsWindows())
         {
@@ -108,7 +109,7 @@ public static class AuthenticodeVerificationService
                     pFile =
                         fileInfoPointer,
                     dwStateAction =
-                        WtdStateActionIgnore,
+                        WtdStateActionVerify,
                     hWVTStateData =
                         IntPtr.Zero,
                     pwszURLReference =
@@ -141,21 +142,31 @@ public static class AuthenticodeVerificationService
                 unchecked(
                     (int)status);
 
+            // Read the leaf signer from this exact verification state, never
+            // an unrelated certificate or timestamp countersigner in the file.
+            var verifiedData = Marshal.PtrToStructure<WinTrustData>(trustDataPointer);
+            using var certificate = ReadSignerCertificate(verifiedData.hWVTStateData);
+            if (certificate is not null)
+            {
+                publisher = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+                if (string.IsNullOrWhiteSpace(publisher)) publisher = "Signed";
+                thumbprint = certificate.Thumbprint;
+            }
+
             return new AuthenticodeVerificationResult
             {
-                Signed =
-                    !string.IsNullOrWhiteSpace(
-                        publisher),
+                SignerThumbprint = thumbprint,
+                Signed = certificate is not null,
                 Trusted =
-                    code == 0,
+                    code == 0 && certificate is not null,
                 Publisher =
                     publisher,
                 StatusCode =
                     code,
                 Status =
-                    code == 0
-                        ? "Trusted"
-                        : $"WinVerifyTrust returned 0x{status:X8}."
+                    code != 0
+                        ? $"WinVerifyTrust returned 0x{status:X8}."
+                        : certificate is null ? "Verified signer certificate unavailable." : "Trusted"
             };
         }
         finally
@@ -163,6 +174,13 @@ public static class AuthenticodeVerificationService
             if (trustDataPointer !=
                 IntPtr.Zero)
             {
+                var closingData = Marshal.PtrToStructure<WinTrustData>(trustDataPointer);
+                if (closingData.hWVTStateData != IntPtr.Zero)
+                {
+                    closingData.dwStateAction = WtdStateActionClose;
+                    Marshal.StructureToPtr(closingData, trustDataPointer, false);
+                    _ = WinVerifyTrust(new IntPtr(-1), GenericVerifyV2, trustDataPointer);
+                }
                 Marshal.DestroyStructure<WinTrustData>(
                     trustDataPointer);
                 Marshal.FreeCoTaskMem(
@@ -183,31 +201,38 @@ public static class AuthenticodeVerificationService
         }
     }
 
-    public static string GetPublisher(
-        string path)
+    public static string GetPublisher(string path) => Verify(path).Publisher;
+
+    private static X509Certificate2? ReadSignerCertificate(IntPtr state)
     {
-        try
-        {
-            using var certificate =
-                new X509Certificate2(
-                    X509Certificate.CreateFromSignedFile(
-                        path));
+        if (state == IntPtr.Zero) return null;
+        var provider = WTHelperProvDataFromStateData(state);
+        if (provider == IntPtr.Zero) return null;
+        var signer = WTHelperGetProvSignerFromChain(provider, 0, false, 0);
+        if (signer == IntPtr.Zero) return null;
+        var providerCert = WTHelperGetProvCertFromChain(signer, 0);
+        if (providerCert == IntPtr.Zero) return null;
+        var cert = Marshal.PtrToStructure<ProviderCertificateHeader>(providerCert);
+        if (cert.Certificate == IntPtr.Zero) return null;
+        var context = Marshal.PtrToStructure<CertificateContext>(cert.Certificate);
+        if (context.Encoded == IntPtr.Zero || context.EncodedLength == 0 ||
+            context.EncodedLength > 1024 * 1024)
+            throw new CryptographicException("Invalid Authenticode signer certificate.");
+        var der = new byte[checked((int)context.EncodedLength)];
+        Marshal.Copy(context.Encoded, der, 0, der.Length);
+        return X509CertificateLoader.LoadCertificate(der);
+    }
 
-            var subject =
-                certificate.GetNameInfo(
-                    X509NameType.SimpleName,
-                    forIssuer:
-                        false);
-
-            return string.IsNullOrWhiteSpace(
-                    subject)
-                ? "Signed"
-                : subject;
-        }
-        catch (CryptographicException)
-        {
-            return string.Empty;
-        }
+    internal static bool ThumbprintMatches(string? actual, string? expected)
+    {
+        // Windows thumbprints are SHA-1 certificate identifiers, not file hashes.
+        static string Normalize(string? value) => new((value ?? string.Empty)
+            .Where(c => !char.IsWhiteSpace(c) && c != ':').ToArray());
+        var pin = Normalize(expected);
+        var signer = Normalize(actual);
+        return pin.Length == 40 && pin.All(Uri.IsHexDigit) &&
+            signer.Length == 40 && signer.All(Uri.IsHexDigit) &&
+            string.Equals(signer, pin, StringComparison.OrdinalIgnoreCase);
     }
 
     public static void EnforcePolicy(
@@ -233,6 +258,14 @@ public static class AuthenticodeVerificationService
                 "The staged BitKeyBridge executable does not have a trusted Authenticode signature. " +
                 result.Status);
         }
+
+        // A configured pin always requires Windows trust, even when unsigned
+        // updates were previously enabled. Empty pins preserve existing policy.
+        if (!string.IsNullOrWhiteSpace(config.TrustedUpdateSignerThumbprint) &&
+            (!result.Trusted || !ThumbprintMatches(result.SignerThumbprint,
+                config.TrustedUpdateSignerThumbprint)))
+            throw new InvalidOperationException(
+                "The staged executable does not have the trusted, pinned signer certificate.");
 
         var expectedPublisher =
             config.TrustedUpdatePublisher?.Trim() ??
@@ -275,6 +308,35 @@ public static class AuthenticodeVerificationService
         return exact
             ? string.Equals(publisher, pin, StringComparison.OrdinalIgnoreCase)
             : publisher.Contains(pin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [DllImport("wintrust.dll", ExactSpelling = true)]
+    private static extern IntPtr WTHelperProvDataFromStateData(IntPtr state);
+
+    [DllImport("wintrust.dll", ExactSpelling = true)]
+    private static extern IntPtr WTHelperGetProvSignerFromChain(IntPtr provider,
+        uint signerIndex, [MarshalAs(UnmanagedType.Bool)] bool counterSigner, uint counterSignerIndex);
+
+    [DllImport("wintrust.dll", ExactSpelling = true)]
+    private static extern IntPtr WTHelperGetProvCertFromChain(IntPtr signer, uint certificateIndex);
+
+    // Only the native CRYPT_PROVIDER_CERT prefix is read; pointer alignment
+    // is supplied by sequential layout on x86, x64 and ARM64.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProviderCertificateHeader
+    {
+        public uint Size;
+        public IntPtr Certificate;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CertificateContext
+    {
+        public uint Encoding;
+        public IntPtr Encoded;
+        public uint EncodedLength;
+        public IntPtr Info;
+        public IntPtr Store;
     }
 
     [DllImport(

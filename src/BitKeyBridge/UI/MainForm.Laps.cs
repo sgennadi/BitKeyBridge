@@ -919,9 +919,6 @@ public sealed partial class MainForm
         _cloudClient.TextChanged +=
             (_, _) =>
                 ClearLapsResult();
-        _cloudUsername.TextChanged +=
-            (_, _) =>
-                ClearLapsResult();
         _cloudThumbprint.TextChanged +=
             (_, _) =>
                 ClearLapsResult();
@@ -1204,7 +1201,7 @@ public sealed partial class MainForm
                         _lapsSearchRows.Rows.Add(
                             row.ComputerName,
                             row.ComputerId,
-                            row.KeyDateUtc,
+                            (object?)row.KeyDateUtc ?? DBNull.Value,
                             row.IsLatest is null
                                 ? "-"
                                 : row.IsLatest.Value
@@ -1894,13 +1891,13 @@ public sealed partial class MainForm
                         ? "History"
                         : "Current",
                     DisplayLapsAccount(row),
-                    row.UpdatedAtUtc,
+                    (object?)row.UpdatedAtUtc ?? DBNull.Value,
                     row.IsHistory
                         ? "No"
                         : "Yes",
                     FormatLapsAge(
                         row.UpdatedAtUtc),
-                    row.ExpiresAtUtc,
+                    (object?)row.ExpiresAtUtc ?? DBNull.Value,
                     HelpdeskStatus.LapsEntry(
                         row));
 

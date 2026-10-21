@@ -24,6 +24,11 @@ public sealed class HelpdeskProfileService
                     x =>
                         !string.IsNullOrWhiteSpace(
                             x.Name))
+                .Select(x =>
+                {
+                    x.CloudAuthMode = CloudAuthenticationPolicy.Normalize(x.CloudAuthMode);
+                    return x;
+                })
                 .OrderBy(
                     x =>
                         x.Name,
@@ -48,6 +53,7 @@ public sealed class HelpdeskProfileService
 
         profile.Name =
             profile.Name.Trim();
+        profile.CloudAuthMode = CloudAuthenticationPolicy.Normalize(profile.CloudAuthMode);
         profile.UpdatedAtUtc =
             DateTime.UtcNow;
 

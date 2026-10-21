@@ -150,9 +150,8 @@ public sealed class EntraSetupService : IDisposable
         {
             TenantId = tenantId,
             ClientId = applicationId,
-            Username = existingConfig?.Username ?? string.Empty,
             CertificateThumbprint = cert.Thumbprint,
-            AuthMode = existingConfig?.AuthMode ?? "DeviceCode",
+            AuthMode = CloudAuthenticationPolicy.Normalize(existingConfig?.AuthMode),
             BootstrapClientId = effectiveBootstrapClientId,
             EnableLapsPermissions = includeLapsPermissions,
             EnableIntuneRotationPermissions = includeIntuneRotationPermissions

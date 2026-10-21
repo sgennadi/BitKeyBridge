@@ -2,6 +2,25 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
+    // Keep a direct expansion callback: Control.Visible depends on the
+    // visibility of all parent tabs and is not a reliable expansion state.
+    private Action<bool>? _setHelpdeskRecoveryPolicyExpanded;
+    private Action<bool>? _setHelpdeskProfilesExpanded;
+
+    internal void PreviewSetHelpdeskProfilesExpandedForUiTest(bool expanded)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        _setHelpdeskProfilesExpanded?.Invoke(expanded);
+    }
+
+    internal void PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(bool expanded)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("UI-test-only action.");
+        _setHelpdeskRecoveryPolicyExpanded?.Invoke(expanded);
+    }
+
     private readonly HashSet<string> _rotationSuggestionSessions =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -313,13 +332,30 @@ public sealed partial class MainForm
         root.Controls.Add(
             _setupStatus);
 
-        root.Controls.Add(
-            CreateSectionTitle(
-                "Environment Profile",
-                "Profiles store non-secret AD/Cloud endpoints and preferences only. Passwords, tokens and recovery secrets are never saved in a profile."));
+        var resetLayout = NewActionButton("Reset Visual Layout...");
+        resetLayout.Name = "ResetVisualLayoutButton";
+        resetLayout.AccessibleName =
+            "Restore default visual layout without changing connections or recovery policy";
+        root.Controls.Add(resetLayout);
+        resetLayout.Click += (_, _) => ResetVisualLayout();
+
+        // Only status and everyday actions are shown by default.
+        // Collapsing profiles or recovery policies never saves or alters them.
+        var profileToggle = NewActionButton("Show environment profiles...");
+        profileToggle.Name = "HelpdeskProfilesToggle";
+        profileToggle.AccessibleName = "Show or hide non-secret environment profiles";
+        root.Controls.Add(profileToggle);
+
+        var profileHeading = CreateSectionTitle(
+            "Environment Profiles",
+            "Optional non-secret AD/Cloud endpoints. No passwords, tokens or recovery keys are saved.");
+        profileHeading.Visible = false;
+        root.Controls.Add(profileHeading);
 
         var profileGrid =
             CreateTwoColumnGrid();
+        profileGrid.Name = "HelpdeskProfilesGrid";
+        profileGrid.Visible = false;
 
         _helpdeskProfile.DropDownStyle =
             ComboBoxStyle.DropDownList;
@@ -363,13 +399,42 @@ public sealed partial class MainForm
         root.Controls.Add(
             profileGrid);
 
-        root.Controls.Add(
-            CreateSectionTitle(
-                "Recovery Access",
-                "Ticket/reference is optional by default. Turn it on only when your helpdesk process requires a case number."));
+        var policyOverview = new UiStatusLabel
+        {
+            Name = "HelpdeskRecoveryPolicyOverview",
+            AccessibleName = "Current saved recovery policy, not an access authorization",
+            AutoSize = true,
+            MaximumSize = new Size(1000, 0)
+        };
+        UiStyle.ConfigureStatusLabel(policyOverview);
+        root.Controls.Add(policyOverview);
+        void RefreshPolicyOverview()
+        {
+            var protectedAudit = _config.RequireProtectedAuditForRecovery;
+            UiStyle.SetStatus(policyOverview,
+                "Saved recovery policy: " +
+                (protectedAudit ? "Protected audit required" : "Protected audit not required") +
+                " | Ticket: " +
+                (_config.RequireRecoveryAccessReference ? "required" : "optional") +
+                ". This status does not grant secret access.",
+                protectedAudit ? UiStatusKind.Neutral : UiStatusKind.Warning);
+        }
+
+        var recoveryToggle = NewActionButton("Show recovery access policy...");
+        recoveryToggle.Name = "HelpdeskRecoveryPolicyToggle";
+        recoveryToggle.AccessibleName = "Show or hide recovery access and secret lifetime settings";
+        root.Controls.Add(recoveryToggle);
+
+        var recoveryHeading = CreateSectionTitle(
+            "Recovery Access Policy",
+            "Change ticket, audit and secret lifetime settings only when authorized. Unsaved changes do not affect the displayed policy overview.");
+        recoveryHeading.Visible = false;
+        root.Controls.Add(recoveryHeading);
 
         var recoveryGrid =
             CreateTwoColumnGrid();
+        recoveryGrid.Name = "HelpdeskRecoveryPolicyGrid";
+        recoveryGrid.Visible = false;
 
         _requireRecoveryReference.Text =
             "Require a ticket/reference before recovery-key access";
@@ -455,6 +520,44 @@ public sealed partial class MainForm
         root.Controls.Add(
             recoveryGrid);
 
+        // Use explicit state instead of reading Control.Visible: a child
+        // reports false while an outer tab is not yet displayed. This also
+        // makes the first expansion reliable after RDP/DPI tab switches.
+        var profilesExpanded = false;
+        var recoveryExpanded = false;
+        void SetProfilesExpanded(bool expanded)
+        {
+            if (profilesExpanded == expanded)
+                return;
+            profilesExpanded = expanded;
+            profileHeading.Visible = expanded;
+            profileGrid.Visible = expanded;
+            profileToggle.Text = expanded
+                ? "Hide environment profiles" : "Show environment profiles...";
+            QueueMainViewportReflow();
+        }
+        _setHelpdeskProfilesExpanded = SetProfilesExpanded;
+        profileToggle.Click += (_, _) =>
+            SetProfilesExpanded(!profilesExpanded);
+        void SetRecoveryPolicyExpanded(bool expanded)
+        {
+            if (recoveryExpanded == expanded)
+                return;
+            recoveryExpanded = expanded;
+            recoveryHeading.Visible = expanded;
+            recoveryGrid.Visible = expanded;
+            recoveryToggle.Text = expanded
+                ? "Hide recovery access policy" : "Show recovery access policy...";
+            QueueMainViewportReflow();
+        }
+        recoveryToggle.Click += (_, _) =>
+            SetRecoveryPolicyExpanded(!recoveryExpanded);
+        // Called from Helpdesk > Setup & Permissions even if Settings was
+        // not previously visible: no synthesized click on a hidden button.
+        _setHelpdeskRecoveryPolicyExpanded = SetRecoveryPolicyExpanded;
+        RefreshPolicyOverview();
+        page.Enter += (_, _) => RefreshPolicyOverview();
+
         refreshSetup.Click +=
             (_, _) =>
                 RefreshSetupStatus();
@@ -473,9 +576,11 @@ public sealed partial class MainForm
         deleteProfile.Click +=
             (_, _) =>
                 DeleteSelectedHelpdeskProfile();
-        save.Click +=
-            (_, _) =>
-                SaveHelpdeskBasics();
+        save.Click += (_, _) =>
+        {
+            SaveHelpdeskBasics();
+            RefreshPolicyOverview();
+        };
 
         if (!_layoutSelfTest)
         {
@@ -1129,15 +1234,9 @@ public sealed partial class MainForm
                     _cloudTenant.Text.Trim(),
                 CloudClientId =
                     _cloudClient.Text.Trim(),
-                CloudUsername =
-                    _cloudUsername.Text.Trim(),
                 CloudAuthMode =
-                    _cloudAuthMode.SelectedIndex switch
-                    {
-                        2 => "Certificate",
-                        1 => "Password",
-                        _ => "DeviceCode"
-                    },
+                    _cloudAuthMode.SelectedIndex == 1
+                        ? "Certificate" : "DeviceCode",
                 CloudCertificateThumbprint =
                     _cloudThumbprint.Text.Trim()
             };
@@ -1210,20 +1309,11 @@ public sealed partial class MainForm
             profile.CloudTenant;
         _cloudClient.Text =
             profile.CloudClientId;
-        _cloudUsername.Text =
-            profile.CloudUsername;
         _cloudThumbprint.Text =
             profile.CloudCertificateThumbprint;
         _cloudAuthMode.SelectedIndex =
-            profile.CloudAuthMode.Equals(
-                "Certificate",
-                StringComparison.OrdinalIgnoreCase)
-                ? 2
-                : profile.CloudAuthMode.Equals(
-                    "Password",
-                    StringComparison.OrdinalIgnoreCase)
-                    ? 1
-                    : 0;
+            CloudAuthenticationPolicy.Normalize(profile.CloudAuthMode) == "Certificate"
+                ? 1 : 0;
         UpdateCloudAuthUi();
 
         _config.ActiveHelpdeskProfile =

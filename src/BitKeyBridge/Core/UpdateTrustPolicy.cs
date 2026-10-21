@@ -31,6 +31,8 @@ internal static class UpdateTrustPolicy
     }
 
     internal static bool CanInstallUnattended(AppConfig config) =>
+        (string.IsNullOrWhiteSpace(config.TrustedUpdateSignerThumbprint) ||
+         config.RequireTrustedUpdateSignature) &&
         CanEnableUnattended(config.RequireTrustedUpdateSignature,
             config.TrustedUpdatePublisher,
             config.AllowUnsignedUnattendedUpdates,
@@ -41,6 +43,7 @@ internal static class UpdateTrustPolicy
         config.AllowUnsignedUnattendedUpdates &&
         !config.RequireTrustedUpdateSignature &&
         string.IsNullOrWhiteSpace(config.TrustedUpdatePublisher) &&
+        string.IsNullOrWhiteSpace(config.TrustedUpdateSignerThumbprint) &&
         string.Equals(config.UpdateRepository?.Trim(), OfficialRepository,
             StringComparison.OrdinalIgnoreCase);
 

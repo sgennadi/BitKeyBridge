@@ -320,13 +320,17 @@ public static class UiStyle
         string text,
         UiStatusKind kind)
     {
-        label.StatusKind =
-            kind;
-        label.Text =
-            text;
+        // Frequent progress and connection polls often repeat the same
+        // status. Writing Label.Text when unchanged causes a new layout pass.
+        if (label.StatusKind == kind &&
+            string.Equals(label.Text, text, StringComparison.Ordinal))
+            return;
 
-        RefreshStatusLabel(
-            label);
+        label.StatusKind = kind;
+        if (!string.Equals(label.Text, text, StringComparison.Ordinal))
+            label.Text = text;
+
+        RefreshStatusLabel(label);
     }
 
     public static void ApplyStatusLabel(
@@ -343,34 +347,44 @@ public static class UiStyle
     public static void RefreshStatusLabel(
         UiStatusLabel label)
     {
-        var kind =
-            label.StatusKind;
-
-        (label.BackColor, label.ForeColor) =
-            ResolveStatusColors(
-                kind,
-                SystemInformation.HighContrast);
-
-        label.Image =
-            UiStatusGlyphs.Get(
-                kind,
-                label.DeviceDpi,
-                label.ForeColor);
-
-        if (string.IsNullOrWhiteSpace(
-                label.AccessibleName))
+        var kind = label.StatusKind;
+        var (background, foreground) = ResolveStatusColors(
+            kind, SystemInformation.HighContrast);
+        // Status images are cached per kind / DPI / color. Changing their
+        // property on EVERY responsive refresh invalidated many AutoSize
+        // labels and their parents even when there was no visual change.
+        var glyph = UiStatusGlyphs.Get(kind, label.DeviceDpi, foreground);
+        var changed = false;
+        if (label.BackColor != background)
         {
-            label.AccessibleName =
-                "Status";
+            label.BackColor = background;
+            changed = true;
+        }
+        if (label.ForeColor != foreground)
+        {
+            label.ForeColor = foreground;
+            changed = true;
+        }
+        if (!ReferenceEquals(label.Image, glyph))
+        {
+            label.Image = glyph;
+            changed = true;
         }
 
-        label.AccessibleDescription =
-            string.IsNullOrWhiteSpace(
-                label.Text)
-                ? $"{kind} status."
-                : $"{kind} status. {label.Text}";
+        if (string.IsNullOrWhiteSpace(label.AccessibleName))
+            label.AccessibleName = "Status";
 
-        label.Invalidate();
+        var description = string.IsNullOrWhiteSpace(label.Text)
+            ? $"{kind} status."
+            : $"{kind} status. {label.Text}";
+        if (!string.Equals(label.AccessibleDescription, description,
+                StringComparison.Ordinal))
+            label.AccessibleDescription = description;
+
+        // Property setters already invalidate when changed. The unchanged
+        // case deliberately schedules no new paint/measurement at all.
+        if (changed && label.IsHandleCreated)
+            label.Invalidate();
     }
 
     internal static (
@@ -879,24 +893,49 @@ public static class UiStyle
         var updatingWidths = false;
         void ResizeChildren()
         {
-            // A child.Width assignment raises another Layout event. Guard
-            // against re-entrancy and avoid rewriting properties whose
-            // measured width has not changed during the same WM_SIZE burst.
+            // Hidden pages can be constructed at the WinForms default 200px
+            // width. Never cache that transient value: recompute from the
+            // live viewport on every meaningful resize or visibility change.
             if (updatingWidths || panel.IsDisposed || panel.Disposing)
                 return;
 
-            var scrollbar =
-                panel.VerticalScroll.Visible
-                    ? SystemInformation.VerticalScrollBarWidth
-                    : 0;
+            // Reserve scrollbar space before the scrollbar first appears.
+            // This prevents width oscillation as action rows wrap at 200% DPI.
+            var scrollbar = panel.AutoScroll
+                ? SystemInformation.VerticalScrollBarWidth : 0;
+            var available = Math.Max(0,
+                panel.ClientSize.Width - panel.Padding.Horizontal -
+                scrollbar - 2);
+            if (available <= 0)
+                return;
 
-            var available =
-                Math.Max(
-                    0,
-                    panel.ClientSize.Width -
-                    panel.Padding.Horizontal -
-                    scrollbar -
-                    2);
+            static bool IsIntrinsicAutoSize(Control child) =>
+                child.AutoSize && (child is Label || child is Button);
+
+            static bool NeedsWidthLimit(Control child) =>
+                child.AutoSize &&
+                (child is TableLayoutPanel || child is FlowLayoutPanel);
+
+            // A property write initiates another WinForms Layout. Skip the
+            // Suspend/ResumeLayout cycle if widths are already correct.
+            var needsLayout = false;
+            foreach (Control child in panel.Controls)
+            {
+                if (child.IsDisposed || IsIntrinsicAutoSize(child))
+                    continue;
+                var width = Math.Max(1, available - child.Margin.Horizontal);
+                var limit = new Size(width, 0);
+                if (child.Width != width ||
+                    (NeedsWidthLimit(child) &&
+                     (child.MinimumSize != limit ||
+                      child.MaximumSize != limit)))
+                {
+                    needsLayout = true;
+                    break;
+                }
+            }
+            if (!needsLayout)
+                return;
 
             updatingWidths = true;
             panel.SuspendLayout();
@@ -904,31 +943,30 @@ public static class UiStyle
             {
                 foreach (Control child in panel.Controls)
                 {
-                    var width = Math.Max(
-                        0, available - child.Margin.Horizontal);
-                    if (width <= 0 || child.IsDisposed)
+                    if (child.IsDisposed || IsIntrinsicAutoSize(child))
                         continue;
 
-                    if (child is TableLayoutPanel { AutoSize: true } table)
+                    var width = Math.Max(1,
+                        available - child.Margin.Horizontal);
+                    if (NeedsWidthLimit(child))
                     {
-                        // Keep the width responsive while allowing height to
-                        // grow naturally at 150/200% text and Hebrew RTL.
+                        // AutoSize FlowLayoutPanel must have a width limit,
+                        // not just a Width assignment (which AutoSize undoes).
+                        // Height remains unrestricted, so buttons wrap rather
+                        // than being clipped in Diagnostics and Settings.
                         var limit = new Size(width, 0);
-                        if (table.MinimumSize != limit)
-                            table.MinimumSize = limit;
-                        if (table.MaximumSize != limit)
-                            table.MaximumSize = limit;
+                        if (child.MaximumSize != limit)
+                            child.MaximumSize = limit;
+                        if (child.MinimumSize != limit)
+                            child.MinimumSize = limit;
                     }
-
                     if (child.Width != width)
                         child.Width = width;
                 }
             }
             finally
             {
-                // One normal layout after all width changes is needed for
-                // AutoSize height and scrolling. The re-entrancy guard remains
-                // active during ResumeLayout(true), avoiding the former loop.
+                // One ordinary AutoSize/layout pass, under the recursion guard.
                 panel.ResumeLayout(performLayout: true);
                 updatingWidths = false;
             }
@@ -936,5 +974,8 @@ public static class UiStyle
 
         panel.Layout += (_, _) => ResizeChildren();
         panel.ClientSizeChanged += (_, _) => ResizeChildren();
+        panel.VisibleChanged += (_, _) => ResizeChildren();
+        panel.ParentChanged += (_, _) => ResizeChildren();
+        panel.ControlAdded += (_, _) => ResizeChildren();
     }
 }

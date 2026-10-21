@@ -260,6 +260,31 @@ public sealed partial class MainForm
         ReflowHomeResultsArea();
     }
 
+    // Restore only visual pane order. The three existing controls and
+    // their selected metadata remain intact; no recovery secret is touched.
+    // Connection source, remembered authentication METHOD, RBAC and audit
+    // preferences are deliberately not modified by a visual layout reset.
+    private void RestoreDefaultHomePaneOrder()
+    {
+        _homePaneOrder =
+            [HomePaneKind.BitLocker, HomePaneKind.Laps, HomePaneKind.Computers];
+        _startConnectionPreferences.HomePaneOrder =
+            string.Join(",", _homePaneOrder);
+        _startConnectionPreferences.RecoveryCardsOnLeft = true;
+
+        // Allow the existing incremental repositioning code to move only
+        // the outer hosts. No card, data grid or network client is rebuilt.
+        _homeResultsLayoutKey = string.Empty;
+        ReflowHomeResultsArea();
+    }
+
+    internal string PreviewHomePaneOrderForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        return string.Join(",", _homePaneOrder);
+    }
+
     internal void ExchangeHomePanesForUiSelfTest(string source, string destination)
     {
         if (!_layoutSelfTest)

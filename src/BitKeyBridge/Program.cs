@@ -1883,6 +1883,7 @@ internal static class Program
             failures.AddRange(ProtectedAuditArchiveService.RunOfflineTests(tempDirectory));
             failures.AddRange(InstalledUpdateHealthService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateBackupSafety.RunOfflineTests(tempDirectory));
+            failures.AddRange(UpdateStagingCleanupService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateApplyGate.RunOfflineTests());
             failures.AddRange(ScheduledUpdateGate.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
@@ -4247,11 +4248,10 @@ internal static class Program
         Console.WriteLine("  --coverage-policy-severity-unencrypted <Error|Warning|Info>");
         Console.WriteLine("  --coverage-policy-severity-stale <Error|Warning|Info>");
         Console.WriteLine("  --coverage-policy-severity-old-key <Error|Warning|Info>");
-        Console.WriteLine("  --cloud-auth <mode>   DeviceCode, Certificate, or Password for --coverage");
+        Console.WriteLine("  --cloud-auth <mode>   DeviceCode or Certificate for --coverage");
         Console.WriteLine("  --tenant-id <id>      Override saved Entra tenant ID for this run");
         Console.WriteLine("  --client-id <id>      Override saved BitKeyBridge client ID for this run");
         Console.WriteLine("  --cert-thumbprint <t> Override saved certificate thumbprint for this run");
-        Console.WriteLine("  --cloud-user <upn>    Override saved cloud username for Password mode");
         Console.WriteLine("  --cloud-machine-status Show ProgramData cloud certificate config metadata");
         Console.WriteLine("  --cloud-machine-save   Save certificate cloud config for LocalSystem/gMSA");
         Console.WriteLine("  --cloud-machine-delete Delete ProgramData machine cloud config");
