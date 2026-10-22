@@ -188,7 +188,35 @@ internal static class UiLanguageService
             ["MetadataActionDecryptionFailed"] =
                 ["Check authorized LAPS decrypt rights.", "Проверьте права расшифровки LAPS.", "בדקו הרשאות לפענוח LAPS."],
             ["MetadataActionRateLimited"] =
-                ["Retry after source backoff.", "Повторите после паузы источника.", "נסו שוב לאחר ההמתנה הנדרשת."]
+                ["Retry after source backoff.", "Повторите после паузы источника.", "נסו שוב לאחר ההמתנה הנדרשת."],
+            ["MainWindowsAccount"] = ["Use current Windows account", "Текущая учётная запись Windows", "שימוש בחשבון Windows הנוכחי"],
+            ["MainOtherAdAccount"] = ["Use another AD account", "Другая учётная запись AD", "שימוש בחשבון AD אחר"],
+            ["MainConnectAd"] = ["Connect to AD", "Подключить AD", "התחברות ל-AD"],
+            ["MainDisconnectAd"] = ["Disconnect", "Отключиться", "ניתוק"],
+            ["MainConnectionTools"] = ["Connection tools...", "Инструменты подключения...", "כלי חיבור..."],
+            ["MainRecoverySteps"] = ["Recovery Steps", "Этапы восстановления", "שלבי שחזור"],
+            ["MainViewCommands"] = ["View diagnostic commands", "Команды диагностики", "הצגת פקודות אבחון"],
+            ["MainLoadHistory"] = ["Load history", "Загрузить историю", "טעינת היסטוריה"],
+            ["MainBackToStart"] = ["Back to Start", "На главную", "חזרה להתחלה"],
+            ["MainBitLockerCommands"] = ["BitLocker Commands...", "Команды BitLocker...", "פקודות BitLocker..."],
+            ["MainLapsCommands"] = ["LAPS Commands...", "Команды LAPS...", "פקודות LAPS..."],
+            ["MainOpenDeviceSearch"] = ["Open device search", "Поиск устройств", "פתיחת חיפוש מכשירים"],
+            ["MainEnterprise"] = ["Enterprise", "Организация", "ארגוני"],
+            ["MainEnvironmentCheck"] = ["Environment Check...", "Проверка среды...", "בדיקת סביבה..."],
+            ["MainDeviceDiagnostics"] = ["Device / Graph Diagnostics...", "Диагностика устройств / Graph...", "אבחון מכשיר / Graph..."],
+            ["MainCheckProtectedAudit"] = ["Check Protected Audit...", "Проверить защищённый аудит...", "בדיקת יומן ביקורת מוגן..."],
+            ["MainUiPerformance"] = ["UI Performance...", "Производительность интерфейса...", "ביצועי הממשק..."],
+            ["MainResetLayout"] = ["Reset Layout", "Сбросить расположение", "איפוס פריסת מסך"],
+            ["MainCloudRotation"] = ["Allow Intune BitLocker rotation (write permission, optional)", "Разрешить ротацию BitLocker через Intune (запись, необязательно)", "אפשר סבב מפתחות BitLocker דרך Intune (הרשאת כתיבה, לא חובה)"],
+            ["MainSaveConfig"] = ["Save Config", "Сохранить настройки", "שמירת הגדרות"],
+            ["MainEntraWizard"] = ["Intune / Entra Setup Wizard...", "Мастер настройки Intune / Entra...", "אשף הגדרת Intune / Entra..."],
+            ["MainConnectTest"] = ["Connect / Test", "Подключить / проверить", "התחברות / בדיקה"],
+            ["MainFirstRunRepair"] = ["First-Run / Repair", "Первая настройка / восстановление", "הגדרה ראשונית / תיקון"],
+            ["MainBootstrap"] = ["Bootstrap...", "Первичная настройка...", "אתחול ראשוני..."],
+            ["MainRolloverCertificate"] = ["Rollover Certificate...", "Сменить сертификат...", "החלפת אישור..."],
+            ["MainCloudLapsRead"] = ["Include LAPS read permissions in setup", "Включить разрешения чтения LAPS", "כלול הרשאות קריאה של LAPS"],
+            ["MainAdvancedAd"] = ["Advanced AD settings...", "Дополнительные настройки AD...", "הגדרות AD מתקדמות..."],
+            ["MainHideAdvancedAd"] = ["Hide advanced AD settings", "Скрыть дополнительные настройки AD", "הסתרת הגדרות AD מתקדמות"],
         };
 
     internal static string PreferenceFile =>
@@ -322,6 +350,18 @@ internal static class UiLanguageService
                     if (Translate(language, key) is var word &&
                         (string.IsNullOrWhiteSpace(word) || word == key))
                         failures.Add("Missing translated metadata guidance: " + key);
+                }
+            }
+
+            foreach (var language in SupportedLanguages.Select(x => x.Code))
+            {
+                foreach (var key in new[] { "MainWindowsAccount", "MainOtherAdAccount", "MainConnectAd", "MainDisconnectAd", "MainConnectionTools", "MainRecoverySteps", "MainViewCommands", "MainLoadHistory", "MainBackToStart", "MainBitLockerCommands", "MainLapsCommands", "MainOpenDeviceSearch", "MainEnterprise", "MainEnvironmentCheck", "MainDeviceDiagnostics", "MainCheckProtectedAudit", "MainUiPerformance", "MainResetLayout", "MainCloudRotation", "MainSaveConfig", "MainEntraWizard", "MainConnectTest", "MainFirstRunRepair", "MainBootstrap", "MainRolloverCertificate", "MainCloudLapsRead", "MainAdvancedAd", "MainHideAdvancedAd" })
+                {
+                    var translation = Translate(language, key);
+                    if (string.IsNullOrWhiteSpace(translation) ||
+                        string.Equals(translation, key, StringComparison.Ordinal))
+                        failures.Add("Missing localized static caption: " + key +
+                            " [" + language + "]");
                 }
             }
 
