@@ -317,13 +317,18 @@ internal static class UiModernTheme
                 markerWidth, markerHeight);
         }
 
+        // Owner-drawn tabs must explicitly pass the bidirectional text flag.
+        // RTL tab positioning does not make TextRenderer detect Hebrew.
+        var textFlags = TextFormatFlags.HorizontalCenter |
+            TextFormatFlags.VerticalCenter |
+            TextFormatFlags.NoPrefix |
+            TextFormatFlags.EndEllipsis;
+        if (tabs.RightToLeft == RightToLeft.Yes)
+            textFlags |= TextFormatFlags.RightToLeft;
         TextRenderer.DrawText(args.Graphics,
             tabs.TabPages[args.Index].Text, tabs.Font, rect,
             active ? UiStyle.ModernForeground : UiStyle.ModernMuted,
-            TextFormatFlags.HorizontalCenter |
-            TextFormatFlags.VerticalCenter |
-            TextFormatFlags.NoPrefix |
-            TextFormatFlags.EndEllipsis);
+            textFlags);
     }
 
     private static void PaintGroupBox(GroupBox group, PaintEventArgs args)
