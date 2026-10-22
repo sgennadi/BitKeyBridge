@@ -68,7 +68,7 @@ public sealed partial class MainForm
                 !string.Equals(control.Text, translated, StringComparison.Ordinal))
                 control.Text = translated;
             // Keep text entry and recovery values LTR even for Hebrew.
-            if (control is Button or CheckBox or RadioButton or LinkLabel or GroupBox &&
+            if ((control is Button or CheckBox or RadioButton or LinkLabel or GroupBox) &&
                 control.RightToLeft != direction)
                 control.RightToLeft = direction;
         }
@@ -107,7 +107,7 @@ public sealed partial class MainForm
         if (!string.IsNullOrWhiteSpace(caption) &&
             !string.Equals(control.Text, caption, StringComparison.Ordinal))
             control.Text = caption;
-        if (control is Button or CheckBox && control.RightToLeft != direction)
+        if ((control is Button or CheckBox) && control.RightToLeft != direction)
             control.RightToLeft = direction;
     }
 
