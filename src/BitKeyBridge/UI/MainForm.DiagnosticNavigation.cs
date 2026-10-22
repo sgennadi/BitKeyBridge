@@ -91,7 +91,8 @@ public sealed partial class MainForm
             "Show in-memory layout timings without computer identities or secrets";
         uiPerformance.Click += (_, _) =>
             ShowAppMessage("UI performance (current session)",
-                UiLayoutTelemetry.Report());
+                UiLayoutTelemetry.Report() + Environment.NewLine +
+                Environment.NewLine + UiTabNavigationTelemetry.Report());
 
         buttons.Controls.AddRange([
             environment,
