@@ -569,6 +569,51 @@ public static class UiLayoutSelfTest
             if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensity ||
                 updateDensity.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
                 failures.Add("Hebrew Update Center switch did not localize.");
+            // WinForms originally mirrored the Form itself, recursively
+            // resetting native child windows and sometimes blanking Hebrew
+            // captions after a language switch. Only the tab strip may mirror.
+            if (form.RightToLeftLayout || form.RightToLeft == RightToLeft.Yes)
+                failures.Add("Hebrew language selection must not mirror the MainForm HWND.");
+            if (tabs is not null && tabs.TabPages.Cast<TabPage>().Any(
+                    page => page.RightToLeft != RightToLeft.No))
+                failures.Add("Main workspace pages must keep child/secret controls LTR.");
+
+            var translatedControls = new (string Name, string Key)[]
+            {
+                ("HomeUseWindowsIdentity", "MainWindowsAccount"),
+                ("HomeUseOtherAccount", "MainOtherAdAccount"),
+                ("HomeConnectAdButton", "MainConnectAd"),
+                ("HomeConnectionToolsButton", "MainConnectionTools"),
+                ("HomeRecoverySteps", "MainRecoverySteps"),
+                ("HomeBitLockerDiagnosticLink", "MainViewCommands"),
+                ("HomeLoadLapsHistoryButton", "MainLoadHistory"),
+                ("HelpdeskOpenDeviceWorkspaceButton", "MainOpenDeviceSearch"),
+                ("RunEnvironmentCheckButton", "MainEnvironmentCheck"),
+                ("RunUiPerformanceDiagnosticsButton", "MainUiPerformance")
+            };
+            foreach (var language in new[] { "he", "en", "ru", "he" })
+            {
+                form.PreviewShellLanguageForLayoutTest(language);
+                foreach (var (name, key) in translatedControls)
+                {
+                    var control = FindByName(form, name);
+                    if (control is null ||
+                        string.IsNullOrWhiteSpace(control.Text) ||
+                        control.Text != UiLanguageService.Translate(language, key))
+                        failures.Add("Language switch left an empty or stale caption: " +
+                            name + " (" + language + ")");
+                }
+
+                if (tabs is not null &&
+                    tabs.TabPages.Cast<TabPage>().Any(
+                        page => string.IsNullOrWhiteSpace(page.Text)))
+                    failures.Add("Language switch left an empty main workspace tab.");
+            }
+
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensityFinal ||
+                updateDensityFinal.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
+                failures.Add("Hebrew Update Center switch lost its caption after repeated switching.");
+
             form.PreviewShellLanguageForLayoutTest("ru");
             if (FindByName(form, "UpdateCenterCompact") is not CheckBox russianDensity ||
                 russianDensity.Text != UiLanguageService.Translate("ru", "UpdateCenterCompact"))
