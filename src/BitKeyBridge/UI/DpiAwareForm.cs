@@ -135,6 +135,7 @@ public class DpiAwareForm : Form
             return;
 
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var initialRefresh = !_responsiveLayoutInitialized;
         _responsiveLayoutRunning = true;
         _responsiveLabelTimer.Stop();
         try
@@ -166,6 +167,7 @@ public class DpiAwareForm : Form
         {
             _responsiveLayoutRunning = false;
             UiLayoutTelemetry.RecordResponsiveForm(started);
+            UiLayoutTelemetry.RecordResponsivePhase(started, initialRefresh);
         }
     }
 
