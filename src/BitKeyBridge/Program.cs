@@ -1873,6 +1873,7 @@ internal static class Program
             failures.AddRange(AccessHealthLocalService.RunOfflineTests());
             failures.AddRange(AccessHealthGuidanceService.RunOfflineTests());
             failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
+            failures.AddRange(UiTabNavigationTelemetry.RunOfflineTests());
             failures.AddRange(UiWorkspacePreferenceService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateCenterStatusService.RunOfflineTests());
             failures.AddRange(UpdateService.RunReleaseChannelOfflineTests());
