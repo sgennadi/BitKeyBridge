@@ -9,6 +9,7 @@ public sealed partial class MainForm
     private ToolStripMenuItem? _languageTopMenu;
     private readonly List<ToolStripMenuItem> _languageChoices = [];
     private string _uiLanguageCode = "en";
+    private bool _shellLanguageApplied;
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly Button _connectAdButton = new();
@@ -418,7 +419,7 @@ public sealed partial class MainForm
             UiLanguageService.SavePreferred(next);
             _uiLanguageCode = next;
             ApplyShellLanguage();
-            QueueMainViewportReflow();
+            QueueNavigationViewportReflow();
         }
         catch (Exception ex)
         {
@@ -430,18 +431,29 @@ public sealed partial class MainForm
 
     private void ApplyShellLanguage()
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var initialApply = !_shellLanguageApplied;
         var rtl = UiLanguageService.IsRightToLeft(_uiLanguageCode);
-        SuspendLayout();
+        var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
+        // Mirroring the entire Form HWND can recreate native child controls
+        // and stall during Hebrew switches, especially under RDP.
         _mainTabs.SuspendLayout();
+        MainMenuStrip?.SuspendLayout();
         try
         {
-            // WinForms handles the mirrored shell and tab strip; identifiers
-            // and recovery-key text inside functional workspaces are NOT
-            // converted, reversed or translated by this operation.
-            RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-            RightToLeftLayout = rtl;
-            _mainTabs.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-            _mainTabs.RightToLeftLayout = rtl;
+            if (RightToLeft != RightToLeft.No)
+                RightToLeft = RightToLeft.No;
+            if (RightToLeftLayout)
+                RightToLeftLayout = false;
+            if (_mainTabs.RightToLeft != direction)
+                _mainTabs.RightToLeft = direction;
+            if (_mainTabs.RightToLeftLayout != rtl)
+                _mainTabs.RightToLeftLayout = rtl;
+            foreach (TabPage page in _mainTabs.TabPages)
+                if (page.RightToLeft != RightToLeft.No)
+                    page.RightToLeft = RightToLeft.No;
+            if (MainMenuStrip is { } menu && menu.RightToLeft != direction)
+                menu.RightToLeft = direction;
 
             // Recovery-key strings, passwords, GUIDs and account/device IDs
             // must stay visually LTR even under mirrored Hebrew navigation.
@@ -486,11 +498,14 @@ public sealed partial class MainForm
             _globalConnectionStatus.ToolTipText =
                 UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
             ApplyUpdateCenterLanguage();
+            ApplyLocalizedShellCaptions(rtl);
         }
         finally
         {
             _mainTabs.ResumeLayout(performLayout: true);
-            ResumeLayout(performLayout: true);
+            MainMenuStrip?.ResumeLayout(performLayout: false);
+            _shellLanguageApplied = true;
+            UiLayoutTelemetry.RecordLanguageSwitch(started, initialApply);
         }
     }
 
@@ -802,9 +817,7 @@ public sealed partial class MainForm
         _homeAdvancedConnectionMenuItem.Click += (_, _) =>
         {
             _advancedConnectionGroup.Visible = !_advancedConnectionGroup.Visible;
-            _homeAdvancedConnectionMenuItem.Text = _advancedConnectionGroup.Visible
-                ? "Hide advanced AD settings"
-                : "Advanced AD settings...";
+            RefreshAdvancedConnectionMenuCaption();
         };
 
         _homeConnectionToolsMenu.Items.AddRange([
