@@ -1,3 +1,11 @@
+## 0.32.0-rc.9
+
+**Published 2026-10-21 as an unsigned, explicit opt-in prerelease; stable v0.30.5 remains the latest stable release.**
+
+- Keep the consolidated RC8 security, passwordless Graph authentication, responsive Helpdesk/Settings UI and guarded updater improvements in a separately tagged RC9 preview.
+- The published `v0.32.0-rc.9` tag and its binary assets remain immutable. Enterprise code signing, administrator/technician approval, real Windows/AD/Entra/RDP acceptance and explicit update consent remain separate release gates.
+- Subsequent Hebrew caption, metadata lookup and UI performance improvements on `development/post-rc9-lookup-ux` (and its review branches) are development-only and are **not included** in RC9 download assets.
+
 ## 0.32.0-rc.8
 
 **Consolidated single-source candidate (unpublished).** Includes RC7/RC8 UI/updater fixes and Graph ROPC removal on one independent integration branch. The exact candidate requires full CI, manual Windows/RDP/AD/Entra acceptance, and explicit release approval; stable v0.30.5 remains unchanged.
