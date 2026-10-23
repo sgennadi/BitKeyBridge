@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "release/v0.32.0-rc.9", "development/post-rc9-lookup-ux" ]
   pull_request:
+    # Prevent historical RC9 version gate from running on Stable PRs to main.
+    branches: [ "development/post-rc9-lookup-ux", "release/v0.32.0-rc.9" ]
     paths:
       - ".github/workflows/rc-0.32.0.yml"
       - "src/**"

@@ -1,0 +1,88 @@
+name: Stable main provenance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# The stable source guard is read-only: it never tags, deploys, signs,
+# updates a machine or grants consent to unsigned automatic packages.
+permissions:
+  contents: read
+
+concurrency:
+  group: bitkeybridge-stable-main-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stable-provenance:
+    name: Verified stable source only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Reject prerelease and inconsistent Windows version metadata
+        id: version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+
+          project = ET.parse("src/BitKeyBridge/BitKeyBridge.csproj").getroot()
+          values = {}
+          for group in project.findall("PropertyGroup"):
+              for key in ("Version", "InformationalVersion",
+                          "FileVersion", "AssemblyVersion"):
+                  node = group.find(key)
+                  if node is not None and node.text and key not in values:
+                      values[key] = node.text.strip()
+
+          version = values.get("Version", "")
+          if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+              raise SystemExit("Refusing non-stable Version on default main: " + version)
+          expected = {
+              "InformationalVersion": version,
+              "FileVersion": version + ".0",
+              "AssemblyVersion": version + ".0",
+          }
+          for name, target in expected.items():
+              if values.get(name) != target:
+                  raise SystemExit(f"{name} must be exactly {target}; got {values.get(name)}")
+
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          if not re.search(r"(?m)^## " + re.escape(version) + r"(?:\s|$)", changelog):
+              raise SystemExit("The stable source has no exact CHANGELOG version header.")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print("version=" + version, file=out)
+          print("Version metadata is a consistent stable SemVer: " + version)
+          PY
+      - name: Require the published stable GitHub release and tag ancestry
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "sgennadi/BitKeyBridge"
+          expected="v$STABLE_VERSION"
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          if [[ "$latest" != "$expected" ]]; then
+            echo "main version $expected differs from published latest stable $latest" >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/$expected^{commit}")"
+          if ! git merge-base --is-ancestor "$tag_commit" HEAD; then
+            echo "Stable main is not descended from the published immutable tag $expected" >&2
+            exit 1
+          fi
+          echo "Verified published stable $expected is an ancestor of main."

@@ -2,7 +2,7 @@ name: codeql
 
 on:
   push:
-    branches: [ "main", "master", "release/v0.30.3", "release/v0.30.4" ]
+    branches: [ "main", "master", "release/v0.30.3", "release/v0.30.4", "release/v0.32.0" ]
   pull_request:
     # Analyze feature PRs targeting integration/staging branches as well as
     # main; security checks must not silently disappear on stacked PRs.

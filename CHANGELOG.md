@@ -1,3 +1,14 @@
+## 0.32.0
+
+**Stable source. New, unsigned release only from the exact gated release/v0.32.0 commit.**
+
+- Consolidated v0.32.0-rc.9 and post-RC9 fixes for Windows x64, x86 and ARM64.
+- Hebrew RTL: dynamic/duplicate-name controls translate correctly; static action labels restore after accidental blanking without rescanning the whole control tree or modifying user/secret fields.
+- Improved compact WinForms tab navigation, HiDPI/RDP redraw performance, unified source-qualified AD/Entra Helpdesk lookup and optional saved startup connection.
+- Removed cloud ROPC; retained Device Code/certificate authentication, protected audit, RBAC and strict updater trust/rollback policy.
+- Release-gated CodeQL, LAPS, UI/HiDPI tests, two non-admin protected audit accounts, real legacy migration/rollback, checksums, SBOM and provenance.
+- **Unsigned release**, not organizational signing or mass deployment approval. Previously opted-in stable auto-update clients may discover it; production Windows/AD/Entra/CyberArk pilot is a separate decision.
+
 ## 0.32.0-rc.9
 
 **Published 2026-10-21 as an unsigned, explicit opt-in prerelease; stable v0.30.5 remains the latest stable release.**

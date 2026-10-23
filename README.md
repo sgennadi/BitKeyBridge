@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable v0.30.5 (unsigned); published opt-in prerelease v0.32.0-rc.6. Consolidated RC8 is under development and NOT published.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable v0.32.0 (unsigned, subject to exact-head release CI).** Unifies RC9 with post-RC9 Hebrew/HiDPI fixes, unified Helpdesk search and the guarded updater. v0.30.5 remains available for rollback. Older RC notes below are historical; a Stable release does not authorize enterprise-wide unattended deployment.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,13 +10,13 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## Consolidated RC8 security changes (not published)
+## RC8 security changes — included in v0.32.0
 
 [RC8 single-source release acceptance checklist](docs/release-candidate-v0.32.0-rc.8.md). This integrated candidate is isolated from the stacked RC7/RC8 draft pull requests.
 
-This branch removes Graph username/password (ROPC) sign-in from GUI, CLI and token services. Existing `Password` profile choices migrate to `DeviceCode` and require a new interactive sign-in. Tenant, client and certificate identifiers remain; legacy username fields are no longer persisted. The optional Remote API remains disabled by default. Protected audit and release-signing gates are unchanged. **Do not deploy this candidate until its combined CI and real Windows/Entra/RDP pilot pass.**
+This branch removes Graph username/password (ROPC) sign-in from GUI, CLI and token services. Existing `Password` profile choices migrate to `DeviceCode` and require a new interactive sign-in. Tenant, client and certificate identifiers remain; legacy username fields are no longer persisted. The optional Remote API remains disabled by default. Protected audit and release-signing gates are unchanged. **The published release requires a separate managed Windows/AD/Entra/RDP/CyberArk pilot before fleet rollout.**
 
-## Next preview: unified Helpdesk Device Workspace (development only)
+## Unified Helpdesk Device Workspace — in v0.32.0
 
 The post-RC7 [Device Workspace prototype](docs/rc8-device-workspace-preview.md)
 keeps a **single** Start search. Helpdesk reuses the selected non-secret device
@@ -24,7 +24,7 @@ metadata, links straight back to the Start workspace, and focuses the same
 search with Ctrl+F. Returning from Helpdesk no longer drops an exact selected
 computer when the original query was abbreviated. Dedicated authorized
 BitLocker/LAPS views, permission checks and audit remain unchanged.
-This prototype is **not published** and does not change RC7 release preparation.
+This source-qualified workspace is included in v0.32.0. Earlier RC preview notes remain for reference.
 
 The next [compact Connection and Settings preview](docs/rc8-settings-connection-preview.md)
 keeps one primary connection action, moves seldom-used direct source/cloud
