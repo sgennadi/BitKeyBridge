@@ -61,11 +61,14 @@ public sealed partial class MainForm
             // A late-created tab, wizard section, or diagnostics panel should
             // be translated without scanning the entire WinForms tree again.
             control.ControlAdded += OnLocalizedCaptionControlAdded;
+            control.ControlRemoved += OnLocalizedCaptionControlRemoved;
 
-            if (LocalizedCaptions.TryGetValue(control.Name, out var key))
+            if (!string.IsNullOrEmpty(control.Name) &&
+                LocalizedCaptions.TryGetValue(control.Name, out var key))
             {
                 _localizedCaptionControls[control] = key;
                 control.Disposed += OnLocalizedCaptionControlDisposed;
+                control.TextChanged += OnLocalizedCaptionTextChanged;
                 ApplyLocalizedCaption(control, key,
                     UiLanguageService.IsRightToLeft(_uiLanguageCode)
                         ? RightToLeft.Yes : RightToLeft.No);
@@ -82,10 +85,51 @@ public sealed partial class MainForm
             ObserveLocalizedCaptionTree(args.Control);
     }
 
+    private void OnLocalizedCaptionControlRemoved(object? sender, ControlEventArgs args)
+    {
+        var pending = new Stack<Control>();
+        pending.Push(args.Control);
+        while (pending.Count > 0)
+        {
+            var control = pending.Pop();
+            if (_localizedCaptionObserved.Remove(control))
+            {
+                control.ControlAdded -= OnLocalizedCaptionControlAdded;
+                control.ControlRemoved -= OnLocalizedCaptionControlRemoved;
+            }
+
+            if (_localizedCaptionControls.Remove(control))
+            {
+                control.Disposed -= OnLocalizedCaptionControlDisposed;
+                control.TextChanged -= OnLocalizedCaptionTextChanged;
+            }
+
+            foreach (Control child in control.Controls)
+                pending.Push(child);
+        }
+    }
+
     private void OnLocalizedCaptionControlDisposed(object? sender, EventArgs args)
     {
         if (sender is Control control)
+        {
             _localizedCaptionControls.Remove(control);
+            control.TextChanged -= OnLocalizedCaptionTextChanged;
+        }
+    }
+
+    private void OnLocalizedCaptionTextChanged(object? sender, EventArgs args)
+    {
+        // Fixed captions must not disappear because another refresh cleared
+        // their Text. Runtime status and identity fields are not registered.
+        if (sender is Control control &&
+            string.IsNullOrWhiteSpace(control.Text) &&
+            _localizedCaptionControls.TryGetValue(control, out var key))
+        {
+            ApplyLocalizedCaption(control, key,
+                UiLanguageService.IsRightToLeft(_uiLanguageCode)
+                    ? RightToLeft.Yes : RightToLeft.No);
+        }
     }
 
     private void ApplyLocalizedCaption(
@@ -101,7 +145,7 @@ public sealed partial class MainForm
 
         // Only captions follow RTL. Device identity, recovery keys and typed
         // input remain LTR; changing Form.RightToLeft recreates HWNDs.
-        if (control is Button or CheckBox or RadioButton or LinkLabel or GroupBox &&
+        if ((control is Button or CheckBox or RadioButton or LinkLabel or GroupBox) &&
             control.RightToLeft != direction)
             control.RightToLeft = direction;
     }
