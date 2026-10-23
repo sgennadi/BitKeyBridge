@@ -81,14 +81,17 @@ public sealed partial class MainForm
 
     private void OnLocalizedCaptionControlAdded(object? sender, ControlEventArgs args)
     {
-        if (_localizedCaptionCacheBuilt && !IsDisposed && !Disposing)
-            ObserveLocalizedCaptionTree(args.Control);
+        if (_localizedCaptionCacheBuilt && !IsDisposed && !Disposing &&
+            args.Control is { } child)
+            ObserveLocalizedCaptionTree(child);
     }
 
     private void OnLocalizedCaptionControlRemoved(object? sender, ControlEventArgs args)
     {
+        if (args.Control is not { } removed)
+            return;
         var pending = new Stack<Control>();
-        pending.Push(args.Control);
+        pending.Push(removed);
         while (pending.Count > 0)
         {
             var control = pending.Pop();
