@@ -21,6 +21,11 @@ internal static class UiStaticCaptionCatalog
             ["Audit"] = ["Аудит", "ביקורת"],
             ["Helpdesk"] = ["Поддержка", "תמיכה"],
             ["Tools"] = ["Инструменты", "כלים"],
+            ["Open recovery export"] = ["Открыть файл экспорта", "פתיחת קובץ הייצוא"],
+            ["Open export log"] = ["Открыть журнал экспорта", "פתיחת יומן הייצוא"],
+            ["Open export folder"] = ["Открыть папку экспорта", "פתיחת תיקיית הייצוא"],
+            ["Windows Event Log"] = ["Журнал событий Windows", "יומן האירועים של Windows"],
+            ["Latest GitHub release"] = ["Последний выпуск GitHub", "הגרסה האחרונה ב-GitHub"],
             ["Refresh"] = ["Обновить", "רענון"],
             ["Cancel"] = ["Отмена", "ביטול"],
             ["Start"] = ["Запуск", "התחלה"],
@@ -62,6 +67,10 @@ internal static class UiStaticCaptionCatalog
                  "עקיפת הגנות פרסום (ירידת רשומות / שינוי טווח)"],
             ["No run in this GUI session yet."] =
                 ["В этом сеансе запусков ещё не было.", "טרם בוצעה הרצה בהפעלה זו."],
+            ["Last successful export: not recorded yet."] =
+                ["Последний успешный экспорт: пока нет данных.", "ייצוא מוצלח אחרון: טרם נרשם."],
+            ["Last successful export: status unavailable."] =
+                ["Последний успешный экспорт: данные недоступны.", "ייצוא מוצלח אחרון: המצב אינו זמין."],
             ["Scope"] = ["Область", "טווח"],
             ["Status"] = ["Состояние", "מצב"],
             ["Objects"] = ["Объекты", "אובייקטים"],
@@ -247,6 +256,9 @@ internal static class UiStaticCaptionCatalog
     }
 
     internal static bool Contains(string english) => Captions.ContainsKey(english);
+
+    internal static string TranslateOrOriginal(string? language, string english) =>
+        TryTranslate(language, english, out var translation) ? translation : english;
 
     internal static IEnumerable<string> ValidateLanguages()
     {

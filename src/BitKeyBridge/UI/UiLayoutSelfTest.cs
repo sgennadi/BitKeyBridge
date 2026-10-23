@@ -646,6 +646,54 @@ public static class UiLayoutSelfTest
                         failures.Add("Language switch left an empty or stale caption: " +
                             name + " (" + language + ")");
                 }
+                // Verify the actual unnamed title/description/button controls
+                // from the reported Export & Automation screenshot. This was
+                // previously all English except the top-level Settings tab.
+                foreach (var english in new[]
+                {
+                    "Export & Automation", "Recovery Export Storage",
+                    "Export Scopes", "Output root:", "Subdirectory:",
+                    "Save Export Settings", "Secure Output...",
+                    "Remove Selected", "Check All", "Run Export", "Dry Run",
+                    "Override publish guards (row drop / scope change)"
+                })
+                {
+                    var expected = UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, english);
+                    var found = false;
+                    var pending = new Stack<Control>();
+                    pending.Push(form);
+                    while (pending.Count > 0)
+                    {
+                        var current = pending.Pop();
+                        if (string.Equals(current.Text, expected,
+                                StringComparison.Ordinal))
+                            found = true;
+                        foreach (Control child in current.Controls)
+                            pending.Push(child);
+                    }
+                    if (!found)
+                        failures.Add("Export/admin caption was not translated: " +
+                            english + " (" + language + ")");
+                }
+                // Headers are separate native ListView items, not Controls.
+                var expectedScope = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Scope");
+                var headersFound = false;
+                var listPending = new Stack<Control>();
+                listPending.Push(form);
+                while (listPending.Count > 0)
+                {
+                    var current = listPending.Pop();
+                    if (current is ListView list && list.Columns
+                        .Cast<ColumnHeader>().Any(h => h.Text == expectedScope))
+                        headersFound = true;
+                    foreach (Control child in current.Controls)
+                        listPending.Push(child);
+                }
+                if (!headersFound)
+                    failures.Add("Export scope ListView headers were not localized: " +
+                        language);
 
                 if (tabs is not null &&
                     tabs.TabPages.Cast<TabPage>().Any(

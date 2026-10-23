@@ -365,6 +365,27 @@ internal static class UiLanguageService
                 }
             }
 
+            failures.AddRange(UiStaticCaptionCatalog.ValidateLanguages());
+            foreach (var original in new[]
+            {
+                "Export & Automation", "Recovery Export Storage",
+                "Export Scopes", "Output root:", "Run Export",
+                "Save Export Settings", "Remove Selected",
+                "Override publish guards (row drop / scope change)",
+                "Updates", "Advanced", "Service & Health",
+                "Domain Controllers", "Audit"
+            })
+            {
+                foreach (var language in SupportedLanguages.Select(x => x.Code))
+                {
+                    if (!UiStaticCaptionCatalog.TryTranslate(language,
+                            original, out var caption) ||
+                        string.IsNullOrWhiteSpace(caption))
+                        failures.Add("Missing full RU/HE Admin translation: " +
+                            original + " (" + language + ")");
+                }
+            }
+
             var preference = Path.Combine(testDirectory, "ui-language-fixture.json");
             SavePreferred("he", preference);
             if (ReadPreferred(preference) != "he")

@@ -74,7 +74,10 @@ public sealed partial class MainForm
                 key = namedKey;
             else if (control is Button or CheckBox or RadioButton or
                          LinkLabel or GroupBox or TabPage ||
-                     control is Label and not UiStatusLabel)
+                     control is Label and not UiStatusLabel &&
+                     !ReferenceEquals(control, _exportSummary) &&
+                     !ReferenceEquals(control, _lastSuccess) &&
+                     !ReferenceEquals(control, _coverageSummary))
             {
                 // Only exact known static captions. Never discover translations
                 // by scanning arbitrary TextBoxes, credentials or status data.
@@ -252,6 +255,36 @@ public sealed partial class MainForm
             for (var i = parents.Length - 1; i >= 0; i--)
                 if (!parents[i].IsDisposed)
                     parents[i].ResumeLayout(performLayout: true);
+        }
+
+        // The summary is a mutable run result: translate only its original
+        // empty-session placeholder; never replace an actual export result.
+        if (UiStaticCaptionCatalog.Contains("No run in this GUI session yet.") &&
+            new[] { "en", "ru", "he" }.Any(code =>
+                string.Equals(_exportSummary.Text,
+                    UiStaticCaptionCatalog.TranslateOrOriginal(code,
+                        "No run in this GUI session yet."),
+                    StringComparison.Ordinal)))
+            _exportSummary.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, "No run in this GUI session yet.");
+
+        // Last-success detail can be device-specific and must never be treated
+        // as a static caption. The absent/unavailable states are safe to relabel.
+        foreach (var original in new[]
+        {
+            "Last successful export: not recorded yet.",
+            "Last successful export: status unavailable."
+        })
+        {
+            if (new[] { "en", "ru", "he" }.Any(code =>
+                string.Equals(_lastSuccess.Text,
+                    UiStaticCaptionCatalog.TranslateOrOriginal(code, original),
+                    StringComparison.Ordinal)))
+            {
+                _lastSuccess.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, original);
+                break;
+            }
         }
 
         // Top ToolStrip entries are not Controls and need explicit handling.

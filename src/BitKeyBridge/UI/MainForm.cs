@@ -476,7 +476,8 @@ public sealed partial class MainForm : DpiAwareForm
             var last = JsonStore.Read<LastSuccessInfo>(_config.LastSuccessFile);
             if (last is null)
             {
-                _lastSuccess.Text = "Last successful export: not recorded yet.";
+                _lastSuccess.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, "Last successful export: not recorded yet.");
                 _lastSuccess.ForeColor = SystemColors.ControlText;
                 return;
             }
@@ -488,7 +489,8 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _lastSuccess.Text =
-                "Last successful export: status unavailable.";
+                UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, "Last successful export: status unavailable.");
             _lastSuccess.ForeColor =
                 SystemColors.ControlText;
             WindowsEventLogService.TryWrite(
