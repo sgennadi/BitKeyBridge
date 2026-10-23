@@ -237,7 +237,7 @@ public sealed partial class MainForm
         var parents = _localizedCaptionControls.Keys
             .Where(x => !x.IsDisposed && x.Parent is not null)
             .Select(x => x.Parent!)
-            .Distinct(ReferenceEqualityComparer.Instance)
+            .Distinct()
             .ToArray();
         foreach (var parent in parents)
             parent.SuspendLayout();
