@@ -587,16 +587,10 @@ public static class UiLayoutSelfTest
                 AutoSize = true
             };
             tabs?.TabPages[0].Controls.Add(dynamicCaptionsPanel);
-            using var lateAction1 = new Button
-            {
-                Name = "HomeRecoverySteps",
-                Text = "Untranslated late button"
-            };
-            using var lateAction2 = new Button
-            {
-                Name = "HomeRecoverySteps",
-                Text = "Another untranslated button"
-            };
+            using var lateAction1 = UiStyle.CreateActionButton("Untranslated late button");
+            lateAction1.Name = "HomeRecoverySteps";
+            using var lateAction2 = UiStyle.CreateActionButton("Another untranslated button");
+            lateAction2.Name = "HomeRecoverySteps";
             dynamicCaptionsPanel.Controls.Add(lateAction1);
             dynamicCaptionsPanel.Controls.Add(lateAction2);
             if (lateAction1.Text != UiLanguageService.Translate("he", "MainRecoverySteps") ||
@@ -654,11 +648,8 @@ public static class UiLayoutSelfTest
             // Replacing a control on a live page must pick up Hebrew instantly.
             dynamicCaptionsPanel.Controls.Remove(lateAction1);
             lateAction1.Dispose();
-            using var replacementAction = new Button
-            {
-                Name = "HomeRecoverySteps",
-                Text = "Replacement action"
-            };
+            using var replacementAction = UiStyle.CreateActionButton("Replacement action");
+            replacementAction.Name = "HomeRecoverySteps";
             dynamicCaptionsPanel.Controls.Add(replacementAction);
             if (replacementAction.Text != UiLanguageService.Translate("he", "MainRecoverySteps"))
                 failures.Add("Recreated action lost active Hebrew localization.");
