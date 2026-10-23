@@ -604,6 +604,12 @@ public static class UiLayoutSelfTest
                 lateAction1.RightToLeft != RightToLeft.Yes ||
                 lateAction2.RightToLeft != RightToLeft.Yes)
                 failures.Add("Late/duplicate WinForms controls were not translated in active Hebrew UI.");
+            // Legacy UI refreshes may transiently clear Text. Only fixed,
+            // registered captions are repaired; dynamic status is unaffected.
+            lateAction2.Text = string.Empty;
+            if (lateAction2.Text != UiLanguageService.Translate("he", "MainRecoverySteps"))
+                failures.Add("Blank fixed Hebrew caption was not restored.");
+
 
             var translatedControls = new (string Name, string Key)[]
             {
