@@ -40,9 +40,14 @@ public sealed partial class MainForm
     // Strong references are kept only to controls with fixed captions.
     // Removed/disposed controls are deregistered; the observer uses weak keys.
     // Multiple controls with the same Name must all receive translations.
+    private const string OriginalCaptionPrefix = "\u0001";
     private readonly Dictionary<Control, string> _localizedCaptionControls =
         new(ReferenceEqualityComparer.Instance);
     private readonly ConditionalWeakTable<Control, object> _localizedCaptionObserved = new();
+    // List-view header source literals are captured only once, before
+    // translation, and are not mistaken for live AD/Graph result values.
+    private readonly Dictionary<ListView, (string English, int InitialWidth)[]> _localizedListViewHeaders =
+        new(ReferenceEqualityComparer.Instance);
     private static readonly object LocalizedCaptionObserverMarker = new();
     private bool _localizedCaptionCacheBuilt;
 
@@ -63,8 +68,21 @@ public sealed partial class MainForm
             control.ControlAdded += OnLocalizedCaptionControlAdded;
             control.ControlRemoved += OnLocalizedCaptionControlRemoved;
 
+            string? key = null;
             if (!string.IsNullOrEmpty(control.Name) &&
-                LocalizedCaptions.TryGetValue(control.Name, out var key))
+                LocalizedCaptions.TryGetValue(control.Name, out var namedKey))
+                key = namedKey;
+            else if (control is Button or CheckBox or RadioButton or
+                         LinkLabel or GroupBox or TabPage ||
+                     control is Label and not UiStatusLabel)
+            {
+                // Only exact known static captions. Never discover translations
+                // by scanning arbitrary TextBoxes, credentials or status data.
+                if (UiStaticCaptionCatalog.Contains(control.Text))
+                    key = OriginalCaptionPrefix + control.Text;
+            }
+
+            if (key is not null)
             {
                 _localizedCaptionControls[control] = key;
                 control.Disposed += OnLocalizedCaptionControlDisposed;
@@ -72,6 +90,16 @@ public sealed partial class MainForm
                 ApplyLocalizedCaption(control, key,
                     UiLanguageService.IsRightToLeft(_uiLanguageCode)
                         ? RightToLeft.Yes : RightToLeft.No);
+            }
+
+            if (control is ListView list && list.Columns.Count > 0 &&
+                list.Columns.Cast<ColumnHeader>().Any(x =>
+                    UiStaticCaptionCatalog.Contains(x.Text)))
+            {
+                _localizedListViewHeaders[list] = list.Columns.Cast<ColumnHeader>()
+                    .Select(x => (x.Text, x.Width)).ToArray();
+                list.Disposed += OnLocalizedListViewDisposed;
+                ApplyLocalizedListViewHeaders(list);
             }
 
             foreach (Control child in control.Controls)
@@ -106,6 +134,8 @@ public sealed partial class MainForm
                 control.Disposed -= OnLocalizedCaptionControlDisposed;
                 control.TextChanged -= OnLocalizedCaptionTextChanged;
             }
+            if (control is ListView list && _localizedListViewHeaders.Remove(list))
+                list.Disposed -= OnLocalizedListViewDisposed;
 
             foreach (Control child in control.Controls)
                 pending.Push(child);
@@ -118,6 +148,39 @@ public sealed partial class MainForm
         {
             _localizedCaptionControls.Remove(control);
             control.TextChanged -= OnLocalizedCaptionTextChanged;
+        }
+    }
+
+    private void OnLocalizedListViewDisposed(object? sender, EventArgs args)
+    {
+        if (sender is ListView list)
+        {
+            _localizedListViewHeaders.Remove(list);
+            list.Disposed -= OnLocalizedListViewDisposed;
+        }
+    }
+
+    private void ApplyLocalizedListViewHeaders(ListView list)
+    {
+        if (list.IsDisposed || !_localizedListViewHeaders.TryGetValue(list, out var sources))
+            return;
+        for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+        {
+            var (english, originalWidth) = sources[i];
+            if (!UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
+                    out var translation))
+                continue;
+            var column = list.Columns[i];
+            if (!string.Equals(column.Text, translation, StringComparison.Ordinal))
+                column.Text = translation;
+            // Longer Hebrew/Russian titles must never disappear under fixed
+            // narrow 70-80px English header widths. Scrolling is preferable
+            // to truncation; the original width is restored in English.
+            var required = TextRenderer.MeasureText(translation, list.Font).Width +
+                UiStyle.ScaleLogicalPixels(18, list.DeviceDpi);
+            var width = Math.Max(originalWidth, required);
+            if (column.Width != width)
+                column.Width = width;
         }
     }
 
@@ -141,7 +204,11 @@ public sealed partial class MainForm
         if (control.IsDisposed || control.Disposing)
             return;
 
-        var translated = UiLanguageService.Translate(_uiLanguageCode, key);
+        var translated = key.StartsWith(OriginalCaptionPrefix, StringComparison.Ordinal)
+            ? UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode,
+                key[OriginalCaptionPrefix.Length..], out var text)
+                ? text : key[OriginalCaptionPrefix.Length..]
+            : UiLanguageService.Translate(_uiLanguageCode, key);
         if (!string.IsNullOrWhiteSpace(translated) &&
             !string.Equals(control.Text, translated, StringComparison.Ordinal))
             control.Text = translated;
@@ -162,8 +229,48 @@ public sealed partial class MainForm
         }
 
         var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
-        foreach (var (control, key) in _localizedCaptionControls.ToArray())
-            ApplyLocalizedCaption(control, key, direction);
+        // Coalesce multiple TextChanged layout requests under shared parent
+        // containers. Never suspend or touch secret/identity controls.
+        var parents = _localizedCaptionControls.Keys
+            .Where(x => !x.IsDisposed && x.Parent is not null)
+            .Select(x => x.Parent!)
+            .Distinct(ReferenceEqualityComparer.Instance)
+            .ToArray();
+        foreach (var parent in parents)
+            parent.SuspendLayout();
+        try
+        {
+            foreach (var (control, key) in _localizedCaptionControls.ToArray())
+                ApplyLocalizedCaption(control, key, direction);
+            foreach (var list in _localizedListViewHeaders.Keys.ToArray())
+                ApplyLocalizedListViewHeaders(list);
+        }
+        finally
+        {
+            // Layout each affected group once instead of once per translated
+            // button/label. MainForm's tab strip is already suspended by caller.
+            for (var i = parents.Length - 1; i >= 0; i--)
+                if (!parents[i].IsDisposed)
+                    parents[i].ResumeLayout(performLayout: true);
+        }
+
+        // Top ToolStrip entries are not Controls and need explicit handling.
+        // Preserve their original English identity in Tag; never translate
+        // device IDs or dynamic status text.
+        if (_toolsTopMenu is not null)
+            foreach (ToolStripItem item in _toolsTopMenu.DropDownItems)
+            {
+                if (item is ToolStripSeparator || item == _recoveryStepsMenu ||
+                    item == _accessHealthMenu)
+                    continue;
+                if (item.Tag is null)
+                    item.Tag = item.Text;
+                if (item.Tag is string original &&
+                    UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode,
+                        original, out var label) &&
+                    !string.Equals(item.Text, label, StringComparison.Ordinal))
+                    item.Text = label;
+            }
 
         SetCloudCaption(_cloudSaveButton, "MainSaveConfig", direction);
         SetCloudCaption(_cloudWizardButton, "MainEntraWizard", direction);
