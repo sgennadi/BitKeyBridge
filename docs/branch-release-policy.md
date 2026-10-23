@@ -1,15 +1,16 @@
 # BitKeyBridge branch and release policy
 
-Updated: 2026-10-18. This document describes the desired repository model,
+Updated: 2026-10-23. This document describes the desired repository model,
 not an assertion that GitHub administrative rulesets have been installed.
 
 ## Source of truth
 
 | Area | Branch/ref | Rule |
 | --- | --- | --- |
-| Stable source | `main` | Equals the latest approved stable release's functionality. Currently v0.30.5 after PR #89. Do not merge unapproved RC code. |
+| Stable source | `main` | Equals the latest approved stable release's functionality. Retain v0.30.5 until the new v0.32.0 GitHub Stable release/tag exists, then merge exactly that released source. Do not merge unapproved RC code. |
 | Stable release | immutable `vX.Y.Z` tag | Exact release SHA, reproducible artifacts, release notes, all gates green, publishing authorization documented. |
-| Preview integration | `integration/v0.32.0-staging-20261018` | Feature PRs land here first. RC changes are not production deployment approvals. |
+| Stable release preparation | `release/v0.32.0` | Dedicated exact-version CI and owner-approved **unsigned** Stable publication. Release subject must be exactly `Release v0.32.0`. |
+| Preview integration | `development/post-rc9-lookup-ux` | RC9 features and independently tested post-RC9 UX fixes; not a managed production rollout authorization. |
 | Public prerelease | immutable `vX.Y.Z-rc.N` tag | Dedicated `release/vX.Y.Z-rc.N` branch and pinned-head CI; must not become GitHub Latest. |
 | Development | `feature/*`, `fix/*`, `sync/*` | Pull request, CI, review; no automatic deployment or release. |
 
@@ -24,12 +25,19 @@ not an assertion that GitHub administrative rulesets have been installed.
    integration and pinned legacy upgrade/rollback.
 4. Publish prerelease artifacts only from its exact branch, exact approval
    message and exact immutable commit, after every gate passes.
-5. Before *stable* promotion, independently validate Windows 11, domain AD,
-   delegated Entra/Intune access, CyberArk EPM/WDAC/AppLocker, protected
-   journaling and certificate/code signing. Perform explicit pilot approval.
-6. Create a new stable GitHub release, then fast-forward-equivalent /
-   review-merge its source into `main`. Preserve full history and release tags.
-   Never merge a preview directly to main just to raise the version number.
+5. A public **unsigned** Stable release requires an explicit owner authorization,
+   successful exact-source CI, published checksum/provenance evidence, and
+   prominently documented limitations. This does **not** mean the software has
+   an organizational Authenticode signature or is approved for fleet rollout.
+   **Before managed production deployment**, independently validate Windows 11
+   (including Hebrew/HiDPI/RDP), domain AD, delegated Entra/Intune access,
+   CyberArk EPM/WDAC/AppLocker, protected journaling/SIEM, and secure update
+   rollback with a representative canary group. Complete enterprise signing
+   and acceptance separately.
+6. Create the new stable GitHub release after all publishing checks pass,
+   then review-merge the tagged release source into `main` using a true merge
+   commit that preserves the exact release tag as an ancestor. Never squash
+   away the stable tag's ancestry or merge a preview directly to main.
 
 ## GitHub administrator settings (manual approval required)
 
