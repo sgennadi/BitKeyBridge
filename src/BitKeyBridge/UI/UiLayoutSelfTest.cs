@@ -578,6 +578,33 @@ public static class UiLayoutSelfTest
                     page => page.RightToLeft != RightToLeft.No))
                 failures.Add("Main workspace pages must keep child/secret controls LTR.");
 
+            // Runtime-created and duplicate named actions must be translated.
+            // They are deliberately added after the first Hebrew pass to catch
+            // the old one-time control tree snapshot regression.
+            var dynamicCaptionsPanel = new FlowLayoutPanel
+            {
+                Name = "LateLocalizedActionsFixture",
+                AutoSize = true
+            };
+            tabs?.TabPages[0].Controls.Add(dynamicCaptionsPanel);
+            using var lateAction1 = UiStyle.CreateActionButton("Untranslated late button");
+            lateAction1.Name = "HomeRecoverySteps";
+            using var lateAction2 = UiStyle.CreateActionButton("Another untranslated button");
+            lateAction2.Name = "HomeRecoverySteps";
+            dynamicCaptionsPanel.Controls.Add(lateAction1);
+            dynamicCaptionsPanel.Controls.Add(lateAction2);
+            if (lateAction1.Text != UiLanguageService.Translate("he", "MainRecoverySteps") ||
+                lateAction2.Text != UiLanguageService.Translate("he", "MainRecoverySteps") ||
+                lateAction1.RightToLeft != RightToLeft.Yes ||
+                lateAction2.RightToLeft != RightToLeft.Yes)
+                failures.Add("Late/duplicate WinForms controls were not translated in active Hebrew UI.");
+            // Legacy UI refreshes may transiently clear Text. Only fixed,
+            // registered captions are repaired; dynamic status is unaffected.
+            lateAction2.Text = string.Empty;
+            if (lateAction2.Text != UiLanguageService.Translate("he", "MainRecoverySteps"))
+                failures.Add("Blank fixed Hebrew caption was not restored.");
+
+
             var translatedControls = new (string Name, string Key)[]
             {
                 ("HomeUseWindowsIdentity", "MainWindowsAccount"),
@@ -594,6 +621,13 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                foreach (var lateAction in new[] { lateAction1, lateAction2 })
+                {
+                    if (lateAction.Text != UiLanguageService.Translate(language, "MainRecoverySteps") ||
+                        lateAction.RightToLeft != (language == "he" ? RightToLeft.Yes : RightToLeft.No))
+                        failures.Add("Dynamic duplicate caption remained blank, stale or LTR-invalid: " +
+                            language);
+                }
                 foreach (var (name, key) in translatedControls)
                 {
                     var control = FindByName(form, name);
@@ -609,6 +643,20 @@ public static class UiLayoutSelfTest
                         page => string.IsNullOrWhiteSpace(page.Text)))
                     failures.Add("Language switch left an empty main workspace tab.");
             }
+
+            // Disposed buttons must never remain in the active caption cache.
+            // Replacing a control on a live page must pick up Hebrew instantly.
+            dynamicCaptionsPanel.Controls.Remove(lateAction1);
+            lateAction1.Dispose();
+            using var replacementAction = UiStyle.CreateActionButton("Replacement action");
+            replacementAction.Name = "HomeRecoverySteps";
+            dynamicCaptionsPanel.Controls.Add(replacementAction);
+            if (replacementAction.Text != UiLanguageService.Translate("he", "MainRecoverySteps"))
+                failures.Add("Recreated action lost active Hebrew localization.");
+            form.PreviewShellLanguageForLayoutTest("ru");
+            if (replacementAction.Text != UiLanguageService.Translate("ru", "MainRecoverySteps"))
+                failures.Add("Recreated action did not follow subsequent language switches.");
+            form.PreviewShellLanguageForLayoutTest("he");
 
             if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensityFinal ||
                 updateDensityFinal.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
