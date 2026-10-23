@@ -32,8 +32,6 @@ public sealed partial class MainForm : DpiAwareForm
 
     private readonly TextBox _cloudTenant = new();
     private readonly TextBox _cloudClient = new();
-    private readonly TextBox _cloudUsername = new();
-    private readonly TextBox _cloudPassword = new();
     private readonly TextBox _cloudThumbprint = new();
     private readonly ComboBox _cloudAuthMode = new();
     private readonly UiStatusLabel _cloudStatus = new();
@@ -167,6 +165,9 @@ public sealed partial class MainForm : DpiAwareForm
         _config = config;
         _layoutSelfTest =
             layoutSelfTest;
+        _uiLanguageCode = layoutSelfTest
+            ? "en"
+            : UiLanguageService.ReadPreferred();
         _ad =
             new ActiveDirectoryService(
                 config);
@@ -216,9 +217,9 @@ public sealed partial class MainForm : DpiAwareForm
         if (layoutSelfTest)
             return;
 
-        // Default to a maximized workspace; responsive reflow also handles
-        // later restore/maximize operations and changing RDP resolutions.
-        WindowState = FormWindowState.Maximized;
+        // Per-user window preferences restore safely on monitor/RDP changes.
+        // First launch still defaults to a maximized responsive workspace.
+        RestoreWorkspace();
 
         LoadDirectorySettings();
         LoadDefaultScopes();
@@ -235,11 +236,15 @@ public sealed partial class MainForm : DpiAwareForm
                 _startSearchDebounceTimer?.Stop();
                 _homeSearchDebounceTimer?.Stop();
                 _homeSearchCancellation?.Cancel();
+                SaveWorkspace();
                 ClearSensitiveState();
             };
 
         Shown += async (_, _) =>
         {
+            // Local update status is loaded on a worker, never blocking the
+            // source chooser or the WinForms message loop.
+            RefreshUpdateCenter();
             // Show the source chooser promptly. Network update checks must not
             // hold the connection wizard hostage while GitHub is unavailable.
             await ShowStartupConnectionWizardAsync();
@@ -471,7 +476,8 @@ public sealed partial class MainForm : DpiAwareForm
             var last = JsonStore.Read<LastSuccessInfo>(_config.LastSuccessFile);
             if (last is null)
             {
-                _lastSuccess.Text = "Last successful export: not recorded yet.";
+                _lastSuccess.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, "Last successful export: not recorded yet.");
                 _lastSuccess.ForeColor = SystemColors.ControlText;
                 return;
             }
@@ -483,7 +489,8 @@ public sealed partial class MainForm : DpiAwareForm
         catch (Exception ex)
         {
             _lastSuccess.Text =
-                "Last successful export: status unavailable.";
+                UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, "Last successful export: status unavailable.");
             _lastSuccess.ForeColor =
                 SystemColors.ControlText;
             WindowsEventLogService.TryWrite(
@@ -614,7 +621,6 @@ public sealed partial class MainForm : DpiAwareForm
                 ComboBoxStyle.DropDownList;
             _cloudAuthMode.Items.AddRange([
                 "Device Code (MFA / Conditional Access)",
-                "DEPRECATED — Username + Password (ROPC, no MFA)",
                 "App registration + certificate"
             ]);
         }
@@ -624,13 +630,10 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudRotationPermissions.Checked = _cloudConfig.EnableIntuneRotationPermissions;
         _cloudTenant.Text = _cloudConfig.TenantId;
         _cloudClient.Text = _cloudConfig.ClientId;
-        _cloudUsername.Text = _cloudConfig.Username;
         _cloudThumbprint.Text = _cloudConfig.CertificateThumbprint;
-        _cloudAuthMode.SelectedIndex = _cloudConfig.AuthMode.Equals("Certificate", StringComparison.OrdinalIgnoreCase)
-            ? 2
-            : _cloudConfig.AuthMode.Equals("Password", StringComparison.OrdinalIgnoreCase)
-                ? 1
-                : 0;
+        _cloudAuthMode.SelectedIndex =
+            CloudAuthenticationPolicy.Normalize(_cloudConfig.AuthMode) == "Certificate"
+                ? 1 : 0;
         UpdateCloudAuthUi();
         if (string.IsNullOrWhiteSpace(_cloudConfig.ClientId))
         {
@@ -645,50 +648,25 @@ public sealed partial class MainForm : DpiAwareForm
     {
         _cloudConfig.TenantId = _cloudTenant.Text.Trim();
         _cloudConfig.ClientId = _cloudClient.Text.Trim();
-        _cloudConfig.Username = _cloudUsername.Text.Trim();
         _cloudConfig.EnableLapsPermissions = _cloudLapsPermissions.Checked;
         _cloudConfig.EnableIntuneRotationPermissions = _cloudRotationPermissions.Checked;
         _cloudConfig.CertificateThumbprint = _cloudThumbprint.Text.Trim();
-        _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex switch
-        {
-            2 => "Certificate",
-            1 => "Password",
-            _ => "DeviceCode"
-        };
+        _cloudConfig.AuthMode = _cloudAuthMode.SelectedIndex == 1
+            ? "Certificate" : "DeviceCode";
         ConfigService.SaveCloudConfig(_cloudConfig);
         UiStyle.SetStatus(
             _cloudStatus,
-            "Cloud config saved. Password was not saved.",
+            "Cloud configuration saved. Sign in using Device Code or certificate.",
             UiStatusKind.Success);
     }
 
     private void UpdateCloudAuthUi()
     {
-        var deviceCode = _cloudAuthMode.SelectedIndex == 0;
-        var password = _cloudAuthMode.SelectedIndex == 1;
-        var cert = _cloudAuthMode.SelectedIndex == 2;
-        _cloudUsername.Enabled = password;
-        _cloudPassword.Enabled = password;
-        _cloudThumbprint.Enabled = cert;
-
-        if (!password)
-        {
-            _cloudPassword.Clear();
-        }
-        else
-        {
-            UiStyle.SetStatus(
-                _cloudStatus,
-                "Deprecated compatibility mode: ROPC doesn't support MFA and is commonly blocked by Conditional Access. Use Device Code or certificate authentication for new deployments.",
-                UiStatusKind.Warning);
-        }
+        _cloudThumbprint.Enabled = _cloudAuthMode.SelectedIndex == 1;
     }
 
     private async Task<bool> ConnectCloudAsync(bool forLaps = false, CancellationToken ct = default)
     {
-        var passwordMode =
-            _cloudAuthMode.SelectedIndex == 1;
-
         try
         {
             _cloudDiagnostics.Clear();
@@ -704,23 +682,13 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudToken =
                 _cloudAuthMode.SelectedIndex switch
                 {
-                    2 =>
+                    1 =>
                         await graph
                             .AcquireCertificateTokenAsync(
                                 _cloudTenant.Text,
                                 _cloudClient.Text,
                                 _cloudThumbprint.Text,
                                 ct),
-                    1 =>
-                        await graph
-                            .AcquirePasswordTokenAsync(
-                                _cloudTenant.Text,
-                                _cloudClient.Text,
-                                _cloudUsername.Text,
-                                _cloudPassword.Text,
-                                ct,
-                                lapsOnly: forLaps,
-                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions),
                     _ =>
                         await graph
                             .AcquireDeviceCodeTokenAsync(
@@ -776,7 +744,6 @@ public sealed partial class MainForm : DpiAwareForm
                 ("Tenant", _cloudTenant.Text),
                 ("ClientId", _cloudClient.Text),
                 ("Authentication", _cloudAuthMode.Text),
-                ("Username", _cloudUsername.Text),
                 ("LapsOnly", forLaps.ToString()));
 
             if (forLaps)
@@ -787,16 +754,10 @@ public sealed partial class MainForm : DpiAwareForm
                     ex,
                     ("Tenant", _cloudTenant.Text),
                     ("ClientId", _cloudClient.Text),
-                    ("Authentication", _cloudAuthMode.Text),
-                    ("Username", _cloudUsername.Text));
+                    ("Authentication", _cloudAuthMode.Text));
             }
 
             return false;
-        }
-        finally
-        {
-            if (passwordMode)
-                _cloudPassword.Clear();
         }
     }
 
@@ -894,12 +855,7 @@ public sealed partial class MainForm : DpiAwareForm
 
         if (running)
         {
-            _cloudUsername.Enabled =
-                false;
-            _cloudPassword.Enabled =
-                false;
-            _cloudThumbprint.Enabled =
-                false;
+            _cloudThumbprint.Enabled = false;
         }
         else
         {
@@ -933,39 +889,19 @@ public sealed partial class MainForm : DpiAwareForm
 
     private string BuildCloudTokenContext()
     {
-        var mode =
-            _cloudAuthMode.SelectedIndex switch
-            {
-                2 => "Certificate",
-                1 => "Password",
-                _ => "DeviceCode"
-            };
+        var certificate = _cloudAuthMode.SelectedIndex == 1;
+        var identity = certificate
+            ? new string(_cloudThumbprint.Text
+                .Where(Uri.IsHexDigit)
+                .Select(char.ToUpperInvariant)
+                .ToArray())
+            : string.Empty;
 
-        var identity =
-            mode.Equals(
-                "Password",
-                StringComparison.Ordinal)
-                ? _cloudUsername.Text.Trim()
-                : mode.Equals(
-                    "Certificate",
-                    StringComparison.Ordinal)
-                    ? new string(
-                        _cloudThumbprint.Text
-                            .Where(
-                                Uri.IsHexDigit)
-                            .Select(
-                                char.ToUpperInvariant)
-                            .ToArray())
-                    : string.Empty;
-
-        return string.Join(
-            "|",
-            _cloudTenant.Text.Trim()
-                .ToUpperInvariant(),
-            _cloudClient.Text.Trim()
-                .ToUpperInvariant(),
-            mode,
-            identity.ToUpperInvariant(),
+        return string.Join("|",
+            _cloudTenant.Text.Trim().ToUpperInvariant(),
+            _cloudClient.Text.Trim().ToUpperInvariant(),
+            certificate ? "Certificate" : "DeviceCode",
+            identity,
             _cloudRotationPermissions.Checked ? "ROTATION" : "READ-ONLY");
     }
 
@@ -4561,7 +4497,7 @@ public sealed partial class MainForm : DpiAwareForm
                     _startResults.Rows.Add(
                         row.ComputerName,
                         row.RecoveryId,
-                        row.KeyDate,
+                        (object?)row.KeyDate ?? DBNull.Value,
                         row.IsLatest is null
                             ? "-"
                             : row.IsLatest.Value
@@ -4834,19 +4770,17 @@ public sealed partial class MainForm : DpiAwareForm
     private async Task<string?> EnsureStartRecoveryKeyAsync(
         RecoverySearchResult row)
     {
-        if (!string.IsNullOrWhiteSpace(
-                _startCurrentKey))
-        {
-            return _startCurrentKey;
-        }
-
+        // Never reuse or repopulate shared secret cache across an async
+        // read; the selection can change before the continuation executes.
+        // The reveal handler may cache only AFTER checking the same row.
+        string? recovered;
         try
         {
             UseWaitCursor = true;
 
             if (IsLocalRecoveryRow(row))
             {
-                _startCurrentKey =
+                recovered =
                     await Task.Run(
                         () =>
                             IsProtectedRecoveryRow(row)
@@ -4861,7 +4795,7 @@ public sealed partial class MainForm : DpiAwareForm
             }
             else
             {
-                _startCurrentKey =
+                recovered =
                     await Task.Run(
                         () =>
                         {
@@ -4879,7 +4813,7 @@ public sealed partial class MainForm : DpiAwareForm
                         });
             }
 
-            return _startCurrentKey;
+            return recovered;
         }
         catch (Exception ex)
         {
@@ -4951,6 +4885,15 @@ public sealed partial class MainForm : DpiAwareForm
         if (context is null)
             return;
 
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()))
+        {
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Selected recovery entry changed during the ticket prompt. Restart the operation.",
+                UiStatusKind.Warning);
+            return;
+        }
+
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
                 "RevealRecoveryKey",
@@ -4965,12 +4908,21 @@ public sealed partial class MainForm : DpiAwareForm
             await EnsureStartRecoveryKeyAsync(
                 row);
 
-        if (string.IsNullOrWhiteSpace(
-                key))
+        if (string.IsNullOrWhiteSpace(key))
+            return;
+
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()) || IsDisposed)
         {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Recovery selection changed during the confidential read. Stale key discarded.",
+                UiStatusKind.Warning);
             return;
         }
 
+        // Retain only the key for the currently selected and verified row.
+        _startCurrentKey = key;
         _startKey.Text =
             key;
         _startKey.UseSystemPasswordChar =
@@ -5027,6 +4979,15 @@ public sealed partial class MainForm : DpiAwareForm
         if (context is null)
             return;
 
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()))
+        {
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Selected recovery entry changed during the ticket prompt. Restart the operation.",
+                UiStatusKind.Warning);
+            return;
+        }
+
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
                 "CopyRecoveryKey",
@@ -5041,9 +5002,16 @@ public sealed partial class MainForm : DpiAwareForm
             await EnsureStartRecoveryKeyAsync(
                 row);
 
-        if (string.IsNullOrWhiteSpace(
-                key))
+        if (string.IsNullOrWhiteSpace(key))
+            return;
+
+        if (!HomeRecoverySelectionGuard.IsSelectedStartRow(
+                row, GetSelectedStartRecoveryRow()) || IsDisposed)
         {
+            _startCurrentKey = null;
+            UiStyle.SetStatus(_startPurposeStatus,
+                "Recovery selection changed during the confidential read. Nothing was copied.",
+                UiStatusKind.Warning);
             return;
         }
 
@@ -5900,7 +5868,6 @@ public sealed partial class MainForm : DpiAwareForm
         _connectedAdAuthentication = string.Empty;
         AdSessionCredentials.Clear();
         _recoveryAccessContexts.Clear();
-        _cloudPassword.Clear();
         _adPassword.Clear();
         _serviceIdentityPassword.Clear();
     }

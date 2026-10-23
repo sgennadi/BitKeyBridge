@@ -294,9 +294,9 @@ public sealed partial class MainForm
                 row.ObjectGuid,
                 row.OrganizationalUnit,
                 row.BackupEvidence,
-                row.EffectiveExpirationUtc,
+                (object?)row.EffectiveExpirationUtc ?? DBNull.Value,
                 row.ExpirationState(DateTime.UtcNow),
-                row.AdLastLogonUtc);
+                (object?)row.AdLastLogonUtc ?? DBNull.Value);
             _lapsCoverageResults.Rows[index].Tag = row;
         }
         _lapsCoverageResults.ClearSelection();

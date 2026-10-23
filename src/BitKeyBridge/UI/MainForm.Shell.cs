@@ -3,6 +3,13 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly TabControl _mainTabs = new();
+    private ToolStripMenuItem? _toolsTopMenu;
+    private ToolStripMenuItem? _recoveryStepsMenu;
+    private ToolStripMenuItem? _accessHealthMenu;
+    private ToolStripMenuItem? _languageTopMenu;
+    private readonly List<ToolStripMenuItem> _languageChoices = [];
+    private string _uiLanguageCode = "en";
+    private bool _shellLanguageApplied;
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly Button _connectAdButton = new();
@@ -144,18 +151,18 @@ public sealed partial class MainForm
         if (AdministrationAllowed)
             _mainTabs.TabPages.Add(BuildAdministrationWorkspaceTab());
 
-        foreach (TabPage page in
-                 _mainTabs.TabPages)
-        {
-            page.AutoScroll =
-                true;
-        }
+        // Scrolling belongs to each workspace's inner viewport. An
+        // AutoScroll TabPage can leave Dock=Fill nested tabs at an obsolete
+        // virtual width after DPI or RDP resolution changes.
+        foreach (TabPage page in _mainTabs.TabPages)
+            page.AutoScroll = false;
 
         _mainTabs.SelectedIndexChanged +=
             (_, _) =>
             {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 ApplyComputerQueryToSelectedWorkspace();
-                QueueMainViewportReflow();
+                QueueNavigationViewportReflow(started);
 
                 if (ReferenceEquals(
                         _mainTabs.SelectedTab,
@@ -177,8 +184,53 @@ public sealed partial class MainForm
         // Admin-only Settings cannot be opened when its tab is absent.
         KeyDown += (_, e) =>
         {
+            // Global, non-secret Helpdesk shortcuts; they never invoke
+            // Reveal, Copy, rotation or an audit-broker probe.
+            if (e.Control && e.Shift && !e.Alt)
+            {
+                if (e.KeyCode == Keys.H)
+                {
+                    OpenHelpdeskAccessHealth();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.R)
+                {
+                    ShowRecoveryWorkflowSteps();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                return;
+            }
             if (!e.Control || e.Alt || e.Shift)
                 return;
+
+            // Ctrl+F focuses the existing metadata search input in the
+            // currently selected workspace; it never invokes secret reveal.
+            if (e.KeyCode == Keys.F)
+            {
+                TextBox? query = _mainTabs.SelectedIndex switch
+                {
+                    0 => _homeQuery,
+                    1 => _startQuery,
+                    2 => _lapsQuery,
+                    3 => _unifiedQuery,
+                    // Helpdesk reuses the one Start query, never a second
+                    // textbox or a second metadata request.
+                    4 => _homeQuery,
+                    _ => null
+                };
+                if (_mainTabs.SelectedTab?.Name == "HelpdeskDashboardTab")
+                    OpenHelpdeskDeviceWorkspace();
+                if (query is { Visible: true, Enabled: true })
+                {
+                    query.Focus();
+                    query.SelectAll();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                return;
+            }
 
             int index = e.KeyCode switch
             {
@@ -203,6 +255,7 @@ public sealed partial class MainForm
         // Do not change selection in Shown (including after the connection
         // wizard), and never silently switch to Helpdesk on normal launch.
         _mainTabs.SelectedTab = _homeWorkspaceTab;
+        ApplyShellLanguage();
 
         root.Controls.Add(_mainTabs, 0, 2);
         root.Controls.Add(
@@ -282,7 +335,11 @@ public sealed partial class MainForm
             Dock = DockStyle.Top
         };
 
-        var tools = new ToolStripMenuItem("Tools");
+        var tools = new ToolStripMenuItem("Tools")
+        {
+            AutoSize = true,
+            Padding = new Padding(10, 0, 10, 0)
+        };
 
         if (AdministrationAllowed)
         {
@@ -306,13 +363,182 @@ public sealed partial class MainForm
             tools.DropDownItems.Add(new ToolStripSeparator());
         }
 
+        var recoverySteps = new ToolStripMenuItem(
+            "Recovery Steps (Ctrl+Shift+R)")
+        {
+            Name = "RecoveryStepsMenu",
+            ToolTipText = "Read-only helpdesk recovery checklist; never reveals a password."
+        };
+        recoverySteps.Click += (_, _) => ShowRecoveryWorkflowSteps();
+        _recoveryStepsMenu = recoverySteps;
+        tools.DropDownItems.Add(recoverySteps);
+
+        var accessHealth = new ToolStripMenuItem(
+            "Access Health (Ctrl+Shift+H)")
+        {
+            Name = "AccessHealthMenu",
+            ToolTipText = "Metadata-only permissions diagnosis; no secret reads or elevation."
+        };
+        accessHealth.Click += (_, _) => OpenHelpdeskAccessHealth();
+        _accessHealthMenu = accessHealth;
+        tools.DropDownItems.Add(accessHealth);
         tools.DropDownItems.Add(
             "Latest GitHub release",
             null,
             (_, _) => OpenLatestRelease());
 
+        _toolsTopMenu = tools;
         menu.Items.Add(tools);
+
+        // Language selection is per user. Never change machine RBAC, cloud
+        // credentials, system locale or the saved search/recovery context.
+        var languages = new ToolStripMenuItem("Language")
+        {
+            Name = "UiLanguageMenu",
+            AutoSize = true,
+            // Hebrew שפה must retain all glyphs after menu RTL/reflow.
+            Padding = new Padding(10, 0, 10, 0)
+        };
+        _languageTopMenu = languages;
+        foreach (var language in UiLanguageService.SupportedLanguages)
+        {
+            var option = new ToolStripMenuItem(language.DisplayName)
+            {
+                Name = "UiLanguage-" + language.Code,
+                Tag = language.Code,
+                CheckOnClick = false
+            };
+            option.Click += (_, _) => SetShellLanguage(language.Code);
+            languages.DropDownItems.Add(option);
+            _languageChoices.Add(option);
+        }
+        menu.Items.Add(languages);
         return menu;
+    }
+
+    private void SetShellLanguage(string code)
+    {
+        var next = UiLanguageService.Normalize(code);
+        if (string.Equals(next, _uiLanguageCode, StringComparison.Ordinal))
+            return;
+        try
+        {
+            UiLanguageService.SavePreferred(next);
+            _uiLanguageCode = next;
+            ApplyShellLanguage();
+            QueueNavigationViewportReflow();
+        }
+        catch (Exception ex)
+        {
+            _appDiagnostics.ShowMessage(
+                "Cannot save the selected interface language.",
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private void ApplyShellLanguage()
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var initialApply = !_shellLanguageApplied;
+        var rtl = UiLanguageService.IsRightToLeft(_uiLanguageCode);
+        var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
+        // Mirroring the entire Form HWND can recreate native child controls
+        // and stall during Hebrew switches, especially under RDP.
+        _mainTabs.SuspendLayout();
+        MainMenuStrip?.SuspendLayout();
+        try
+        {
+            var chromeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (RightToLeft != RightToLeft.No)
+                RightToLeft = RightToLeft.No;
+            if (RightToLeftLayout)
+                RightToLeftLayout = false;
+            // A mirrored native tab strip cannot also use OwnerDrawFixed:
+            // DrawItem rectangles point to LTR positions, leaving duplicate
+            // blank pills while the actual Hebrew headers appear on the right.
+            // Change DrawMode before enabling native RTL mirroring and only
+            // restore custom drawing once LTR mirroring has been disabled.
+            if (rtl && _mainTabs.DrawMode != TabDrawMode.Normal)
+                _mainTabs.DrawMode = TabDrawMode.Normal;
+            if (_mainTabs.RightToLeft != direction)
+                _mainTabs.RightToLeft = direction;
+            if (_mainTabs.RightToLeftLayout != rtl)
+                _mainTabs.RightToLeftLayout = rtl;
+            if (!rtl && _mainTabs.DrawMode != TabDrawMode.OwnerDrawFixed)
+                _mainTabs.DrawMode = TabDrawMode.OwnerDrawFixed;
+            foreach (TabPage page in _mainTabs.TabPages)
+                if (page.RightToLeft != RightToLeft.No)
+                    page.RightToLeft = RightToLeft.No;
+            if (MainMenuStrip is { } menu && menu.RightToLeft != direction)
+                menu.RightToLeft = direction;
+            UiLayoutTelemetry.RecordLanguageChrome(chromeStarted);
+
+            // Recovery-key strings, passwords, GUIDs and account/device IDs
+            // must stay visually LTR even under mirrored Hebrew navigation.
+            foreach (var literal in new[]
+            {
+                _homeQuery, _startQuery, _lapsQuery, _unifiedQuery,
+                _startKey, _lapsPassword, _deviceRecoveryKey,
+                _adServer, _adDomain, _adUsername,
+                _cloudTenant, _cloudClient, _cloudThumbprint
+            })
+                literal.RightToLeft = RightToLeft.No;
+
+            var keys = new[]
+            {
+                "Start", "BitLocker", "LAPS", "Devices", "Helpdesk",
+                "Diagnostics", "Settings"
+            };
+            for (var i = 0; i < Math.Min(keys.Length, _mainTabs.TabPages.Count); i++)
+                _mainTabs.TabPages[i].Text =
+                    UiLanguageService.Translate(_uiLanguageCode, keys[i]);
+
+            if (_toolsTopMenu is not null)
+                _toolsTopMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "Tools");
+            if (_recoveryStepsMenu is not null)
+                _recoveryStepsMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "RecoveryStepsShortcut");
+            if (_accessHealthMenu is not null)
+                _accessHealthMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "AccessHealthShortcut");
+            if (_languageTopMenu is not null)
+                _languageTopMenu.Text =
+                    UiLanguageService.Translate(_uiLanguageCode, "Language");
+            foreach (var choice in _languageChoices)
+                choice.Checked = string.Equals(choice.Tag as string,
+                    _uiLanguageCode, StringComparison.Ordinal);
+
+            _homeSearchButton.Text =
+                UiLanguageService.Translate(_uiLanguageCode, "Search");
+            _homeSearchCancelButton.Text =
+                UiLanguageService.Translate(_uiLanguageCode, "Cancel");
+            _globalConnectionStatus.ToolTipText =
+                UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+            var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            ApplyUpdateCenterLanguage();
+            ApplyLocalizedShellCaptions(rtl);
+            UiLayoutTelemetry.RecordLanguageCaptions(captionsStarted);
+        }
+        finally
+        {
+            var resumeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            _mainTabs.ResumeLayout(performLayout: true);
+            // false reused the old menu layout after switching between
+            // Language / Язык / שפה, sometimes clipping the final Hebrew glyph.
+            MainMenuStrip?.ResumeLayout(performLayout: true);
+            UiLayoutTelemetry.RecordLanguageResume(resumeStarted);
+            _shellLanguageApplied = true;
+            UiLayoutTelemetry.RecordLanguageSwitch(started, initialApply);
+        }
+    }
+
+    internal void PreviewShellLanguageForLayoutTest(string code)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Language preview is restricted to UI tests.");
+        _uiLanguageCode = UiLanguageService.Normalize(code);
+        ApplyShellLanguage();
     }
 
     private TabPage BuildHomeWorkspaceTab()
@@ -555,6 +781,8 @@ public sealed partial class MainForm
         var connectionActions =
             new FlowLayoutPanel
             {
+                Name = "HomeConnectionDirectActions",
+                Visible = false,
                 Dock =
                     DockStyle.Top,
                 AutoSize =
@@ -613,9 +841,7 @@ public sealed partial class MainForm
         _homeAdvancedConnectionMenuItem.Click += (_, _) =>
         {
             _advancedConnectionGroup.Visible = !_advancedConnectionGroup.Visible;
-            _homeAdvancedConnectionMenuItem.Text = _advancedConnectionGroup.Visible
-                ? "Hide advanced AD settings"
-                : "Advanced AD settings...";
+            RefreshAdvancedConnectionMenuCaption();
         };
 
         _homeConnectionToolsMenu.Items.AddRange([
@@ -629,16 +855,18 @@ public sealed partial class MainForm
             _homeDisconnectAdButton,
             _homeConnectionToolsButton
         ]);
+        _startDirectActionsPanel = connectionActions;
         connection.Controls.Add(
             connectionActions,
             0,
             4);
 
-        connection.Controls.Add(
-            new Label
+        var directConnectionHint = new Label
             {
+                Name = "HomeConnectionDirectHint",
+                Visible = false,
                 Text =
-                    "Sign in with your Windows account or choose another AD account. Advanced connection settings are under Connection tools.",
+                    "Direct AD actions and account selection are optional. Connect / Change opens the normal connection wizard.",
                 AutoSize =
                     true,
                 MaximumSize =
@@ -651,9 +879,9 @@ public sealed partial class MainForm
                         UiStyle.ControlGap,
                         0,
                         0)
-            },
-            0,
-            5);
+            };
+        _startDirectHint = directConnectionHint;
+        connection.Controls.Add(directConnectionHint, 0, 5);
 
         UiStyle.ConfigureStatusLabel(
             _startSetupStatus);
@@ -1075,6 +1303,14 @@ public sealed partial class MainForm
             _secretLifetimeStatus);
         secretLifetime.Controls.Add(
             _clearSecretNow);
+        _homeRecoveryStepsButton.Name = "HomeRecoverySteps";
+        _homeRecoveryStepsButton.Text = "Recovery Steps";
+        _homeRecoveryStepsButton.AccessibleName =
+            "Review selected computer recovery steps without revealing secrets";
+        _homeRecoveryStepsButton.Enabled = false;
+        UiStyle.ConfigureActionButton(_homeRecoveryStepsButton);
+        _homeRecoveryStepsButton.Click += (_, _) => ShowRecoveryWorkflowSteps();
+        secretLifetime.Controls.Add(_homeRecoveryStepsButton);
         _homeSelectionPanel.Controls.Add(
             secretLifetime,
             0,
@@ -1169,6 +1405,7 @@ public sealed partial class MainForm
                     return;
 
                 RememberComputerQuery(_homeQuery.Text);
+                InvalidateHomeSelectionOnQueryEdit();
                 QueueHomeSearch();
             };
 
@@ -1832,6 +2069,7 @@ public sealed partial class MainForm
             new RowStyle(
                 SizeType.AutoSize));
 
+        _startKey.Name = "BitLockerRecoverySecretField";
         _startKey.Dock =
             DockStyle.Top;
         _startKey.ReadOnly = true;
@@ -2088,11 +2326,14 @@ public sealed partial class MainForm
 
     private TabPage BuildDevicesWorkspaceTab()
     {
-        var tab = new TabPage("Devices");
+        var tab = new TabPage("Devices") { Name = "DevicesWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
 
         nested.TabPages.Add(BuildDeviceSearchPage());
 
@@ -2145,6 +2386,8 @@ public sealed partial class MainForm
             Margin = new Padding(0, 7, 10, 0)
         }, 0, 0);
 
+        _unifiedQuery.Name = "UnifiedDeviceSearchQuery";
+        _unifiedQuery.AccessibleName = "Search device metadata across AD, Entra and Intune";
         _unifiedQuery.Dock = DockStyle.Fill;
         _unifiedQuery.Font = UiStyle.CreateBodyFont(10.5F);
         search.Controls.Add(_unifiedQuery, 1, 0);
@@ -2289,6 +2532,7 @@ public sealed partial class MainForm
                     4)
         }, 0, 1);
 
+        _deviceRecoveryKey.Name = "EntraBitLockerSecretField";
         _deviceRecoveryKey.Dock =
             DockStyle.Top;
         _deviceRecoveryKey.ReadOnly = true;
@@ -2404,11 +2648,14 @@ public sealed partial class MainForm
 
     private TabPage BuildAdministrationWorkspaceTab()
     {
-        var tab = new TabPage("Settings");
+        var tab = new TabPage("Settings") { Name = "SettingsWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
 
         // Everyday settings are immediately visible; enterprise features live
         // under a single explicit group instead of competing at the top level.
@@ -2425,6 +2672,7 @@ public sealed partial class MainForm
             Name = "EnterpriseSettingsSections",
             Dock = DockStyle.Fill
         };
+        enterpriseSections.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
         enterpriseSections.TabPages.Add(BuildSecuritySettingsResponsiveTab());
         enterpriseSections.TabPages.Add(BuildExportAutomationResponsiveTab());
         enterprise.Controls.Add(enterpriseSections);
@@ -2436,11 +2684,14 @@ public sealed partial class MainForm
 
     private TabPage BuildHealthAuditWorkspaceTab()
     {
-        var tab = new TabPage("Diagnostics");
+        var tab = new TabPage("Diagnostics") { Name = "DiagnosticsWorkspace" };
         var nested = new TabControl
         {
             Dock = DockStyle.Fill
         };
+        // Selection can activate a page created at WinForms' 200x100
+        // placeholder size. Coalesce its reflow with ordinary WM_SIZE.
+        nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow();
 
         nested.TabPages.Add(BuildDiagnosticToolsPage());
         nested.TabPages.Add(BuildAccessHealthResponsiveTab());
@@ -2464,7 +2715,7 @@ public sealed partial class MainForm
             AutoScroll = true,
             Padding = new Padding(18),
             ColumnCount = 2,
-            RowCount = 13
+            RowCount = 11
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -2481,27 +2732,24 @@ public sealed partial class MainForm
 
         AddCloudAdminRow(root, 1, "Tenant ID / domain:", _cloudTenant);
         AddCloudAdminRow(root, 2, "Client ID:", _cloudClient);
-        AddCloudAdminRow(root, 3, "Username:", _cloudUsername);
-        AddCloudAdminRow(root, 4, "Password:", _cloudPassword);
-        _cloudPassword.UseSystemPasswordChar = true;
-        AddCloudAdminRow(root, 5, "Certificate thumbprint:", _cloudThumbprint);
+        AddCloudAdminRow(root, 3, "Certificate thumbprint:", _cloudThumbprint);
 
         _cloudAuthMode.DropDownStyle = ComboBoxStyle.DropDownList;
         _cloudAuthMode.Items.AddRange([
             "Device Code (MFA / Conditional Access)",
-            "DEPRECATED — Username + Password (ROPC, no MFA)",
             "App registration + certificate"
         ]);
-        AddCloudAdminRow(root, 6, "Authentication:", _cloudAuthMode);
+        _cloudAuthMode.Name = "CloudAuthenticationMode";
+        AddCloudAdminRow(root, 4, "Authentication:", _cloudAuthMode);
 
         _cloudLapsPermissions.Text = "Include LAPS read permissions in setup";
         _cloudLapsPermissions.AutoSize = true;
-        root.Controls.Add(_cloudLapsPermissions, 1, 7);
+        root.Controls.Add(_cloudLapsPermissions, 1, 5);
 
         _cloudRotationPermissions.Name = "CloudEnableRotationPermission";
         _cloudRotationPermissions.Text = "Allow Intune BitLocker rotation (write permission, optional)";
         _cloudRotationPermissions.AutoSize = true;
-        root.Controls.Add(_cloudRotationPermissions, 1, 8);
+        root.Controls.Add(_cloudRotationPermissions, 1, 6);
 
         var buttons = new FlowLayoutPanel
         {
@@ -2549,7 +2797,7 @@ public sealed partial class MainForm
             _cloudRolloverButton
         ]);
 
-        root.Controls.Add(buttons, 1, 9);
+        root.Controls.Add(buttons, 1, 7);
 
         UiStyle.ConfigureStatusLabel(
             _cloudStatus);
@@ -2557,7 +2805,7 @@ public sealed partial class MainForm
             "Microsoft Graph status";
         _cloudStatus.MaximumSize =
             new Size(900, 0);
-        root.Controls.Add(_cloudStatus, 1, 10);
+        root.Controls.Add(_cloudStatus, 1, 8);
 
         _cloudProgress.Name =
             "CloudConnectionProgress";
@@ -2580,12 +2828,12 @@ public sealed partial class MainForm
         root.Controls.Add(
             _cloudProgress,
             1,
-            11);
+            9);
 
         root.Controls.Add(
             _cloudDiagnostics,
             1,
-            12);
+            10);
 
         _cloudWizardButton.Click += async (_, _) => await OpenIntuneSetupWizardAsync();
         _cloudSaveButton.Click += (_, _) => SaveCloudFields();

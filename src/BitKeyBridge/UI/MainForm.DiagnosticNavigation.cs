@@ -14,6 +14,7 @@ public sealed partial class MainForm
         };
 
         var workspace = CreateVerticalWorkspace();
+        workspace.Name = "DiagnosticToolsWorkspace";
         page.Controls.Add(workspace);
         workspace.Controls.Add(CreateSectionTitle(
             "Connection and recovery diagnostics",
@@ -22,6 +23,7 @@ public sealed partial class MainForm
             "No secret is retrieved by opening a diagnostic tool."));
 
         var buttons = CreateActionFlow();
+        buttons.Name = "DiagnosticToolsActions";
 
         var environment = NewActionButton("Environment Check...");
         environment.Name = "RunEnvironmentCheckButton";
@@ -83,12 +85,22 @@ public sealed partial class MainForm
             }
         };
 
+        var uiPerformance = NewActionButton("UI Performance...");
+        uiPerformance.Name = "RunUiPerformanceDiagnosticsButton";
+        uiPerformance.AccessibleName =
+            "Show in-memory layout timings without computer identities or secrets";
+        uiPerformance.Click += (_, _) =>
+            ShowAppMessage("UI performance (current session)",
+                UiLayoutTelemetry.Report() + Environment.NewLine +
+                Environment.NewLine + UiTabNavigationTelemetry.Report());
+
         buttons.Controls.AddRange([
             environment,
             advanced,
             bitLocker,
             laps,
-            protectedAudit
+            protectedAudit,
+            uiPerformance
         ]);
         workspace.Controls.Add(buttons);
         return page;

@@ -65,6 +65,43 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "legacy cloud password authentication is disabled",
+            () =>
+            {
+                Assert(
+                    CloudAuthenticationPolicy.Normalize("Password") == "DeviceCode" &&
+                    CloudAuthenticationPolicy.Normalize("Certificate") == "Certificate" &&
+                    CloudAuthenticationPolicy.Normalize("DeviceCode") == "DeviceCode" &&
+                    CloudAuthenticationPolicy.Normalize("other") == "DeviceCode",
+                    "Unsupported Graph authentication was not mapped to Device Code.");
+
+                Assert(
+                    typeof(CloudGraphService).GetMethod("AcquirePasswordTokenAsync") is null,
+                    "Password grant is still exposed on CloudGraphService.");
+
+                var oldConfig = JsonSerializer.Deserialize<CloudAuthConfig>(
+                    "{\"AuthMode\":\"Password\",\"Username\":\"legacy-user\"}");
+                if (oldConfig is null)
+                    throw new InvalidOperationException("Legacy cloud JSON failed to load.");
+                oldConfig.AuthMode = CloudAuthenticationPolicy.Normalize(oldConfig.AuthMode);
+                var roundTrip = JsonSerializer.Serialize(oldConfig);
+                Assert(
+                    oldConfig.AuthMode == "DeviceCode" &&
+                    !roundTrip.Contains("\"Username\"", StringComparison.OrdinalIgnoreCase),
+                    "Legacy password auth or username was persisted again.");
+
+                var oldProfile = JsonSerializer.Deserialize<HelpdeskProfile>(
+                    "{\"Name\":\"Legacy\",\"CloudAuthMode\":\"Password\",\"CloudUsername\":\"legacy-user\"}");
+                if (oldProfile is null)
+                    throw new InvalidOperationException("Legacy profile JSON failed to load.");
+                oldProfile.CloudAuthMode = CloudAuthenticationPolicy.Normalize(oldProfile.CloudAuthMode);
+                Assert(
+                    oldProfile.CloudAuthMode == "DeviceCode" &&
+                    !JsonSerializer.Serialize(oldProfile).Contains("\"CloudUsername\"", StringComparison.OrdinalIgnoreCase),
+                    "Legacy Helpdesk profile stored a removed ROPC field.");
+            });
+
+        Check(
             "schema 4 helpdesk prompt migration",
             () =>
             {
@@ -566,6 +603,47 @@ public static class HelpdeskIntegrationSelfTest
                        HelpdeskStatus.ResolveHomeDefaultAction(startRows[0]) ==
                            HomeDefaultAction.Devices,
                     "Start treated Cloud recovery metadata as AD Recovery.");
+            });
+
+        Check(
+            "Start does not hide conflicting cloud identities",
+            () =>
+            {
+                var first = new UnifiedDeviceInfo
+                {
+                    ComputerName = "SHARED-PC",
+                    IdentityKey = "INTUNE:MANAGED:duplicate",
+                    FoundInIntune = true,
+                    EntraDeviceId = "entra-device-one"
+                };
+                first.RecoveryIds.Add("recovery-id-one");
+                var second = new UnifiedDeviceInfo
+                {
+                    ComputerName = "SHARED-PC",
+                    IdentityKey = "INTUNE:MANAGED:duplicate",
+                    FoundInIntune = true,
+                    EntraDeviceId = "entra-device-two"
+                };
+                var mapped = HomeCloudSearchMapper.Map([first, second]);
+                Assert(mapped.Count == 2 &&
+                       mapped.All(row =>
+                           row.IdentityAmbiguous &&
+                           row.BitLockerLookupFailed &&
+                           !RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(row)),
+                    "Duplicate source ID was collapsed or enabled guided recovery.");
+
+                var unknown = HomeCloudSearchMapper.Map(
+                    [new UnifiedDeviceInfo
+                    {
+                        ComputerName = "UNRESOLVED-PC",
+                        IdentityKey = string.Empty,
+                        FoundInIntune = true
+                    }]);
+                Assert(unknown.Count == 1 &&
+                       unknown[0].IdentityAmbiguous &&
+                       !RecoveryWorkflowNavigationPolicy.HasAuthoritativeCloudDeviceId(
+                           unknown[0]),
+                    "Missing cloud source ID was treated as authoritative.");
             });
 
         Check(

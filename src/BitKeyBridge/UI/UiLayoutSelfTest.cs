@@ -67,8 +67,12 @@ public static class UiLayoutSelfTest
         var failures =
             new List<string>();
 
+        VerifyModernAccentAndDynamicTheme(failures);
+
         VerifyStatusGlyphScaling(
             failures);
+
+        VerifyUnchangedStatusDoesNotRepaint(failures);
 
         VerifyWrappingStatusMeasurement(
             failures);
@@ -82,6 +86,9 @@ public static class UiLayoutSelfTest
             failures);
 
         VerifyLapsHelpdeskStates(
+            failures);
+
+        VerifyHebrewIdentityDirection(
             failures);
 
         VerifyStartSourcePolicies(failures);
@@ -195,6 +202,81 @@ public static class UiLayoutSelfTest
         return failures.Count == 0
             ? 0
             : 1;
+    }
+
+    private static void VerifyUnchangedStatusDoesNotRepaint(
+        List<string> failures)
+    {
+        using var status = new UiStatusLabel { Text = "Ready" };
+        UiStyle.ConfigureStatusLabel(status);
+        UiStyle.SetStatus(status, "Ready", UiStatusKind.Success);
+        status.CreateControl();
+
+        var original = status.Image;
+        var invalidations = 0;
+        status.Invalidated += (_, _) => invalidations++;
+
+        // UI polling can repeat identical status updates many times.
+        // There must be no Image replacement or forced repaint.
+        UiStyle.SetStatus(status, "Ready", UiStatusKind.Success);
+        UiStyle.RefreshStatusLabel(status);
+        if (!ReferenceEquals(original, status.Image) ||
+            invalidations != 0)
+        {
+            failures.Add(
+                "Unchanged status text/kind forced a repaint or image replacement.");
+        }
+
+        UiStyle.SetStatus(status, "Disconnected", UiStatusKind.Warning);
+        if (status.Text != "Disconnected" ||
+            status.StatusKind != UiStatusKind.Warning)
+        {
+            failures.Add(
+                "Status optimization suppressed an actual state change.");
+        }
+    }
+
+    private static void VerifyModernAccentAndDynamicTheme(List<string> failures)
+    {
+        if (SystemInformation.HighContrast)
+            return; // Native high contrast colors must always win.
+
+        try
+        {
+            using var host = new Panel();
+            var search = UiStyle.CreateActionButton("Search");
+            search.Name = "HomeUnifiedSearchButton";
+            var reveal = UiStyle.CreateActionButton("Reveal Key");
+            reveal.Name = "HomeRevealBitLockerButton";
+            host.Controls.Add(search);
+            host.Controls.Add(reveal);
+
+            UiModernTheme.Apply(host);
+            if (!UiModernTheme.IsPrimaryAction(search) ||
+                UiModernTheme.IsPrimaryAction(reveal) ||
+                search.BackColor != UiStyle.ModernAccent ||
+                search.ForeColor != Color.White ||
+                reveal.BackColor != UiStyle.ModernSurface)
+            {
+                failures.Add("Modern accent incorrectly styled a recovery-secret action " +
+                    "or failed to distinguish the main Search action.");
+            }
+
+            // An idempotent second application must preserve already-themed
+            // controls, while ControlAdded styles dynamic buttons.
+            UiModernTheme.Apply(host);
+            var retry = UiStyle.CreateActionButton("Retry check");
+            retry.Name = "UpdateCenterRetryCheckButton";
+            host.Controls.Add(retry);
+            if (retry.BackColor != UiStyle.ModernAccent ||
+                search.BackColor != UiStyle.ModernAccent)
+                failures.Add("Theme failed to style dynamically added primary controls.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Modern theme actions: " + ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private static IReadOnlyList<(
@@ -318,6 +400,55 @@ public static class UiLayoutSelfTest
                         ClientId = Guid.Empty.ToString()
                     })),
             (
+                "Recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig
+                        {
+                            RbacEnabled = true,
+                            RequireRecoveryAccessReference = true,
+                            RequireProtectedAuditForRecovery = true,
+                            AuditBrokerEnabled = true,
+                            RbacRecoveryReaders = ["S-1-5-32-544"]
+                        },
+                        new HomeSearchResult
+                        {
+                            ComputerName = "PC-12345",
+                            AdComputerDistinguishedName = "CN=PC-12345,OU=Clients,DC=example,DC=test",
+                            BitLockerKeyCount = 2,
+                            LatestRecoveryId = Guid.Empty.ToString(),
+                            LapsCandidateFound = true,
+                            LapsStatus = "Detected"
+                        },
+                        adConnected: true,
+                        cloudConnected: false,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }))),
+            (
+                "Hebrew recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig(), new HomeSearchResult
+                        {
+                            ComputerName = "PC-HEBREW", IsCloudRecord = true,
+                            SourceIdentity = "ENTRA:DEVICE:some-device-guid",
+                            BitLockerKeyCount = 1
+                        },
+                        adConnected: false, cloudConnected: true,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
+                    "he")),
+            (
+                "Russian recovery workflow preflight",
+                () => new RecoveryWorkflowDialog(
+                    RecoveryWorkflowReadinessService.Build(
+                        new AppConfig(), new HomeSearchResult
+                        {
+                            ComputerName = "PC-RUS", BitLockerKeyCount = 1,
+                            AdComputerDistinguishedName = "CN=PC-RUS,OU=Clients,DC=example,DC=test"
+                        },
+                        adConnected: true, cloudConnected: false,
+                        new AuthorizationDecision { Allowed = true, Permission = "RecoveryRead" }),
+                    "ru")),
+            (
                 "Recovery access",
                 () =>
                     new RecoveryAccessDialog(
@@ -411,6 +542,206 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    private static void VerifyHebrewIdentityDirection(List<string> failures)
+    {
+        try
+        {
+            using var form = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+            form.PreviewShellLanguageForLayoutTest("he");
+
+            var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
+            if (tabs is null || !tabs.RightToLeftLayout ||
+                tabs.RightToLeft != RightToLeft.Yes ||
+                tabs.DrawMode != TabDrawMode.Normal ||
+                tabs.TabPages.Count < 6 ||
+                tabs.TabPages[0].Text != UiLanguageService.Translate("he", "Start") ||
+                tabs.TabPages[3].Name != "DevicesWorkspace")
+                failures.Add("Hebrew mirrored navigation does not retain source-qualified tab identities.");
+
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensity ||
+                updateDensity.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
+                failures.Add("Hebrew Update Center switch did not localize.");
+            // WinForms originally mirrored the Form itself, recursively
+            // resetting native child windows and sometimes blanking Hebrew
+            // captions after a language switch. Only the tab strip may mirror.
+            if (form.RightToLeftLayout || form.RightToLeft == RightToLeft.Yes)
+                failures.Add("Hebrew language selection must not mirror the MainForm HWND.");
+            if (form.MainMenuStrip?.Items.Find("UiLanguageMenu", false).FirstOrDefault() is
+                not ToolStripMenuItem languageItem ||
+                languageItem.Text != UiLanguageService.Translate("he", "Language") ||
+                !languageItem.AutoSize || languageItem.Padding.Horizontal < 12)
+                failures.Add("Hebrew Language menu was clipped or lost its text layout.");
+            if (tabs is not null && tabs.TabPages.Cast<TabPage>().Any(
+                    page => page.RightToLeft != RightToLeft.No))
+                failures.Add("Main workspace pages must keep child/secret controls LTR.");
+
+            // Runtime-created and duplicate named actions must be translated.
+            // They are deliberately added after the first Hebrew pass to catch
+            // the old one-time control tree snapshot regression.
+            var dynamicCaptionsPanel = new FlowLayoutPanel
+            {
+                Name = "LateLocalizedActionsFixture",
+                AutoSize = true
+            };
+            tabs?.TabPages[0].Controls.Add(dynamicCaptionsPanel);
+            using var lateAction1 = UiStyle.CreateActionButton("Untranslated late button");
+            lateAction1.Name = "HomeRecoverySteps";
+            using var lateAction2 = UiStyle.CreateActionButton("Another untranslated button");
+            lateAction2.Name = "HomeRecoverySteps";
+            dynamicCaptionsPanel.Controls.Add(lateAction1);
+            dynamicCaptionsPanel.Controls.Add(lateAction2);
+            if (lateAction1.Text != UiLanguageService.Translate("he", "MainRecoverySteps") ||
+                lateAction2.Text != UiLanguageService.Translate("he", "MainRecoverySteps") ||
+                lateAction1.RightToLeft != RightToLeft.Yes ||
+                lateAction2.RightToLeft != RightToLeft.Yes)
+                failures.Add("Late/duplicate WinForms controls were not translated in active Hebrew UI.");
+            // Legacy UI refreshes may transiently clear Text. Only fixed,
+            // registered captions are repaired; dynamic status is unaffected.
+            lateAction2.Text = string.Empty;
+            if (lateAction2.Text != UiLanguageService.Translate("he", "MainRecoverySteps"))
+                failures.Add("Blank fixed Hebrew caption was not restored.");
+
+
+            var translatedControls = new (string Name, string Key)[]
+            {
+                ("HomeUseWindowsIdentity", "MainWindowsAccount"),
+                ("HomeUseOtherAccount", "MainOtherAdAccount"),
+                ("HomeConnectAdButton", "MainConnectAd"),
+                ("HomeConnectionToolsButton", "MainConnectionTools"),
+                ("HomeRecoverySteps", "MainRecoverySteps"),
+                ("HomeBitLockerDiagnosticLink", "MainViewCommands"),
+                ("HomeLoadLapsHistoryButton", "MainLoadHistory"),
+                ("HelpdeskOpenDeviceWorkspaceButton", "MainOpenDeviceSearch"),
+                ("RunEnvironmentCheckButton", "MainEnvironmentCheck"),
+                ("RunUiPerformanceDiagnosticsButton", "MainUiPerformance")
+            };
+            foreach (var language in new[] { "he", "en", "ru", "he" })
+            {
+                form.PreviewShellLanguageForLayoutTest(language);
+                if (tabs is not null &&
+                    tabs.DrawMode != (language == "he" ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed))
+                    failures.Add("Main tab renderer did not match the active RTL/LTR mode.");
+                foreach (var lateAction in new[] { lateAction1, lateAction2 })
+                {
+                    if (lateAction.Text != UiLanguageService.Translate(language, "MainRecoverySteps") ||
+                        lateAction.RightToLeft != (language == "he" ? RightToLeft.Yes : RightToLeft.No))
+                        failures.Add("Dynamic duplicate caption remained blank, stale or LTR-invalid: " +
+                            language);
+                }
+                foreach (var (name, key) in translatedControls)
+                {
+                    var control = FindByName(form, name);
+                    if (control is null ||
+                        string.IsNullOrWhiteSpace(control.Text) ||
+                        control.Text != UiLanguageService.Translate(language, key))
+                        failures.Add("Language switch left an empty or stale caption: " +
+                            name + " (" + language + ")");
+                }
+                // Verify the actual unnamed title/description/button controls
+                // from the reported Export & Automation screenshot. This was
+                // previously all English except the top-level Settings tab.
+                foreach (var english in new[]
+                {
+                    "Export & Automation", "Recovery Export Storage",
+                    "Export Scopes", "Output root:", "Subdirectory:",
+                    "Save Export Settings", "Secure Output...",
+                    "Remove Selected", "Check All", "Run Export", "Dry Run",
+                    "Override publish guards (row drop / scope change)"
+                })
+                {
+                    var expected = UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, english);
+                    var found = false;
+                    var pending = new Stack<Control>();
+                    pending.Push(form);
+                    while (pending.Count > 0)
+                    {
+                        var current = pending.Pop();
+                        if (string.Equals(current.Text, expected,
+                                StringComparison.Ordinal))
+                            found = true;
+                        foreach (Control child in current.Controls)
+                            pending.Push(child);
+                    }
+                    if (!found)
+                        failures.Add("Export/admin caption was not translated: " +
+                            english + " (" + language + ")");
+                }
+                // Headers are separate native ListView items, not Controls.
+                var expectedScope = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Scope");
+                var headersFound = false;
+                var listPending = new Stack<Control>();
+                listPending.Push(form);
+                while (listPending.Count > 0)
+                {
+                    var current = listPending.Pop();
+                    if (current is ListView list && list.Columns
+                        .Cast<ColumnHeader>().Any(h => h.Text == expectedScope))
+                        headersFound = true;
+                    foreach (Control child in current.Controls)
+                        listPending.Push(child);
+                }
+                if (!headersFound)
+                    failures.Add("Export scope ListView headers were not localized: " +
+                        language);
+
+                if (tabs is not null &&
+                    tabs.TabPages.Cast<TabPage>().Any(
+                        page => string.IsNullOrWhiteSpace(page.Text)))
+                    failures.Add("Language switch left an empty main workspace tab.");
+            }
+
+            // Disposed buttons must never remain in the active caption cache.
+            // Replacing a control on a live page must pick up Hebrew instantly.
+            dynamicCaptionsPanel.Controls.Remove(lateAction1);
+            lateAction1.Dispose();
+            using var replacementAction = UiStyle.CreateActionButton("Replacement action");
+            replacementAction.Name = "HomeRecoverySteps";
+            dynamicCaptionsPanel.Controls.Add(replacementAction);
+            if (replacementAction.Text != UiLanguageService.Translate("he", "MainRecoverySteps"))
+                failures.Add("Recreated action lost active Hebrew localization.");
+            form.PreviewShellLanguageForLayoutTest("ru");
+            if (replacementAction.Text != UiLanguageService.Translate("ru", "MainRecoverySteps"))
+                failures.Add("Recreated action did not follow subsequent language switches.");
+            form.PreviewShellLanguageForLayoutTest("he");
+
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensityFinal ||
+                updateDensityFinal.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
+                failures.Add("Hebrew Update Center switch lost its caption after repeated switching.");
+
+            form.PreviewShellLanguageForLayoutTest("ru");
+            if (FindByName(form, "UpdateCenterCompact") is not CheckBox russianDensity ||
+                russianDensity.Text != UiLanguageService.Translate("ru", "UpdateCenterCompact"))
+                failures.Add("Russian Update Center switch did not localize.");
+            form.PreviewShellLanguageForLayoutTest("he");
+
+            foreach (var name in new[]
+            {
+                "HomeUnifiedQuery", "BitLockerSearchQuery",
+                "LapsLiveSearchQuery", "UnifiedDeviceSearchQuery",
+                "BitLockerRecoverySecretField", "LapsPasswordValue",
+                "EntraBitLockerSecretField"
+            })
+            {
+                if (FindByName(form, name) is not TextBox literal ||
+                    literal.RightToLeft != RightToLeft.No)
+                    failures.Add("Hebrew shell changed identity or secret field direction: " + name);
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Hebrew main shell orientation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 
@@ -650,7 +981,21 @@ public static class UiLayoutSelfTest
             }
 
             VerifyMainViewportFill(main, formName, scenario, failures);
+            VerifyNestedWorkspaceViewport(main, formName, scenario, failures);
             VerifyMainFormTabs(form, formName, scenario, failures);
+            var healthResults = FindByName(main, "AccessHealthResults") as ListView;
+            if (healthResults is not null && !healthResults.ShowItemToolTips)
+                failures.Add($"{formName}/{scenario.Name}: Access Health long diagnostics must have full-text hover access.");
+            var toolsMenu = main.MainMenuStrip?.Items
+                .OfType<ToolStripMenuItem>()
+                .FirstOrDefault(x => x.Text == "Tools");
+            if (toolsMenu is null ||
+                toolsMenu.DropDownItems.Find("RecoveryStepsMenu", false).Length != 1 ||
+                toolsMenu.DropDownItems.Find("AccessHealthMenu", false).Length != 1)
+                failures.Add($"{formName}/{scenario.Name}: global Recovery Steps and Access Health shortcuts must be discoverable from Tools.");
+            if (FindByName(main, "HomeRecoverySteps") is not Button contextSteps ||
+                contextSteps.Enabled)
+                failures.Add($"{formName}/{scenario.Name}: Start Recovery Steps button should exist but remain disabled without a selected device.");
             VerifySelectedHomeRecoveryLayout(main, formName, scenario, failures);
             VerifyHomeStatusGlyphColumn(main, formName, scenario, failures);
         }
@@ -661,6 +1006,17 @@ public static class UiLayoutSelfTest
                 failures.Add(
                     $"{formName}/{scenario.Name}: dialog scrolling is disabled.");
             }
+        }
+        if (form is RecoveryWorkflowDialog)
+        {
+            var expectedCloud = formName.StartsWith("Hebrew", StringComparison.Ordinal);
+            var expectedHebrew = expectedCloud;
+            if (form.RightToLeftLayout != expectedHebrew ||
+                (expectedCloud
+                    ? FindByName(form, "RecoveryRouteDevices") is not Button dev || !dev.Enabled
+                    : FindByName(form, "RecoveryRouteBitLocker") is not Button bit || !bit.Enabled ||
+                      FindByName(form, "RecoveryRouteLaps") is not Button laps || !laps.Enabled))
+                failures.Add($"{formName}/{scenario.Name}: translated recovery guide lacks correct RTL or source-specific metadata navigation.");
         }
         if (form is not MainForm)
         {
@@ -710,6 +1066,179 @@ public static class UiLayoutSelfTest
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: maximized window leaves a small top-left workspace instead of filling the client area.");
+        }
+    }
+
+    /// <summary>
+    /// Recreate the real screenshot failure: leave a selected Dock=Fill child
+    /// at a provisional narrow size even though its outer tab is full width.
+    /// Verify that one production reflow (not test-only normalization) repairs
+    /// Start, BitLocker, LAPS, Helpdesk, Devices, Diagnostics, Settings, and
+    /// every selected nested page at compact and maximized RDP viewport sizes.
+    /// </summary>
+    private static void VerifyNestedWorkspaceViewport(
+        MainForm main,
+        string formName,
+        Scenario scenario,
+        List<string> failures)
+    {
+        if (FindByName(main, "MainWorkspaceTabs") is not TabControl tabs)
+            return;
+
+        var originalSize = main.ClientSize;
+        var originalTab = tabs.SelectedTab;
+        try
+        {
+            var testSizes = new[]
+            {
+                scenario.ClientSize,
+                new Size(
+                    Math.Max(1500, scenario.ClientSize.Width + 240),
+                    Math.Max(900, scenario.ClientSize.Height + 140))
+            };
+
+            foreach (var size in testSizes)
+            {
+                main.ClientSize = size;
+                main.PerformLayout();
+                NormalizeDockFillSizes(main);
+
+                foreach (TabPage page in tabs.TabPages)
+                {
+                    tabs.SelectedTab = page;
+                    Application.DoEvents();
+                    NormalizeDockFillSizes(main);
+                    main.ReflowMainViewport();
+                    VerifySelectedPage(page, page.Text, size.Width);
+                }
+            }
+        }
+        finally
+        {
+            if (originalTab is not null)
+                tabs.SelectedTab = originalTab;
+            main.ClientSize = originalSize;
+            main.ReflowMainViewport();
+        }
+
+        void VerifySelectedPage(TabPage page, string route, int windowWidth)
+        {
+            page.CreateControl();
+            var content = page.Controls.Cast<Control>()
+                .FirstOrDefault(child => child.Dock == DockStyle.Fill);
+
+            if (content is null)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}/{route}: selected page has no full-size workspace.");
+                return;
+            }
+
+            var available = page.ClientSize;
+            if (available.Width < 240 || available.Height < 150)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}/{route}: tab content viewport is too small " +
+                    $"({available.Width}x{available.Height} in {windowWidth}px window).");
+                return;
+            }
+
+            // This deliberately poisons a currently selected, docked child.
+            // A test-side NormalizeDockFillSizes after this point would hide
+            // the defect, so the real MainForm routine must repair it.
+            content.Size = new Size(
+                Math.Min(128, available.Width / 4),
+                Math.Min(86, available.Height / 4));
+            main.ReflowMainViewport();
+
+            if (content.Width < available.Width * 0.80 ||
+                content.Height < available.Height * 0.80)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}/{route}: selected nested content remains " +
+                    $"at {content.Width}x{content.Height} inside " +
+                    $"{available.Width}x{available.Height} tab after ReflowMainViewport.");
+            }
+
+            if (content is FlowLayoutPanel
+                { FlowDirection: FlowDirection.TopDown } flow)
+            {
+                flow.PerformLayout();
+                var rightLimit = flow.ClientSize.Width - flow.Padding.Right + 3;
+                var minimumSectionWidth = Math.Max(
+                    0, flow.ClientSize.Width - flow.Padding.Horizontal -
+                    SystemInformation.VerticalScrollBarWidth - 4);
+
+                foreach (Control child in flow.Controls)
+                {
+                    if (child is not TableLayoutPanel { AutoSize: true } &&
+                        child is not FlowLayoutPanel { AutoSize: true })
+                        continue;
+
+                    if (minimumSectionWidth > 100 &&
+                        child.Width < minimumSectionWidth * 0.78)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}/{route}: AutoSize section " +
+                            $"'{ControlName(child)}' remained narrow " +
+                            $"({child.Width} of {minimumSectionWidth}px).");
+                    }
+                    if (child.Right > rightLimit)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}/{route}: AutoSize section " +
+                            $"'{ControlName(child)}' is horizontally clipped " +
+                            $"(Right={child.Right}, Limit={rightLimit}).");
+                    }
+                }
+
+                if (page.Name == "DiagnosticToolsTab")
+                {
+                    if (FindByName(page, "DiagnosticToolsActions")
+                        is not FlowLayoutPanel actions ||
+                        actions.Controls.OfType<Button>().Count() != 6 ||
+                        FindByName(page, "RunUiPerformanceDiagnosticsButton")
+                            is not Button)
+                    {
+                        failures.Add(
+                            $"{formName}/{scenario.Name}: Diagnostics > Tools actions are missing.");
+                    }
+                    else
+                    {
+                        foreach (var button in actions.Controls.OfType<Button>())
+                        {
+                            if (button.Right > actions.ClientSize.Width + 3 ||
+                                button.Bottom > actions.ClientSize.Height + 3)
+                            {
+                                failures.Add(
+                                    $"{formName}/{scenario.Name}: Diagnostics > Tools " +
+                                    $"button '{button.Text}' is clipped at {windowWidth}px.");
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (content is not TabControl nested)
+                return;
+
+            var originalNestedTab = nested.SelectedTab;
+            try
+            {
+                foreach (TabPage child in nested.TabPages)
+                {
+                    nested.SelectedTab = child;
+                    Application.DoEvents();
+                    NormalizeDockFillSizes(main);
+                    main.ReflowMainViewport();
+                    VerifySelectedPage(child, route + " > " + child.Text, windowWidth);
+                }
+            }
+            finally
+            {
+                if (originalNestedTab is not null)
+                    nested.SelectedTab = originalNestedTab;
+            }
         }
     }
 
@@ -871,6 +1400,36 @@ public static class UiLayoutSelfTest
                 }
             }
 
+            // Check reset while a real grid row is selected. Reordering
+            // its surrounding hosts must preserve the exact result object.
+            main.PreviewResetVisualLayoutForUiSelfTest();
+            main.ReflowMainViewport();
+            if (grid.SelectedRows.Count != 1 ||
+                !ReferenceEquals(grid.SelectedRows[0].Tag, computer))
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: visual reset lost the exact selected device metadata.");
+            }
+            // Validate actual WinForms grid coordinates, not only the
+            // persisted pane-order string. It must work both in 3 columns
+            // and in the vertically stacked compact/RDP layout.
+            var resetCells = new[]
+            {
+                cards.GetPositionFromControl(bitLocker),
+                cards.GetPositionFromControl(laps),
+                cards.GetPositionFromControl(computers)
+            };
+            var resetLayoutCorrect = expectedThree
+                ? resetCells.Select(x => x.Column).SequenceEqual([0, 1, 2]) &&
+                  resetCells.All(x => x.Row == 0)
+                : resetCells.Select(x => x.Row).SequenceEqual([0, 1, 2]) &&
+                  resetCells.All(x => x.Column == 0);
+            if (!resetLayoutCorrect)
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: visual reset left overlapping or incorrectly ordered WinForms panes.");
+            }
+
             if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
                 FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true } ||
                 FindByName(cards, "HomeLoadLapsHistoryButton") is Button { Enabled: true })
@@ -953,6 +1512,93 @@ public static class UiLayoutSelfTest
             failures.Add("Start connection source must isolate AD from cloud-only searches.");
         }
 
+        // Source persistence is per-user and opt-in. Existing saved
+        // preferences from earlier builds must still show the chooser.
+        failures.AddRange(StartConnectionPolicy.RunOfflineTests());
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.ActiveDirectory))
+        {
+            if (wizard.Controls.Find("StartupRememberLastConnection", true)
+                is not [CheckBox { Checked: false, Enabled: true }])
+            {
+                failures.Add("Remembered startup connection must be unchecked by default.");
+            }
+        }
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.Both, rememberLastConnection: true))
+        {
+            if (!wizard.RememberLastConnectionOnStart ||
+                wizard.Controls.Find("StartupRememberLastConnection", true)
+                    is not [CheckBox { Checked: true, Enabled: true }])
+            {
+                failures.Add("Remember-last startup selection was not restored in the wizard.");
+            }
+        }
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.Choose, rememberLastConnection: true))
+        {
+            if (wizard.RememberLastConnectionOnStart ||
+                wizard.Controls.Find("StartupRememberLastConnection", true)
+                    is not [CheckBox { Checked: false, Enabled: false }])
+            {
+                failures.Add("Offline Start must disable remembered automatic connection.");
+            }
+            if (wizard.Controls.Find("StartupConnectionConfirm", true)
+                    is not [Button { Text: "Open Start" }] ||
+                wizard.Controls.Find("StartupConnectionSkip", true)
+                    is not [Button { Text: "Cancel" }])
+            {
+                failures.Add("Offline Start must be a separate explicit action from Cancel.");
+            }
+        }
+
+        // Cloud setup is allowed without a pre-existing tenant/app registration:
+        // it opens the existing administrator-only setup wizard. No token,
+        // Graph consent or credential is ever created by changing radio modes.
+        using (var cloud = new CloudConnectionWizardDialog(new CloudAuthConfig()))
+        {
+            var approved = cloud.Controls.Find("CloudWizardExistingApp", true)
+                .OfType<RadioButton>().FirstOrDefault();
+            var admin = cloud.Controls.Find("CloudWizardAdministratorSetup", true)
+                .OfType<RadioButton>().FirstOrDefault();
+            var tenant = cloud.Controls.Find("CloudWizardTenant", true)
+                .OfType<TextBox>().FirstOrDefault();
+            var client = cloud.Controls.Find("CloudWizardClient", true)
+                .OfType<TextBox>().FirstOrDefault();
+            if (approved is null || admin is null || tenant is null || client is null ||
+                cloud.Controls.Find("CloudWizardPermissionsToggle", true)
+                    is not [Button] ||
+                cloud.Controls.Find("CloudWizardPermissions", true)
+                    is not [Label])
+            {
+                failures.Add("Cloud wizard must retain all sources and expandable delegated-permissions guidance.");
+            }
+            else
+            {
+                admin.Checked = true;
+                if (tenant.Enabled || client.Enabled || !cloud.RequestAdministrativeSetup)
+                    failures.Add("Admin setup must not require existing tenant or client IDs.");
+                approved.Checked = true;
+                if (!tenant.Enabled || !client.Enabled || cloud.RequestAdministrativeSetup)
+                    failures.Add("Existing-app sign-in must expose its tenant and client ID controls.");
+            }
+        }
+
+        using (var wizard = new StartupConnectionWizardDialog(
+            StartConnectionPolicy.ActiveDirectory,
+            rememberLastConnection: true, automaticConnectionsAllowed: false))
+        {
+            if (wizard.RememberLastConnectionOnStart ||
+                wizard.Controls.Find("StartupRememberLastConnection", true)
+                    is not [CheckBox { Checked: false, Enabled: false }])
+            {
+                failures.Add("Machine configuration must disable automatic reconnection.");
+            }
+        }
+
         // Detect wrong passwords using error codes (not only English text).
         // Network outages and unrelated LDAP errors must not trigger
         // an automatic credential prompt.
@@ -1017,6 +1663,10 @@ public static class UiLayoutSelfTest
         if (!form.KeyPreview)
             failures.Add($"{formName}/{scenario.Name}: Ctrl+1..7 global keyboard tab navigation requires KeyPreview.");
 
+        if (!form.KeyPreview)
+            failures.Add(
+                $"{formName}/{scenario.Name}: keyboard shortcuts require MainForm.KeyPreview.");
+
         var preferredOrder = new[]
         {
             "Start", "BitLocker", "LAPS", "Devices", "Helpdesk", "Diagnostics"
@@ -1034,6 +1684,33 @@ public static class UiLayoutSelfTest
                     $"{formName}/{scenario.Name}: scheduled updater is missing " +
                     requiredBackgroundUpdaterControl);
         }
+        // Every responsive size/DPI scenario must expose the Update Center
+        // without creating a task, clearing a rollback hold or installing.
+        foreach (var name in new[]
+                 {
+                     "UpdateCenterV2", "UpdateCenterSummary",
+                     "UpdateCenterTaskDetails", "UpdateCenterRefreshButton",
+                     "UpdateCenterRetryCheckButton", "UpdateCenterPauseButton",
+                     "UpdateCenterEnableButton", "UpdateCenterCompact"
+                 })
+        {
+            if (FindByName(form, name) is null)
+                failures.Add(
+                    $"{formName}/{scenario.Name}: Update Center control missing: " + name);
+        }
+        if (tabs.TabPages.Count > 3 &&
+            tabs.TabPages[3].Name != "DevicesWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant Devices workspace ID missing; localization must not break navigation.");
+        if (tabs.TabPages.Count > 5 &&
+            tabs.TabPages[5].Name != "DiagnosticsWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant Diagnostics workspace ID missing.");
+        if (tabs.TabPages.Count > 6 &&
+            tabs.TabPages[6].Name != "SettingsWorkspace")
+            failures.Add(
+                $"{formName}/{scenario.Name}: invariant admin Settings workspace ID missing.");
+
         var actualOrder = tabs.TabPages.Cast<TabPage>()
             .Select(page => page.Text).ToArray();
         if (actualOrder.Length < preferredOrder.Length ||
@@ -1045,6 +1722,39 @@ public static class UiLayoutSelfTest
                 string.Join(" / ", actualOrder) +
                 "; required Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics.");
         }
+        if (actualOrder.Length >= 5)
+        {
+            foreach (var (tabIndex, queryName) in new[]
+            {
+                (0, "HomeUnifiedQuery"),
+                (1, "BitLockerSearchQuery"),
+                (2, "LapsLiveSearchQuery"),
+                (3, "UnifiedDeviceSearchQuery")
+            })
+            {
+                if (FindByName(tabs.TabPages[tabIndex], queryName) is not TextBox)
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: Ctrl+F search input {queryName} is missing.");
+            }
+        }
+
+        // The Helpdesk landing tab reuses Start rather than maintaining
+        // a separate query, duplicate BitLocker/LAPS buttons or AD/Graph work.
+        if (tabs.TabPages.Count > 4)
+        {
+            var helpdeskPage = tabs.TabPages[4];
+            if (FindByName(helpdeskPage, "HelpdeskOpenDeviceWorkspaceButton") is not Button ||
+                FindByName(helpdeskPage, "HelpdeskSelectedDeviceSummary") is not UiStatusLabel ||
+                FindByName(helpdeskPage, "HelpdeskRecoveryStepsButton") is not Button ||
+                FindByName(helpdeskPage, "HelpdeskDashboardStatus") is not UiStatusLabel ||
+                FindByName(helpdeskPage, "HelpdeskQuickSearch") is not null ||
+                helpdeskPage.Controls.OfType<FlowLayoutPanel>()
+                    .SelectMany(panel => panel.Controls.OfType<TextBox>()).Any())
+            {
+                failures.Add($"{formName}/{scenario.Name}: Helpdesk must reuse Start search and display selected-device metadata.");
+            }
+        }
+
         if (tabs.TabPages.Count == 0 ||
             !string.Equals(
                 tabs.TabPages[0].Text,
@@ -1065,6 +1775,11 @@ public static class UiLayoutSelfTest
                 {
                     "HomeConnectionSourceChooser",
                     "HomeConnectionSource",
+                    "HomeConnectionPrimaryActions",
+                    "HomeConnectionOptionsToggle",
+                    "HomeConnectionExtraActions",
+                    "HomeConnectionDirectActions",
+                    "HomeConnectionDirectHint",
                     "HomeReconnectWizardButton",
                     "HomeBitLockerPaneHost",
                     "HomeLapsPaneHost",
@@ -1297,6 +2012,112 @@ public static class UiLayoutSelfTest
                 $"{formName}/{scenario.Name}: Updates workspace is missing retry or Authenticode policy controls.");
         }
 
+        // Compact Helpdesk settings still expose the actual policy state
+        // and always retain discoverable controls for profiles and audit.
+        if (FindByName(form, "HelpdeskProfilesToggle") is not Button ||
+            FindByName(form, "HelpdeskProfilesGrid") is not TableLayoutPanel ||
+            FindByName(form, "HelpdeskRecoveryPolicyToggle") is not Button ||
+            FindByName(form, "HelpdeskRecoveryPolicyGrid") is not TableLayoutPanel ||
+            FindByName(form, "HelpdeskRecoveryPolicyOverview")
+                is not UiStatusLabel overview ||
+            !overview.Text.Contains("Saved recovery policy:",
+                StringComparison.Ordinal) ||
+            !overview.Text.Contains("does not grant secret access",
+                StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: compact Settings must display saved audit policy and retain both expandable sections.");
+        }
+
+        // Verify the collapsed policy can be opened reliably even when its
+        // nested Settings TabPage started life at 200x100 (or was hidden
+        // during a DPI/RDP switch). Avoid Control.Visible as a state flag:
+        // WinForms combines it with visibility of all ancestors.
+        if (form is MainForm settingsMain &&
+            FindByName(form, "HelpdeskRecoveryPolicyToggle") is Button policyToggle &&
+            FindByName(form, "HelpdeskRecoveryPolicyGrid") is TableLayoutPanel policyGrid &&
+            tabs.TabPages.Cast<TabPage>().FirstOrDefault(
+                page => page.Name == "SettingsWorkspace") is TabPage settingsTab &&
+            settingsTab.Controls.OfType<TabControl>().FirstOrDefault() is TabControl settingsSections &&
+            settingsSections.TabPages.Cast<TabPage>().FirstOrDefault(
+                page => page.Name == "HelpdeskBasicsTab") is TabPage helpdeskSettings)
+        {
+            var previous = tabs.SelectedTab;
+            var previousSection = settingsSections.SelectedTab;
+            try
+            {
+                tabs.SelectedTab = settingsTab;
+                settingsSections.SelectedTab = helpdeskSettings;
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(true);
+                settingsMain.ReflowMainViewport();
+                if (policyToggle.Text != "Hide recovery access policy")
+                    failures.Add($"{formName}/{scenario.Name}: expanding recovery policy did not update its controls.");
+
+                // Calling Setup & Permissions twice is idempotent rather
+                // than accidentally hiding the policy on its second visit.
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(true);
+                if (policyToggle.Text != "Hide recovery access policy")
+                    failures.Add($"{formName}/{scenario.Name}: repeated Settings navigation collapsed an open policy.");
+
+                if (policyGrid.Parent is FlowLayoutPanel viewport &&
+                    viewport.ClientSize.Width > 600 &&
+                    (policyGrid.Width < viewport.ClientSize.Width / 2 ||
+                     policyGrid.Right > viewport.ClientSize.Width +
+                         SystemInformation.VerticalScrollBarWidth))
+                {
+                    failures.Add($"{formName}/{scenario.Name}: expanded policy was squeezed or clipped by its viewport.");
+                }
+
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(false);
+                if (policyToggle.Text != "Show recovery access policy...")
+                    failures.Add($"{formName}/{scenario.Name}: Settings policy could not be collapsed.");
+            }
+            finally
+            {
+                settingsMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(false);
+                settingsSections.SelectedTab = previousSection;
+                tabs.SelectedTab = previous;
+            }
+        }
+
+        if (FindByName(form, "ResetVisualLayoutButton") is not Button)
+            failures.Add($"{formName}/{scenario.Name}: visual-only layout reset action is missing.");
+
+        if (form is MainForm visualMain)
+        {
+            // Disturb only visual preferences, then verify that a reset
+            // restores defaults without editing source authorization or
+            // saved recovery/audit policies.
+            var securityBefore =
+                visualMain.PreviewNonVisualSettingsForUiSelfTest();
+            visualMain.ExchangeHomePanesForUiSelfTest("BitLocker", "Computers");
+            var compact = FindByName(form, "UpdateCenterCompact") as CheckBox;
+            if (compact is not null)
+                compact.Checked = false;
+            visualMain.PreviewSetConnectionOptionsExpandedForUiTest(true);
+            visualMain.PreviewSetHelpdeskProfilesExpandedForUiTest(true);
+            visualMain.PreviewSetHelpdeskRecoveryPolicyExpandedForUiTest(true);
+            visualMain.PreviewResetVisualLayoutForUiSelfTest();
+            if (visualMain.PreviewHomePaneOrderForUiSelfTest() !=
+                "BitLocker,Laps,Computers")
+                failures.Add($"{formName}/{scenario.Name}: reset did not restore the default three-pane order.");
+            if (compact is not { Checked: true })
+                failures.Add($"{formName}/{scenario.Name}: reset did not restore compact Updates.");
+            if (FindByName(form, "HomeConnectionOptionsToggle") is not Button
+                { Text: "More connection options..." } ||
+                FindByName(form, "HelpdeskProfilesToggle") is not Button
+                { Text: "Show environment profiles..." } ||
+                FindByName(form, "HelpdeskRecoveryPolicyToggle") is not Button
+                { Text: "Show recovery access policy..." })
+            {
+                failures.Add($"{formName}/{scenario.Name}: visual reset did not collapse optional Connection and Settings sections.");
+            }
+            if (securityBefore !=
+                visualMain.PreviewNonVisualSettingsForUiSelfTest())
+                failures.Add($"{formName}/{scenario.Name}: visual reset changed authentication source or recovery policy.");
+            // No second swap: that would silently undo the visual reset.
+        }
+
         if (FindByName(
                 form,
                 "HelpdeskBasicsTab") is null)
@@ -1318,7 +2139,8 @@ public static class UiLayoutSelfTest
             FindByName(form, "RunEnvironmentCheckButton") is null ||
             FindByName(form, "RunAdvancedDeviceDiagnosticsButton") is null ||
             FindByName(form, "RunBitLockerCommandsButton") is null ||
-            FindByName(form, "RunLapsCommandsButton") is null)
+            FindByName(form, "RunLapsCommandsButton") is null ||
+            FindByName(form, "RunUiPerformanceDiagnosticsButton") is null)
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Diagnostics must provide Access Health and the existing recovery runbooks.");
@@ -1444,6 +2266,7 @@ public static class UiLayoutSelfTest
             checkRecoveryConnection: true);
 
         VerifyComputerQueryNavigation(
+            (MainForm)form,
             tabs,
             formName,
             scenario,
@@ -1451,6 +2274,7 @@ public static class UiLayoutSelfTest
     }
 
     private static void VerifyComputerQueryNavigation(
+        MainForm main,
         TabControl tabs,
         string formName,
         Scenario scenario,
@@ -1462,6 +2286,8 @@ public static class UiLayoutSelfTest
             .FirstOrDefault(page => page.Name == "RecoveryWorkspace");
         var laps = tabs.TabPages.Cast<TabPage>()
             .FirstOrDefault(page => page.Name == "LapsWorkspace");
+        var helpdesk = tabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "HelpdeskDashboardTab");
 
         var homeQuery = start is null
             ? null : FindByName(start, "HomeUnifiedQuery") as TextBox;
@@ -1470,7 +2296,7 @@ public static class UiLayoutSelfTest
         var lapsQuery = laps is null
             ? null : FindByName(laps, "LapsLiveSearchQuery") as TextBox;
 
-        if (start is null || recovery is null || laps is null ||
+        if (start is null || recovery is null || laps is null || helpdesk is null ||
             homeQuery is null || recoveryQuery is null || lapsQuery is null)
         {
             failures.Add(
@@ -1512,7 +2338,7 @@ public static class UiLayoutSelfTest
             if (results is not null)
             {
                 var index = results.Rows.Add(
-                    "PC-SELECTED", "AD", "Available", null, "Detected", null);
+                    "PC-SELECTED", "AD", "Available", DBNull.Value, "Detected", DBNull.Value);
                 results.Rows[index].Tag = new HomeSearchResult
                 {
                     ComputerName = "PC-SELECTED",
@@ -1523,13 +2349,88 @@ public static class UiLayoutSelfTest
                 results.ClearSelection();
                 results.Rows[index].Selected = true;
                 results.CurrentCell = results.Rows[index].Cells[0];
+                tabs.SelectedTab = helpdesk;
+                var selectedSummary = FindByName(
+                    helpdesk, "HelpdeskSelectedDeviceSummary") as UiStatusLabel;
+                if (selectedSummary is null ||
+                    !selectedSummary.Text.Contains("PC-SELECTED",
+                        StringComparison.Ordinal))
+                {
+                    failures.Add($"{formName}/{scenario.Name}: Helpdesk must show the exact selected Start metadata without a second search.");
+                }
+
+                main.PreviewHelpdeskDeviceWorkspaceForUiSelfTest();
+                if (!ReferenceEquals(tabs.SelectedTab, start) ||
+                    results.SelectedRows.Count != 1 ||
+                    results.SelectedRows[0].Tag is not HomeSearchResult selected ||
+                    selected.ComputerName != "PC-SELECTED")
+                {
+                    failures.Add($"{formName}/{scenario.Name}: returning from Helpdesk lost the source-qualified Start selection.");
+                }
+
+                // The same selected row can become ambiguous when the
+                // metadata result includes another AD object with this name.
+                // Helpdesk must never imply it can authorize recovery by name.
+                if (results.Rows[index].Tag is HomeSearchResult tested)
+                {
+                    tested.IdentityAmbiguous = true;
+                    tabs.SelectedTab = helpdesk;
+                    if (selectedSummary is null ||
+                        selectedSummary.StatusKind != UiStatusKind.Warning ||
+                        !selectedSummary.Text.Contains("ambiguous",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        failures.Add($"{formName}/{scenario.Name}: ambiguous AD device must be clearly unverified in Helpdesk.");
+                    }
+
+                    // Likewise, a cloud result lacking its source-qualified
+                    // Entra identity must not be displayed as verified.
+                    tested.IdentityAmbiguous = false;
+                    tested.IsCloudRecord = true;
+                    tested.SourceIdentity = string.Empty;
+                    tabs.SelectedTab = start;
+                    tabs.SelectedTab = helpdesk;
+                    if (selectedSummary is null ||
+                        selectedSummary.StatusKind != UiStatusKind.Warning ||
+                        !selectedSummary.Text.Contains("unverified",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        failures.Add($"{formName}/{scenario.Name}: cloud device without an exact identity must remain unverified in Helpdesk.");
+                    }
+
+                    // Restore normal AD metadata before the existing
+                    // BitLocker/LAPS query navigation regression.
+                    tested.IsCloudRecord = false;
+                    tabs.SelectedTab = start;
+                }
+
                 tabs.SelectedTab = recovery;
                 if (recoveryQuery.Text != "PC-SELECTED")
                     failures.Add($"{formName}/{scenario.Name}: selected Start computer was not retained.");
+
+                // A *new* query must invalidate the selected old device
+                // immediately, even before the debounce or a network call.
+                tabs.SelectedTab = start;
+                homeQuery.Text = "PC-NEW-DEVICE";
+                if (results.Rows.Count != 0 ||
+                    (selectedSummary is not null &&
+                     selectedSummary.Text.Contains("PC-SELECTED",
+                         StringComparison.Ordinal)))
+                {
+                    failures.Add($"{formName}/{scenario.Name}: editing Start search retained stale device metadata or Helpdesk selection.");
+                }
             }
         }
         finally
         {
+            // The synthetic result was added only to check navigation.
+            // Clear its selection before the next assertion checks that
+            // Recovery Steps starts disabled without a selected computer.
+            // Otherwise the test itself leaves a false-positive enabled
+            // action behind, even though production navigation is correct.
+            var testGrid = FindByName(start, "HomeUnifiedSearchResults") as DataGridView;
+            testGrid?.Rows.Clear();
+            homeQuery.Clear();
             tabs.SelectedTab = initialTab;
         }
     }

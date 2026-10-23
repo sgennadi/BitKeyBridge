@@ -25,7 +25,7 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
         Text = "Connect to Microsoft Entra / Intune";
         StartPosition = FormStartPosition.CenterParent;
         ShowInTaskbar = false;
-        ClientSize = new Size(790, 545);
+        ClientSize = new Size(750, 520);
         MinimumSize = new Size(650, 480);
         AutoScroll = true;
 
@@ -35,11 +35,11 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
             AutoScroll = true,
             Padding = new Padding(UiStyle.PagePadding),
             ColumnCount = 1,
-            RowCount = 7,
+            RowCount = 8,
             Margin = Padding.Empty
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 6; i++)
+        for (var i = 0; i < 7; i++)
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -54,10 +54,9 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
 
         var explanation = new Label
         {
-            Text = "Sign in with your ordinary work account using Device Code and MFA. " +
-                "No Windows administrator rights or administrator password are required " +
-                "when your organization has already approved the application and assigned " +
-                "the necessary Graph and device permissions.",
+            Text = "Connect with your work account using Device Code and MFA. " +
+                "An IT-approved application and delegated permissions are required. " +
+                "This does not grant access to recovery secrets.",
             AutoSize = true,
             MaximumSize = new Size(720, 0),
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
@@ -75,11 +74,11 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
             Margin = Padding.Empty
         };
         _approvedApp.Name = "CloudWizardExistingApp";
-        _approvedApp.Text = "Use an existing, IT-approved App Registration (recommended)";
+        _approvedApp.Text = "Use an IT-approved app (recommended)";
         _approvedApp.AutoSize = true;
         _approvedApp.Checked = true;
         _adminSetup.Name = "CloudWizardAdministratorSetup";
-        _adminSetup.Text = "Administrator setup: create/repair an application and grant consent";
+        _adminSetup.Text = "Administrator: configure an app";
         _adminSetup.AutoSize = true;
         options.Controls.Add(_approvedApp);
         options.Controls.Add(_adminSetup);
@@ -124,8 +123,14 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
         ids.Controls.Add(_client, 1, 1);
         root.Controls.Add(ids, 0, 3);
 
+        var showPermissions = UiStyle.CreateActionButton("Show required permissions...");
+        showPermissions.Name = "CloudWizardPermissionsToggle";
+        showPermissions.AccessibleName = "Show delegated Graph scopes and recovery authorization requirements";
+        root.Controls.Add(showPermissions, 0, 4);
+
         _requiredPermissions.Name = "CloudWizardPermissions";
         _requiredPermissions.AutoSize = true;
+        _requiredPermissions.Visible = false;
         _requiredPermissions.MaximumSize = new Size(720, 0);
         _requiredPermissions.Text =
             "The app must have admin-approved delegated Graph permissions. " +
@@ -135,7 +140,18 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
             "Reading secrets also requires appropriate per-user Entra RBAC; " +
             "an approved app alone does not grant password access.";
         UiStyle.ConfigureWrappingLabel(_requiredPermissions);
-        root.Controls.Add(_requiredPermissions, 0, 4);
+        root.Controls.Add(_requiredPermissions, 0, 5);
+        var permissionsExpanded = false;
+        showPermissions.Click += (_, _) =>
+        {
+            // The form may be created but not shown when onboarding is
+            // invoked; Control.Visible alone is not reliable until display.
+            permissionsExpanded = !permissionsExpanded;
+            _requiredPermissions.Visible = permissionsExpanded;
+            showPermissions.Text = permissionsExpanded
+                ? "Hide required permissions" : "Show required permissions...";
+            root.PerformLayout();
+        };
 
         var actions = new FlowLayoutPanel
         {
@@ -148,7 +164,7 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
         _continue.Name = "CloudWizardContinue";
         actions.Controls.Add(_continue);
         actions.Controls.Add(_cancel);
-        root.Controls.Add(actions, 0, 5);
+        root.Controls.Add(actions, 0, 6);
         Controls.Add(root);
 
         _approvedApp.CheckedChanged += (_, _) => UpdateMode();
@@ -162,6 +178,7 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
     private void UpdateMode()
     {
         _client.Enabled = _approvedApp.Checked;
+        _tenant.Enabled = _approvedApp.Checked;
         _continue.Text = _adminSetup.Checked
             ? "Open administrator wizard"
             : "Save and sign in";
@@ -169,6 +186,15 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
 
     private void Confirm()
     {
+        // The administrator setup wizard collects its own tenant/app data.
+        // Do not demand a pre-existing registration just to open that flow.
+        if (_adminSetup.Checked)
+        {
+            DialogResult = DialogResult.OK;
+            Close();
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(TenantId))
         {
             MessageBox.Show(this, "Enter a tenant ID or verified domain.",

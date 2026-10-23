@@ -8,11 +8,32 @@ Only runs on a disposable GitHub-hosted Windows CI runner.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$CandidateZip,
+    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$')]
+    [string]$ExpectedCandidateVersion,
     [switch]$EphemeralHostedRunner
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Default to exact source Version, not historic 0.30.5, without trusting
+# the candidate EXE for the expected value. An RC may still pin explicitly.
+if (-not $PSBoundParameters.ContainsKey('ExpectedCandidateVersion')) {
+    $projectPath = Join-Path $PSScriptRoot '../../src/BitKeyBridge/BitKeyBridge.csproj'
+    if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
+        throw 'Candidate project file is missing.'
+    }
+    [xml]$project = Get-Content -LiteralPath $projectPath -Raw
+    $nodes = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+    if ($nodes.Count -ne 1) {
+        throw 'Expected exactly one project Version element.'
+    }
+    $ExpectedCandidateVersion = [string]$nodes[0].InnerText.Trim()
+}
+if ($ExpectedCandidateVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
+    throw "Invalid or missing expected version: $ExpectedCandidateVersion"
+}
+Write-Host "Candidate expected version pinned to source: $ExpectedCandidateVersion"
 
 if (-not $EphemeralHostedRunner -or
     $env:GITHUB_ACTIONS -ne 'true' -or
@@ -90,6 +111,42 @@ function Invoke-Apply([string]$Tool, [string]$Stage, [string]$Version,
             throw 'BitKeyBridge apply helper exceeded four-minute test timeout.'
         }
         if ($process.ExitCode -ne 0) {
+            # On an ephemeral CI machine, show only the updater's already
+            # sanitized failure reason and synthetic executable hash state.
+            # Do not dump appsettings, cloud config, DPAPI blobs or raw logs.
+            # Never retry a rejected update here: a trust/policy rejection
+            # must remain a hard regression failure.
+            $historyPath = Join-Path $env:ProgramData 'BitKeyBridge\Updates\update-history.json'
+            try {
+                if (Test-Path -LiteralPath $historyPath) {
+                    $rows = @(Get-Content -LiteralPath $historyPath -Raw | ConvertFrom-Json)
+                    $action = if ($Rollback) { 'Rollback' } else { 'Install' }
+                    $failed = $rows |
+                        Where-Object { $_.Result -eq 'Failed' -and $_.Action -eq $action } |
+                        Sort-Object TimestampUtc -Descending |
+                        Select-Object -First 1
+                    if ($null -ne $failed) {
+                        # The application sanitized Details before writing
+                        # it. Further redact absolute paths and cap output.
+                        $reason = [string]$failed.Details
+                        $reason = $reason -replace '(?i)[A-Z]:\\[^;\s]+', '[PATH]'
+                        $reason = $reason -replace '(?i)(password|token|secret|credential)\s*[:=]\s*[^;\s]+', '$1=[REDACTED]'
+                        if ($reason.Length -gt 350) { $reason = $reason.Substring(0, 350) }
+                        Write-Host ("CI-only sanitized apply failure: {0}" -f $reason)
+                    }
+                    else {
+                        Write-Host 'CI-only apply failure: no matching persisted failure entry.'
+                    }
+                }
+            }
+            catch {
+                Write-Host ("CI-only update failure history unavailable: {0}" -f
+                    $_.Exception.GetType().Name)
+            }
+            $targetPresent = Test-Path -LiteralPath $Target
+            $backupPresent = Test-Path -LiteralPath ($Target + '.bak')
+            Write-Host ("CI-only file state: TargetPresent={0} BackupPresent={1}" -f
+                $targetPresent, $backupPresent)
             throw "Actual BitKeyBridge apply helper failed. Rollback=$Rollback Version=$Version ExitCode=$($process.ExitCode)"
         }
     }
@@ -118,16 +175,31 @@ try {
         throw 'Candidate x64 executable is missing.'
     }
     $candidateVersion = ((& $current --version --no-elevation | Out-String).Trim())
-    if ($LASTEXITCODE -ne 0 -or $candidateVersion -ne '0.30.5') {
-        throw "Expected a v0.30.5 candidate. Received $candidateVersion."
+    if ($LASTEXITCODE -ne 0 -or $candidateVersion -ne $ExpectedCandidateVersion) {
+        throw "Expected candidate $ExpectedCandidateVersion. Received $candidateVersion."
     }
     $currentHash = Hash-Of $current
 
     # Synthetic, non-functional settings and credential ciphertext only.
     # Preserve the bytes AND the NTFS ACL across the executable update.
-    '{"SchemaVersion":5,"UpdateRepository":"sgennadi/BitKeyBridge","RequireTrustedUpdateSignature":false,"TrustedUpdatePublisher":"","AutoInstallUpdatesOnStart":false}' |
+    # Since RC5 now enforces prerelease consent at the final privileged apply
+    # boundary (including MANUAL upgrades), a disposable CI fixture must
+    # explicitly authorize that preview channel. Stable candidates still
+    # test the default stable-only policy. Never relax the production gate.
+    $allowPreviewCandidate = [bool]($ExpectedCandidateVersion -match '-')
+    $testMachineSettings = @{
+        SchemaVersion = 5
+        UpdateRepository = 'sgennadi/BitKeyBridge'
+        RequireTrustedUpdateSignature = $false
+        TrustedUpdatePublisher = ''
+        AutoInstallUpdatesOnStart = $false
+        AllowPrereleaseUpdates = $allowPreviewCandidate
+    }
+    $testMachineSettings | ConvertTo-Json -Depth 5 |
         Set-Content -LiteralPath $machineConfig -Encoding utf8
     $createdMachineConfig = $true
+    Write-Host ('Legacy migration uses explicit prerelease consent={0} on disposable CI only.' -f
+        $allowPreviewCandidate)
     '{"AuthMode":"DeviceCode","TenantId":"synthetic-fixture.invalid"}' |
         Set-Content -LiteralPath $profileConfig -Encoding utf8
     $createdProfileConfig = $true

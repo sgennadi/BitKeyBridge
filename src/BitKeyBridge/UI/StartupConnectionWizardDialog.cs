@@ -1,8 +1,9 @@
 namespace BitKeyBridge;
 
 /// <summary>
-/// Explicit connection choice at every interactive launch. Selecting a source
-/// alone cannot retrieve passwords, grant Graph consent, or elevate a user.
+/// Explicit connection choice on first launch and whenever the operator has
+/// not opted into a remembered source. Choosing one cannot retrieve secrets,
+/// grant Graph consent, persist passwords or elevate a user.
 /// </summary>
 public sealed class StartupConnectionWizardDialog : DpiAwareForm
 {
@@ -11,9 +12,11 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
     private readonly RadioButton _both = new();
     private readonly RadioButton _later = new();
     private readonly CheckBox _otherAdAccount = new();
+    private readonly CheckBox _rememberConnection = new();
+    private readonly bool _automaticConnectionsAllowed;
     private readonly Label _explanation = new();
     private readonly Button _connect = UiStyle.CreateActionButton("Connect");
-    private readonly Button _skip = UiStyle.CreateActionButton("Not now", DialogResult.Cancel);
+    private readonly Button _skip = UiStyle.CreateActionButton("Cancel", DialogResult.Cancel);
 
     public string SelectedSource =>
         _ad.Checked ? StartConnectionPolicy.ActiveDirectory :
@@ -24,14 +27,19 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
     public bool UseOtherAdAccount => _otherAdAccount.Checked &&
         StartConnectionPolicy.NeedsActiveDirectory(SelectedSource);
 
+    public bool RememberLastConnectionOnStart => _rememberConnection.Checked &&
+        SelectedSource != StartConnectionPolicy.Choose;
+
     public StartupConnectionWizardDialog(string? previouslySelectedSource,
-        bool preferOtherAdAccount = false)
+        bool preferOtherAdAccount = false, bool rememberLastConnection = false,
+        bool automaticConnectionsAllowed = true)
     {
+        _automaticConnectionsAllowed = automaticConnectionsAllowed;
         Name = "StartupConnectionWizardDialog";
         Text = "BitKeyBridge - Connect";
         StartPosition = FormStartPosition.CenterParent;
         ShowInTaskbar = false;
-        ClientSize = new Size(780, 560);
+        ClientSize = new Size(750, 520);
         MinimumSize = new Size(610, 460);
 
         var root = new TableLayoutPanel
@@ -41,17 +49,17 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
             AutoScroll = true,
             AutoSize = false,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 7,
             Padding = new Padding(UiStyle.PagePadding)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         var title = new Label
         {
-            Text = "Connect to BitKeyBridge",
+            Text = "Choose a connection",
             Font = UiStyle.CreatePageTitleFont(),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
@@ -60,8 +68,8 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
 
         var caption = new Label
         {
-            Text = "Choose where this session will read device recovery information. " +
-                   "BitLocker and LAPS passwords stay hidden until you explicitly request them.",
+            Text = "Select a source for this session. Recovery passwords remain hidden " +
+                   "until an authorized technician explicitly requests them.",
             AutoSize = true,
             MaximumSize = new Size(720, 0),
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
@@ -81,10 +89,10 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         };
         foreach (var (control, name, captionText) in new[]
         {
-            (_ad, "StartupConnectAD", "Active Directory (on-premises)"),
-            (_cloud, "StartupConnectCloud", "Microsoft Entra / Intune (Microsoft 365)"),
-            (_both, "StartupConnectBoth", "Both: Active Directory + Microsoft 365"),
-            (_later, "StartupConnectLater", "Choose later")
+            (_ad, "StartupConnectAD", "Active Directory"),
+            (_cloud, "StartupConnectCloud", "Microsoft 365 (Entra / Intune)"),
+            (_both, "StartupConnectBoth", "AD + Microsoft 365"),
+            (_later, "StartupConnectLater", "Start without a connection")
         })
         {
             control.Name = name;
@@ -97,17 +105,26 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         root.Controls.Add(options, 0, 2);
 
         _otherAdAccount.Name = "StartupOtherAdAccount";
-        _otherAdAccount.Text = "Use another AD account (request credentials on Connect)";
+        _otherAdAccount.Text = "Use another AD account (ask for credentials)";
         _otherAdAccount.AutoSize = true;
         _otherAdAccount.Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.SectionGap);
         root.Controls.Add(_otherAdAccount, 0, 3);
+
+        _rememberConnection.Name = "StartupRememberLastConnection";
+        _rememberConnection.AccessibleName =
+            "Remember selected connection and reconnect automatically on the next launch";
+        _rememberConnection.Text = "Use this source next time (no passwords stored)";
+        _rememberConnection.AutoSize = true;
+        _rememberConnection.Margin = new Padding(0, 0, 0, UiStyle.SectionGap);
+        root.Controls.Add(_rememberConnection, 0, 4);
+        _rememberConnection.CheckedChanged += (_, _) => UpdateOptions();
 
         _explanation.Name = "StartupConnectionExplanation";
         _explanation.AutoSize = true;
         _explanation.MaximumSize = new Size(710, 0);
         _explanation.Margin = new Padding(0, 0, 0, UiStyle.SectionGap);
         UiStyle.ConfigureWrappingLabel(_explanation);
-        root.Controls.Add(_explanation, 0, 4);
+        root.Controls.Add(_explanation, 0, 5);
 
         var footer = new FlowLayoutPanel
         {
@@ -122,7 +139,7 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         _skip.Name = "StartupConnectionSkip";
         footer.Controls.Add(_connect);
         footer.Controls.Add(_skip);
-        root.Controls.Add(footer, 0, 5);
+        root.Controls.Add(footer, 0, 6);
 
         Controls.Add(root);
         _connect.Click += (_, _) =>
@@ -143,6 +160,8 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         if (preferOtherAdAccount &&
             StartConnectionPolicy.NeedsActiveDirectory(SelectedSource))
             _otherAdAccount.Checked = true;
+        _rememberConnection.Checked = automaticConnectionsAllowed &&
+            rememberLastConnection && SelectedSource != StartConnectionPolicy.Choose;
         UpdateOptions();
     }
 
@@ -153,21 +172,30 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         if (!ad)
             _otherAdAccount.Checked = false;
 
-        _connect.Text = SelectedSource == StartConnectionPolicy.Choose
-            ? "Continue to Start" : "Connect";
+        _rememberConnection.Enabled = _automaticConnectionsAllowed &&
+            SelectedSource != StartConnectionPolicy.Choose;
+        if (!_rememberConnection.Enabled)
+            _rememberConnection.Checked = false;
 
-        _explanation.Text = SelectedSource switch
+        _connect.Text = SelectedSource == StartConnectionPolicy.Choose
+            ? "Open Start" : "Connect";
+
+        var sourceExplanation = SelectedSource switch
         {
             StartConnectionPolicy.ActiveDirectory =>
-                "First try the current Windows account. No Domain Admin membership is needed " +
-                "for sign-in; access to recovery secrets depends on delegated AD permissions.",
+                "Uses the current Windows account by default. Recovery access still requires delegated AD permissions.",
             StartConnectionPolicy.MicrosoftCloud =>
-                "Sign in with your work account using Device Code and MFA. If no approved " +
-                "Microsoft Entra application is configured, the cloud setup wizard opens.",
+                "Uses delegated work-account sign-in and MFA. An approved Entra application is required.",
             StartConnectionPolicy.Both =>
-                "Connect to AD first, then sign in to Microsoft 365. Each source uses its own " +
-                "permissions; cloud application setup may require administrator approval.",
-            _ => "No credentials are requested. You can select a connection source on Start later."
+                "Connects to AD, then Microsoft 365. Each source checks its own permissions.",
+            _ => "Continue offline. Choose and connect a source from Start when ready."
         };
+
+        _explanation.Text = sourceExplanation +
+            (!_automaticConnectionsAllowed
+                ? " Automatic reconnection is disabled by administrator policy."
+                : RememberLastConnectionOnStart
+                ? " Next launch will reuse the selected source, never an AD password or MFA token."
+                : " Enable 'Use this source next time' to skip this choice on the next launch.");
     }
 }

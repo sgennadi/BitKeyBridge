@@ -65,6 +65,13 @@ internal static class Program
             return StartupDiagnosticService.Run();
         }
 
+        // Explicit offline fleet aggregation: no AD, Graph or machine config loading.
+        if (args.Any(x => x.Equals("--fleet-aggregate", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConsoleHelper.EnsureConsole();
+            return FleetAggregateService.Run(args);
+        }
+
         if (args.Any(x => x.Equals("--ui-self-test", StringComparison.OrdinalIgnoreCase)))
         {
             ConsoleHelper.EnsureConsole();
@@ -86,6 +93,9 @@ internal static class Program
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--fleet-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--fleet-export", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--managed-update-policy", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--check-update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--scheduled-update", StringComparison.OrdinalIgnoreCase) ||
@@ -96,6 +106,7 @@ internal static class Program
             x.Equals("--update-checks-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-center-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-disable", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
@@ -288,6 +299,9 @@ internal static class Program
         var noElevation = args.Any(x => x.Equals("--no-elevation", StringComparison.OrdinalIgnoreCase));
         var readOnlyStatusCommand = args.Any(x =>
             x.Equals("--health", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--fleet-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--fleet-export", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--managed-update-policy", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--service-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--audit-broker-preflight", StringComparison.OrdinalIgnoreCase) ||
@@ -295,6 +309,7 @@ internal static class Program
             x.Equals("--update-task-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--update-checks-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase) ||
+            x.Equals("--update-center-status", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--dc-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--ad-test", StringComparison.OrdinalIgnoreCase) ||
             x.Equals("--coverage", StringComparison.OrdinalIgnoreCase) ||
@@ -1057,6 +1072,13 @@ internal static class Program
         if (args.Any(x => x.Equals("--audit-journal-capacity", StringComparison.OrdinalIgnoreCase)))
             return ProtectedAuditCapacityService.PrintStatus();
 
+        if (args.Any(x => x.Equals("--fleet-status", StringComparison.OrdinalIgnoreCase)))
+            return FleetInventoryService.PrintJson(config);
+
+        if (args.Any(x => x.Equals("--fleet-export", StringComparison.OrdinalIgnoreCase)))
+            return FleetSnapshotExportService.Export(
+                config, GetOptionValue(args, "--fleet-export"));
+
         if (args.Any(x => x.Equals("--health", StringComparison.OrdinalIgnoreCase)))
         {
             var health = new HealthService(config).GetSnapshot();
@@ -1077,8 +1099,20 @@ internal static class Program
         if (args.Any(x => x.Equals("--update-checks-disable", StringComparison.OrdinalIgnoreCase)))
             return SetUpdateCheckSettings(config, enabled: false);
 
+        if (args.Any(x => x.Equals("--managed-update-policy", StringComparison.OrdinalIgnoreCase)))
+            return ManagedUpdatePolicy.PrintStatus(config);
+
         if (args.Any(x => x.Equals("--auto-update-status", StringComparison.OrdinalIgnoreCase)))
             return ShowAutomaticUpdateSettings(config);
+
+        if (args.Any(x => x.Equals("--update-center-status", StringComparison.OrdinalIgnoreCase)))
+        {
+            // Read-only JSON; no GitHub request or unattended installation.
+            var status = UpdateCenterStatusService.Capture(config);
+            Console.WriteLine(JsonSerializer.Serialize(status,
+                new JsonSerializerOptions { WriteIndented = true }));
+            return 0;
+        }
 
         if (args.Any(x => x.Equals("--auto-update-enable", StringComparison.OrdinalIgnoreCase)))
             return SetAutomaticUpdateSettings(config, enabled: true, args);
@@ -1829,12 +1863,30 @@ internal static class Program
             Directory.CreateDirectory(tempDirectory);
 
             failures.AddRange(LapsSelfTest.Run());
+            failures.AddRange(FleetInventoryService.RunOfflineTests());
+            failures.AddRange(FleetAggregateService.RunOfflineTests(tempDirectory));
+            failures.AddRange(FleetSnapshotExportService.RunOfflineTests(tempDirectory));
+            failures.AddRange(ManagedUpdatePolicy.RunOfflineTests());
+            failures.AddRange(StartConnectionPolicy.RunOfflineTests());
             failures.AddRange(UpdatePackageSelfTest.Run());
             failures.AddRange(ProtectedAuditCapacityService.RunOfflineTests());
+            failures.AddRange(AccessHealthLocalService.RunOfflineTests());
+            failures.AddRange(AccessHealthGuidanceService.RunOfflineTests());
+            failures.AddRange(UiLanguageService.RunOfflineTests(tempDirectory));
+            failures.AddRange(UiTabNavigationTelemetry.RunOfflineTests());
+            failures.AddRange(UiWorkspacePreferenceService.RunOfflineTests(tempDirectory));
+            failures.AddRange(UpdateCenterStatusService.RunOfflineTests());
+            failures.AddRange(UpdateService.RunReleaseChannelOfflineTests());
+            failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
+            failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
+            failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
+            failures.AddRange(HomeRecoverySelectionGuard.RunOfflineTests());
             failures.AddRange(ProtectedAuditArchiveService.RunOfflineTests(tempDirectory));
             failures.AddRange(InstalledUpdateHealthService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateBackupSafety.RunOfflineTests(tempDirectory));
+            failures.AddRange(UpdateStagingCleanupService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateApplyGate.RunOfflineTests());
+            failures.AddRange(ScheduledUpdateGate.RunOfflineTests());
             failures.AddRange(AdvancedDiagnosticSelfTest.Run(tempDirectory));
             failures.AddRange(
                 HelpdeskIntegrationSelfTest.Run(
@@ -1980,7 +2032,11 @@ internal static class Program
                     AutoInstallUpdatesOnStart = true,
                     AllowUnsignedUnattendedUpdates = true
                 };
-                if (!ScheduledUpdateService.IsEligible(unsignedAuto))
+                if (!UpdateTrustPolicy.CanEnableUnattended(
+                        unsignedAuto.RequireTrustedUpdateSignature,
+                        unsignedAuto.TrustedUpdatePublisher,
+                        unsignedAuto.AllowUnsignedUnattendedUpdates,
+                        unsignedAuto.UpdateRepository))
                     failures.Add("Explicit official-repository unsigned scheduler opt-in is not recognized.");
                 unsignedAuto.UpdateRepository = "attacker/BitKeyBridge";
                 if (ScheduledUpdateService.IsEligible(unsignedAuto))
@@ -4193,11 +4249,10 @@ internal static class Program
         Console.WriteLine("  --coverage-policy-severity-unencrypted <Error|Warning|Info>");
         Console.WriteLine("  --coverage-policy-severity-stale <Error|Warning|Info>");
         Console.WriteLine("  --coverage-policy-severity-old-key <Error|Warning|Info>");
-        Console.WriteLine("  --cloud-auth <mode>   DeviceCode, Certificate, or Password for --coverage");
+        Console.WriteLine("  --cloud-auth <mode>   DeviceCode or Certificate for --coverage");
         Console.WriteLine("  --tenant-id <id>      Override saved Entra tenant ID for this run");
         Console.WriteLine("  --client-id <id>      Override saved BitKeyBridge client ID for this run");
         Console.WriteLine("  --cert-thumbprint <t> Override saved certificate thumbprint for this run");
-        Console.WriteLine("  --cloud-user <upn>    Override saved cloud username for Password mode");
         Console.WriteLine("  --cloud-machine-status Show ProgramData cloud certificate config metadata");
         Console.WriteLine("  --cloud-machine-save   Save certificate cloud config for LocalSystem/gMSA");
         Console.WriteLine("  --cloud-machine-delete Delete ProgramData machine cloud config");
@@ -4281,6 +4336,9 @@ internal static class Program
         Console.WriteLine("  --output-root <path>  Local/UNC export root for this run");
         Console.WriteLine("  --output-subdirectory <name>  Export subdirectory for this run");
         Console.WriteLine("  --health              Print the local health snapshot as JSON");
+        Console.WriteLine("  --fleet-status        Print secret-free machine and update inventory JSON");
+        Console.WriteLine("  --fleet-export <MACHINE.json>  Atomically export approved non-secret JSON");
+        Console.WriteLine("  --fleet-aggregate <folder> <output.csv>  Offline bounded fleet CSV aggregation");
         Console.WriteLine("  --install-service     Install/update and start the native Windows Service");
         Console.WriteLine("  --uninstall-service   Stop and remove the native Windows Service");
         Console.WriteLine("  --start-service       Start the installed BitKeyBridge service");
@@ -4315,6 +4373,8 @@ internal static class Program
         Console.WriteLine("  --update-checks-enable   Enable automatic update checks when the GUI starts");
         Console.WriteLine("  --update-checks-disable  Disable automatic startup checks; manual check/update still work");
         Console.WriteLine("  --auto-update-status       Show auto-install and unsigned trust settings");
+        Console.WriteLine("  --update-center-status     Show read-only JSON: versions, task, rollback and policy state");
+        Console.WriteLine("  --managed-update-policy   Show HKLM GPO/Intune update restrictions");
         Console.WriteLine("  --auto-update-enable       Enable trusted auto-installation (requires opt-in)");
         Console.WriteLine("  --accept-unsigned-update-risk  With --auto-update-enable: permit unsigned official GitHub auto-installation");
         Console.WriteLine("  --auto-update-disable      Disable automatic installation");

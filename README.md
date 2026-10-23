@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable release channel: v0.30.4 — unsigned, with explicitly enabled automatic installation.** — keeps the normal helpdesk path short: Start provides metadata-first BitLocker/LAPS work with direct recovery actions and visible secret lifetimes, while Administration separates everyday Helpdesk settings from optional enterprise policy controls. Access Health, searchable recovery audit history, environment profiles, updater rollback/history and one-click sanitized diagnostics are built in.
+**Stable v0.32.0 (unsigned, subject to exact-head release CI).** Unifies RC9 with post-RC9 Hebrew/HiDPI fixes, unified Helpdesk search and the guarded updater. v0.30.5 remains available for rollback. Older RC notes below are historical; a Stable release does not authorize enterprise-wide unattended deployment.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
@@ -10,7 +10,128 @@ BitKeyBridge is written in **C# / .NET 10 / WinForms** and directly uses LDAP, M
 
 Release packages are self-contained single-file Windows builds for **x64**, **x86**, and **ARM64**.
 
-## Stable v0.30.4
+## RC8 security changes — included in v0.32.0
+
+[RC8 single-source release acceptance checklist](docs/release-candidate-v0.32.0-rc.8.md). This integrated candidate is isolated from the stacked RC7/RC8 draft pull requests.
+
+This branch removes Graph username/password (ROPC) sign-in from GUI, CLI and token services. Existing `Password` profile choices migrate to `DeviceCode` and require a new interactive sign-in. Tenant, client and certificate identifiers remain; legacy username fields are no longer persisted. The optional Remote API remains disabled by default. Protected audit and release-signing gates are unchanged. **The published release requires a separate managed Windows/AD/Entra/RDP/CyberArk pilot before fleet rollout.**
+
+## Unified Helpdesk Device Workspace — in v0.32.0
+
+The post-RC7 [Device Workspace prototype](docs/rc8-device-workspace-preview.md)
+keeps a **single** Start search. Helpdesk reuses the selected non-secret device
+metadata, links straight back to the Start workspace, and focuses the same
+search with Ctrl+F. Returning from Helpdesk no longer drops an exact selected
+computer when the original query was abbreviated. Dedicated authorized
+BitLocker/LAPS views, permission checks and audit remain unchanged.
+This source-qualified workspace is included in v0.32.0. Earlier RC preview notes remain for reference.
+
+The next [compact Connection and Settings preview](docs/rc8-settings-connection-preview.md)
+keeps one primary connection action, moves seldom-used direct source/cloud
+controls behind an explicit expansion, and provides collapsible Helpdesk
+profiles and recovery policies with a visible summary of the **saved** protected
+audit and ticket requirements. Enterprise authorization gates are unchanged.
+
+
+## v0.32.0-rc.7 — release candidate in preparation (not published)
+
+RC7 carries the verified [Diagnostics > Tools / nested-tab viewport fix](https://github.com/sgennadi/BitKeyBridge/pull/98) beyond the previously published RC6 tag. It repairs stale Dock=Fill bounds on selected nested WinForms pages, bounds AutoSize FlowLayoutPanel action rows to available width, and avoids competing scroll containers. Existing BitLocker/LAPS secret authorization, RBAC, protected-audit and updater trust/rollback behavior are unchanged.
+
+Only the **unsigned opt-in prerelease** pipeline is staged. The candidate must pass all Windows x64/x86/ARM64, UI 100–200%/RDP, LAPS, CodeQL, protected-audit and pinned upgrade/rollback checks **on its final source commit**, followed by manual real-device DPI/RDP and helpdesk acceptance before publication. Stable/Latest remains v0.30.5; there is no automatic deployment, GPO enrollment or unsigned-consent change.
+
+[RC7 release plan and acceptance checklist](docs/release-candidate-v0.32.0-rc.7.md).
+
+## v0.32.0-rc.6 — smoother, cleaner Windows UI
+
+RC6 adds a polished native WinForms interface with selective accent-colored
+actions, a clearer selected-tab indicator and fewer expensive redraw passes.
+Window resizing and RDP/4K monitor changes no longer trigger a full theme and
+rounded-region refresh for every control. Layout is batched while Dock=Fill
+remains immediate; translated text still wraps and the real form test matrix
+covers 100%-200% scaling. Secrets, AD/Graph authorization and automatic-update
+trust policies are unchanged.
+
+See [UI responsiveness and 4K/RDP validation](docs/ui-rendering-performance-2026-10.md)
+and the [RC6 release/acceptance guide](docs/release-candidate-v0.32.0-rc.6.md).
+
+## v0.32.0-rc.5 security and updater foundation
+
+This unsigned prerelease supersedes RC4's initial Update Center 2.0 with
+read-only, cancellation-bounded Retry; GPO/trust-aware machine Pause/Enable;
+admin-confirmed recovery from rollback holds; and explicit prerelease revocation
+protection during scheduled staging and privileged apply. Version, channel,
+task safety, next run, last successful update and last failure are visible
+without querying BitLocker/LAPS secrets. Compact EN/RU/HE layouts and saved
+window bounds adapt to RDP/display changes without clipped status labels.
+
+The new `--update-center-status --no-elevation` CLI prints read-only JSON,
+including the exact SYSTEM task action check. Enabling unsigned auto-update
+continues to require separate, explicit risk consent on each approved test
+machine and is never performed by publication.
+
+[Update Center 2.0 operator guide](docs/update-center-v2.md).
+
+## v0.32.0-rc.3 feature foundation
+
+The prerelease combines the v0.31.0 Unified Search/Recovery Workflow, v0.32.0
+secret-free Fleet/GPO reporting, and stable v0.30.5 updater/audit foundations.
+It is a GitHub **prerelease** and will NOT replace Stable / Latest v0.30.5.
+All executables are **unsigned**. Do not deploy across managed computers
+before controlled AD/Entra/Intune, CyberArk EPM and Audit Broker acceptance.
+
+## Startup wizard in v0.32.0-rc.3
+
+The first interactive launch presents **Active Directory**, **Microsoft Entra /
+Intune**, **Both** and **Choose later**. Check **Remember this connection** in
+the wizard to reuse your chosen source and automatically reconnect on the next
+launch (subject to the machine's AutoConnectOnStart setting). Otherwise the
+wizard appears each time; the previously selected source is still prefilled.
+
+This is a per-user opt-in, not a machine deployment or a permission change.
+Alternate AD passwords are **never remembered**; fresh credentials and cloud
+MFA are requested when needed. Select **Reconnect / Change connection...** on
+Start to uncheck the box; a quick source change also disables auto-reconnect
+until explicitly reapproved. The option is available in the RC3 preview; earlier binaries still show the chooser every launch.
+
+[Remembered startup connection guide](docs/startup-remember-connection.md).
+
+
+RC2 corrects the daily SYSTEM updater's async lock so a staged download is
+not reported as failed when the continuation runs on another .NET thread.
+`--self-test` now checks cross-thread release and concurrent exclusion.
+
+Test machines may enable prerelease checks in Settings > Updates. Merely
+allowing prereleases does not grant permission to install automatically.
+Unattended installation requires separately configured signature publisher
+trust or conscious unsigned consent for the official GitHub repository; GPO
+can always deny automatic installation. `--check-update --no-elevation`
+checks for updates without installing them.
+
+[Previous RC5 security and updater release guide](docs/release-candidate-v0.32.0-rc.5.md).
+
+## v0.32.0 fleet inventory (development)
+
+`--fleet-status` produces secret-free machine metadata;
+`--fleet-export <MACHINE.json> --no-elevation` atomically writes an approved
+report, and `--fleet-aggregate <folder> <output.csv>` creates bounded offline
+CSV. Optional GPO templates (EN/RU/HE) can only restrict auto-updates.
+No remote agent, secret retrieval or production deployment is included.
+
+## v0.31.0 search UX (in development)
+
+`Ctrl+F` focuses the metadata query in the current Start, BitLocker, LAPS,
+Devices or Helpdesk workspace. It never automatically reveals a recovery
+key or LAPS password and preserves search context. `Ctrl+1`–`Ctrl+7`
+continues navigating the ordered main tabs.
+
+## Latest stable v0.30.5
+
+[GitHub Release v0.30.5](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.30.5)
+contains x64/x86/ARM64 packages with exactly one tested executable in each
+root ZIP, preserving strict legacy updater compatibility. Unsigned
+automatic installation remains explicitly opt-in and rollback protected.
+
+## Historical stable v0.30.4
 
 Windows x64, x86 and ARM64. Start opens first; navigate Start / BitLocker / LAPS / Devices / Helpdesk / Diagnostics / Settings (where permitted). Optional daily SYSTEM updater uses the existing verified/rollback-safe pipeline and requires explicit administrator-approved unsigned or pinned-signer trust. The release binaries are **unsigned**.
 
@@ -179,7 +300,7 @@ The previous ten top-level tabs and duplicate Recovery Search / Cloud Search / U
 - In v0.26.9, AD, Intune and Entra BitLocker metadata are independently queried. Partial results remain available with per-source failure diagnostics; `?` means recovery metadata was not verified, never proof that no backup exists.
 - Device identity is source-qualified: AD objectGUID/DN, Entra deviceId and Intune managedDeviceId. Same-name AD/Cloud records are displayed separately until authoritative linkage is verified; ambiguous recovery/rotation actions are disabled.
 - Optional Entra/Intune enrichment and recovery-key rotation.
-- Device Code and app-registration + certificate Graph authentication. Password/ROPC remains available only as a **deprecated compatibility mode** and is not recommended.
+- Microsoft Graph authentication supports delegated Device Code and app-registration certificate. The consolidated RC8 source removes legacy username/password (ROPC); published v0.30.5 remains unchanged.
 - Zero-registration first-run Entra setup with native Graph calls.
 - Role-aware GUI navigation.
 - Responsive WinForms layouts using TableLayoutPanel / FlowLayoutPanel for DPI, RDP, text scaling, and smaller displays.
@@ -378,7 +499,7 @@ Configure Microsoft Graph under **Administration → Cloud**.
 Authentication modes:
 
 - **Device Code** — recommended interactive mode for MFA / Conditional Access.
-- **Username + Password (ROPC)** — **deprecated compatibility mode**. It doesn't support MFA, is commonly blocked by Conditional Access, and should be replaced by Device Code or certificate authentication.
+- **Username + Password (ROPC)** — removed from the consolidated RC8 source. Saved legacy selections migrate to interactive Device Code; unattended operation requires certificate authentication.
 - **App registration + certificate** — recommended unattended/service mode.
 
 Runtime Graph permissions are limited to the permissions required by the tool, including BitLocker metadata/key access, device reads, and Intune managed-device rotation.

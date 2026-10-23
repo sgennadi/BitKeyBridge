@@ -24,6 +24,11 @@ public sealed class HousekeepingStatus
     public int TemporaryFilesDeleted { get; set; }
     public int TemporaryFileErrors { get; set; }
 
+    public int UpdateFoldersScanned { get; set; }
+    public int UpdateFoldersCandidates { get; set; }
+    public int UpdateFoldersDeleted { get; set; }
+    public int UpdateFolderErrors { get; set; }
+
     public long BytesFreed { get; set; }
     public List<string> Warnings { get; set; } = [];
     public List<string> Errors { get; set; } = [];

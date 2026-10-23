@@ -10,6 +10,17 @@ public class DpiAwareForm : Form
     private readonly Dictionary<Label, Size> _labelMaximumSizes =
         new();
 
+    // WinForms can send hundreds of WM_SIZE notifications while dragging or
+    // reconnecting an RDP session. Batch expensive text measurement.
+    private readonly System.Windows.Forms.Timer _responsiveLabelTimer =
+        new() { Interval = 65 };
+    private readonly System.Windows.Forms.Timer _responsiveLayoutTimer =
+        new() { Interval = 65 };
+    private bool _responsiveLayoutRunning;
+    private bool _responsiveLayoutInitialized;
+    private int _lastFullLayoutDpi;
+    private bool _lastHighContrast;
+
     public DpiAwareForm()
     {
         AutoScaleMode =
@@ -21,14 +32,35 @@ public class DpiAwareForm : Form
         Font =
             UiStyle.BodyFont;
 
-        SizeChanged +=
-            (_, _) =>
-            {
-                if (IsHandleCreated)
-                {
-                    RefreshResponsiveLabelWidths();
-                }
-            };
+        _responsiveLabelTimer.Tick += (_, _) =>
+        {
+            _responsiveLabelTimer.Stop();
+            if (!IsDisposed && !Disposing && IsHandleCreated)
+                RefreshResponsiveLabelWidths();
+        };
+        _responsiveLayoutTimer.Tick += (_, _) =>
+        {
+            _responsiveLayoutTimer.Stop();
+            if (!IsDisposed && !Disposing && IsHandleCreated)
+                RefreshResponsiveLayout();
+        };
+        // A height-only resize cannot change label wrapping; ignore it.
+        var lastMeasuredWidth = 0;
+        SizeChanged += (_, _) =>
+        {
+            if (!IsHandleCreated || IsDisposed || Disposing ||
+                ClientSize.Width == lastMeasuredWidth)
+                return;
+
+            lastMeasuredWidth = ClientSize.Width;
+            _responsiveLabelTimer.Stop();
+            _responsiveLabelTimer.Start();
+        };
+        Disposed += (_, _) =>
+        {
+            _responsiveLabelTimer.Dispose();
+            _responsiveLayoutTimer.Dispose();
+        };
     }
 
     protected override void OnLoad(EventArgs e)
@@ -41,14 +73,18 @@ public class DpiAwareForm : Form
         // Form-level AutoScroll can freeze a maximized docked root at its
         // original preferred size on high-DPI and remote-desktop desktops.
         AutoScroll = this is not MainForm;
-        UiModernTheme.Apply(this);
         RefreshResponsiveLayout();
     }
 
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        RefreshResponsiveLayout();
+        // OnLoad already measured the full control tree. A second full
+        // traversal here on every form show used to visibly freeze the UI.
+        // Newly added controls are themed through ControlAdded and ordinary
+        // WinForms docking handles their first layout.
+        if (!_responsiveLayoutInitialized)
+            RefreshResponsiveLayout();
     }
 
     protected override void OnDpiChanged(
@@ -57,9 +93,7 @@ public class DpiAwareForm : Form
         base.OnDpiChanged(
             e);
 
-        BeginInvoke(
-            new MethodInvoker(
-                RefreshResponsiveLayout));
+        QueueResponsiveLayoutRefresh();
     }
 
     protected override void OnFontChanged(
@@ -70,9 +104,7 @@ public class DpiAwareForm : Form
 
         if (IsHandleCreated)
         {
-            BeginInvoke(
-                new MethodInvoker(
-                    RefreshResponsiveLayout));
+            QueueResponsiveLayoutRefresh();
         }
     }
 
@@ -88,16 +120,55 @@ public class DpiAwareForm : Form
         UiModernTheme.Refresh(this);
     }
 
+    private void QueueResponsiveLayoutRefresh()
+    {
+        if (!IsHandleCreated || IsDisposed || Disposing)
+            return;
+
+        _responsiveLayoutTimer.Stop();
+        _responsiveLayoutTimer.Start();
+    }
+
     private void RefreshResponsiveLayout()
     {
-        UiModernTheme.Apply(this);
-        ApplyResponsiveDefaults(
-            this);
-        ConstrainToWorkingArea();
-        PerformLayout();
-        RefreshResponsiveLabelWidths();
-        PerformLayout();
-        UiModernTheme.Refresh(this);
+        if (_responsiveLayoutRunning || IsDisposed || Disposing)
+            return;
+
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var initialRefresh = !_responsiveLayoutInitialized;
+        _responsiveLayoutRunning = true;
+        _responsiveLabelTimer.Stop();
+        try
+        {
+            // Apply() is idempotent and subscribes to new child controls once.
+            UiModernTheme.Apply(this);
+            ApplyResponsiveDefaults(this);
+            ConstrainToWorkingArea();
+            PerformLayout();
+            // Label.MaximumSize setters automatically request WinForms layout
+            // only for labels whose available width truly changed.
+            // A second unconditional PerformLayout() of the entire form,
+            // followed by recursive theme invalidation, doubled the cost of
+            // every DPI and font update on densely populated Settings tabs.
+            RefreshResponsiveLabelWidths();
+            var dpi = DeviceDpi;
+            var highContrast = SystemInformation.HighContrast;
+            if (_responsiveLayoutInitialized &&
+                (dpi != _lastFullLayoutDpi ||
+                 highContrast != _lastHighContrast))
+            {
+                UiModernTheme.Refresh(this);
+            }
+            _lastFullLayoutDpi = dpi;
+            _lastHighContrast = highContrast;
+            _responsiveLayoutInitialized = true;
+        }
+        finally
+        {
+            _responsiveLayoutRunning = false;
+            UiLayoutTelemetry.RecordResponsiveForm(started);
+            UiLayoutTelemetry.RecordResponsivePhase(started, initialRefresh);
+        }
     }
 
     private void ApplyResponsiveDefaults(

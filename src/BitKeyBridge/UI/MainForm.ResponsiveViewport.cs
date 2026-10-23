@@ -2,35 +2,84 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
-    private bool _mainViewportReflowQueued;
+    // Frequent WM_SIZE events during RDP/4K window drags must not trigger
+    // recursive full-tree layout and GDI region regeneration on every frame.
+    private readonly System.Windows.Forms.Timer _mainViewportIdleTimer = new()
+    {
+        Interval = 55
+    };
     private bool _mainViewportReflowRunning;
     private bool _homeResultsReflowRunning;
     private string _homeResultsLayoutKey = string.Empty;
     private string _homeConnectionsRecentLayoutKey = string.Empty;
     private bool _homeConnectionsRecentReflowRunning;
+    private string _lastRepairedTabPath = string.Empty;
+    private int _navigationReflowSequence;
 
     private void InitializeMainViewport()
     {
         AutoScroll = false;
         InitializeHomeStatusGlyphAlignment();
+        _mainViewportIdleTimer.Tick += (_, _) =>
+        {
+            _mainViewportIdleTimer.Stop();
+            if (!IsDisposed && IsHandleCreated)
+                ReflowMainViewport();
+        };
         ClientSizeChanged += (_, _) => QueueMainViewportReflow();
+        DpiChanged += (_, _) => QueueMainViewportReflow();
+        FontChanged += (_, _) => QueueMainViewportReflow();
         Shown += (_, _) => QueueMainViewportReflow();
+        FormClosed += (_, _) => _mainViewportIdleTimer.Dispose();
     }
 
     private void QueueMainViewportReflow()
     {
-        if (_mainViewportReflowQueued || !IsHandleCreated || IsDisposed)
+        if (!IsHandleCreated || IsDisposed || Disposing)
             return;
 
-        _mainViewportReflowQueued = true;
-        BeginInvoke(new MethodInvoker(() =>
-        {
-            _mainViewportReflowQueued = false;
-            if (!IsDisposed)
-                ReflowMainViewport();
-        }));
+        // A 55-ms quiet-period batch is imperceptible when dragging, but
+        // eliminates dozens of layout passes for one native WM_SIZE burst.
+        // Dock=Fill still updates immediately through normal WinForms layout.
+        _mainViewportIdleTimer.Stop();
+        _mainViewportIdleTimer.Start();
     }
 
+
+    // Actual tab navigation is discrete, unlike high-frequency WM_SIZE bursts.
+    // Post exactly one pass after WinForms activates the selected page. Rapid
+    // navigation cancels stale posted callbacks rather than laying out tabs
+    // that are already hidden. This does not make LDAP/Graph calls.
+    private void QueueNavigationViewportReflow(long navigationStarted = 0)
+    {
+        if (!IsHandleCreated || IsDisposed || Disposing)
+            return;
+
+        _mainViewportIdleTimer.Stop();
+        var sequence = ++_navigationReflowSequence;
+        var selectedIndex = _mainTabs.SelectedIndex;
+        try
+        {
+            BeginInvoke((Action)(() =>
+            {
+                if (IsDisposed || Disposing || !_mainTabs.IsHandleCreated ||
+                    sequence != _navigationReflowSequence ||
+                    _mainTabs.SelectedIndex != selectedIndex)
+                    return;
+
+                ReflowMainViewport();
+                if (navigationStarted > 0)
+                    UiTabNavigationTelemetry.Record(selectedIndex, navigationStarted);
+            }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The handle can disappear between IsHandleCreated and BeginInvoke
+            // during shutdown or RDP teardown. A new Shown/resize will reflow.
+            System.Diagnostics.Debug.WriteLine(
+                "Navigation reflow was not scheduled: " + ex.GetType().Name);
+        }
+    }
 
     private double EffectiveHomeDpiScale() =>
         Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
@@ -118,6 +167,7 @@ public sealed partial class MainForm
         if (_homeResultsLayoutKey == desiredKey)
             return;
 
+        var cardsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         _homeResultsReflowRunning = true;
         _homeServiceCards.SuspendLayout();
         try
@@ -195,58 +245,153 @@ public sealed partial class MainForm
         }
         finally
         {
+            // ResumeLayout(true) already lays out the modified card grid once.
+            // A second forced PerformLayout repaints all recovery children.
             _homeServiceCards.ResumeLayout(true);
             _homeResultsReflowRunning = false;
+            UiLayoutTelemetry.RecordHomeCards(cardsStarted);
         }
-        _homeServiceCards.PerformLayout();
+    }
+
+    // Selection (including a nested tab) may expose panels initially built
+    // at WinForms' provisional 200x100 size. Only a new visible tab path,
+    // DPI change or genuinely repaired geometry needs an explicit reflow.
+    // A routine WM_SIZE with correctly docked controls does not.
+    private static string SelectedTabPath(TabControl root)
+    {
+        var path = new System.Text.StringBuilder();
+        var tabs = root;
+        while (tabs.SelectedTab is TabPage page)
+        {
+            path.Append('/').Append(page.Name);
+            var next = page.Controls.OfType<TabControl>()
+                .FirstOrDefault(control => control.Dock == DockStyle.Fill);
+            if (next is null)
+                break;
+            tabs = next;
+        }
+        return path.ToString();
+    }
+
+    private static void RepairSelectedTabHierarchy(
+        TabControl tabs, bool forceFlowLayout)
+    {
+        if (tabs.IsDisposed || tabs.Disposing ||
+            tabs.SelectedTab is not TabPage page)
+            return;
+
+        var display = tabs.DisplayRectangle;
+        if (display.Width <= 0 || display.Height <= 0)
+            return;
+
+        // Do not continuously fight native tab borders (a few pixels).
+        // Only correct an obviously stale page after a hidden-tab resize.
+        var widthTolerance = Math.Max(16, display.Width / 8);
+        var heightTolerance = Math.Max(16, display.Height / 8);
+        var pageRepaired =
+            Math.Abs(page.Width - display.Width) > widthTolerance ||
+            Math.Abs(page.Height - display.Height) > heightTolerance;
+        if (pageRepaired)
+            page.Bounds = display;
+
+        foreach (Control content in page.Controls)
+        {
+            if (content.IsDisposed || content.Dock != DockStyle.Fill)
+                continue;
+
+            var viewport = page.DisplayRectangle;
+            if (viewport.Width <= 0 || viewport.Height <= 0)
+                continue;
+
+            var boundsRepaired = content.Bounds != viewport;
+            if (boundsRepaired)
+                content.Bounds = viewport;
+
+            if (content is TabControl nested)
+                RepairSelectedTabHierarchy(
+                    nested, forceFlowLayout || pageRepaired || boundsRepaired);
+            else if (content is FlowLayoutPanel
+                     { FlowDirection: FlowDirection.TopDown } flow &&
+                     (forceFlowLayout || pageRepaired || boundsRepaired))
+            {
+                // Inactive pages still receive an initial explicit layout
+                // on selection. Stable pages are laid out by native docking
+                // and must not be forcibly measured on every WM_SIZE event.
+                flow.PerformLayout();
+            }
+        }
     }
 
     internal void ReflowMainViewport()
     {
-        if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width == 0)
+        if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width <= 0)
             return;
 
+        var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         _mainViewportReflowRunning = true;
         try
         {
-            AutoScroll = false;
+            if (AutoScroll)
+                AutoScroll = false;
+
             var shell = Controls.OfType<TableLayoutPanel>()
                 .FirstOrDefault(x => x.Name == "MainLayoutRoot");
             if (shell is null)
                 return;
 
-            // Do not let a pre-maximize preferred width constrain the entire
-            // application to the top-left of a 4K / Remote Desktop screen.
-            shell.Dock = DockStyle.Fill;
-            if (shell.Bounds != ClientRectangle)
-                shell.Bounds = ClientRectangle;
-
-            shell.PerformLayout();
-            ReflowConnectionsRecent();
-            shell.PerformLayout();
-            ReflowHomeResultsArea();
-            _mainTabs.Dock = DockStyle.Fill;
-            _mainTabs.PerformLayout();
-
-            if (_mainTabs.SelectedTab is TabPage page)
+            // Docking is automatic during WM_SIZE. Only repair actual geometry
+            // mismatches, instead of forcing 6+ nested PerformLayout passes.
+            var geometryChanged = false;
+            if (shell.Dock != DockStyle.Fill)
             {
-                page.PerformLayout();
-                if (page.Controls.Count > 0 &&
-                    page.Controls[0].Dock == DockStyle.Fill)
-                {
-                    var content = page.Controls[0];
-                    if (content.Bounds != page.DisplayRectangle)
-                        content.Bounds = page.DisplayRectangle;
-                    content.PerformLayout();
-                }
+                shell.Dock = DockStyle.Fill;
+                geometryChanged = true;
+            }
+            if (shell.Bounds != ClientRectangle)
+            {
+                shell.Bounds = ClientRectangle;
+                geometryChanged = true;
+            }
+            if (_mainTabs.Dock != DockStyle.Fill)
+            {
+                _mainTabs.Dock = DockStyle.Fill;
+                geometryChanged = true;
             }
 
-            UiModernTheme.Refresh(shell);
-            AlignHomeStatusGlyphs();
+            if (geometryChanged)
+                shell.PerformLayout();
+
+            // TabPage sizes are lazily calculated by WinForms. After switching
+            // Diagnostics > Tools, Settings > Enterprise, or reconnecting RDP,
+            // nested Dock=Fill content can retain a 200x100 provisional size
+            // even though the outer workspace fills the window. Repair only
+            // the visible tab chain; never rebuild its controls or re-theme.
+            var selectedPath = SelectedTabPath(_mainTabs) + ":" + DeviceDpi;
+            var changedPath = !string.Equals(
+                selectedPath, _lastRepairedTabPath, StringComparison.Ordinal);
+            RepairSelectedTabHierarchy(_mainTabs, changedPath);
+            _lastRepairedTabPath = selectedPath;
+
+            // Home cards and connection panes are not part of any other
+            // workspace. Do not update their geometry or glyph regions while
+            // a different page is selected. Returning to Start schedules an
+            // immediate reflow using the current RDP/window dimensions.
+            if (ReferenceEquals(_mainTabs.SelectedTab, _homeWorkspaceTab))
+            {
+                ReflowConnectionsRecent();
+                ReflowHomeResultsArea();
+                AlignHomeStatusGlyphs();
+            }
+
+            // Theme controls subscribe to SizeChanged and DpiChanged already.
+            // UiModernTheme.Refresh(shell) rebuilt every rounded HWND region and
+            // invalidated all tab controls on each window resize. It belongs
+            // only in the shared theme/DPI refresh path, NOT in WM_SIZE.
         }
         finally
         {
             _mainViewportReflowRunning = false;
+            UiLayoutTelemetry.RecordViewport(viewportStarted);
         }
     }
 }

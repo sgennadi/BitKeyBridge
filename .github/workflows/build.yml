@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   laps-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -259,6 +259,16 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Validate GPO templates and localized restriction resources
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/Validate-GpoTemplates.ps1
+
+      - name: Reject WinForms recursive repaint regressions at 100-200% DPI
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./tests/windows/UiRenderingRegression.ps1
+
       - name: Restore
         shell: cmd
         run: dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
@@ -382,6 +392,81 @@ jobs:
             throw "SECURITY: portable copy registered a persistent SYSTEM update task."
           }
           Write-Host "Portable background update denied with $($background.ExitCode) and task creation denied with $($register.ExitCode)."
+
+      - name: Fleet secret-free JSON schema smoke
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $json = & $exe --fleet-status --no-elevation 2>&1 | Out-String
+          if ($LASTEXITCODE -notin @(0, 2)) {
+            throw "Fleet metadata command crashed: $json"
+          }
+          $report = $json | ConvertFrom-Json
+          if ($report.schemaVersion -ne 1 -or
+              !$report.machine -or !$report.version -or
+              $report.dataClassification -ne 'NonSecretMetadataOnly' -or
+              $null -eq $report.autoInstallPermitted) {
+            throw 'Fleet JSON schema mismatch.'
+          }
+          foreach ($name in @('password','recoveryKey','accessToken','tenantId','privateKey')) {
+            if ($json -match ('"'+$name+'"s*:')) {
+              throw "Forbidden sensitive field in fleet JSON: $name"
+            }
+          }
+
+      - name: Fleet atomic export and CSV roundtrip
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A deliberately rejected CLI operation must be inspected via $LASTEXITCODE.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
+          $folder = Join-Path $env:RUNNER_TEMP ('bkb-fleet-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $folder | Out-Null
+          try {
+            $machine = [Environment]::MachineName
+            $target = Join-Path $folder ($machine + '.json')
+            & $exe --fleet-export $target --no-elevation | Out-Null
+            $status = $LASTEXITCODE
+            Write-Host "Fleet export exit code: $status; JSON present: $(Test-Path -LiteralPath $target -PathType Leaf)"
+            if ($status -notin @(0, 2) -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+              throw 'Native fleet export did not write a machine-scoped JSON report.'
+            }
+            $raw = Get-Content -LiteralPath $target -Raw -Encoding UTF8
+            $report = $raw | ConvertFrom-Json
+            if ($report.machine -ne $machine -or $report.schemaVersion -ne 1 -or
+                $report.dataClassification -ne 'NonSecretMetadataOnly') {
+              throw 'Fleet export wrote a mismatched or unsafe inventory schema.'
+            }
+            $csv = Join-Path $folder 'fleet.csv'
+            & $exe --fleet-aggregate $folder $csv --no-elevation | Out-Null
+            $aggregateExit = $LASTEXITCODE
+            Write-Host "Fleet aggregation exit code: $aggregateExit; CSV present: $(Test-Path -LiteralPath $csv -PathType Leaf)"
+            if ($aggregateExit -ne 0 -or -not (Test-Path -LiteralPath $csv -PathType Leaf)) {
+              throw 'Fleet roundtrip aggregation failed.'
+            }
+            $rows = @(Get-Content -LiteralPath $csv -Encoding UTF8)
+            if ($rows.Count -ne 2 -or $rows[0] -notmatch '^Machine,CollectedUtc,' -or
+                $rows[1] -notmatch [regex]::Escape($machine)) {
+              throw 'Fleet aggregate CSV does not include exactly one device.'
+            }
+            $denied = Join-Path $folder 'OTHER-COMPUTER.json'
+            & $exe --fleet-export $denied --no-elevation 2>&1 | Out-Null
+            $deniedExit = $LASTEXITCODE
+            Write-Host "Wrong-machine export exit code: $deniedExit; output absent: $(!(Test-Path -LiteralPath $denied))"
+            if ($deniedExit -eq 0 -or (Test-Path -LiteralPath $denied)) {
+              throw 'Fleet export allowed overwriting another computer identity.'
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          # The final native invocation intentionally returned 2 (denied).
+          # Explicitly report success after assertions: pwsh otherwise returns
+          # the last native exit code even when every safety assertion passed.
+          exit 0
 
       - name: Updater preference persistence self-test
         if: matrix.rid == 'win-x64'
@@ -558,7 +643,8 @@ jobs:
         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
-        github.ref == 'refs/heads/release/v0.30.5'))
+        github.ref == 'refs/heads/release/v0.30.5' ||
+        github.ref == 'refs/heads/release/v0.32.0'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 30
@@ -599,7 +685,8 @@ jobs:
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
-        github.ref == 'refs/heads/release/v0.30.5'))
+        github.ref == 'refs/heads/release/v0.30.5' ||
+        github.ref == 'refs/heads/release/v0.32.0'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -680,7 +767,7 @@ jobs:
       github.event_name == 'pull_request' &&
       (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
     needs: [build, laps-regression, audit-broker-integration, release-signing-positive]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -761,6 +848,32 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  codeql-stable-release:
+    # Require on-SHA security scanning before publication.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/release/v0.32.0'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          build-mode: manual
+      - name: Build stable source for CodeQL
+        shell: cmd
+        run: |
+          dotnet restore src\BitKeyBridge\BitKeyBridge.csproj
+          dotnet build src\BitKeyBridge\BitKeyBridge.csproj -c Release --no-restore
+      - uses: github/codeql-action/analyze@v4
+
   release:
     if: >-
       always() &&
@@ -775,12 +888,16 @@ jobs:
          ((github.ref == 'refs/heads/release/v0.30.4' &&
            github.event.head_commit.message == 'Release v0.30.4') ||
           (github.ref == 'refs/heads/release/v0.30.5' &&
-           github.event.head_commit.message == 'Release v0.30.5')) &&
+           github.event.head_commit.message == 'Release v0.30.5') ||
+          (github.ref == 'refs/heads/release/v0.32.0' &&
+           github.event.head_commit.message == 'Release v0.32.0' &&
+           needs['codeql-stable-release'].result == 'success')) &&
          needs['audit-broker-integration'].result == 'success' &&
          needs['legacy-upgrade-regression'].result == 'success') ||
         (github.ref != 'refs/heads/release/v0.30.3' &&
          github.ref != 'refs/heads/release/v0.30.4' &&
          github.ref != 'refs/heads/release/v0.30.5' &&
+         github.ref != 'refs/heads/release/v0.32.0' &&
          (startsWith(github.ref, 'refs/tags/v') ||
           (github.event_name == 'push' &&
            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
@@ -789,7 +906,7 @@ jobs:
            github.ref == 'refs/heads/improve/nonadmin-audit-ui-20261014' &&
            startsWith(github.event.head_commit.message, 'Publish RC v0.30.0-rc.1'))))
       )
-    needs: [build, laps-regression, audit-broker-integration, legacy-upgrade-regression]
+    needs: [build, laps-regression, audit-broker-integration, legacy-upgrade-regression, codeql-stable-release]
     runs-on: windows-latest
     # Least-privilege token; these scopes are never granted to PR builds.
     permissions:
@@ -850,6 +967,10 @@ jobs:
             throw "The dedicated release branch is authorized only for v0.30.5."
           }
 
+          if ("${{ github.ref }}" -eq "refs/heads/release/v0.32.0" -and $tag -ne "v0.32.0") {
+            throw "The dedicated release branch is authorized only for v0.32.0."
+          }
+
           $exists = $false
           gh release view $tag --repo "${{ github.repository }}" *> $null
           $releaseViewExitCode = $LASTEXITCODE
@@ -884,6 +1005,13 @@ jobs:
               ($tag -eq 'v0.30.5' -and
                "${{ github.ref }}" -eq 'refs/heads/release/v0.30.5')) {
             Write-Host "Owner-authorized unsigned release ${tag}: no Authenticode signing."
+          }
+          elseif ($tag -eq 'v0.32.0' -and
+                  "${{ github.ref }}" -eq 'refs/heads/release/v0.32.0') {
+            if (-not (Test-Path 'docs/release-authorization-v0.32.0.md')) {
+              throw 'Stable 0.32.0 publication authorization document is missing.'
+            }
+            Write-Host 'Owner-authorized UNSIGNED v0.32.0 Stable; no fleet deployment.'
           }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
                   $tag -ne "v0.30.0-rc.1") {
@@ -961,11 +1089,15 @@ jobs:
           steps.release_meta.outputs.exists != 'true' &&
           (github.ref == 'refs/heads/release/v0.30.3' ||
            github.ref == 'refs/heads/release/v0.30.4' ||
-           github.ref == 'refs/heads/release/v0.30.5')
+           github.ref == 'refs/heads/release/v0.30.5' ||
+           github.ref == 'refs/heads/release/v0.32.0')
         shell: pwsh
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag -eq 'v0.30.5') {
+          if ($tag -eq 'v0.32.0') {
+            Copy-Item docs/release-notes-v0.32.0.md release/RELEASE-NOTES.md
+          }
+          elseif ($tag -eq 'v0.30.5') {
             Copy-Item docs/unsigned-auto-update-0.30.5.md release/RELEASE-NOTES.md
           }
           elseif ($tag -eq 'v0.30.4') {
@@ -1119,7 +1251,7 @@ jobs:
             '--target', '${{ github.sha }}',
             '--title', "BitKeyBridge $tag"
           )
-          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5') -and
+          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5', 'v0.32.0') -and
               (Test-Path 'release/RELEASE-NOTES.md')) {
             $args += @('--notes-file', 'release/RELEASE-NOTES.md')
           }

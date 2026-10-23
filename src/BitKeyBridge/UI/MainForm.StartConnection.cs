@@ -12,7 +12,18 @@ public sealed partial class MainForm
         ConfigService.LoadStartConnectionPreferences();
 
     private Control? _startAdIdentityPanel;
+    private Control? _startDirectActionsPanel;
+    private Control? _startDirectHint;
+    private bool _connectionOptionsExpanded;
+    private Action<bool>? _setConnectionOptionsExpanded;
     private bool _initializingStartSource;
+
+    internal void PreviewSetConnectionOptionsExpandedForUiTest(bool expanded)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        _setConnectionOptionsExpanded?.Invoke(expanded);
+    }
     private bool _cloudWizardOpening;
 
     private Control BuildStartConnectionSourceChooser()
@@ -24,20 +35,39 @@ public sealed partial class MainForm
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 3,
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap),
             Padding = Padding.Empty
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 3; i++)
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // Everyday connection has one primary action. Direct source/cloud
+        // maintenance stays discoverable, but does not crowd the first screen.
+        var primary = new FlowLayoutPanel
+        {
+            Name = "HomeConnectionPrimaryActions",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            FlowDirection = FlowDirection.LeftToRight
+        };
+        var showOptions = NewActionButton("More connection options...");
+        showOptions.Name = "HomeConnectionOptionsToggle";
+        showOptions.AccessibleName =
+            "Show or hide direct connection source and Microsoft 365 setup options";
 
         var row = new FlowLayoutPanel
         {
+            Name = "HomeConnectionExtraActions",
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Top,
             WrapContents = true,
+            Visible = false,
             Margin = Padding.Empty,
             FlowDirection = FlowDirection.LeftToRight
         };
@@ -81,12 +111,28 @@ public sealed partial class MainForm
         row.Controls.Add(_homeConnectionSource);
 
         _homeReconnectWizardButton.Name = "HomeReconnectWizardButton";
-        _homeReconnectWizardButton.Text = "Reconnect / Change connection...";
+        _homeReconnectWizardButton.Text = "Connect / Change...";
         _homeReconnectWizardButton.AccessibleName =
             "Reopen the AD or Microsoft 365 connection wizard to change source, " +
             "account or retry after a failed password";
         UiStyle.ConfigureActionButton(_homeReconnectWizardButton);
-        row.Controls.Add(_homeReconnectWizardButton);
+        primary.Controls.Add(_homeReconnectWizardButton);
+        primary.Controls.Add(showOptions);
+        layout.Controls.Add(primary, 0, 0);
+        void SetConnectionOptionsExpanded(bool expanded)
+        {
+            if (_connectionOptionsExpanded == expanded)
+                return;
+            _connectionOptionsExpanded = expanded;
+            row.Visible = expanded;
+            showOptions.Text = expanded
+                ? "Hide connection options" : "More connection options...";
+            UpdateStartConnectionSourceControls();
+            QueueMainViewportReflow();
+        }
+        _setConnectionOptionsExpanded = SetConnectionOptionsExpanded;
+        showOptions.Click += (_, _) =>
+            SetConnectionOptionsExpanded(!_connectionOptionsExpanded);
         _homeReconnectWizardButton.Click += async (_, _) =>
             await ShowConnectionWizardAsync(
                 preferOtherAdAccount: _lastAdConnectionFailed &&
@@ -105,7 +151,7 @@ public sealed partial class MainForm
             "Set up an approved application or request administrator setup";
         UiStyle.ConfigureActionButton(_homeConfigureCloudButton);
         row.Controls.Add(_homeConfigureCloudButton);
-        layout.Controls.Add(row, 0, 0);
+        layout.Controls.Add(row, 0, 1);
 
         _homeCloudConnectionStatus.Name = "HomeCloudConnectionStatus";
         _homeCloudConnectionStatus.AccessibleName =
@@ -113,14 +159,19 @@ public sealed partial class MainForm
         UiStyle.ConfigureStatusLabel(_homeCloudConnectionStatus);
         _homeCloudConnectionStatus.MaximumSize = new Size(1100, 0);
         UiStyle.SetStatus(_homeCloudConnectionStatus,
-            "Select AD, Microsoft Entra / Intune, or both to begin.",
+            "Use Connect / Change to select AD, Microsoft 365 or both.",
             UiStatusKind.Neutral);
-        layout.Controls.Add(_homeCloudConnectionStatus, 0, 1);
+        layout.Controls.Add(_homeCloudConnectionStatus, 0, 2);
 
         _homeConnectionSource.SelectedIndexChanged += async (_, _) =>
         {
             if (_initializingStartSource)
                 return;
+
+            // A quick source switch must not silently re-target the remembered
+            // unattended connection. Re-enable it deliberately in the wizard.
+            _startConnectionPreferences.RememberLastConnectionOnStart = false;
+            _startConnectionPreferences.PreferOtherAdAccountOnStart = false;
             await OnStartConnectionSourceSelectedAsync();
         };
         _homeConfigureCloudButton.Click += async (_, _) =>
@@ -186,9 +237,15 @@ public sealed partial class MainForm
         _homeUseWindowsIdentity.Visible = ad;
         _homeUseOtherAccount.Visible = ad;
         if (_startAdIdentityPanel is not null)
-            _startAdIdentityPanel.Visible = ad;
-        // Diagnostic tools remain available while disconnected or using
-        // Microsoft 365. Only the AD-specific advanced settings are scoped.
+            _startAdIdentityPanel.Visible = ad && _connectionOptionsExpanded;
+        // Direct operations are opt-in visual details only. Permission and
+        // source checks on the underlying actions remain unchanged.
+        if (_startDirectActionsPanel is not null)
+            _startDirectActionsPanel.Visible = _connectionOptionsExpanded;
+        if (_startDirectHint is not null)
+            _startDirectHint.Visible = _connectionOptionsExpanded;
+        // Diagnostic tools remain discoverable even when disconnected or
+        // cloud-only: reveal the direct actions through More options.
         _homeConnectionToolsButton.Visible = true;
         _homeAdvancedConnectionMenuItem.Visible = ad;
         // Never leave AD credential and server fields visible while
@@ -216,15 +273,15 @@ public sealed partial class MainForm
                 HasCloudSearchSession()
                     ? "Connected to Microsoft Entra / Intune using delegated Graph permissions."
                     : StartCloudAppConfigured()
-                        ? "Cloud is configured. Click Connect to Microsoft 365 to sign in with MFA."
-                        : "No cloud application configured. The connection wizard will open.",
+                        ? "Cloud is configured. Use Connect / Change for delegated MFA sign-in."
+                        : "Cloud app not configured. Connect / Change opens guided setup.",
                 HasCloudSearchSession() ? UiStatusKind.Success :
                 StartCloudAppConfigured() ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
         else if (SelectedStartSource == StartConnectionPolicy.Choose)
         {
             UiStyle.SetStatus(_homeCloudConnectionStatus,
-                "Choose where recovery data is stored. No AD or cloud credential prompt is required yet.",
+                "Use Connect / Change to choose a source. No credentials are requested until Connect.",
                 UiStatusKind.Neutral);
         }
     }

@@ -2,23 +2,61 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
+    // Editing the Start query invalidates the old device selection *now*,
+    // even if the user clears the input or no source is connected. Never let
+    // stale BitLocker/LAPS actions point at a previous computer while a new
+    // query is waiting for the debounce timer.
+    private void InvalidateHomeSelectionOnQueryEdit()
+    {
+        if (_homeSearchResults.IsDisposed)
+            return;
+
+        var hadRows = _homeSearchResults.Rows.Count > 0;
+        if (hadRows)
+        {
+            // Any revealed secret belongs to the previous device context.
+            // This uses the established clipboard/password lifetime cleanup.
+            if (!_layoutSelfTest)
+                ClearVisibleSecretsNow();
+
+            _updatingHomeSearchResults = true;
+            try
+            {
+                _homeSearchResults.Rows.Clear();
+            }
+            finally
+            {
+                _updatingHomeSearchResults = false;
+            }
+            UpdateHomeSearchSelection();
+            UiStyle.SetStatus(_homeSearchStatus,
+                "Search text changed. Previous device selection cleared.",
+                UiStatusKind.Neutral);
+        }
+    }
+
     private void QueueHomeSearch()
     {
         if (_layoutSelfTest)
             return;
 
         _homeSearchDebounceTimer?.Stop();
+        // Stop old LDAP/Graph work immediately, not only at the start of the
+        // next search. A short or empty query must not strand a busy spinner.
+        _homeSearchCancellation?.Cancel();
         _homeSearchGeneration++;
+        _homeSearchCancelButton.Enabled = false;
+        _homeSearchProgress.Visible = false;
+        _homeSearchButton.Enabled =
+            _directoryConnected || HasCloudSearchSession();
 
-        var query =
-            _homeQuery.Text.Trim();
-
-        if (query.Length <
-            SearchText.MinimumLiveSearchCharacters ||
-            !_directoryConnected)
-        {
+        var query = _homeQuery.Text.Trim();
+        // Live keystrokes remain AD-only; Microsoft Graph queries require
+        // an explicit Search / Enter action to avoid excess Graph requests.
+        if (query.Length < SearchText.MinimumLiveSearchCharacters ||
+            !_directoryConnected ||
+            !StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource))
             return;
-        }
 
         _homeSearchDebounceTimer?.Start();
     }
@@ -137,6 +175,8 @@ public sealed partial class MainForm
             var lapsRows = lapsOutcome.Rows;
             string? recoveryFailure = recoveryOutcome.Error;
             string? lapsFailure = lapsOutcome.Error;
+            var recoveryFailureKind = recoveryOutcome.FailureKind;
+            var lapsFailureKind = lapsOutcome.FailureKind;
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -165,6 +205,7 @@ public sealed partial class MainForm
                     if (!extra.Succeeded)
                     {
                         lapsFailure = extra.Error;
+                        lapsFailureKind = extra.FailureKind;
                         break;
                     }
 
@@ -198,6 +239,7 @@ public sealed partial class MainForm
                     if (!extra.Succeeded)
                     {
                         recoveryFailure = extra.Error;
+                        recoveryFailureKind = extra.FailureKind;
                         break;
                     }
 
@@ -215,6 +257,7 @@ public sealed partial class MainForm
                         if (!retried.Succeeded)
                         {
                             recoveryFailure = retried.Error;
+                            recoveryFailureKind = retried.FailureKind;
                             break;
                         }
 
@@ -307,6 +350,12 @@ public sealed partial class MainForm
                                 row.KeyDateUtc)
                         .FirstOrDefault();
 
+                var exactComputerDn = bitLocker
+                    .Select(item => item.ComputerDistinguishedName)
+                    .Append(laps?.ComputerDistinguishedName ?? string.Empty)
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                    ?? string.Empty;
+
                 var result =
                     new HomeSearchResult
                     {
@@ -315,6 +364,9 @@ public sealed partial class MainForm
                         ComputerId =
                             laps?.ComputerId ??
                             string.Empty,
+                        AdComputerDistinguishedName = exactComputerDn,
+                        SourceIdentity = string.IsNullOrWhiteSpace(exactComputerDn)
+                            ? string.Empty : "AD:DN:" + exactComputerDn,
                         BitLockerKeyCount =
                             bitLocker.Count,
                         BitLockerLookupFailed =
@@ -365,10 +417,10 @@ public sealed partial class MainForm
                         result.ComputerName,
                         result.SourceSummary,
                         result.BitLockerStatus,
-                        result.LatestBitLockerKeyUtc,
+                        (object?)result.LatestBitLockerKeyUtc ?? DBNull.Value,
                         result.LapsStatus,
-                        result.LapsKeyDateUtc ??
-                        result.LapsExpiresAtUtc);
+                        (object?)(result.LapsKeyDateUtc ??
+                        result.LapsExpiresAtUtc) ?? DBNull.Value);
 
                 _homeSearchResults.Rows[rowIndex].Tag =
                     result;
@@ -408,18 +460,27 @@ public sealed partial class MainForm
             if (recoveryFailure is not null)
             {
                 failedSources.Add("BitLocker");
-                diagnosticDetails.Add("BitLocker metadata: " + recoveryFailure);
+                diagnosticDetails.Add("BitLocker metadata [" +
+                    MetadataFailureGuidance.Label(recoveryFailureKind) + "]: " +
+                    recoveryFailure + Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(recoveryFailureKind, "AD"));
             }
             if (lapsFailure is not null)
             {
                 failedSources.Add("LAPS");
-                diagnosticDetails.Add("LAPS metadata: " + lapsFailure);
+                diagnosticDetails.Add("LAPS metadata [" +
+                    MetadataFailureGuidance.Label(lapsFailureKind) + "]: " +
+                    lapsFailure + Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(lapsFailureKind, "AD"));
             }
 
             if (cloudOutcome is { Failure: not null })
             {
                 failedSources.Add("Cloud");
-                diagnosticDetails.Add("Graph metadata: " + cloudOutcome.Failure);
+                diagnosticDetails.Add("Graph metadata [" +
+                    MetadataFailureGuidance.Label(cloudOutcome.FailureKind) + "]: " +
+                    cloudOutcome.Failure + Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(cloudOutcome.FailureKind, "Cloud"));
             }
             else if (cloudOutcome is { IsPartial: true })
             {
@@ -436,14 +497,28 @@ public sealed partial class MainForm
                     "An LDAP error is not proof that a backup is absent.");
             }
 
+            var primaryFailure = recoveryFailure is not null
+                ? (Kind: recoveryFailureKind, Source: "AD")
+                : lapsFailure is not null
+                    ? (Kind: lapsFailureKind, Source: "AD")
+                    : cloudOutcome is { Failure: not null }
+                        ? (Kind: cloudOutcome.FailureKind, Source: "Cloud")
+                        : (Kind: MetadataFailureKind.Unknown, Source: "Cloud");
+
             var statusText = failedSources.Count > 0
-                ? $"Partial search: {string.Join(" and ", failedSources)} lookup failed. " +
-                  $"{names.Count} result(s) found; see diagnostics."
+                ? UiLanguageService.Translate(_uiLanguageCode, "MetadataPartial") +
+                  " (" + UiLanguageService.Translate(_uiLanguageCode,
+                      "MetadataKind" + primaryFailure.Kind) + "): " +
+                  names.Count + " " +
+                  UiLanguageService.Translate(_uiLanguageCode, "MetadataVisible") + " " +
+                  UiLanguageService.Translate(_uiLanguageCode,
+                      "MetadataAction" + primaryFailure.Kind) + " " +
+                  UiLanguageService.Translate(_uiLanguageCode, "MetadataSeeDiagnostics")
                 : ambiguousNames.Count > 0
                     ? $"{names.Count} result(s); {ambiguousNames.Count} ambiguous computer name(s). " +
                       "Use an exact AD object GUID or OU in LAPS/Recovery."
                     : names.Count == 0
-                        ? "No matching computer, Recovery ID or device ID was found."
+                        ? UiLanguageService.Translate(_uiLanguageCode, "MetadataNoAdRecords")
                         : names.Count == 1
                             ? "One computer found. BitLocker and LAPS actions are below."
                             : $"Found {names.Count} computers. Select one to view its recovery cards.";
@@ -588,6 +663,8 @@ public sealed partial class MainForm
 
         var connected = _directoryConnected && !_directoryConnecting;
 
+        _homeRecoveryStepsButton.Enabled = selected is not null;
+
         _homeRevealBitLockerButton.Enabled =
             connected &&
             selected is not null &&
@@ -612,6 +689,9 @@ public sealed partial class MainForm
 
         UpdateHomeServiceCards(selected);
         RefreshHomeSelectionSummary();
+        // Helpdesk reflects this exact selected record, without a duplicate
+        // query, background lookup or new credential request.
+        UpdateHelpdeskSelectedDeviceSummary();
         // Selection changes the Start split layout immediately. A selected
         // computer must never be hidden below an oversized empty result grid.
         QueueMainViewportReflow();

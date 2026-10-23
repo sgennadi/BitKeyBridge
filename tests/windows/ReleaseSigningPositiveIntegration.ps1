@@ -262,6 +262,9 @@ try {
             }
         }
         finally { $signProcess.Dispose() }
+        # Exercise the production C# verifier against each signed PE payload.
+        dotnet run --project (Join-Path $PSScriptRoot '../AuthenticodeRegression') -c Release -- $exe $thumbprint
+        if ($LASTEXITCODE -ne 0) { throw "Runtime Authenticode regression failed for $rid." }
         # Avoid a redundant SignTool network/trust lookup. The actual
         # release validator performs Authenticode validation below.
         # Store-only ZIP is sufficient to exercise archive verification and

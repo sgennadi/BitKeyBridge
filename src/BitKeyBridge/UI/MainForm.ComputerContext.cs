@@ -33,6 +33,20 @@ public sealed partial class MainForm
             return;
         }
 
+        // Selecting a result on Start captures its exact source-qualified
+        // HomeSearchResult. The search textbox may still contain the user's
+        // shorter query ("PC" -> "PC-001"). Returning from Helpdesk must
+        // preserve that selected object and its metadata, not clear the grid
+        // merely to replace the textbox with the full computer name.
+        // A genuinely different cross-tab query still invalidates the grid.
+        if (ReferenceEquals(target, _homeQuery) &&
+            GetSelectedHomeSearchResult() is { } selected &&
+            string.Equals(selected.ComputerName, _currentComputerQuery,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         _applyingComputerQuery = true;
         try
         {

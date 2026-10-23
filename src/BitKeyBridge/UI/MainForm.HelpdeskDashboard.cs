@@ -9,31 +9,39 @@ public sealed partial class MainForm
         var page = new TabPage("Helpdesk")
         {
             Name = "HelpdeskDashboardTab",
-            AutoScroll = true
+            AutoScroll = false
         };
         var root = CreateVerticalWorkspace();
         page.Controls.Add(root);
         root.Controls.Add(CreateSectionTitle(
             "Helpdesk workspace",
-            "Find a device, review recovery options, or diagnose access. No administrator rights are required to open this page."));
+            "Search and select a device once on Start. Helpdesk contains access checks, recovery guidance and support tools; it never performs a second device search."));
 
         var actions = CreateActionFlow();
-        var search = NewActionButton("Find Device");
-        var bitlocker = NewActionButton("BitLocker");
-        var laps = NewActionButton("LAPS");
+        var search = NewActionButton("Device Workspace");
+        search.Name = "HelpdeskOpenDeviceWorkspaceButton";
+        search.AccessibleName = "Open the existing Start device search and selection";
+        var prepare = NewActionButton("Recovery Steps");
+        prepare.Name = "HelpdeskRecoveryStepsButton";
+        prepare.AccessibleName = "Review recovery steps without revealing a password";
+        // BitLocker and LAPS already have main tabs and selected-device
+        // cards on Start; do not duplicate those navigation controls here.
         var access = NewActionButton("Access Health");
+        access.Name = "HelpdeskAccessHealthButton";
         var support = NewActionButton("Support Bundle");
-        actions.Controls.AddRange([search, bitlocker, laps, access, support]);
+        support.Name = "HelpdeskSupportBundleButton";
+        actions.Controls.AddRange([search, prepare, access, support]);
         root.Controls.Add(actions);
 
-        var quickQuery = new TextBox
+        _helpdeskSelectedDeviceSummary = new UiStatusLabel
         {
-            Name = "HelpdeskQuickSearch",
-            AccessibleName = "Find a computer or device",
-            PlaceholderText = "Computer name or device ID",
-            Dock = DockStyle.Top
+            Name = "HelpdeskSelectedDeviceSummary",
+            AccessibleName = "Selected device metadata from Start; no recovery secrets",
+            AutoSize = true,
+            MaximumSize = new Size(1000, 0)
         };
-        root.Controls.Add(quickQuery);
+        UiStyle.ConfigureStatusLabel(_helpdeskSelectedDeviceSummary);
+        root.Controls.Add(_helpdeskSelectedDeviceSummary);
 
         var status = new UiStatusLabel
         {
@@ -46,9 +54,13 @@ public sealed partial class MainForm
         root.Controls.Add(status);
 
         var refresh = NewActionButton("Refresh Status");
+        refresh.Name = "HelpdeskRefreshStatusButton";
         var setup = NewActionButton("Setup & Permissions");
+        setup.Name = "HelpdeskSetupPermissionsButton";
         var checklist = NewActionButton("Deployment Checklist");
+        checklist.Name = "HelpdeskDeploymentChecklistButton";
         var probe = NewActionButton("Run Access Checks");
+        probe.Name = "HelpdeskRunAccessChecksButton";
         var diagnostics = CreateActionFlow();
         diagnostics.Controls.AddRange([refresh, probe, setup, checklist]);
         root.Controls.Add(diagnostics);
@@ -83,48 +95,29 @@ public sealed partial class MainForm
             var audit = _config.RequireProtectedAuditForRecovery
                 ? "Protected audit required"
                 : "Protected audit not required by current policy";
-            var connection = _directoryConnected
-                ? "AD connected"
-                : "AD not connected";
+            // Reflect the selected connection source. A cloud-only Helpdesk
+            // session must not be presented as simply "AD disconnected".
+            // HasCloudSearchSession checks in-memory token state only.
+            var adStatus = _directoryConnected ? "AD connected" : "AD disconnected";
+            var cloudStatus = HasCloudSearchSession()
+                ? "Microsoft 365 connected" : "Microsoft 365 disconnected";
+            var connection = StartConnectionPolicy.Normalize(SelectedStartSource) switch
+            {
+                StartConnectionPolicy.ActiveDirectory => adStatus,
+                StartConnectionPolicy.MicrosoftCloud => cloudStatus,
+                StartConnectionPolicy.Both => adStatus + " / " + cloudStatus,
+                _ => "Choose a connection source on Start"
+            };
             UiStyle.SetStatus(status,
                 $"{connection} | {audit} | Search: {(searchAllowed ? "permitted" : "denied")}. " +
                 "Use Access Health for detailed checks; status alone does not authorize secret reads.",
                 searchAllowed ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
 
-        void OpenSearch()
-        {
-            if (_homeWorkspaceTab is null)
-                return;
-            _mainTabs.SelectedTab = _homeWorkspaceTab;
-            var query = quickQuery.Text.Trim();
-            if (!string.IsNullOrWhiteSpace(query))
-                _homeQuery.Text = query;
-            _homeQuery.Focus();
-            // A deliberate Find Device click/Enter must execute a metadata
-            // search instead of only transferring keyboard focus. The Start
-            // handler remains authoritative for source and RBAC checks.
-            if (query.Length >= SearchText.MinimumLiveSearchCharacters)
-                _homeSearchButton.PerformClick();
-        }
-        search.Click += (_, _) => OpenSearch();
-        quickQuery.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Enter)
-                return;
-            e.SuppressKeyPress = true;
-            OpenSearch();
-        };
-        bitlocker.Click += (_, _) =>
-        {
-            if (_recoveryWorkspaceTab is not null)
-                _mainTabs.SelectedTab = _recoveryWorkspaceTab;
-        };
-        laps.Click += (_, _) =>
-        {
-            if (_lapsWorkspaceTab is not null)
-                _mainTabs.SelectedTab = _lapsWorkspaceTab;
-        };
+        // The same selected HomeSearchResult and source identity are reused.
+        // Helpdesk does not create an independent query or fetch secrets.
+        search.Click += (_, _) => OpenHelpdeskDeviceWorkspace();
+        prepare.Click += (_, _) => ShowRecoveryWorkflowSteps();
         access.Click += (_, _) => OpenHelpdeskAccessHealth();
         support.Click += (_, _) =>
         {
@@ -140,8 +133,13 @@ public sealed partial class MainForm
             if (!_layoutSelfTest && _accessHealthRun.Enabled)
                 await RunAccessHealthAsync();
         };
-        page.Enter += (_, _) => UpdateStatus();
+        page.Enter += (_, _) =>
+        {
+            UpdateStatus();
+            UpdateHelpdeskSelectedDeviceSummary();
+        };
         UpdateStatus();
+        UpdateHelpdeskSelectedDeviceSummary();
         return page;
     }
 
@@ -425,7 +423,9 @@ public sealed partial class MainForm
 
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Settings")
+            // Text changes with language: Settings is a stable control ID.
+            if (!string.Equals(page.Name, "SettingsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)
@@ -437,6 +437,12 @@ public sealed partial class MainForm
                     if (section.Name == "HelpdeskBasicsTab")
                     {
                         nested.SelectedTab = section;
+                        // Selecting a previously hidden TabPage is not a
+                        // reliable way to infer child Visible state.
+                        // Expand using the same idempotent method as the
+                        // Settings button, without simulating a click.
+                        _setHelpdeskRecoveryPolicyExpanded?.Invoke(true);
+                        QueueMainViewportReflow();
                         return;
                     }
                 }
@@ -446,9 +452,39 @@ public sealed partial class MainForm
 
     private void OpenHelpdeskAccessHealth()
     {
+        // Reuse the exact Start AD selection without copying any recovery
+        // key, LAPS password, ticket or cloud token into the diagnostic UI.
+        // Never carry an ambiguous/cloud hostname into the AD query.
+        if (!_layoutSelfTest && _accessHealthRun.Enabled &&
+            !_accessHealthComputer.IsDisposed)
+        {
+            var selected = GetSelectedHomeSearchResult();
+            var safeName = AccessHealthGuidanceService.SafeAdComputerName(selected);
+            if (safeName is not null)
+            {
+                _accessHealthComputer.Text = safeName;
+                UiStyle.SetStatus(_accessHealthStatus,
+                    "Using selected Start computer " + safeName +
+                    ". Tests have not run; this is not recovery authorization.",
+                    UiStatusKind.Neutral);
+            }
+            else if (selected is not null)
+            {
+                // An old AD name must never masquerade as the newly selected
+                // cloud/ambiguous object during a cross-workspace switch.
+                _accessHealthComputer.Clear();
+                UiStyle.SetStatus(_accessHealthStatus,
+                    "Selected device cannot be safely reused as an AD computer. " +
+                    "Confirm its unique directory ID before entering a diagnostic query.",
+                    UiStatusKind.Warning);
+            }
+        }
+
         foreach (TabPage page in _mainTabs.TabPages)
         {
-            if (page.Text != "Diagnostics")
+            // Works under English, Russian and mirrored Hebrew navigation.
+            if (!string.Equals(page.Name, "DiagnosticsWorkspace",
+                    StringComparison.Ordinal))
                 continue;
             _mainTabs.SelectedTab = page;
             foreach (Control control in page.Controls)

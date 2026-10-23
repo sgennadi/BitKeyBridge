@@ -13,6 +13,8 @@ public sealed class HelpdeskProfile
     public string RecoverySearchSource { get; set; } = "LiveAD";
     public string CloudTenant { get; set; } = string.Empty;
     public string CloudClientId { get; set; } = string.Empty;
+    // Legacy profile compatibility; never read by authentication or persisted.
+    [System.Text.Json.Serialization.JsonIgnore]
     public string CloudUsername { get; set; } = string.Empty;
     public string CloudAuthMode { get; set; } = "DeviceCode";
     public string CloudCertificateThumbprint { get; set; } = string.Empty;

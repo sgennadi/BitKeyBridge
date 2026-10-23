@@ -12,7 +12,6 @@ namespace BitKeyBridge;
 internal static class ScheduledUpdateService
 {
     internal const string TaskName = "BitKeyBridge-AutoUpdate";
-    private const string UpdateMutexName = @"Global\BitKeyBridge-AutomaticUpdate";
 
     internal static bool IsEligible(AppConfig config) =>
         config.CheckForUpdatesOnStart &&
@@ -87,11 +86,11 @@ internal static class ScheduledUpdateService
             return 0;
         }
 
-        using var gate = new Mutex(false, UpdateMutexName);
-        bool acquired;
-        try { acquired = gate.WaitOne(TimeSpan.FromSeconds(2)); }
-        catch (AbandonedMutexException) { acquired = true; }
-        if (!acquired)
+        // Mutexes are thread-affine. The downloader awaits network and disk I/O,
+        // so the continuation can run on another thread. Use the cross-process
+        // semaphore guard instead; it remains owned until the async method exits.
+        using var gate = ScheduledUpdateGate.TryAcquire();
+        if (gate is null)
         {
             Console.WriteLine("Another automatic BitKeyBridge updater is running.");
             return 0;
@@ -118,11 +117,15 @@ internal static class ScheduledUpdateService
             if (!string.Equals(active.UpdateRepository, config.UpdateRepository,
                     StringComparison.OrdinalIgnoreCase))
                 return Fail("Background update canceled: configured repository changed.", 3);
+            if (active.AllowPrereleaseUpdates != config.AllowPrereleaseUpdates)
+                return Fail("Background update canceled: prerelease channel changed.", 3);
 
             var staged = await updater.PrepareAsync(info, limit.Token);
             active = ConfigService.LoadAppConfig();
             if (!IsEligible(active) || UpdateRollbackHoldService.IsActiveForCurrentBuild())
                 return Fail("Background update canceled: machine approval was revoked during staging.", 3);
+            if (active.AllowPrereleaseUpdates != config.AllowPrereleaseUpdates)
+                return Fail("Background update canceled: prerelease permission changed during download.", 3);
 
             // SYSTEM task launches helper in the same privileged identity;
             // the helper rechecks plan hash, executable hash, active policy,
@@ -142,7 +145,6 @@ internal static class ScheduledUpdateService
                 EventLogSeverity.Warning, 4105, "Update");
             return Fail("Background update failed: " + reason, 1);
         }
-        finally { gate.ReleaseMutex(); }
     }
 
     private static bool IsMachineInstalledExecutable()

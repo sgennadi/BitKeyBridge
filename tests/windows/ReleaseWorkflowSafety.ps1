@@ -75,7 +75,7 @@ if ($workflow -notmatch "refs/heads/release/v0\.30\.4" -or
     $release -notmatch "github\.ref != 'refs/heads/release/v0\.30\.4'" -or
     $release -notmatch 'SHA256SUMS.txt' -or
     $release -notmatch "needs\['legacy-upgrade-regression'\]\.result == 'success'" -or
-    $release -notmatch 'needs: \[build, laps-regression, audit-broker-integration, legacy-upgrade-regression\]') {
+    $release -notmatch 'needs: \[build, laps-regression, audit-broker-integration, legacy-upgrade-regression, codeql-stable-release\]') {
     throw 'Stable unsigned v0.30.4 lacks exact commit, broker, legacy upgrade, or checksum gates.'
 }
 
@@ -101,6 +101,16 @@ $signingEvidence = [regex]::Match($release,
 if (-not $signingEvidence.Success -or
     $signingEvidence.Groups['step'].Value -notmatch "github\.ref != 'refs/heads/release/v0\.30\.5'") {
     throw 'v0.30.5 unsigned stable release must skip signed-only attestation evidence.'
+}
+# v0.32.0 stable requires exact release commit and same-SHA CodeQL.
+if (-not $pushBranches[0].Contains('"release/v0.32.0"') -or
+    -not $release.Contains("github.event.head_commit.message == 'Release v0.32.0'") -or
+    -not $release.Contains("github.ref != 'refs/heads/release/v0.32.0'") -or
+    -not $release.Contains("needs['codeql-stable-release'].result == 'success'") -or
+    -not $release.Contains('docs/release-authorization-v0.32.0.md') -or
+    -not $release.Contains('docs/release-notes-v0.32.0.md') -or
+    -not $workflow.Contains('  codeql-stable-release:')) {
+    throw 'Stable v0.32.0 exact-source security and release guards are missing.'
 }
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.

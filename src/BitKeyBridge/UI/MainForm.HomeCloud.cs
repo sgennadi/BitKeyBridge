@@ -4,7 +4,8 @@ public sealed partial class MainForm
 {
     private sealed record HomeCloudLookupStatus(
         int RecordsAdded, bool IsPartial, string SourceDiagnostics,
-        string? Failure);
+        string? Failure,
+        MetadataFailureKind FailureKind = MetadataFailureKind.None);
 
     private bool HasCloudSearchSession() =>
         _cloudToken is not null &&
@@ -18,7 +19,8 @@ public sealed partial class MainForm
     {
         if (!HasCloudSearchSession())
             return new HomeCloudLookupStatus(
-                0, false, string.Empty, "Cloud session unavailable.");
+                0, false, string.Empty, "Cloud session unavailable.",
+                MetadataFailureKind.SignInRequired);
 
         try
         {
@@ -39,8 +41,8 @@ public sealed partial class MainForm
                 {
                     var index = _homeSearchResults.Rows.Add(
                         result.ComputerName, result.SourceSummary,
-                        result.BitLockerStatus, result.LatestBitLockerKeyUtc,
-                        result.LapsStatus, result.LapsKeyDateUtc);
+                        result.BitLockerStatus, (object?)result.LatestBitLockerKeyUtc ?? DBNull.Value,
+                        result.LapsStatus, (object?)result.LapsKeyDateUtc ?? DBNull.Value);
                     _homeSearchResults.Rows[index].Tag = result;
                 }
 
@@ -70,7 +72,8 @@ public sealed partial class MainForm
             ct.ThrowIfCancellationRequested();
             return new HomeCloudLookupStatus(
                 0, false, string.Empty,
-                DiagnosticRedaction.Sanitize(ex.Message));
+                DiagnosticRedaction.Sanitize(ex.Message),
+                MetadataFailureGuidance.Classify(ex));
         }
     }
 
@@ -100,16 +103,29 @@ public sealed partial class MainForm
             if (result.Failure is not null || result.IsPartial)
                 _appDiagnostics.ShowMessage(
                     "Cloud metadata search was incomplete.",
-                    result.Failure ?? result.SourceDiagnostics);
+                    (result.Failure ?? result.SourceDiagnostics) +
+                    Environment.NewLine + "Next check: " +
+                    MetadataFailureGuidance.NextAction(
+                        result.Failure is null
+                            ? MetadataFailureKind.Unknown
+                            : result.FailureKind, "Cloud"));
 
-            UiStyle.SetStatus(
-                _homeSearchStatus,
-                result.Failure is not null
-                    ? "Cloud lookup failed. See diagnostics; no backup absence is proven."
+            var resultStatus = result.Failure is not null
+                ? UiLanguageService.Translate(_uiLanguageCode,
+                    "MetadataKind" + result.FailureKind) + ". " +
+                  UiLanguageService.Translate(_uiLanguageCode,
+                    "MetadataAction" + result.FailureKind) + " " +
+                  UiLanguageService.Translate(_uiLanguageCode,
+                    "MetadataBackupUnverified")
+                : result.RecordsAdded == 0 && !result.IsPartial
+                    ? UiLanguageService.Translate(_uiLanguageCode, "MetadataNoCloudRecords")
                     : $"Cloud: {result.RecordsAdded} record(s). " +
-                      "Select a source-qualified row for Device 360." +
-                      (result.IsPartial ? " Some metadata is unverified." : ""),
-                result.Failure is not null || result.IsPartial
+                      "Select an exact row for Device 360." +
+                      (result.IsPartial ? " Some metadata is unverified." : "");
+            UiStyle.SetStatus(
+                _homeSearchStatus, resultStatus,
+                result.Failure is not null || result.IsPartial ||
+                    result.RecordsAdded == 0
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
         }

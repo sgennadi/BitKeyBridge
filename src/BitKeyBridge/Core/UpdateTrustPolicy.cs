@@ -31,20 +31,26 @@ internal static class UpdateTrustPolicy
     }
 
     internal static bool CanInstallUnattended(AppConfig config) =>
+        (string.IsNullOrWhiteSpace(config.TrustedUpdateSignerThumbprint) ||
+         config.RequireTrustedUpdateSignature) &&
         CanEnableUnattended(config.RequireTrustedUpdateSignature,
             config.TrustedUpdatePublisher,
             config.AllowUnsignedUnattendedUpdates,
-            config.UpdateRepository);
+            config.UpdateRepository) &&
+        ManagedUpdatePolicy.IsPermitted(config);
 
     internal static bool UseUnsignedOptInChannel(AppConfig config) =>
         config.AllowUnsignedUnattendedUpdates &&
         !config.RequireTrustedUpdateSignature &&
         string.IsNullOrWhiteSpace(config.TrustedUpdatePublisher) &&
+        string.IsNullOrWhiteSpace(config.TrustedUpdateSignerThumbprint) &&
         string.Equals(config.UpdateRepository?.Trim(), OfficialRepository,
             StringComparison.OrdinalIgnoreCase);
 
     internal static string DescribeMode(AppConfig config) =>
-        CanEnableUnattended(config.RequireTrustedUpdateSignature, config.TrustedUpdatePublisher)
+        !ManagedUpdatePolicy.IsPermitted(config)
+            ? "Blocked by centrally managed update policy"
+            : CanEnableUnattended(config.RequireTrustedUpdateSignature, config.TrustedUpdatePublisher)
             ? "Trusted Authenticode publisher"
             : UseUnsignedOptInChannel(config)
                 ? "Unsigned opt-in (GitHub SHA-256, no publisher identity)"

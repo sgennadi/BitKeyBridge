@@ -1,3 +1,135 @@
+## 0.32.0
+
+**Stable source. New, unsigned release only from the exact gated release/v0.32.0 commit.**
+
+- Consolidated v0.32.0-rc.9 and post-RC9 fixes for Windows x64, x86 and ARM64.
+- Hebrew RTL: dynamic/duplicate-name controls translate correctly; static action labels restore after accidental blanking without rescanning the whole control tree or modifying user/secret fields.
+- Improved compact WinForms tab navigation, HiDPI/RDP redraw performance, unified source-qualified AD/Entra Helpdesk lookup and optional saved startup connection.
+- Removed cloud ROPC; retained Device Code/certificate authentication, protected audit, RBAC and strict updater trust/rollback policy.
+- Release-gated CodeQL, LAPS, UI/HiDPI tests, two non-admin protected audit accounts, real legacy migration/rollback, checksums, SBOM and provenance.
+- **Unsigned release**, not organizational signing or mass deployment approval. Previously opted-in stable auto-update clients may discover it; production Windows/AD/Entra/CyberArk pilot is a separate decision.
+
+## 0.32.0-rc.9
+
+**Published 2026-10-21 as an unsigned, explicit opt-in prerelease; stable v0.30.5 remains the latest stable release.**
+
+- Keep the consolidated RC8 security, passwordless Graph authentication, responsive Helpdesk/Settings UI and guarded updater improvements in a separately tagged RC9 preview.
+- The published `v0.32.0-rc.9` tag and its binary assets remain immutable. Enterprise code signing, administrator/technician approval, real Windows/AD/Entra/RDP acceptance and explicit update consent remain separate release gates.
+- Subsequent Hebrew caption, metadata lookup and UI performance improvements on `development/post-rc9-lookup-ux` (and its review branches) are development-only and are **not included** in RC9 download assets.
+
+## 0.32.0-rc.8
+
+**Consolidated single-source candidate (unpublished).** Includes RC7/RC8 UI/updater fixes and Graph ROPC removal on one independent integration branch. The exact candidate requires full CI, manual Windows/RDP/AD/Entra acceptance, and explicit release approval; stable v0.30.5 remains unchanged.
+
+- Await diagnostic actions and log sanitized failures once; explicitly deny missing audit-broker identities; preserve blank grid dates and annotate the recovery-selection null contract.
+- Load the verified Authenticode leaf certificate through X509CertificateLoader and support an optional exact TrustedUpdateSignerThumbprint pin in administrator-owned appsettings.json. A configured pin requires Windows trust even when unsigned consent exists. Keep existing publisher policy and unsigned defaults.
+- Pin Linux CI to Ubuntu 24.04 and gate an independent RC8 branch/tag, without publishing from an integration PR. Add production-verifier signed, tampered, unsigned and wrong-pin regression coverage.
+- Consolidate Start and Helpdesk device search into one source-qualified selection. Preserve the selected AD/Entra record across Helpdesk navigation; require existing per-source authorization for BitLocker/LAPS.
+- Simplify the connection chooser to a primary Connect / Change action, optional direct connection tools and expandable cloud permissions guidance; retain administrator-only application provisioning and no saved passwords.
+- Collapse seldom-used profile and recovery policy editors while keeping the saved protected-audit/ticket status visible, and add visual-only Reset Layout with preserved credentials, audit and selection.
+- Avoid repeated status paints, full-form DPI layout passes and unnecessary nested-tab FlowLayoutPanel remeasurement; add on-demand Diagnostics > Tools > UI Performance counters showing WinForms layout count, average and worst duration without secret/device data.
+- Automatically remove stale updater staging versions and abandoned helper/rollback GUID directories during enabled housekeeping using the existing 7-day temporary retention setting. Restrict removal to named folders under ProgramData/BitKeyBridge/Updates; preserve current/held versions, live helpers, symlinks, .bak, update history, settings, protected audit and recovery secrets.
+- Remove Microsoft Graph ROPC grant and password UI/CLI. Migrate legacy AuthMode=Password to interactive DeviceCode and omit obsolete usernames from saved settings/profiles. Keep certificate auth for unattended jobs and Remote API disabled by default.
+- Expand offline WinForms 100-200%/RDP, status redraw, protected-update staging and rollback regressions. Do not publish until full CI and interactive AD/Entra/RDP/security acceptance.
+
+## 0.32.0-rc.7
+
+**Status: Prepared, not yet published.**
+
+**Unsigned opt-in candidate; v0.30.5 remains Stable/Latest. The existing RC6 tag/assets are immutable.**
+
+- Roll forward the tested WinForms viewport fix from PR #98: Diagnostics > Tools, Start, BitLocker, LAPS, Helpdesk, Devices and Settings, including nested Enterprise and Diagnostics sections.
+- Bound AutoSize vertical-workspace section tables and action flows to the current viewport width, preserving wrapping heights and avoiding expensive no-op layout passes.
+- Repair stale selected nested TabPage Dock=Fill bounds after tab switches, resizing, DPI changes and RDP reconnects without rebuilding controls, accessing secrets or changing updater/security policy.
+- Keep regression coverage for deliberately collapsed viewports at compact/maximized 100%, 150%, 175% and 200% font/DPI scenarios; require real-device RDP/HiDPI signoff before external prerelease publication.
+- Pin new 0.32.0-rc.7 ProductVersion/InformationalVersion and exact independent release branch/tag gating, three single-file x64/x86/ARM64 ZIPs, SHA256SUMS and BUILD-INFO; require LAPS, CodeQL, protected-audit and verified legacy migration/rollback.
+- No new endpoint enrollment, automatic task, GPO change, unsigned consent, institutional-signing claim or Stable promotion.
+
+## 0.32.0-rc.6
+
+**Unsigned, opt-in smoother Windows GUI preview. Stable/Latest remains v0.30.5.**
+
+- Polish the native Windows 11-inspired interface: consistent accent styling for the primary non-secret actions, selected-tab indicator, clean native text input/grid outlines, original accessible controls and unchanged password reveal/copy styling.
+- Remove full-tree theme refresh, repeated shell/tab/page PerformLayout and Win32 rounded Region recreation on each WM_SIZE; preserve automatic Dock=Fill and theme refresh on actual monitor-DPI change.
+- Coalesce rapid MainForm RDP/window resize events (55 ms), other form label measurement (65 ms) and DPI/font layout refresh (65 ms), without any global WS_EX_COMPOSITED window that would slow remote rendering.
+- Guard nested vertical workspace Layout callbacks against reentrancy, batch width changes and restore one ordinary AutoSize layout so translated captions and controls remain visible at 150-200% scaling.
+- Fix Diagnostics > Tools content stuck in the top-left corner: bound AutoSize action rows and section tables to the live viewport width, repair selected nested TabPages recursively, and remove competing top-level AutoScroll for Start, BitLocker, LAPS, Devices, Helpdesk, Diagnostics and Settings. Add compact/maximized 100-200% simulated DPI and RDP resize regression checks.
+- Theme only previously unseen controls and apply styles to dynamically added children. Avoid native Region clipping on TextBox/ComboBox/DataGridView/ListView/ProgressBar.
+- Extend real WinForms runtime --ui-self-test for accent and secret-action semantics, and add Windows UI-rendering source regressions to x64 CI.
+- Publish only after exact pinned RC6 source passes x64/x86/ARM64, CodeQL, all offline/UI/GPO checks, actual two-standard-user protected audit and legacy upgrade/rollback. No managed machine enrollment, signature bypass, or promotion to Stable/Latest.
+
+## 0.32.0-rc.5
+
+**Unsigned, opt-in hardened Update Center 2.0 preview. Stable Latest stays v0.30.5.**
+
+- Fix security-sensitive Update Center shortcuts: Pause and Enable affect only saved machine automatic-update flags, require an administrator and explicit enable confirmation, preserve all unrelated unsigned consent/publisher/channel settings, and never clear a failed-update hold.
+- Require administrator identity, explicit Yes/No approval and effective GPO/signer policy revalidation before the existing Resume Auto-Install action can remove a rollback/failure hold.
+- Make Retry a bounded (30-second), non-mutating online metadata check against saved machine configuration with duplicate-click suppression; add a Windows regression that rejects any accidental Save Update Settings or configuration write.
+- Recheck prerelease permission both in the scheduled SYSTEM worker and the privileged apply helper; reject a preview update when permission was revoked during async staging, without breaking explicitly requested manual rollback.
+- Read Task Scheduler off the GUI thread with stale-refresh suppression, display the task's next run in compact mode and flag any principal, runlevel, executable or arguments that differ from the exact intended SYSTEM task.
+- Show separately the last successful update and latest sanitized failure with EN/RU/HE status strings; improve responsive wrapped labels/actions at HiDPI/200% and RDP.
+- Clamp saved window bounds to current screen after monitor/resolution changes and keep per-user compact layout.
+- Release three architecture ZIPs only after the exact RC5 commit passes source/version checks, LAPS, CodeQL, executable/UI tests, two-standard-user protected audit and real legacy upgrade/rollback. No managed endpoint enrollment or signing bypass.
+
+## 0.32.0-rc.4
+
+- Published the initial compact Update Center 2.0 and per-user HiDPI/RDP workspace preview, including read-only updater status and pilot-facing UI documentation. RC5 supersedes its security and policy handling; neither prerelease is Stable/Latest.
+
+## 0.32.0-rc.3
+
+- Add a startup connection wizard checkbox **Remember this connection**; explicitly opt in to automatic reuse of the last selected AD, Microsoft Entra/Intune or combined source.
+- Save only per-user source and selected authentication method in LocalAppData; never store alternate AD passwords or bypass delegated Microsoft Graph MFA.
+- Keep the wizard visible by default on first run and after upgrading legacy source preferences. Respect machine AutoConnectOnStart=false, Choose later, and explicit opt-out in the wizard.
+- Allow the Start source drop-down to change sources without silently retargeting remembered auto-connect; reconnect and revise the preference from the existing wizard button.
+- Add offline policy and Windows HiDPI wizard regressions to the release-gated test suite.
+- RC3 remains an unsigned opt-in GitHub prerelease, not Stable/Latest; GitHub Release creation requires all architecture builds, LAPS, CodeQL, protected audit, and legacy migration/rollback tests to pass at the exact promoted source SHA.
+- The existing v0.30.5 stable and v0.32.0-rc.2 prerelease binaries are not changed.
+
+## 0.32.0-rc.2
+
+**Unsigned, opt-in prerelease. Supersedes RC1 for the daily background updater.**
+
+- Fix the scheduled SYSTEM updater's cross-process lock: asynchronous network/download continuations cannot safely release a Windows thread-affine Mutex; use an asynchronous-safe named Semaphore instead, with exactly-once disposal.
+- Add Windows runtime self-test for concurrent invocation and cross-thread release. The separate exclusive privileged apply gate and all original rollback, hash, issuer-trust and centrally managed policy checks remain in effect.
+- Rebuild and publish all three architecture ZIPs and SHA256SUMS only after pinned-source CI completes Windows x64/x86/ARM64, LAPS, CodeQL, two-standard-user audit broker tests, GPO/XML and actual legacy migration and rollback.
+- Neither consent to unsigned packages nor registration of the daily SYSTEM task is enabled silently. Stable/Latest stays v0.30.5.
+
+## 0.32.0-rc.1
+
+**Opt-in, unsigned Windows prerelease for technician testing; NOT a production-approved stable release.**
+
+- Integrate v0.31.0 source-qualified Unified Search, Access Health, seven-step secret-free Recovery Workflow, EN/RU/HE responsive UI, and v0.32.0 bounded Fleet/GPO inventory on the v0.30.5 hardened updater/audit foundation.
+- Use 0.32.0-rc.1 as .NET ProductVersion/InformationalVersion; retain numeric Windows FileVersion 0.32.0.0.
+- Deliver canonical single-root-EXE x64/x86/ARM64 ZIPs from a separate prerelease workflow, guarded by Windows and LAPS regressions, GPO template checks, CodeQL, SHA-256 verification, post-build version/architecture checks, protected audit and ZIP layout tests.
+- Prerelease is NOT GitHub Stable/Latest. A client must independently opt into prerelease checks; automatic installation still requires its existing explicit publisher-pinned trust or unsigned opt-in, and centrally managed GPO may deny it.
+- The EXEs are unsigned; same-account SHA-256 and GitHub asset digests do not establish a genuine publisher identity. No silent enrollment, automatic GPO linking, privileged secret access, or deployment are performed by publication.
+- Real non-admin AD/Entra/Intune, RDP/4K, CyberArk EPM, GPMC, NTFS/SMB ACL and service/rollback acceptance remain mandatory before stable v0.32.0.
+
+## 0.32.0-dev.1
+
+**Internal integration preview only; not a public release.**
+
+- Add non-secret, schema-versioned native `--fleet-status` metadata for a managed Windows machine.
+- Add strict, bounded offline `--fleet-aggregate <input-folder> <output.csv>` using newest valid UTC report per machine, 7-day staleness indicator and CSV injection mitigation. Invalid, duplicate and unsafe fields are rejected.
+- Add native `--fleet-export <MACHINE.json> --no-elevation`: export the existing fleet JSON contract using a new local temporary file and atomic replacement, with matching-machine filename requirement and reparse-target checks. SCM permission failure is never interpreted as healthy service.
+- Supply optional machine-scoped GPO restrictions in EN/RU/HE Administrative Templates and a CMD-only device-identity collection wrapper using existing share permissions. GPO restrictions cannot grant unsigned-update consent.
+- Validate the Microsoft PolicyDefinitions namespace, exact machine policy DWORD values and matching localized ADML resources in Windows CI, alongside native export/aggregation roundtrips and wrong-machine denial.
+- Keep the earlier conflicting `FleetSnapshotTransport` JSON-summary CLI from draft PR #67 out of this integration: the official command produces CSV consistently.
+- No central remote execution, recovery passwords, tokens, new privileged daemon, automatic policy link or production deployment is included. Real GPMC and GPO share ACL verification remain required.
+
+## 0.31.0-rc.1
+
+**Development release candidate only — not published or production-approved.** Based on the v0.30.5 updater/protected-audit hotfix and the full v0.31.0 WinForms feature integration.
+
+- Add a source-qualified Unified Search 2.0 spanning AD, Intune and Entra recovery metadata; never merge distinct device records using hostname alone.
+- Retry only transient Graph metadata HTTP 429/500/502/503/504 requests once, with bounded delay and cancellation. Never retry 401/403, secret reads, rotation or unauthorized actions.
+- Include Helpdesk Access Health 2.0 with current Windows-token RBAC, AD/LAPS/BitLocker/Graph and protected broker guidance. No probe authorizes a recovery secret.
+- Include a seven-step read-only Recovery Workflow, with explicit ticket/audit readiness, stale selection prevention, exact AD object DN/GUID or authoritative cloud ID verification and no automatic reveal/rotation.
+- Provide compact keyboard navigation (Ctrl+F and Ctrl+1..7), EN/RU/HE shell labels, Hebrew RTL and HiDPI/RDP 175%/200% UI regression coverage.
+- Preserve v0.30.5 hardened updater ZIP (one root EXE, SHA-256 checks), post-install self-test/rollback, legacy migration checks and lossless protected journal archival. Both previous and new offline regression suites are retained.
+- RC compiled binaries are strictly test artifacts. No public GitHub Release, GPO fleet rollout, machine enrollment, automatic unsigned update opt-in or recovery secret access is authorized.
+- Before promotion: complete x64/x86/ARM64 and CodeQL CI on this exact revision, two-standard-user protected audit acceptance, and physical AD/Graph/CyberArk EPM/RDP/4K pilot checks.
+
 ## 0.30.5
 
 - Hotfix release ZIP layout: archive only BitKeyBridge.exe at ZIP root; exclude generated UI test logs.

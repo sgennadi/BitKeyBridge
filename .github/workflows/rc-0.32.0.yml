@@ -1,0 +1,329 @@
+name: BitKeyBridge v0.32.0 RC9 prerelease checks
+
+on:
+  push:
+    branches: [ "release/v0.32.0-rc.9", "development/post-rc9-lookup-ux" ]
+  pull_request:
+    # Prevent historical RC9 version gate from running on Stable PRs to main.
+    branches: [ "development/post-rc9-lookup-ux", "release/v0.32.0-rc.9" ]
+    paths:
+      - ".github/workflows/rc-0.32.0.yml"
+      - "src/**"
+      - "tests/**"
+      - "deployment/gpo/**"
+      - "CHANGELOG.md"
+      - "README.md"
+      - "docs/release-candidate-v0.32.0-rc.8.md"
+  workflow_dispatch:
+
+# Untrusted PR builds cannot create releases or read signing secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: bitkeybridge-rc032-${{ github.event_name }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  source-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pin version and exact source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fq '<Version>0.32.0-rc.9</Version>' src/BitKeyBridge/BitKeyBridge.csproj
+          grep -Fq '<InformationalVersion>0.32.0-rc.9</InformationalVersion>' src/BitKeyBridge/BitKeyBridge.csproj
+          grep -Fq '<FileVersion>0.32.0.0</FileVersion>' src/BitKeyBridge/BitKeyBridge.csproj
+          # RC9 packages the already-verified RC8 feature snapshot without changing
+          # the underlying features. The version-specific release notes are
+          # attached to the GitHub prerelease; retain the RC8 history gate.
+          grep -Fxq '## 0.32.0-rc.8' CHANGELOG.md
+          # Inspect only the actual PowerShell version-check line. A grep
+          # negative against the entire workflow would match its own source
+          # and could silently pass due to Bash's !/errexit exceptions.
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('.github/workflows/rc-0.32.0.yml').read_text().splitlines()
+          expected = r"          if ($version -notmatch '^0\.32\.0-rc\.9(?:\+[^ ]+)?$' -or"
+          if lines.count(expected) != 1:
+              raise SystemExit("Stale or duplicate candidate ProductVersion gate")
+          PY
+          test -s docs/release-candidate-v0.32.0-rc.8.md
+          test -f tests/windows/ProtectedAuditBrokerIntegration.ps1
+          test -f tests/windows/UpgradeMigrationRegression.ps1
+          test -f tests/windows/Verify-UpdateZipLayout.ps1
+          test -f tests/windows/UiRenderingRegression.ps1
+          # Fail closed if the nested viewport fix is missing from release source.
+          grep -Fq 'RepairSelectedTabHierarchy(_mainTabs, changedPath)' src/BitKeyBridge/UI/MainForm.ResponsiveViewport.cs
+          grep -Fq 'DiagnosticToolsActions' src/BitKeyBridge/UI/MainForm.DiagnosticNavigation.cs
+          grep -Fq 'VerifyNestedWorkspaceViewport' src/BitKeyBridge/UI/UiLayoutSelfTest.cs
+          grep -Fq 'child is TableLayoutPanel || child is FlowLayoutPanel' src/BitKeyBridge/UI/UiStyle.cs
+          # Prevent accidental reintroduction of username/password OAuth grants.
+          test -f src/BitKeyBridge/Core/CloudAuthenticationPolicy.cs
+          grep -Fq 'CloudAuthenticationPolicy.Normalize' src/BitKeyBridge/Infrastructure/ConfigService.cs
+          if grep -Fq 'AcquirePasswordTokenAsync(' src/BitKeyBridge/Services/CloudGraphService.cs; then
+            echo 'ROPC method was reintroduced' >&2
+            exit 1
+          fi
+          if grep -Fq '"grant_type"] = "password"' src/BitKeyBridge/Services/CloudGraphService.cs; then
+            echo 'ROPC OAuth password grant was reintroduced' >&2
+            exit 1
+          fi
+          if grep -Fq '_cloudPassword' src/BitKeyBridge/UI/MainForm.cs; then
+            echo 'Legacy cloud password input was reintroduced' >&2
+            exit 1
+          fi
+
+  laps-regression:
+    needs: source-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Authenticode pin regression
+        run: dotnet run --project tests/AuthenticodeRegression -c Release
+      - name: LAPS lifecycle and encoding regression
+        run: dotnet run --project tests/LapsRegression -c Release
+
+  codeql:
+    needs: source-gate
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          build-mode: manual
+      - name: Compile analyzed source
+        shell: pwsh
+        run: |
+          dotnet restore src/BitKeyBridge/BitKeyBridge.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+          dotnet build src/BitKeyBridge/BitKeyBridge.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'CodeQL source compilation failed.' }
+      - uses: github/codeql-action/analyze@v4
+
+  build:
+    needs: source-gate
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [ win-x64, win-x86, win-arm64 ]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Validate GPO templates and ZIP regressions
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          ./tests/windows/Validate-GpoTemplates.ps1
+          ./tests/windows/UpdateZipLayoutRegression.ps1
+          ./tests/windows/UpdateHoldSettingsRegression.ps1
+          ./tests/windows/UiRenderingRegression.ps1
+      - name: Restore and publish
+        shell: pwsh
+        run: |
+          dotnet restore src/BitKeyBridge/BitKeyBridge.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+          dotnet publish src/BitKeyBridge/BitKeyBridge.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o publish/${{ matrix.rid }}
+          if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
+      - name: Verify PE architecture, exact version and one-root-EXE ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rid = '${{ matrix.rid }}'
+          $exe = "publish/$rid/BitKeyBridge.exe"
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Missing executable.' }
+          $item = Get-Item -LiteralPath $exe
+          if ($item.Length -le 0 -or $item.Length -gt 536870912) { throw 'Invalid executable size.' }
+          $version = $item.VersionInfo.ProductVersion
+          if ($version -notmatch '^0\.32\.0-rc\.9(?:\+[^ ]+)?$' -or
+              $item.VersionInfo.FileVersion -ne '0.32.0.0') {
+            throw "Wrong executable version: ProductVersion=$version FileVersion=$($item.VersionInfo.FileVersion)"
+          }
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exe).Path)
+          if ($bytes.Length -lt 512 -or [BitConverter]::ToUInt16($bytes, 0) -ne 0x5A4D) {
+            throw 'Invalid executable DOS header.'
+          }
+          $offset = [BitConverter]::ToInt32($bytes, 0x3C)
+          if ($offset -lt 64 -or $offset + 6 -gt $bytes.Length -or
+              [BitConverter]::ToUInt32($bytes, $offset) -ne 0x00004550) {
+            throw 'Invalid PE signature.'
+          }
+          $expected = @{ 'win-x64' = 0x8664; 'win-x86' = 0x014c; 'win-arm64' = 0xaa64 }
+          $machine = [BitConverter]::ToUInt16($bytes, $offset + 4)
+          if ($machine -ne $expected[$rid]) {
+            throw "Wrong PE machine for $rid : $machine."
+          }
+          $bytes = $null
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          $zip = "package/BitKeyBridge-$rid.zip"
+          Compress-Archive -LiteralPath $exe -DestinationPath $zip
+          ./tests/windows/Verify-UpdateZipLayout.ps1 -ArchivePath $zip -ExpectedExecutable $exe
+          Write-Host "Verified $rid version $version and SHA256 $((Get-FileHash $zip -Algorithm SHA256).Hash)"
+      - name: Execute published binary offline tests and UI HiDPI tests
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path -LiteralPath 'publish/win-x64/BitKeyBridge.exe').Path
+          foreach ($test in @('--self-test', '--ui-self-test')) {
+            $process = Start-Process -FilePath $exe -ArgumentList @($test, '--no-elevation') -PassThru -Wait
+            if ($process.ExitCode -ne 0) {
+              # WinExe runs without a console; print the synthetic layout report
+              # so failures can be diagnosed without downloading binaries.
+              $report = Join-Path (Split-Path -Parent $exe) 'ui-self-test.log'
+              if ($test -eq '--ui-self-test' -and
+                  (Test-Path -LiteralPath $report -PathType Leaf)) {
+                Write-Host '--- UI SELF-TEST REPORT (first 120 lines) ---'
+                Get-Content -LiteralPath $report -TotalCount 120 | ForEach-Object { Write-Host $_ }
+              }
+              throw "RC $test failed with exit code $($process.ExitCode)."
+            }
+          }
+          ./tests/windows/ReleaseSigningGateSmoke.ps1 -Executable $exe
+          ./tests/windows/UpdateCenterSmoke.ps1 -Executable $exe
+      - name: Upload test package
+        uses: actions/upload-artifact@v7
+        with:
+          name: rc-${{ matrix.rid }}
+          path: package/BitKeyBridge-${{ matrix.rid }}.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  protected-audit-integration:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: rc-win-x64
+          path: broker-package
+      - name: Verify two real standard Windows identities and protected journal ACK
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Refusing privileged audit regression on a non-disposable runner.'
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'bitkeybridge-rc-audit'
+          Expand-Archive -LiteralPath broker-package/BitKeyBridge-win-x64.zip -DestinationPath $root
+          ./tests/windows/ProtectedAuditBrokerIntegration.ps1 -Executable (Join-Path $root 'BitKeyBridge.exe') -EphemeralHostedRunner
+
+  legacy-upgrade-rollback:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: rc-win-x64
+          path: legacy-package
+      - name: Real upgrade and rollback from pinned v0.30.1 and v0.30.3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Refusing legacy upgrade regression on a non-disposable runner.'
+          }
+          ./tests/windows/UpgradeMigrationRegression.ps1 -CandidateZip 'legacy-package/BitKeyBridge-win-x64.zip' -ExpectedCandidateVersion '0.32.0-rc.9' -EphemeralHostedRunner
+
+  publish-prerelease:
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'sgennadi/BitKeyBridge' &&
+      github.ref == 'refs/heads/release/v0.32.0-rc.9' &&
+      github.event.head_commit.message == 'Release candidate v0.32.0-rc.9'
+    needs: [source-gate, laps-regression, codeql, build, protected-audit-integration, legacy-upgrade-rollback]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: rc-win-x64
+          path: incoming/win-x64
+      - uses: actions/download-artifact@v8
+        with:
+          name: rc-win-x86
+          path: incoming/win-x86
+      - uses: actions/download-artifact@v8
+        with:
+          name: rc-win-arm64
+          path: incoming/win-arm64
+      - name: Recheck immutable release metadata and assemble package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag='v0.32.0-rc.9'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = 'refs/heads/release/v0.32.0-rc.9'
+          test "$GH_REPO" = 'sgennadi/BitKeyBridge'
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing overwrite' >&2
+            exit 1
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo 'Tag already exists; refusing retagging' >&2
+            exit 1
+          fi
+          mkdir -p release
+          for rid in win-x64 win-x86 win-arm64; do
+            src="incoming/$rid/BitKeyBridge-$rid.zip"
+            dst="release/BitKeyBridge-$rid.zip"
+            test -s "$src"
+            unzip -tq "$src" >/dev/null
+            test "$(unzip -Z -1 "$src")" = 'BitKeyBridge.exe'
+            cp "$src" "$dst"
+          done
+          cd release
+          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          printf 'Version: 0.32.0-rc.9\nSourceSHA: %s\nArchitecture: Windows x64, x86, ARM64\nSigning: UNSIGNED, OPT-IN PRERELEASE\n' "$GITHUB_SHA" > BUILD-INFO.txt
+          test "$(wc -l < SHA256SUMS.txt)" -eq 3
+      - name: Publish unsigned, opt-in GitHub prerelease (never Latest)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release create v0.32.0-rc.9 \
+            release/BitKeyBridge-win-x64.zip \
+            release/BitKeyBridge-win-x86.zip \
+            release/BitKeyBridge-win-arm64.zip \
+            release/SHA256SUMS.txt \
+            release/BUILD-INFO.txt \
+            --repo "$GH_REPO" \
+            --target "$GITHUB_SHA" \
+            --title 'BitKeyBridge v0.32.0-rc.9 (unsigned opt-in preview)' \
+            --notes 'Unsigned opt-in RC9 from the CI-verified consolidated RC8 source. Native Windows x64/x86/ARM64; faster WinForms HiDPI/RDP and unified Helpdesk; Graph Device Code or certificate only (ROPC removed); strict signed-update checks, protected audit, guarded cleanup and rollback. Real Windows/RDP/AD/Entra/CyberArk validation and institutional signing are required before production deployment. Stable/Latest remains v0.30.5. No automatic deployment.' \
+            --prerelease
