@@ -27,7 +27,9 @@ public sealed partial class MainForm
         // BitLocker and LAPS already have main tabs and selected-device
         // cards on Start; do not duplicate those navigation controls here.
         var access = NewActionButton("Access Health");
+        access.Name = "HelpdeskAccessHealthButton";
         var support = NewActionButton("Support Bundle");
+        support.Name = "HelpdeskSupportBundleButton";
         actions.Controls.AddRange([search, prepare, access, support]);
         root.Controls.Add(actions);
 
@@ -52,9 +54,13 @@ public sealed partial class MainForm
         root.Controls.Add(status);
 
         var refresh = NewActionButton("Refresh Status");
+        refresh.Name = "HelpdeskRefreshStatusButton";
         var setup = NewActionButton("Setup & Permissions");
+        setup.Name = "HelpdeskSetupPermissionsButton";
         var checklist = NewActionButton("Deployment Checklist");
+        checklist.Name = "HelpdeskDeploymentChecklistButton";
         var probe = NewActionButton("Run Access Checks");
+        probe.Name = "HelpdeskRunAccessChecksButton";
         var diagnostics = CreateActionFlow();
         diagnostics.Controls.AddRange([refresh, probe, setup, checklist]);
         root.Controls.Add(diagnostics);
