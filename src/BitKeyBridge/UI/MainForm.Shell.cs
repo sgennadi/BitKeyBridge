@@ -335,7 +335,11 @@ public sealed partial class MainForm
             Dock = DockStyle.Top
         };
 
-        var tools = new ToolStripMenuItem("Tools");
+        var tools = new ToolStripMenuItem("Tools")
+        {
+            AutoSize = true,
+            Padding = new Padding(10, 0, 10, 0)
+        };
 
         if (AdministrationAllowed)
         {
@@ -390,7 +394,10 @@ public sealed partial class MainForm
         // credentials, system locale or the saved search/recovery context.
         var languages = new ToolStripMenuItem("Language")
         {
-            Name = "UiLanguageMenu"
+            Name = "UiLanguageMenu",
+            AutoSize = true,
+            // Hebrew שפה must retain all glyphs after menu RTL/reflow.
+            Padding = new Padding(10, 0, 10, 0)
         };
         _languageTopMenu = languages;
         foreach (var language in UiLanguageService.SupportedLanguages)
@@ -441,19 +448,30 @@ public sealed partial class MainForm
         MainMenuStrip?.SuspendLayout();
         try
         {
+            var chromeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (RightToLeft != RightToLeft.No)
                 RightToLeft = RightToLeft.No;
             if (RightToLeftLayout)
                 RightToLeftLayout = false;
+            // A mirrored native tab strip cannot also use OwnerDrawFixed:
+            // DrawItem rectangles point to LTR positions, leaving duplicate
+            // blank pills while the actual Hebrew headers appear on the right.
+            // Change DrawMode before enabling native RTL mirroring and only
+            // restore custom drawing once LTR mirroring has been disabled.
+            if (rtl && _mainTabs.DrawMode != TabDrawMode.Normal)
+                _mainTabs.DrawMode = TabDrawMode.Normal;
             if (_mainTabs.RightToLeft != direction)
                 _mainTabs.RightToLeft = direction;
             if (_mainTabs.RightToLeftLayout != rtl)
                 _mainTabs.RightToLeftLayout = rtl;
+            if (!rtl && _mainTabs.DrawMode != TabDrawMode.OwnerDrawFixed)
+                _mainTabs.DrawMode = TabDrawMode.OwnerDrawFixed;
             foreach (TabPage page in _mainTabs.TabPages)
                 if (page.RightToLeft != RightToLeft.No)
                     page.RightToLeft = RightToLeft.No;
             if (MainMenuStrip is { } menu && menu.RightToLeft != direction)
                 menu.RightToLeft = direction;
+            UiLayoutTelemetry.RecordLanguageChrome(chromeStarted);
 
             // Recovery-key strings, passwords, GUIDs and account/device IDs
             // must stay visually LTR even under mirrored Hebrew navigation.
@@ -497,13 +515,19 @@ public sealed partial class MainForm
                 UiLanguageService.Translate(_uiLanguageCode, "Cancel");
             _globalConnectionStatus.ToolTipText =
                 UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+            var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
+            UiLayoutTelemetry.RecordLanguageCaptions(captionsStarted);
         }
         finally
         {
+            var resumeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             _mainTabs.ResumeLayout(performLayout: true);
-            MainMenuStrip?.ResumeLayout(performLayout: false);
+            // false reused the old menu layout after switching between
+            // Language / Язык / שפה, sometimes clipping the final Hebrew glyph.
+            MainMenuStrip?.ResumeLayout(performLayout: true);
+            UiLayoutTelemetry.RecordLanguageResume(resumeStarted);
             _shellLanguageApplied = true;
             UiLayoutTelemetry.RecordLanguageSwitch(started, initialApply);
         }

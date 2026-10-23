@@ -94,7 +94,13 @@ internal static class UiModernTheme
                 tabs.Alignment == TabAlignment.Top &&
                 tabs.Appearance == TabAppearance.Normal:
                 tabs.BackColor = UiStyle.ModernCanvas;
-                tabs.DrawMode = TabDrawMode.OwnerDrawFixed;
+                // Native mirrored WinForms tabs and OwnerDrawFixed disagree about
+                // header coordinates: Hebrew produced a second row of seven
+                // empty owner-drawn pills on the left of the real RTL headers.
+                // Let Windows draw mirrored tabs natively; retain the custom
+                // rounded renderer only for non-mirrored EN/RU headers.
+                tabs.DrawMode = tabs.RightToLeftLayout
+                    ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed;
                 tabs.Padding = new Point(
                     UiStyle.ModernTabHorizontalPadding,
                     UiStyle.ModernTabVerticalPadding);

@@ -561,6 +561,7 @@ public static class UiLayoutSelfTest
             var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
             if (tabs is null || !tabs.RightToLeftLayout ||
                 tabs.RightToLeft != RightToLeft.Yes ||
+                tabs.DrawMode != TabDrawMode.Normal ||
                 tabs.TabPages.Count < 6 ||
                 tabs.TabPages[0].Text != UiLanguageService.Translate("he", "Start") ||
                 tabs.TabPages[3].Name != "DevicesWorkspace")
@@ -574,6 +575,11 @@ public static class UiLayoutSelfTest
             // captions after a language switch. Only the tab strip may mirror.
             if (form.RightToLeftLayout || form.RightToLeft == RightToLeft.Yes)
                 failures.Add("Hebrew language selection must not mirror the MainForm HWND.");
+            if (form.MainMenuStrip?.Items.Find("UiLanguageMenu", false).FirstOrDefault() is
+                not ToolStripMenuItem languageItem ||
+                languageItem.Text != UiLanguageService.Translate("he", "Language") ||
+                !languageItem.AutoSize || languageItem.Padding.Horizontal < 12)
+                failures.Add("Hebrew Language menu was clipped or lost its text layout.");
             if (tabs is not null && tabs.TabPages.Cast<TabPage>().Any(
                     page => page.RightToLeft != RightToLeft.No))
                 failures.Add("Main workspace pages must keep child/secret controls LTR.");
@@ -621,6 +627,9 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                if (tabs is not null &&
+                    tabs.DrawMode != (language == "he" ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed))
+                    failures.Add("Main tab renderer did not match the active RTL/LTR mode.");
                 foreach (var lateAction in new[] { lateAction1, lateAction2 })
                 {
                     if (lateAction.Text != UiLanguageService.Translate(language, "MainRecoverySteps") ||

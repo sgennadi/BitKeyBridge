@@ -53,6 +53,9 @@ internal static class UiLayoutTelemetry
     private static readonly Counter WarmResponsiveForm = new();
     private static readonly Counter ColdLanguageApply = new();
     private static readonly Counter WarmLanguageSwitch = new();
+    private static readonly Counter LanguageChrome = new();
+    private static readonly Counter LanguageCaptions = new();
+    private static readonly Counter LanguageResume = new();
 
     internal static void RecordViewport(long start) => MainViewport.Record(start);
     internal static void RecordResponsiveForm(long start) => ResponsiveForm.Record(start);
@@ -61,6 +64,9 @@ internal static class UiLayoutTelemetry
         (initial ? ColdResponsiveForm : WarmResponsiveForm).Record(start);
     internal static void RecordLanguageSwitch(long start, bool initial) =>
         (initial ? ColdLanguageApply : WarmLanguageSwitch).Record(start);
+    internal static void RecordLanguageChrome(long start) => LanguageChrome.Record(start);
+    internal static void RecordLanguageCaptions(long start) => LanguageCaptions.Record(start);
+    internal static void RecordLanguageResume(long start) => LanguageResume.Record(start);
 
     internal static string Report() =>
         "WinForms layout timings for this process (non-secret, since startup). " +
@@ -71,7 +77,10 @@ internal static class UiLayoutTelemetry
         ColdResponsiveForm.Summarize("Initial DPI/font refresh") + "\n" +
         WarmResponsiveForm.Summarize("Subsequent DPI/font refresh") + "\n" +
         ColdLanguageApply.Summarize("Initial language labels") + "\n" +
-        WarmLanguageSwitch.Summarize("Language changes (warm)") + "\n\n" +
+        WarmLanguageSwitch.Summarize("Language changes (warm)") + "\n" +
+        LanguageChrome.Summarize("Language chrome / tab mirroring") + "\n" +
+        LanguageCaptions.Summarize("Language captions") + "\n" +
+        LanguageResume.Summarize("Language layout resume") + "\n\n" +
         "If a tab still feels slow but these numbers are low, " +
         "the delay may be a synchronous data operation or native paint. " +
         "This report contains no device names, passwords or tokens.";
