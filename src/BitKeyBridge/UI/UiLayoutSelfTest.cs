@@ -832,6 +832,31 @@ public static class UiLayoutSelfTest
                     failures.Add("Export scope ListView headers were not localized: " +
                         language);
 
+                // The other core grids must also localize. Assert
+                // names/selection and data remain untouched by UI language.
+                foreach (var (gridName, columnName, english) in new[]
+                {
+                    ("HomeRecentComputers", "LastAction", "Last action"),
+                    ("HomeRecentComputers", "LastUsed", "Last used"),
+                    ("HomeUnifiedSearchResults", "BitLockerDate", "BitLocker key date"),
+                    ("HomeUnifiedSearchResults", "LapsDate", "LAPS metadata date"),
+                    ("BitLockerSearchResults", "KeyDate", "Key date"),
+                    ("BitLockerSearchResults", "Latest", "Latest"),
+                    ("LapsSearchResults", "ComputerId", "Device / AD object ID"),
+                    ("LapsKeyResults", "RecordType", "Current / history"),
+                    ("LapsKeyResults", "Account", "Account"),
+                    ("LapsKeyResults", "Age", "Age"),
+                    ("LapsKeyResults", "Expires", "Expires")
+                })
+                {
+                    if (FindByName(form, gridName) is not DataGridView grid ||
+                        grid.Columns[columnName] is not DataGridViewColumn column ||
+                        column.HeaderText !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(language, english))
+                        failures.Add("Core data grid header untranslated: " +
+                            gridName + "/" + columnName + " (" + language + ")");
+                }
+
                 // DataGridViewColumn is not part of the Control tree.
                 // LAPS Coverage must preserve column identity and data while
                 // localizing headers without clipping at high DPI.

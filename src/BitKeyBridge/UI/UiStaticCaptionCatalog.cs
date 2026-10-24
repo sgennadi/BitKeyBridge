@@ -492,7 +492,21 @@ internal static class UiStaticCaptionCatalog
             ["Coverage Policy"] = ["Политика покрытия", "מדיניות כיסוי"],
             ["Enable Coverage policy evaluation"] = ["Включить оценку политики покрытия", "הפעלת הערכת מדיניות כיסוי"],
             ["Policy evaluates metadata counts only. It never retrieves a BitLocker recovery password."] = ["Политика оценивает только количество записей метаданных. Пароли восстановления BitLocker не запрашиваются.", "המדיניות בודקת ספירה של רשומות נתונים בלבד. סיסמאות שחזור של BitLocker אינן נקראות."],
-            ["Helpdesk deployment - preparation"] = ["Развёртывание поддержки — подготовка", "פריסת מוקד התמיכה — הכנה"]
+            ["Helpdesk deployment - preparation"] = ["Развёртывание поддержки — подготовка", "פריסת מוקד התמיכה — הכנה"],
+            ["Last action"] = ["Последнее действие", "פעולה אחרונה"],
+            ["Last used"] = ["Последнее использование", "שימוש אחרון"],
+            ["BitLocker"] = ["BitLocker", "BitLocker"],
+            ["BitLocker key date"] = ["Дата ключа BitLocker", "תאריך מפתח BitLocker"],
+            ["LAPS"] = ["LAPS", "LAPS"],
+            ["LAPS metadata date"] = ["Дата метаданных LAPS", "תאריך נתוני LAPS"],
+            ["Key date"] = ["Дата ключа", "תאריך מפתח"],
+            ["Latest"] = ["Последний", "האחרון"],
+            ["Device / AD object ID"] = ["Устройство / ID объекта AD", "מכשיר / מזהה אובייקט AD"],
+            ["Source / version"] = ["Источник / версия", "מקור / גרסה"],
+            ["Current / history"] = ["Текущий / история", "נוכחי / היסטוריה"],
+            ["Account"] = ["Учётная запись", "חשבון"],
+            ["Age"] = ["Возраст", "גיל"],
+            ["Expires"] = ["Истекает", "תפוגה"]
         };
 
     internal static bool TryTranslate(string? language, string english, out string translation)
