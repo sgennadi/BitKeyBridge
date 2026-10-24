@@ -51,7 +51,8 @@ public sealed partial class MainForm
     private static readonly object LocalizedCaptionObserverMarker = new();
     private bool _localizedCaptionCacheBuilt;
 
-    private void ObserveLocalizedCaptionTree(Control root)
+    private void ObserveLocalizedCaptionTree(
+        Control root, bool applyImmediately = true)
     {
         var pending = new Stack<Control>();
         pending.Push(root);
@@ -90,9 +91,13 @@ public sealed partial class MainForm
                 _localizedCaptionControls[control] = key;
                 control.Disposed += OnLocalizedCaptionControlDisposed;
                 control.TextChanged += OnLocalizedCaptionTextChanged;
-                ApplyLocalizedCaption(control, key,
-                    UiLanguageService.IsRightToLeft(_uiLanguageCode)
-                        ? RightToLeft.Yes : RightToLeft.No);
+                // Cold startup: discover and cache captions first; the
+                // subsequent batched language pass suspends their parents.
+                // Dynamic controls still localize immediately.
+                if (applyImmediately)
+                    ApplyLocalizedCaption(control, key,
+                        UiLanguageService.IsRightToLeft(_uiLanguageCode)
+                            ? RightToLeft.Yes : RightToLeft.No);
             }
 
             if (control is ListView list && list.Columns.Count > 0 &&
@@ -102,7 +107,8 @@ public sealed partial class MainForm
                 _localizedListViewHeaders[list] = list.Columns.Cast<ColumnHeader>()
                     .Select(x => (x.Text, x.Width)).ToArray();
                 list.Disposed += OnLocalizedListViewDisposed;
-                ApplyLocalizedListViewHeaders(list);
+                if (applyImmediately)
+                    ApplyLocalizedListViewHeaders(list);
             }
 
             foreach (Control child in control.Controls)
@@ -230,7 +236,7 @@ public sealed partial class MainForm
         if (!_localizedCaptionCacheBuilt)
         {
             _localizedCaptionCacheBuilt = true;
-            ObserveLocalizedCaptionTree(_mainTabs);
+            ObserveLocalizedCaptionTree(_mainTabs, applyImmediately: false);
         }
 
         var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
@@ -352,6 +358,7 @@ public sealed partial class MainForm
                     item.Text = caption;
             }
         }
+        RefreshStartConnectionLocalization();
         RefreshAdvancedConnectionMenuCaption();
     }
 

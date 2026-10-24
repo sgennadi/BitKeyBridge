@@ -706,9 +706,45 @@ public static class UiLayoutSelfTest
                 ("RunEnvironmentCheckButton", "MainEnvironmentCheck"),
                 ("RunUiPerformanceDiagnosticsButton", "MainUiPerformance")
             };
+            var originalConnectionSelection =
+                (FindByName(form, "HomeConnectionSource") as ComboBox)?.SelectedIndex;
+            var connectionChoiceEnglish = new[]
+            {
+                "Choose a source",
+                "Active Directory",
+                "Microsoft Entra / Intune (Microsoft 365)",
+                "Both: Active Directory + Microsoft Entra"
+            };
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                // This picker is an enum-by-index, not a text-matched choice:
+                // EN/RU/HE switches may never select a different identity
+                // provider or trigger an asynchronous new connection.
+                if (FindByName(form, "HomeConnectionSource") is not ComboBox source ||
+                    source.Items.Count != connectionChoiceEnglish.Length ||
+                    source.SelectedIndex != originalConnectionSelection ||
+                    connectionChoiceEnglish.Where((english, index) =>
+                        source.Items[index] as string !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(language, english)).Any())
+                    failures.Add("Start connection source picker translation changed the selected source: " +
+                        language);
+                if (FindByName(form, "HomeConnectionOptionsToggle") is not Button optionsToggle)
+                    failures.Add("Connection options toggle not found.");
+                else
+                {
+                    if (optionsToggle.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "More connection options..."))
+                        failures.Add("Collapsed connection options were not translated: " + language);
+                    form.PreviewSetConnectionOptionsExpandedForUiTest(true);
+                    if (optionsToggle.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Hide connection options"))
+                        failures.Add("Expanded connection options were not translated: " + language);
+                    form.PreviewSetConnectionOptionsExpandedForUiTest(false);
+                    if (optionsToggle.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "More connection options..."))
+                        failures.Add("Collapsing connection options lost translation: " + language);
+                }
                 if (helpItem is not null &&
                     helpItem.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language, "Show explanations"))

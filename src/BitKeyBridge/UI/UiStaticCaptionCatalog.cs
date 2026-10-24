@@ -434,7 +434,18 @@ internal static class UiStaticCaptionCatalog
             ["Source"] = ["Источник", "מקור"],
             ["Auth"] = ["Аутентификация", "אימות"],
             ["Reference"] = ["Ссылка", "אסמכתא"],
-            ["Reason"] = ["Причина", "סיבה"]
+            ["Reason"] = ["Причина", "סיבה"],
+            // Start / connection picker: the selection is a stable source
+            // index, never a localized string or an authentication identity.
+            ["More connection options..."] = ["Другие параметры подключения...", "אפשרויות חיבור נוספות..."],
+            ["Hide connection options"] = ["Скрыть параметры подключения", "הסתרת אפשרויות חיבור"],
+            ["Connect using:"] = ["Подключение через:", "התחברות באמצעות:"],
+            ["Connect / Change..."] = ["Подключить / изменить...", "התחברות / שינוי..."],
+            ["Connect to Microsoft 365"] = ["Подключиться к Microsoft 365", "התחברות ל-Microsoft 365"],
+            ["Cloud Setup..."] = ["Настройка облака...", "הגדרת ענן..."],
+            ["Choose a source"] = ["Выберите источник", "בחירת מקור"],
+            ["Microsoft Entra / Intune (Microsoft 365)"] = ["Microsoft Entra / Intune (Microsoft 365)", "Microsoft Entra / Intune (Microsoft 365)"],
+            ["Both: Active Directory + Microsoft Entra"] = ["Оба: Active Directory + Microsoft Entra", "שניהם: Active Directory + Microsoft Entra"]
         };
 
     internal static bool TryTranslate(string? language, string english, out string translation)

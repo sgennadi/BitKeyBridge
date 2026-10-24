@@ -2,6 +2,17 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
+    // Localizing displayed choices must never change their security-relevant
+    // SelectedIndex (0=choose, 1=AD, 2=cloud, 3=both).
+    private static readonly string[] ConnectionSourceChoiceCaptions =
+    [
+        "Choose a source",
+        "Active Directory",
+        "Microsoft Entra / Intune (Microsoft 365)",
+        "Both: Active Directory + Microsoft Entra"
+    ];
+
+    private Button? _homeConnectionOptionsToggle;
     private readonly ComboBox _homeConnectionSource = new();
     private readonly Button _homeConnectCloudButton = new();
     private readonly Button _homeReconnectWizardButton = new();
@@ -57,6 +68,7 @@ public sealed partial class MainForm
         };
         var showOptions = NewActionButton("More connection options...");
         showOptions.Name = "HomeConnectionOptionsToggle";
+        _homeConnectionOptionsToggle = showOptions;
         showOptions.AccessibleName =
             "Show or hide direct connection source and Microsoft 365 setup options";
 
@@ -86,12 +98,7 @@ public sealed partial class MainForm
         _homeConnectionSource.DropDownStyle = ComboBoxStyle.DropDownList;
         _homeConnectionSource.MinimumSize = new Size(310, UiStyle.MinimumButtonHeight);
         _homeConnectionSource.Width = 340;
-        _homeConnectionSource.Items.AddRange([
-            "Choose a source",
-            "Active Directory",
-            "Microsoft Entra / Intune (Microsoft 365)",
-            "Both: Active Directory + Microsoft Entra"
-        ]);
+        _homeConnectionSource.Items.AddRange(ConnectionSourceChoiceCaptions);
         _initializingStartSource = true;
         try
         {
@@ -125,8 +132,10 @@ public sealed partial class MainForm
                 return;
             _connectionOptionsExpanded = expanded;
             row.Visible = expanded;
-            showOptions.Text = expanded
+            var caption = expanded
                 ? "Hide connection options" : "More connection options...";
+            showOptions.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, caption);
             UpdateStartConnectionSourceControls();
             QueueMainViewportReflow();
         }
@@ -181,6 +190,51 @@ public sealed partial class MainForm
 
         UpdateStartConnectionSourceControls();
         return layout;
+    }
+
+    private void RefreshStartConnectionLocalization()
+    {
+        // The toggle has two distinct runtime captions. Do not retranslate
+        // only the initial English caption from the generic control cache.
+        if (_homeConnectionOptionsToggle is { IsDisposed: false } toggle)
+        {
+            var original = _connectionOptionsExpanded
+                ? "Hide connection options" : "More connection options...";
+            var translated = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, original);
+            if (!string.Equals(toggle.Text, translated, StringComparison.Ordinal))
+                toggle.Text = translated;
+        }
+
+        if (_homeConnectionSource.IsDisposed ||
+            _homeConnectionSource.Items.Count != ConnectionSourceChoiceCaptions.Length)
+            return;
+
+        // ComboBox Items are not WinForms Controls. Translate them in place
+        // without triggering source changes, clearing recovery metadata, or
+        // writing connection preferences.
+        var selectedIndex = _homeConnectionSource.SelectedIndex;
+        var previousGuard = _initializingStartSource;
+        _initializingStartSource = true;
+        _homeConnectionSource.BeginUpdate();
+        try
+        {
+            for (var i = 0; i < ConnectionSourceChoiceCaptions.Length; i++)
+            {
+                var translated = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, ConnectionSourceChoiceCaptions[i]);
+                if (!string.Equals(_homeConnectionSource.Items[i] as string,
+                        translated, StringComparison.Ordinal))
+                    _homeConnectionSource.Items[i] = translated;
+            }
+            if (_homeConnectionSource.SelectedIndex != selectedIndex)
+                _homeConnectionSource.SelectedIndex = selectedIndex;
+        }
+        finally
+        {
+            _homeConnectionSource.EndUpdate();
+            _initializingStartSource = previousGuard;
+        }
     }
 
     private string SelectedStartSource => _startConnectionPreferences.Source;
