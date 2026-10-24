@@ -9,11 +9,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>BitKeyBridge</AssemblyName>
     <RootNamespace>BitKeyBridge</RootNamespace>
-    <Version>0.32.2</Version>
+    <Version>0.32.3</Version>
     <!-- Numeric PE versions remain numeric; InformationalVersion tracks SemVer development versions. -->
-    <AssemblyVersion>0.32.2.0</AssemblyVersion>
-    <FileVersion>0.32.2.0</FileVersion>
-    <InformationalVersion>0.32.2</InformationalVersion>
+    <AssemblyVersion>0.32.3.0</AssemblyVersion>
+    <FileVersion>0.32.3.0</FileVersion>
+    <InformationalVersion>0.32.3</InformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RuntimeIdentifiers>win-x64;win-x86;win-arm64</RuntimeIdentifiers>

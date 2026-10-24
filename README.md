@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable v0.32.2 (UNSIGNED; exact-source GitHub Actions release).** This version expands Russian/Hebrew translations for security dialogs, the connection-source chooser, and Start/BitLocker/LAPS grid headers; initial caption updates are batched without changing data or authorizations. x64/x86/ARM64 portable ZIPs include SHA256SUMS, SBOM, provenance and an opt-in hash-pinned canary installer. v0.32.1 remains available for rollback. No automatic-update consent, GPO/Intune enrollment, or signer trust setting is changed. Some runtime status text remains English, and on-device RDP/200% Hebrew latency still requires a managed pilot.
+**Stable v0.32.3 (UNSIGNED; exact-source GitHub Actions release).** Fixes diagnostics copy disappearing after language changes, adds Tools > Copy UI diagnostics (Ctrl+Shift+P) and prevents inherited RTL reflows across main workspace pages. Windows x64/x86/ARM64 ZIPs, SHA256SUMS, SBOM, provenance and optional pinned Canary installer are published only after final-source release checks. v0.32.2 remains available for rollback. No GPO/Intune enrollment, auto-update consent or signer trust changes. Real RDP Hebrew performance requires new on-device measurements.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 

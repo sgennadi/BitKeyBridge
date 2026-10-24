@@ -1,3 +1,13 @@
+## 0.32.3
+
+**Stable Windows UI diagnostics hotfix — UNSIGNED x64/x86/ARM64.**
+
+- Set main workspace pages explicitly LTR before Hebrew TabControl mirroring; avoid redundant native child-control RTL propagation on every language switch.
+- Preserve redacted diagnostics report and Copy diagnostics/Dismiss controls across EN/RU/HE transitions. Provide an always-available Tools > Copy UI diagnostics shortcut (Ctrl+Shift+P).
+- Add regression coverage for the retained report, translated buttons, native menu shortcut, repeated RTL/LTR switching and high DPI. Preserve account, recovery-key, source and security data.
+- Release-gated architecture builds, CodeQL, LAPS, two-user protected audit, legacy upgrade/rollback, checksums, provenance, SBOM, and exact-hash-pinned canary installation with tampered ZIP rejection.
+- **UNSIGNED** EXEs. No GPO/Intune assignment, silent unsigned consent, signing bypass or fleet deployment. New native RDP/200% Hebrew timings are required to confirm the performance improvement.
+
 ## 0.32.2
 
 **Stable EN/RU/HE UI and DataGridView fix — UNSIGNED, x64/x86/ARM64.**
