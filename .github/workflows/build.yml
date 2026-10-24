@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0", "release/v0.32.1" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -644,7 +644,8 @@ jobs:
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
-        github.ref == 'refs/heads/release/v0.32.0'))
+        github.ref == 'refs/heads/release/v0.32.0' ||
+        github.ref == 'refs/heads/release/v0.32.1'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 30
@@ -686,7 +687,8 @@ jobs:
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
-        github.ref == 'refs/heads/release/v0.32.0'))
+        github.ref == 'refs/heads/release/v0.32.0' ||
+        github.ref == 'refs/heads/release/v0.32.1'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -852,7 +854,8 @@ jobs:
     # Require on-SHA security scanning before publication.
     if: >-
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/release/v0.32.0'
+      (github.ref == 'refs/heads/release/v0.32.0' ||
+       github.ref == 'refs/heads/release/v0.32.1')
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
@@ -891,6 +894,9 @@ jobs:
            github.event.head_commit.message == 'Release v0.30.5') ||
           (github.ref == 'refs/heads/release/v0.32.0' &&
            github.event.head_commit.message == 'Release v0.32.0' &&
+           needs['codeql-stable-release'].result == 'success') ||
+          (github.ref == 'refs/heads/release/v0.32.1' &&
+           github.event.head_commit.message == 'Release v0.32.1' &&
            needs['codeql-stable-release'].result == 'success')) &&
          needs['audit-broker-integration'].result == 'success' &&
          needs['legacy-upgrade-regression'].result == 'success') ||
@@ -898,6 +904,7 @@ jobs:
          github.ref != 'refs/heads/release/v0.30.4' &&
          github.ref != 'refs/heads/release/v0.30.5' &&
          github.ref != 'refs/heads/release/v0.32.0' &&
+         github.ref != 'refs/heads/release/v0.32.1' &&
          (startsWith(github.ref, 'refs/tags/v') ||
           (github.event_name == 'push' &&
            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
@@ -970,6 +977,9 @@ jobs:
           if ("${{ github.ref }}" -eq "refs/heads/release/v0.32.0" -and $tag -ne "v0.32.0") {
             throw "The dedicated release branch is authorized only for v0.32.0."
           }
+          if ("${{ github.ref }}" -eq "refs/heads/release/v0.32.1" -and $tag -ne "v0.32.1") {
+            throw "The dedicated release branch is authorized only for v0.32.1."
+          }
 
           $exists = $false
           gh release view $tag --repo "${{ github.repository }}" *> $null
@@ -1012,6 +1022,13 @@ jobs:
               throw 'Stable 0.32.0 publication authorization document is missing.'
             }
             Write-Host 'Owner-authorized UNSIGNED v0.32.0 Stable; no fleet deployment.'
+          }
+          elseif ($tag -eq 'v0.32.1' -and
+                  "${{ github.ref }}" -eq 'refs/heads/release/v0.32.1') {
+            if (-not (Test-Path 'docs/release-authorization-v0.32.1.md')) {
+              throw 'v0.32.1 Stable publication authorization document is missing.'
+            }
+            Write-Host 'Owner-authorized UNSIGNED v0.32.1 Stable: managed canary only with explicit consent.'
           }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
                   $tag -ne "v0.30.0-rc.1") {
@@ -1090,11 +1107,15 @@ jobs:
           (github.ref == 'refs/heads/release/v0.30.3' ||
            github.ref == 'refs/heads/release/v0.30.4' ||
            github.ref == 'refs/heads/release/v0.30.5' ||
-           github.ref == 'refs/heads/release/v0.32.0')
+           github.ref == 'refs/heads/release/v0.32.0' ||
+           github.ref == 'refs/heads/release/v0.32.1')
         shell: pwsh
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag -eq 'v0.32.0') {
+          if ($tag -eq 'v0.32.1') {
+            Copy-Item docs/release-notes-v0.32.1.md release/RELEASE-NOTES.md
+          }
+          elseif ($tag -eq 'v0.32.0') {
             Copy-Item docs/release-notes-v0.32.0.md release/RELEASE-NOTES.md
           }
           elseif ($tag -eq 'v0.30.5') {
@@ -1251,7 +1272,7 @@ jobs:
             '--target', '${{ github.sha }}',
             '--title', "BitKeyBridge $tag"
           )
-          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5', 'v0.32.0') -and
+          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5', 'v0.32.0', 'v0.32.1') -and
               (Test-Path 'release/RELEASE-NOTES.md')) {
             $args += @('--notes-file', 'release/RELEASE-NOTES.md')
           }
