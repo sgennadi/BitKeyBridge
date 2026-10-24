@@ -64,7 +64,23 @@ Assert-Source ($style.Contains('panel.VisibleChanged += (_, _) => ResizeChildren
 Assert-Source ($shell.Contains('page.AutoScroll = false')) 'Outer TabPage AutoScroll must not fight nested Dock=Fill viewports.'
 Assert-Source ($shell.Contains('nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow()')) 'Nested tabs must use one immediate visible-layout repair instead of WM_SIZE debounce.'
 Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnostics.Contains('DiagnosticToolsActions')) 'Diagnostics layout must expose stable regression targets.'
-Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and $base.Contains('UiLayoutTelemetry.RecordResponsiveForm(started)') -and $base.Contains('UiLayoutTelemetry.RecordResponsivePhase(started, initialRefresh)')) 'Initial and subsequent DPI/font timings must be measured separately.'
+Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and
+               $base.Contains('UiLayoutTelemetry.RecordResponsiveForm(started)') -and
+               [regex]::IsMatch($base, 'UiLayoutTelemetry\.RecordResponsivePhase\s*\(\s*started\s*,\s*initialRefresh\s*,\s*this\s+is\s+MainForm\s*\)') -and
+               $telemetry.Contains('ColdMainForm.Summarize("Initial DPI - main window")') -and
+               $telemetry.Contains('ColdOtherForms.Summarize("Initial DPI - other windows")')) 'Initial and subsequent DPI/font timings must distinguish the main window from other forms.'
+Assert-Source (
+    @('ThemeInstall', 'ControlDefaults', 'WorkArea', 'Layout', 'LabelWidths', 'ThemeRefresh') |
+        ForEach-Object { $base.Contains('UiLayoutTelemetry.DpiPhase.' + $_) } |
+        Where-Object { -not $_ } |
+        Measure-Object |
+        Select-Object -ExpandProperty Count |
+        ForEach-Object { $_ -eq 0 }
+) 'Every full DPI phase must retain its independent non-secret timing counter.'
+Assert-Source ($telemetry.Contains('DpiThemeInstall.Summarize("DPI phase - theme installation")') -and
+               $telemetry.Contains('DpiControlDefaults.Summarize("DPI phase - control defaults")') -and
+               $telemetry.Contains('DpiLayout.Summarize("DPI phase - WinForms PerformLayout")') -and
+               $telemetry.Contains('DpiLabelWidths.Summarize("DPI phase - label widths")')) 'The DPI report must include all expensive layout-phase counters.'
 Assert-Source ($style.Contains('if (label.StatusKind == kind') -and $layoutSelfTest.Contains('Unchanged status text/kind forced a repaint')) 'Repeated unchanged status polls must not repaint.'
 Assert-Source ($viewport.Contains('_lastRepairedTabPath') -and $viewport.Contains('UiLayoutTelemetry.RecordViewport(viewportStarted)')) 'Selected-tab layout must avoid repeat repair and expose timing metrics.'
 Assert-Source ($diagnostics.Contains('RunUiPerformanceDiagnosticsButton') -and $diagnostics.Contains('UiTabNavigationTelemetry.Report()') -and $telemetry.Contains('Interlocked.Increment')) 'Diagnostics must expose bounded navigation and non-secret repaint timings.'
