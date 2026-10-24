@@ -875,7 +875,7 @@ public static class UiLayoutSelfTest
                 // Use centralized column factory (HiDPI/WinForms policy).
                 using var lateColumn = UiStyle.CreateSortableTextColumn(
                     "LateLocalizedHeaderFixture", "Expiration (UTC)");
-                lateGrid.Columns.Add(lateColumn);
+                lateGrid.Columns.AddRange([lateColumn]);
                 if (lateColumn.HeaderText != UiStaticCaptionCatalog.TranslateOrOriginal(
                         "he", "Expiration (UTC)"))
                     failures.Add("Late-added DataGridView column was not localized in Hebrew.");
