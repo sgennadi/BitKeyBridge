@@ -93,6 +93,23 @@ public static class UiLayoutSelfTest
 
         VerifyDiagnosticCopyVisibility(failures);
 
+        // A DPI report must distinguish the initially measured MainForm from
+        // any auxiliary form, and include only aggregate phase timings.
+        var performanceReport = UiLayoutTelemetry.Report();
+        foreach (var expected in new[]
+        {
+            "Initial DPI - main window",
+            "Initial DPI - other windows",
+            "DPI phase - theme installation",
+            "DPI phase - control defaults",
+            "DPI phase - work-area adjustment",
+            "DPI phase - WinForms PerformLayout",
+            "DPI phase - label widths",
+            "DPI phase - theme refresh"
+        })
+            if (!performanceReport.Contains(expected, StringComparison.Ordinal))
+                failures.Add("Missing DPI timing phase: " + expected);
+
         VerifyModalDialogLocalization(failures);
 
         VerifyStartSourcePolicies(failures);

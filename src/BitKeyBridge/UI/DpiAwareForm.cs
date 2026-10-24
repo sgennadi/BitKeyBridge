@@ -146,24 +146,48 @@ public class DpiAwareForm : Form
         _responsiveLabelTimer.Stop();
         try
         {
+            // Attribute each expensive initial or subsequent DPI operation
+            // separately. The phase counters are allocation-light aggregates;
+            // we never record a window name, control text, or recovery data.
+            var stageStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             // Apply() is idempotent and subscribes to new child controls once.
             UiModernTheme.Apply(this);
+            UiLayoutTelemetry.RecordDpiPhase(
+                stageStarted, UiLayoutTelemetry.DpiPhase.ThemeInstall);
+
+            stageStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyResponsiveDefaults(this);
+            UiLayoutTelemetry.RecordDpiPhase(
+                stageStarted, UiLayoutTelemetry.DpiPhase.ControlDefaults);
+
+            stageStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ConstrainToWorkingArea();
+            UiLayoutTelemetry.RecordDpiPhase(
+                stageStarted, UiLayoutTelemetry.DpiPhase.WorkArea);
+
+            stageStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             PerformLayout();
+            UiLayoutTelemetry.RecordDpiPhase(
+                stageStarted, UiLayoutTelemetry.DpiPhase.Layout);
+
             // Label.MaximumSize setters automatically request WinForms layout
             // only for labels whose available width truly changed.
-            // A second unconditional PerformLayout() of the entire form,
-            // followed by recursive theme invalidation, doubled the cost of
-            // every DPI and font update on densely populated Settings tabs.
+            // Keep the layout behavior unchanged while measuring its phases.
+            stageStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             RefreshResponsiveLabelWidths();
+            UiLayoutTelemetry.RecordDpiPhase(
+                stageStarted, UiLayoutTelemetry.DpiPhase.LabelWidths);
+
             var dpi = DeviceDpi;
             var highContrast = SystemInformation.HighContrast;
             if (_responsiveLayoutInitialized &&
                 (dpi != _lastFullLayoutDpi ||
                  highContrast != _lastHighContrast))
             {
+                stageStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 UiModernTheme.Refresh(this);
+                UiLayoutTelemetry.RecordDpiPhase(
+                    stageStarted, UiLayoutTelemetry.DpiPhase.ThemeRefresh);
             }
             _lastFullLayoutDpi = dpi;
             _lastHighContrast = highContrast;
@@ -173,7 +197,8 @@ public class DpiAwareForm : Form
         {
             _responsiveLayoutRunning = false;
             UiLayoutTelemetry.RecordResponsiveForm(started);
-            UiLayoutTelemetry.RecordResponsivePhase(started, initialRefresh);
+            UiLayoutTelemetry.RecordResponsivePhase(
+                started, initialRefresh, this is MainForm);
         }
     }
 

@@ -51,6 +51,20 @@ internal static class UiLayoutTelemetry
     private static readonly Counter HomeCards = new();
     private static readonly Counter ColdResponsiveForm = new();
     private static readonly Counter WarmResponsiveForm = new();
+    // "Initial" means each DpiAwareForm instance is seeing its first
+    // full pass. Two cold calls do NOT imply the main window was laid out
+    // twice. Separate the main shell from a modal/secondary dialog.
+    private static readonly Counter ColdMainForm = new();
+    private static readonly Counter ColdOtherForms = new();
+
+    // These phases deliberately capture timing ONLY, never window captions,
+    // device/account identifiers, secrets, or dynamically translated text.
+    private static readonly Counter DpiThemeInstall = new();
+    private static readonly Counter DpiControlDefaults = new();
+    private static readonly Counter DpiWorkArea = new();
+    private static readonly Counter DpiLayout = new();
+    private static readonly Counter DpiLabelWidths = new();
+    private static readonly Counter DpiThemeRefresh = new();
     private static readonly Counter ColdLanguageApply = new();
     private static readonly Counter WarmLanguageSwitch = new();
     private static readonly Counter LanguageChrome = new();
@@ -63,8 +77,36 @@ internal static class UiLayoutTelemetry
     internal static void RecordViewport(long start) => MainViewport.Record(start);
     internal static void RecordResponsiveForm(long start) => ResponsiveForm.Record(start);
     internal static void RecordHomeCards(long start) => HomeCards.Record(start);
-    internal static void RecordResponsivePhase(long start, bool initial) =>
+    internal static void RecordResponsivePhase(
+        long start, bool initial, bool mainWindow)
+    {
         (initial ? ColdResponsiveForm : WarmResponsiveForm).Record(start);
+        if (initial)
+            (mainWindow ? ColdMainForm : ColdOtherForms).Record(start);
+    }
+
+    internal enum DpiPhase
+    {
+        ThemeInstall,
+        ControlDefaults,
+        WorkArea,
+        Layout,
+        LabelWidths,
+        ThemeRefresh
+    }
+
+    internal static void RecordDpiPhase(long start, DpiPhase phase)
+    {
+        switch (phase)
+        {
+            case DpiPhase.ThemeInstall: DpiThemeInstall.Record(start); break;
+            case DpiPhase.ControlDefaults: DpiControlDefaults.Record(start); break;
+            case DpiPhase.WorkArea: DpiWorkArea.Record(start); break;
+            case DpiPhase.Layout: DpiLayout.Record(start); break;
+            case DpiPhase.LabelWidths: DpiLabelWidths.Record(start); break;
+            case DpiPhase.ThemeRefresh: DpiThemeRefresh.Record(start); break;
+        }
+    }
     internal static void RecordLanguageSwitch(long start, bool initial) =>
         (initial ? ColdLanguageApply : WarmLanguageSwitch).Record(start);
     internal static void RecordLanguageChrome(long start) => LanguageChrome.Record(start);
@@ -85,6 +127,14 @@ internal static class UiLayoutTelemetry
         ResponsiveForm.Summarize("Full DPI/font refresh (all)") + "\n" +
         ColdResponsiveForm.Summarize("Initial DPI/font refresh") + "\n" +
         WarmResponsiveForm.Summarize("Subsequent DPI/font refresh") + "\n" +
+        ColdMainForm.Summarize("Initial DPI - main window") + "\n" +
+        ColdOtherForms.Summarize("Initial DPI - other windows") + "\n" +
+        DpiThemeInstall.Summarize("DPI phase - theme installation") + "\n" +
+        DpiControlDefaults.Summarize("DPI phase - control defaults") + "\n" +
+        DpiWorkArea.Summarize("DPI phase - work-area adjustment") + "\n" +
+        DpiLayout.Summarize("DPI phase - WinForms PerformLayout") + "\n" +
+        DpiLabelWidths.Summarize("DPI phase - label widths") + "\n" +
+        DpiThemeRefresh.Summarize("DPI phase - theme refresh") + "\n" +
         ColdLanguageApply.Summarize("Initial language labels") + "\n" +
         WarmLanguageSwitch.Summarize("Language changes (warm)") + "\n" +
         LanguageChrome.Summarize("Language chrome / tab mirroring") + "\n" +
