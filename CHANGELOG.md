@@ -1,3 +1,14 @@
+## 0.32.5
+
+**Stable WinForms performance diagnostics — UNSIGNED portable x64/x86/ARM64.**
+
+- Separate cold DPI/font refresh timings of the main window from other dialogs, including theme installation, defaults, work-area sizing, PerformLayout, label widths and optional theme refresh.
+- Measure actual warm right-to-left tab setter/mirror changes instead of including no-op initial properties; count the TabControl native HWND creation and destruction events without ever storing the handles.
+- Add per-workspace selection-to-UI-callback and viewport reflow timings to the existing full-switch p50/p95 report, isolating the slow Start tab navigation.
+- Retain native Hebrew tab mirroring, LTR passwords and identity fields, and the persistent Copy diagnostics status link and Ctrl+Shift+P shortcut. All measurements remain non-secret and require no AD or Graph access.
+- Extend WinForms/PowerShell regression tests for performance instrumentation. **These counters do not prove that RTL switching is faster; retest on Windows/RDP before any optimization claim.**
+- Release-gated architecture builds, CodeQL, LAPS, Protected Audit Broker integration, migration/rollback, SHA256SUMS, SBOM, provenance and a validated exact-hash-pinned optional Canary installer. **UNSIGNED** binaries; no GPO/Intune rollout, unsigned auto-update opt-in or signer bypass.
+
 ## 0.32.4
 
 **Stable WinForms Hebrew Copy Diagnostics visibility fix (UNSIGNED x64/x86/ARM64).**
