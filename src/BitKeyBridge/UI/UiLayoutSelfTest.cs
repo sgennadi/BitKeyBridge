@@ -832,10 +832,61 @@ public static class UiLayoutSelfTest
                     failures.Add("Export scope ListView headers were not localized: " +
                         language);
 
+                // DataGridViewColumn is not part of the Control tree.
+                // LAPS Coverage must preserve column identity and data while
+                // localizing headers without clipping at high DPI.
+                if (FindByName(form, "LapsCoverageDevices") is DataGridView lapsGrid)
+                {
+                    foreach (var (columnName, english) in new[]
+                    {
+                        ("Guid", "AD object GUID"),
+                        ("OU", "OU / distinguished name"),
+                        ("Backup", "Visible LAPS metadata"),
+                        ("Expiry", "Expiration (UTC)"),
+                        ("State", "Expiry state"),
+                        ("LastLogon", "Last AD logon (UTC)")
+                    })
+                    {
+                        var expected = UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, english);
+                        if (lapsGrid.Columns[columnName] is not DataGridViewColumn column ||
+                            string.IsNullOrWhiteSpace(column.HeaderText) ||
+                            column.HeaderText != expected)
+                            failures.Add("LAPS grid header not localized: " +
+                                english + " (" + language + ")");
+                    }
+                }
+                if (FindByName(form, "LapsCoverageChanges") is DataGridView changeGrid)
+                    foreach (var english in new[] { "Change type", "Previous", "Current" })
+                        if (!changeGrid.Columns.Cast<DataGridViewColumn>().Any(
+                            column => column.HeaderText ==
+                                UiStaticCaptionCatalog.TranslateOrOriginal(language, english)))
+                            failures.Add("LAPS comparison grid header not localized: " +
+                                english + " (" + language + ")");
+
                 if (tabs is not null &&
                     tabs.TabPages.Cast<TabPage>().Any(
                         page => string.IsNullOrWhiteSpace(page.Text)))
                     failures.Add("Language switch left an empty main workspace tab.");
+            }
+
+            if (FindByName(form, "LapsCoverageChanges") is DataGridView lateGrid)
+            {
+                using var lateColumn = new DataGridViewTextBoxColumn
+                {
+                    Name = "LateLocalizedHeaderFixture",
+                    HeaderText = "Expiration (UTC)"
+                };
+                lateGrid.Columns.Add(lateColumn);
+                if (lateColumn.HeaderText != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "he", "Expiration (UTC)"))
+                    failures.Add("Late-added DataGridView column was not localized in Hebrew.");
+                form.PreviewShellLanguageForLayoutTest("ru");
+                if (lateColumn.HeaderText != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Expiration (UTC)"))
+                    failures.Add("Late-added DataGridView column did not switch to Russian.");
+                lateGrid.Columns.Remove(lateColumn);
+                form.PreviewShellLanguageForLayoutTest("he");
             }
 
             // Disposed buttons must never remain in the active caption cache.

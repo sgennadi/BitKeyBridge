@@ -48,6 +48,12 @@ public sealed partial class MainForm
     // translation, and are not mistaken for live AD/Graph result values.
     private readonly Dictionary<ListView, (string English, int InitialWidth)[]> _localizedListViewHeaders =
         new(ReferenceEqualityComparer.Instance);
+    // WinForms DataGridViewColumn is not a Control. Cache source headers by
+    // object identity so language switching never translates a previously
+    // translated caption again or changes any cell values.
+    private readonly Dictionary<DataGridView,
+        Dictionary<DataGridViewColumn, (string English, int MinimumWidth)>>
+        _localizedGridHeaders = new(ReferenceEqualityComparer.Instance);
     private static readonly object LocalizedCaptionObserverMarker = new();
     private bool _localizedCaptionCacheBuilt;
 
@@ -111,6 +117,18 @@ public sealed partial class MainForm
                     ApplyLocalizedListViewHeaders(list);
             }
 
+            if (control is DataGridView grid)
+            {
+                _localizedGridHeaders[grid] = new Dictionary<DataGridViewColumn,
+                    (string English, int MinimumWidth)>(ReferenceEqualityComparer.Instance);
+                grid.ColumnAdded += OnLocalizedGridColumnAdded;
+                grid.ColumnRemoved += OnLocalizedGridColumnRemoved;
+                grid.Disposed += OnLocalizedGridDisposed;
+                CaptureLocalizedGridHeaders(grid);
+                if (applyImmediately)
+                    ApplyLocalizedGridHeaders(grid);
+            }
+
             foreach (Control child in control.Controls)
                 pending.Push(child);
         }
@@ -145,6 +163,8 @@ public sealed partial class MainForm
             }
             if (control is ListView list && _localizedListViewHeaders.Remove(list))
                 list.Disposed -= OnLocalizedListViewDisposed;
+            if (control is DataGridView grid)
+                StopObservingLocalizedGrid(grid);
 
             foreach (Control child in control.Controls)
                 pending.Push(child);
@@ -166,6 +186,90 @@ public sealed partial class MainForm
         {
             _localizedListViewHeaders.Remove(list);
             list.Disposed -= OnLocalizedListViewDisposed;
+        }
+    }
+
+    private void StopObservingLocalizedGrid(DataGridView grid)
+    {
+        if (!_localizedGridHeaders.Remove(grid))
+            return;
+        grid.ColumnAdded -= OnLocalizedGridColumnAdded;
+        grid.ColumnRemoved -= OnLocalizedGridColumnRemoved;
+        grid.Disposed -= OnLocalizedGridDisposed;
+    }
+
+    private void OnLocalizedGridDisposed(object? sender, EventArgs args)
+    {
+        if (sender is DataGridView grid)
+            StopObservingLocalizedGrid(grid);
+    }
+
+    private void OnLocalizedGridColumnAdded(
+        object? sender, DataGridViewColumnEventArgs args)
+    {
+        if (sender is DataGridView grid && !grid.IsDisposed &&
+            _localizedGridHeaders.ContainsKey(grid))
+        {
+            CaptureLocalizedGridHeaders(grid);
+            ApplyLocalizedGridHeaders(grid);
+        }
+    }
+
+    private void OnLocalizedGridColumnRemoved(
+        object? sender, DataGridViewColumnEventArgs args)
+    {
+        if (sender is DataGridView grid &&
+            _localizedGridHeaders.TryGetValue(grid, out var headers))
+            headers.Remove(args.Column);
+    }
+
+    private void CaptureLocalizedGridHeaders(DataGridView grid)
+    {
+        if (!_localizedGridHeaders.TryGetValue(grid, out var headers))
+            return;
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            if (!headers.ContainsKey(column) &&
+                column.HeaderText is { } caption &&
+                UiStaticCaptionCatalog.Contains(caption))
+                headers.Add(column, (caption, column.MinimumWidth));
+        }
+    }
+
+    private void ApplyLocalizedGridHeaders(DataGridView grid)
+    {
+        if (grid.IsDisposed || !_localizedGridHeaders.TryGetValue(grid, out var headers) ||
+            headers.Count == 0)
+            return;
+
+        // Headers only. Never rewrite a row, secret, account, SID or metadata.
+        // MinimumWidth permits horizontal scrolling instead of cutting longer
+        // Hebrew and Russian captions at 175%-200% DPI.
+        var headerFont = grid.ColumnHeadersDefaultCellStyle.Font ?? grid.Font;
+        var flags = TextFormatFlags.SingleLine |
+                    TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+        grid.SuspendLayout();
+        try
+        {
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                if (!headers.TryGetValue(column, out var source))
+                    continue;
+                var caption = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, source.English);
+                if (!string.Equals(column.HeaderText, caption, StringComparison.Ordinal))
+                    column.HeaderText = caption;
+                var required = TextRenderer.MeasureText(
+                    caption, headerFont, new Size(4096, 1024), flags).Width +
+                    UiStyle.ScaleLogicalPixels(26, grid.DeviceDpi);
+                var width = Math.Max(source.MinimumWidth, required);
+                if (column.MinimumWidth != width)
+                    column.MinimumWidth = width;
+            }
+        }
+        finally
+        {
+            grid.ResumeLayout(performLayout: grid.Visible);
         }
     }
 
@@ -276,6 +380,8 @@ public sealed partial class MainForm
             }
             foreach (var list in _localizedListViewHeaders.Keys.ToArray())
                 ApplyLocalizedListViewHeaders(list);
+            foreach (var grid in _localizedGridHeaders.Keys.ToArray())
+                ApplyLocalizedGridHeaders(grid);
         }
         finally
         {
