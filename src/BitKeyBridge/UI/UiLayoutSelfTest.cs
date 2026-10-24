@@ -91,6 +91,8 @@ public static class UiLayoutSelfTest
         VerifyHebrewIdentityDirection(
             failures);
 
+        VerifyModalDialogLocalization(failures);
+
         VerifyStartSourcePolicies(failures);
 
         var factories =
@@ -202,6 +204,53 @@ public static class UiLayoutSelfTest
         return failures.Count == 0
             ? 0
             : 1;
+    }
+
+    private static void VerifyModalDialogLocalization(List<string> failures)
+    {
+        static bool HasText(Control root, string text)
+        {
+            var queue = new Stack<Control>();
+            queue.Push(root);
+            while (queue.Count != 0)
+            {
+                var current = queue.Pop();
+                if (current.Text == text)
+                    return true;
+                foreach (Control child in current.Controls)
+                    queue.Push(child);
+            }
+            return false;
+        }
+
+        try
+        {
+            using var prompt = new AdCredentialPromptDialog(@"DOMAIN\helpdesk");
+            using var startup = new StartupConnectionWizardDialog(
+                StartConnectionPolicy.ActiveDirectory);
+            foreach (var (language, domainTitle, startupTitle, connectText) in
+                new[]
+                {
+                    ("ru", "Подключение к Active Directory", "Выберите подключение", "Подключиться"),
+                    ("he", "התחברות ל-Active Directory", "בחירת חיבור", "התחברות"),
+                    ("en", "Connect to Active Directory", "Choose a connection", "Connect"),
+                    ("ru", "Подключение к Active Directory", "Выберите подключение", "Подключиться")
+                })
+            {
+                UiDialogLocalization.Apply(prompt, language);
+                UiDialogLocalization.Apply(startup, language);
+                if (prompt.Text != domainTitle || !HasText(startup, startupTitle) ||
+                    !HasText(prompt, connectText))
+                    failures.Add("Modal dialog translation missing or stale: " + language);
+                if (prompt.Username != @"DOMAIN\helpdesk")
+                    failures.Add("Dialog localization modified supplied AD account data.");
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Modal EN/RU/HE translation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private static void VerifyUnchangedStatusDoesNotRepaint(
