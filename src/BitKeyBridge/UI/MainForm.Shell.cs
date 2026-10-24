@@ -128,6 +128,11 @@ public sealed partial class MainForm
             "MainWorkspaceTabs";
         _mainTabs.Dock =
             DockStyle.Fill;
+        // Track native HWND creation/destruction counts, never their values.
+        _mainTabs.HandleCreated += (_, _) =>
+            UiLayoutTelemetry.RecordMainTabHandleCreated();
+        _mainTabs.HandleDestroyed += (_, _) =>
+            UiLayoutTelemetry.RecordMainTabHandleDestroyed();
 
         _homeWorkspaceTab =
             BuildHomeWorkspaceTab();
@@ -516,13 +521,17 @@ public sealed partial class MainForm
             if (_mainTabs.DrawMode != TabDrawMode.Normal)
                 _mainTabs.DrawMode = TabDrawMode.Normal;
             var directionStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (_mainTabs.RightToLeft != direction)
+            var directionChanged = _mainTabs.RightToLeft != direction;
+            if (directionChanged)
                 _mainTabs.RightToLeft = direction;
-            UiLayoutTelemetry.RecordLanguageTabDirection(directionStarted);
+            UiLayoutTelemetry.RecordLanguageTabDirection(
+                directionStarted, initialApply, directionChanged);
             var mirroringStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (_mainTabs.RightToLeftLayout != rtl)
+            var mirroringChanged = _mainTabs.RightToLeftLayout != rtl;
+            if (mirroringChanged)
                 _mainTabs.RightToLeftLayout = rtl;
-            UiLayoutTelemetry.RecordLanguageTabMirroring(mirroringStarted);
+            UiLayoutTelemetry.RecordLanguageTabMirroring(
+                mirroringStarted, initialApply, mirroringChanged);
             // Each page has been explicitly LTR since construction. Do not
             // reapply RightToLeft here: repeating this operation may cause
             // multi-second WinForms native control-tree rebuilds.

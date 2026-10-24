@@ -70,6 +70,12 @@ internal static class UiLayoutTelemetry
     private static readonly Counter LanguageChrome = new();
     private static readonly Counter LanguageTabDirection = new();
     private static readonly Counter LanguageTabMirroring = new();
+    // Counters below record only a true EN/RU <-> HE change after startup.
+    private static readonly Counter WarmTabDirectionChanges = new();
+    private static readonly Counter WarmTabMirrorChanges = new();
+    // Native tab HWND recreation counts only, not the HWND identifiers.
+    private static long _mainTabHandleCreated;
+    private static long _mainTabHandleDestroyed;
     private static readonly Counter LanguageMenuDirection = new();
     private static readonly Counter LanguageCaptions = new();
     private static readonly Counter LanguageResume = new();
@@ -110,10 +116,24 @@ internal static class UiLayoutTelemetry
     internal static void RecordLanguageSwitch(long start, bool initial) =>
         (initial ? ColdLanguageApply : WarmLanguageSwitch).Record(start);
     internal static void RecordLanguageChrome(long start) => LanguageChrome.Record(start);
-    internal static void RecordLanguageTabDirection(long start) =>
+    internal static void RecordLanguageTabDirection(
+        long start, bool initial, bool changed)
+    {
         LanguageTabDirection.Record(start);
-    internal static void RecordLanguageTabMirroring(long start) =>
+        if (!initial && changed)
+            WarmTabDirectionChanges.Record(start);
+    }
+    internal static void RecordLanguageTabMirroring(
+        long start, bool initial, bool changed)
+    {
         LanguageTabMirroring.Record(start);
+        if (!initial && changed)
+            WarmTabMirrorChanges.Record(start);
+    }
+    internal static void RecordMainTabHandleCreated() =>
+        Interlocked.Increment(ref _mainTabHandleCreated);
+    internal static void RecordMainTabHandleDestroyed() =>
+        Interlocked.Increment(ref _mainTabHandleDestroyed);
     internal static void RecordLanguageMenuDirection(long start) =>
         LanguageMenuDirection.Record(start);
     internal static void RecordLanguageCaptions(long start) => LanguageCaptions.Record(start);
@@ -140,6 +160,9 @@ internal static class UiLayoutTelemetry
         LanguageChrome.Summarize("Language chrome / tab mirroring") + "\n" +
         LanguageTabDirection.Summarize("Tab RTL direction setter") + "\n" +
         LanguageTabMirroring.Summarize("Tab native mirror setter") + "\n" +
+        WarmTabDirectionChanges.Summarize("Tab RTL setter - actual warm changes") + "\n" +
+        WarmTabMirrorChanges.Summarize("Tab native mirror - actual warm changes") + "\n" +
+        $"Main tab native handles (lifetime): created={Interlocked.Read(ref _mainTabHandleCreated)}, destroyed={Interlocked.Read(ref _mainTabHandleDestroyed)}\n" +
         LanguageMenuDirection.Summarize("Top menu RTL setter") + "\n" +
         LanguageCaptions.Summarize("Language captions") + "\n" +
         LanguageResume.Summarize("Language layout resume") + "\n\n" +

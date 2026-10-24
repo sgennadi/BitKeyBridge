@@ -78,6 +78,13 @@ Assert-Source ($telemetry.Contains('DpiThemeInstall.Summarize("DPI phase - theme
                $telemetry.Contains('DpiLabelWidths.Summarize("DPI phase - label widths")')) 'The DPI report must include all expensive layout-phase counters.'
 Assert-Source ($style.Contains('if (label.StatusKind == kind') -and $layoutSelfTest.Contains('Unchanged status text/kind forced a repaint')) 'Repeated unchanged status polls must not repaint.'
 Assert-Source ($viewport.Contains('_lastRepairedTabPath') -and $viewport.Contains('UiLayoutTelemetry.RecordViewport(viewportStarted)')) 'Selected-tab layout must avoid repeat repair and expose timing metrics.'
+Assert-Source ($viewport.Contains('UiTabNavigationTelemetry.RecordDispatch') -and
+               $viewport.Contains('UiTabNavigationTelemetry.RecordLayout') -and
+               $shell.Contains('RecordMainTabHandleCreated') -and
+               $shell.Contains('RecordMainTabHandleDestroyed') -and
+               $telemetry.Contains('Tab RTL setter - actual warm changes') -and
+               $telemetry.Contains('Tab native mirror - actual warm changes')) 'UI timing must distinguish dispatch delay, actual RTL setter changes, and native tab handle churn.'
+
 Assert-Source ($diagnostics.Contains('RunUiPerformanceDiagnosticsButton') -and $diagnostics.Contains('UiTabNavigationTelemetry.Report()') -and $telemetry.Contains('Interlocked.Increment')) 'Diagnostics must expose bounded navigation and non-secret repaint timings.'
 Assert-Source ($shell.Contains('ApplyLocalizedShellCaptions(rtl)') -and $shell.Contains('RightToLeftLayout = false')) 'Hebrew selection must not re-create all native MainForm controls.'
 Assert-Source ($layoutSelfTest.Contains('Language switch left an empty or stale caption')) 'Native UI tests must reject blank/stale captions after Hebrew-Russian-English switches.'

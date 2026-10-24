@@ -67,9 +67,18 @@ public sealed partial class MainForm
                     _mainTabs.SelectedIndex != selectedIndex)
                     return;
 
+                if (navigationStarted > 0)
+                    UiTabNavigationTelemetry.RecordDispatch(
+                        selectedIndex, navigationStarted);
+                var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 ReflowMainViewport();
                 if (navigationStarted > 0)
-                    UiTabNavigationTelemetry.Record(selectedIndex, navigationStarted);
+                {
+                    UiTabNavigationTelemetry.RecordLayout(
+                        selectedIndex, viewportStarted);
+                    UiTabNavigationTelemetry.Record(
+                        selectedIndex, navigationStarted);
+                }
             }));
         }
         catch (InvalidOperationException ex)

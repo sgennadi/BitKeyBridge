@@ -69,6 +69,21 @@ internal static class UiTabNavigationTelemetry
 
     private static readonly Window[] Windows =
         Pages.Select(_ => new Window()).ToArray();
+    // Timing only: no account, device, selection contents or secrets.
+    private static readonly Window[] SelectionToCallback =
+        Pages.Select(_ => new Window()).ToArray();
+    private static readonly Window[] ViewportReflow =
+        Pages.Select(_ => new Window()).ToArray();
+    internal static void RecordDispatch(int pageIndex, long started)
+    {
+        if ((uint)pageIndex < (uint)SelectionToCallback.Length)
+            SelectionToCallback[pageIndex].Add(started);
+    }
+    internal static void RecordLayout(int pageIndex, long started)
+    {
+        if ((uint)pageIndex < (uint)ViewportReflow.Length)
+            ViewportReflow[pageIndex].Add(started);
+    }
 
     internal static void Record(int pageIndex, long started)
     {
@@ -90,6 +105,14 @@ internal static class UiTabNavigationTelemetry
                 continue;
             lines.Add(FormattableString.Invariant(
                 $"{Pages[index]}: runs={result.Count}, window={result.SampleSize}, p50={result.P50:F1} ms, p95={result.P95:F1} ms, max={result.Max:F1} ms"));
+            var dispatch = SelectionToCallback[index].Snapshot();
+            var layout = ViewportReflow[index].Snapshot();
+            if (dispatch.SampleSize > 0)
+                lines.Add(FormattableString.Invariant(
+                    $"{Pages[index]} - selection to UI callback: runs={dispatch.Count}, p50={dispatch.P50:F1} ms, p95={dispatch.P95:F1} ms, max={dispatch.Max:F1} ms"));
+            if (layout.SampleSize > 0)
+                lines.Add(FormattableString.Invariant(
+                    $"{Pages[index]} - viewport reflow: runs={layout.Count}, p50={layout.P50:F1} ms, p95={layout.P95:F1} ms, max={layout.Max:F1} ms"));
         }
         if (lines.Count == 2)
             lines.Add("No completed workspace switches recorded yet.");
@@ -132,6 +155,10 @@ internal static class UiTabNavigationTelemetry
         window.AddMilliseconds(double.PositiveInfinity);
         if (window.Snapshot().Count != bounded.Count)
             failures.Add("Invalid UI latency values were recorded.");
+
+        if (SelectionToCallback.Length != Pages.Length ||
+            ViewportReflow.Length != Pages.Length)
+            failures.Add("Navigation phase counters must cover each fixed tab.");
 
         if (Report().Contains("device=", StringComparison.OrdinalIgnoreCase) ||
             Pages.Distinct(StringComparer.Ordinal).Count() != Pages.Length)
