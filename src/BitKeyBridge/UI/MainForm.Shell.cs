@@ -286,7 +286,10 @@ public sealed partial class MainForm
                 Name =
                     "GlobalStatusBar",
                 SizingGrip =
-                    false
+                    false,
+                // Status links are screen-positioned, never mirrored with
+                // Hebrew navigation; copy must remain at a stable edge.
+                RightToLeft = RightToLeft.No
             };
 
         _globalConnectionStatus.Name =
@@ -318,7 +321,9 @@ public sealed partial class MainForm
 
         _globalCopyDiagnostics.Name = "GlobalCopyDiagnostics";
         _globalCopyDiagnostics.IsLink = true;
-        _globalCopyDiagnostics.Text = "Copy diagnostics";
+        _globalCopyDiagnostics.Text =
+            UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, "Copy diagnostics");
         _globalCopyDiagnostics.ToolTipText =
             "Copy current redacted WinForms layout timings (Ctrl+Shift+P)";
         _globalCopyDiagnostics.Margin = new Padding(

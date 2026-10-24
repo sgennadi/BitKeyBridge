@@ -634,6 +634,14 @@ public static class UiLayoutSelfTest
             form.Show();
             Application.DoEvents();
 
+            if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
+                initialStatus.RightToLeft != RightToLeft.No ||
+                initialStatus.Items.Find("GlobalCopyDiagnostics", false)
+                    .FirstOrDefault() is not ToolStripStatusLabel initialCopy ||
+                initialCopy.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                    "en", "Copy diagnostics"))
+                failures.Add("Initial LTR status-bar copy link is absent.");
+
             for (var i = 0; i < 2; i++)
             {
                 using var largeFont = i == 0
