@@ -872,11 +872,9 @@ public static class UiLayoutSelfTest
 
             if (FindByName(form, "LapsCoverageChanges") is DataGridView lateGrid)
             {
-                using var lateColumn = new DataGridViewTextBoxColumn
-                {
-                    Name = "LateLocalizedHeaderFixture",
-                    HeaderText = "Expiration (UTC)"
-                };
+                // Use centralized column factory (HiDPI/WinForms policy).
+                using var lateColumn = UiStyle.CreateSortableTextColumn(
+                    "LateLocalizedHeaderFixture", "Expiration (UTC)");
                 lateGrid.Columns.Add(lateColumn);
                 if (lateColumn.HeaderText != UiStaticCaptionCatalog.TranslateOrOriginal(
                         "he", "Expiration (UTC)"))
