@@ -91,6 +91,8 @@ public static class UiLayoutSelfTest
         VerifyHebrewIdentityDirection(
             failures);
 
+        VerifyDiagnosticCopyVisibility(failures);
+
         VerifyModalDialogLocalization(failures);
 
         VerifyStartSourcePolicies(failures);
@@ -603,6 +605,77 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    /// <summary>
+    /// Regression for a visually missing copy button: the old check only
+    /// looked up button names, while Hebrew WinForms AutoSize/RTL could
+    /// clip both action controls outside their visible parent rectangle.
+    /// </summary>
+    private static void VerifyDiagnosticCopyVisibility(List<string> failures)
+    {
+        try
+        {
+            using var form = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true)
+            {
+                StartPosition = FormStartPosition.Manual,
+                ClientSize = new Size(1024, 768)
+            };
+            // A hidden Form reports Control.Visible=false for everything
+            // and its AutoSize rows may not lay out. Test actual WinForms
+            // handles and visibility, not just Controls.Find/Text.
+            form.Show();
+            Application.DoEvents();
+
+            for (var i = 0; i < 2; i++)
+            {
+                using var largeFont = i == 0
+                    ? new Font(UiStyle.BodyFont.FontFamily,
+                        UiStyle.BodyFont.Size, FontStyle.Regular,
+                        GraphicsUnit.Point)
+                    : new Font(UiStyle.BodyFont.FontFamily,
+                        UiStyle.BodyFont.Size * 2F, FontStyle.Regular,
+                        GraphicsUnit.Point);
+                form.Font = largeFont;
+                form.PreviewShowUiPerformanceReportForLayoutTest();
+
+                foreach (var language in new[] { "he", "ru", "en", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    form.PerformLayout();
+                    Application.DoEvents();
+
+                    if (FindByName(form, "ApplicationDiagnostics") is not
+                        UiDiagnosticPanel banner ||
+                        !banner.AreActionsWithinVisibleBounds())
+                        failures.Add("Copy Diagnostics is clipped or not visible: " +
+                            language + ", font scale " + (i == 0 ? "100" : "200") + "%.");
+
+                    if (FindByName(form, "GlobalStatusBar") is not StatusStrip status ||
+                        status.Items.Find("GlobalCopyDiagnostics", false)
+                            .FirstOrDefault() is not ToolStripStatusLabel copyLink ||
+                        !copyLink.Available ||
+                        copyLink.Placement != ToolStripItemPlacement.Main ||
+                        copyLink.Bounds.Width <= 0 ||
+                        copyLink.Bounds.Right > status.ClientSize.Width + 2 ||
+                        copyLink.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Copy diagnostics"))
+                        failures.Add("Persistent status bar copy link is clipped: " +
+                            language + ", font scale " + (i == 0 ? "100" : "200") + "%.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Diagnostic copy visibility regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 

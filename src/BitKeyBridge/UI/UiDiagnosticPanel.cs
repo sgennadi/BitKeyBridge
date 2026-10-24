@@ -28,17 +28,56 @@ public sealed class UiDiagnosticPanel : Panel
                 _language, "Diagnostics copied. Secrets are redacted.");
     }
 
-    // Also available to the always-visible Tools shortcut: a user can copy
-    // live timings after a Hebrew switch even if the inline banner is clipped.
+    // Also available to the always-visible Tools/status-bar shortcuts.
     internal void CopyCurrentDiagnostics() => CopyDiagnostics();
+
+    // Geometry-only self-test: report content never leaves this panel.
+    // Each nested Control must fit its own clipping parent, not merely exist
+    // with a translated Text property.
+    internal bool AreActionsWithinVisibleBounds()
+    {
+        if (!HasActiveDiagnostics || !Visible)
+            return false;
+
+        return FitsVisibleParents(_copy) && FitsVisibleParents(_dismiss);
+
+        bool FitsVisibleParents(Control action)
+        {
+            if (!action.Visible || action.IsDisposed ||
+                action.Width < UiStyle.MinimumButtonWidth ||
+                action.Height < UiStyle.MinimumButtonHeight)
+                return false;
+
+            var rectangle = action.Bounds;
+            for (Control? parent = action.Parent; parent is not null;
+                 parent = parent.Parent)
+            {
+                if (parent.IsDisposed || !parent.Visible ||
+                    !parent.ClientRectangle.Contains(rectangle))
+                    return false;
+                if (ReferenceEquals(parent, this))
+                    return true;
+                rectangle.Offset(parent.Left, parent.Top);
+            }
+            return false;
+        }
+    }
 
     public UiDiagnosticPanel()
     {
         Name = "DiagnosticPanel";
         AccessibleName = "Diagnostics";
-        Dock = DockStyle.Top;
+        // This lives in an AutoSize row of MainLayoutRoot. Dock.Fill makes
+        // its bounds fill that row on every DPI/RTL change instead of keeping
+        // a narrow preferred-size rectangle whose copy controls are clipped.
+        Dock = DockStyle.Fill;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        MinimumSize = new Size(0, UiStyle.MinimumButtonHeight +
+            2 * UiStyle.ControlGap);
+        // Only the navigation tab strip should mirror. This report's action
+        // strip must never inherit Hebrew RTL or reverse the copy controls.
+        RightToLeft = RightToLeft.No;
         Visible = false;
         Padding = new Padding(UiStyle.ControlGap);
         Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap);
@@ -48,36 +87,50 @@ public sealed class UiDiagnosticPanel : Panel
 
         var root = new TableLayoutPanel
         {
+            Name = "DiagnosticPanelLayout",
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            RightToLeft = RightToLeft.No,
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(0)
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // Buttons FIRST. Even if summary text expands or an inherited
+        // WinForms AutoSize pass clips a later row, copy stays at the top.
+        var actions = new FlowLayoutPanel
+        {
+            Name = "DiagnosticPanelActions",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(0, UiStyle.MinimumButtonHeight),
+            RightToLeft = RightToLeft.No,
+            WrapContents = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0)
+        };
+        _copy.Name = "CopyDiagnosticsButton";
+        _copy.AccessibleName = "Copy redacted diagnostics to clipboard";
+        _copy.RightToLeft = RightToLeft.No;
+        _dismiss.Name = "DismissDiagnosticsButton";
+        _dismiss.RightToLeft = RightToLeft.No;
+        actions.Controls.Add(_copy);
+        actions.Controls.Add(_dismiss);
+        root.Controls.Add(actions, 0, 0);
 
         _summary.AutoSize = true;
         _summary.Dock = DockStyle.Top;
         _summary.MaximumSize = new Size(980, 0);
         _summary.Font = UiStyle.CreateEmphasisFont();
         _summary.AccessibleName = "Diagnostic reason";
-        root.Controls.Add(_summary, 0, 0);
-
-        var actions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            WrapContents = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, UiStyle.ControlGap, 0, 0)
-        };
-        _copy.Name = "CopyDiagnosticsButton";
-        _copy.AccessibleName = "Copy redacted diagnostics to clipboard";
-        _dismiss.Name = "DismissDiagnosticsButton";
-        actions.Controls.Add(_copy);
-        actions.Controls.Add(_dismiss);
-        root.Controls.Add(actions, 0, 1);
+        _summary.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
+        root.Controls.Add(_summary, 0, 1);
 
         _copyStatus.AutoSize = true;
         _copyStatus.Dock = DockStyle.Top;

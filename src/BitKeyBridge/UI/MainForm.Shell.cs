@@ -56,6 +56,7 @@ public sealed partial class MainForm
     private readonly ToolStripStatusLabel _globalConnectionStatus = new();
     private readonly ToolStripStatusLabel _globalAdAccountStatus = new();
     private readonly ToolStripStatusLabel _globalVersionStatus = new();
+    private readonly ToolStripStatusLabel _globalCopyDiagnostics = new();
     private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
     private CancellationTokenSource? _homeSearchCancellation;
     private int _homeSearchGeneration;
@@ -315,12 +316,23 @@ public sealed partial class MainForm
             (GetType().Assembly.GetName().Version?.ToString(3) ??
              "unknown");
 
-        status.Items.Add(
-            _globalConnectionStatus);
-        status.Items.Add(
-            _globalAdAccountStatus);
-        status.Items.Add(
-            _globalVersionStatus);
+        _globalCopyDiagnostics.Name = "GlobalCopyDiagnostics";
+        _globalCopyDiagnostics.IsLink = true;
+        _globalCopyDiagnostics.Text = "Copy diagnostics";
+        _globalCopyDiagnostics.ToolTipText =
+            "Copy current redacted WinForms layout timings (Ctrl+Shift+P)";
+        _globalCopyDiagnostics.Margin = new Padding(
+            UiStyle.ControlGap, 0, UiStyle.ControlGap, 0);
+        _globalCopyDiagnostics.Click += (_, _) =>
+            ShowUiPerformanceReport(copyImmediately: true);
+
+        status.Items.Add(_globalConnectionStatus);
+        status.Items.Add(_globalAdAccountStatus);
+        // The bottom bar is outside the main TabControl and diagnostics
+        // AutoSize row; this copy link remains accessible even if a native
+        // RTL tab transition temporarily hides the inline action row.
+        status.Items.Add(_globalCopyDiagnostics);
+        status.Items.Add(_globalVersionStatus);
 
         _globalConnectionStatus.Click +=
             (_, _) =>
@@ -580,6 +592,11 @@ public sealed partial class MainForm
             // _mainTabs and is not part of the shell-caption observer.
             // Never clear its active report during a language change.
             _appDiagnostics.ApplyLanguage(_uiLanguageCode);
+            var copyCaption = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, "Copy diagnostics");
+            if (!string.Equals(_globalCopyDiagnostics.Text, copyCaption,
+                    StringComparison.Ordinal))
+                _globalCopyDiagnostics.Text = copyCaption;
             UiLayoutTelemetry.RecordLanguageCaptions(captionsStarted);
         }
         finally
