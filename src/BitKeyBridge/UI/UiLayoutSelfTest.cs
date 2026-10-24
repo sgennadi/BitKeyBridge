@@ -618,6 +618,18 @@ public static class UiLayoutSelfTest
                 },
                 layoutSelfTest: true);
             form.PreviewShellLanguageForLayoutTest("he");
+            form.PreviewShowUiPerformanceReportForLayoutTest();
+
+            var banner = FindByName(form, "ApplicationDiagnostics") as UiDiagnosticPanel;
+            if (banner is null || !banner.HasActiveDiagnostics ||
+                FindByName(banner, "CopyDiagnosticsButton") is not Button ||
+                FindByName(banner, "DismissDiagnosticsButton") is not Button)
+                failures.Add("Diagnostics banner lost the copy/dismiss controls.");
+            var copyUiMenu = form.MainMenuStrip?.Items
+                .Find("CopyUiPerformanceReportMenuItem", true)
+                .OfType<ToolStripMenuItem>().FirstOrDefault();
+            if (copyUiMenu is null)
+                failures.Add("Global UI performance copy shortcut is missing.");
 
             var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
             if (tabs is null || !tabs.RightToLeftLayout ||
@@ -730,6 +742,19 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                // The performance report must not disappear when a
+                // high-DPI WinForms TabControl changes RTL orientation.
+                if (banner is null || !banner.HasActiveDiagnostics ||
+                    FindByName(banner, "CopyDiagnosticsButton") is not Button copyButton ||
+                    copyButton.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Copy diagnostics"))
+                    failures.Add("Diagnostics copy action disappeared or lost translation: " +
+                        language);
+                if (copyUiMenu is null ||
+                    copyUiMenu.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Copy UI diagnostics (Ctrl+Shift+P)"))
+                    failures.Add("Always-visible Tools diagnostic copy action lost its caption: " +
+                        language);
                 // This picker is an enum-by-index, not a text-matched choice:
                 // EN/RU/HE switches may never select a different identity
                 // provider or trigger an asynchronous new connection.

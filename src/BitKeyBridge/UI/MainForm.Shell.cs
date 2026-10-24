@@ -156,7 +156,15 @@ public sealed partial class MainForm
         // AutoScroll TabPage can leave Dock=Fill nested tabs at an obsolete
         // virtual width after DPI or RDP resolution changes.
         foreach (TabPage page in _mainTabs.TabPages)
+        {
             page.AutoScroll = false;
+            // Set an EXPLICIT LTR value before the parent ever mirrors.
+            // An inherited LTR value looks the same but flips to RTL during
+            // the first Hebrew switch, forcing every full-page subtree to
+            // reflow/recreate native handles before it is reset to LTR.
+            // Recovery passwords, device IDs and content remain LTR forever.
+            page.RightToLeft = RightToLeft.No;
+        }
 
         _mainTabs.SelectedIndexChanged +=
             (_, _) =>
@@ -198,6 +206,12 @@ public sealed partial class MainForm
                 else if (e.KeyCode == Keys.R)
                 {
                     ShowRecoveryWorkflowSteps();
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.P)
+                {
+                    ShowUiPerformanceReport(copyImmediately: true);
                     e.SuppressKeyPress = true;
                     e.Handled = true;
                 }
@@ -383,6 +397,18 @@ public sealed partial class MainForm
         accessHealth.Click += (_, _) => OpenHelpdeskAccessHealth();
         _accessHealthMenu = accessHealth;
         tools.DropDownItems.Add(accessHealth);
+
+        // The global diagnostic banner can be temporarily obscured while
+        // WinForms rebuilds a mirrored tab handle. This persistent Tools
+        // action and Ctrl+Shift+P always copy a FRESH non-secret report.
+        var copyUiReport = new ToolStripMenuItem(
+            "Copy UI diagnostics (Ctrl+Shift+P)")
+        {
+            Name = "CopyUiPerformanceReportMenuItem",
+            ToolTipText = "Copy current non-secret WinForms layout timings."
+        };
+        copyUiReport.Click += (_, _) => ShowUiPerformanceReport(copyImmediately: true);
+        tools.DropDownItems.Add(copyUiReport);
         tools.DropDownItems.Add(
             "Latest GitHub release",
             null,
@@ -483,9 +509,9 @@ public sealed partial class MainForm
             if (_mainTabs.RightToLeftLayout != rtl)
                 _mainTabs.RightToLeftLayout = rtl;
             UiLayoutTelemetry.RecordLanguageTabMirroring(mirroringStarted);
-            foreach (TabPage page in _mainTabs.TabPages)
-                if (page.RightToLeft != RightToLeft.No)
-                    page.RightToLeft = RightToLeft.No;
+            // Each page has been explicitly LTR since construction. Do not
+            // reapply RightToLeft here: repeating this operation may cause
+            // multi-second WinForms native control-tree rebuilds.
             var menuStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (MainMenuStrip is { } menu && menu.RightToLeft != direction)
                 menu.RightToLeft = direction;
@@ -553,6 +579,10 @@ public sealed partial class MainForm
             var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
+            // The application-wide diagnostic banner lives outside
+            // _mainTabs and is not part of the shell-caption observer.
+            // Never clear its active report during a language change.
+            _appDiagnostics.ApplyLanguage(_uiLanguageCode);
             UiLayoutTelemetry.RecordLanguageCaptions(captionsStarted);
         }
         finally
@@ -562,6 +592,10 @@ public sealed partial class MainForm
             // false reused the old menu layout after switching between
             // Language / Язык / שפה, sometimes clipping the final Hebrew glyph.
             MainMenuStrip?.ResumeLayout(performLayout: true);
+            // Native TabControl RTL transitions can change Win32 z-order.
+            // Keep the non-modal diagnostics accessible until Dismiss.
+            if (_appDiagnostics.HasActiveDiagnostics)
+                _appDiagnostics.BringToFront();
             UiLayoutTelemetry.RecordLanguageResume(resumeStarted);
             _shellLanguageApplied = true;
             UiLayoutTelemetry.RecordLanguageSwitch(started, initialApply);

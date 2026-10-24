@@ -506,7 +506,11 @@ internal static class UiStaticCaptionCatalog
             ["Current / history"] = ["Текущий / история", "נוכחי / היסטוריה"],
             ["Account"] = ["Учётная запись", "חשבון"],
             ["Age"] = ["Возраст", "גיל"],
-            ["Expires"] = ["Истекает", "תפוגה"]
+            ["Expires"] = ["Истекает", "תפוגה"],
+            ["Copy UI diagnostics (Ctrl+Shift+P)"] = ["Копировать диагностику интерфейса (Ctrl+Shift+P)", "העתקת אבחון ממשק (Ctrl+Shift+P)"],
+            ["Copy diagnostics"] = ["Копировать диагностику", "העתקת אבחון"],
+            ["Dismiss"] = ["Закрыть", "סגירה"],
+            ["Diagnostics copied. Secrets are redacted."] = ["Диагностика скопирована. Секреты скрыты.", "האבחון הועתק. מידע סודי הוסר."]
         };
 
     internal static bool TryTranslate(string? language, string english, out string translation)

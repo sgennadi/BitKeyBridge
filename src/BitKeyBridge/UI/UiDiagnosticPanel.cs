@@ -7,6 +7,30 @@ public sealed class UiDiagnosticPanel : Panel
     private readonly Button _copy = UiStyle.CreateActionButton("Copy diagnostics");
     private readonly Button _dismiss = UiStyle.CreateActionButton("Dismiss");
     private string _diagnostics = string.Empty;
+    private string _language = "en";
+
+    // The source text can be lost visually when native tab handles are
+    // rebuilt. Keep the sanitized report independent of visibility/painting.
+    internal bool HasActiveDiagnostics => !string.IsNullOrWhiteSpace(_diagnostics);
+
+    internal void ApplyLanguage(string code)
+    {
+        _language = UiLanguageService.Normalize(code);
+        _copy.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+            _language, "Copy diagnostics");
+        _dismiss.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+            _language, "Dismiss");
+        if (_copyStatus.Text.Length > 0 &&
+            new[] { "en", "ru", "he" }.Any(language =>
+                _copyStatus.Text == UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Diagnostics copied. Secrets are redacted.")))
+            _copyStatus.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _language, "Diagnostics copied. Secrets are redacted.");
+    }
+
+    // Also available to the always-visible Tools shortcut: a user can copy
+    // live timings after a Hebrew switch even if the inline banner is clipped.
+    internal void CopyCurrentDiagnostics() => CopyDiagnostics();
 
     public UiDiagnosticPanel()
     {
@@ -48,6 +72,9 @@ public sealed class UiDiagnosticPanel : Panel
             FlowDirection = FlowDirection.LeftToRight,
             Margin = new Padding(0, UiStyle.ControlGap, 0, 0)
         };
+        _copy.Name = "CopyDiagnosticsButton";
+        _copy.AccessibleName = "Copy redacted diagnostics to clipboard";
+        _dismiss.Name = "DismissDiagnosticsButton";
         actions.Controls.Add(_copy);
         actions.Controls.Add(_dismiss);
         root.Controls.Add(actions, 0, 1);
@@ -124,7 +151,8 @@ public sealed class UiDiagnosticPanel : Panel
         try
         {
             Clipboard.SetText(_diagnostics);
-            _copyStatus.Text = "Diagnostics copied. Secrets are redacted.";
+            _copyStatus.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _language, "Diagnostics copied. Secrets are redacted.");
         }
         catch (Exception ex)
         {

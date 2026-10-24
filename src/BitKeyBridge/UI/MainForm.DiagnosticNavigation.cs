@@ -6,6 +6,25 @@ namespace BitKeyBridge;
 /// </summary>
 public sealed partial class MainForm
 {
+    private void ShowUiPerformanceReport(bool copyImmediately = false)
+    {
+        // Refresh the counts on every invocation. The report contains timing
+        // aggregates only (no names, keys, account IDs or Graph/AD content).
+        ShowAppMessage("UI performance (current session)",
+            UiLayoutTelemetry.Report() + Environment.NewLine +
+            Environment.NewLine + UiTabNavigationTelemetry.Report());
+        if (copyImmediately)
+            _appDiagnostics.CopyCurrentDiagnostics();
+    }
+
+    internal void PreviewShowUiPerformanceReportForLayoutTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException(
+                "Performance preview is restricted to UI layout tests.");
+        ShowUiPerformanceReport();
+    }
+
     private TabPage BuildDiagnosticToolsPage()
     {
         var page = new TabPage("Tools")
@@ -89,10 +108,7 @@ public sealed partial class MainForm
         uiPerformance.Name = "RunUiPerformanceDiagnosticsButton";
         uiPerformance.AccessibleName =
             "Show in-memory layout timings without computer identities or secrets";
-        uiPerformance.Click += (_, _) =>
-            ShowAppMessage("UI performance (current session)",
-                UiLayoutTelemetry.Report() + Environment.NewLine +
-                Environment.NewLine + UiTabNavigationTelemetry.Report());
+        uiPerformance.Click += (_, _) => ShowUiPerformanceReport();
 
         buttons.Controls.AddRange([
             environment,
