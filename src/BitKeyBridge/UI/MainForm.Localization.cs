@@ -201,17 +201,19 @@ public sealed partial class MainForm
         }
     }
 
+    private string TranslateFixedCaption(string key) =>
+        key.StartsWith(OriginalCaptionPrefix, StringComparison.Ordinal)
+            ? UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, key[OriginalCaptionPrefix.Length..])
+            : UiLanguageService.Translate(_uiLanguageCode, key);
+
     private void ApplyLocalizedCaption(
         Control control, string key, RightToLeft direction)
     {
         if (control.IsDisposed || control.Disposing)
             return;
 
-        var translated = key.StartsWith(OriginalCaptionPrefix, StringComparison.Ordinal)
-            ? UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode,
-                key[OriginalCaptionPrefix.Length..], out var text)
-                ? text : key[OriginalCaptionPrefix.Length..]
-            : UiLanguageService.Translate(_uiLanguageCode, key);
+        var translated = TranslateFixedCaption(key);
         if (!string.IsNullOrWhiteSpace(translated) &&
             !string.Equals(control.Text, translated, StringComparison.Ordinal))
             control.Text = translated;
@@ -232,29 +234,51 @@ public sealed partial class MainForm
         }
 
         var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
-        // Coalesce multiple TextChanged layout requests under shared parent
-        // containers. Never suspend or touch secret/identity controls.
-        var parents = _localizedCaptionControls.Keys
-            .Where(x => !x.IsDisposed && x.Parent is not null)
-            .Select(x => x.Parent!)
-            .Distinct()
-            .ToArray();
+        // Never suspend and force-layout the entire registered form on every
+        // language switch. Most Controls are on unselected nested tabs and
+        // do not need visible layout until that page is shown.
+        var changed = new List<(Control Control, string Caption, bool ChangeText,
+            bool ChangeDirection)>();
+        foreach (var (control, key) in _localizedCaptionControls)
+        {
+            if (control.IsDisposed || control.Disposing)
+                continue;
+            var caption = TranslateFixedCaption(key);
+            var changeText = !string.IsNullOrWhiteSpace(caption) &&
+                !string.Equals(control.Text, caption, StringComparison.Ordinal);
+            var changeDirection =
+                control is Button or CheckBox or RadioButton or LinkLabel or GroupBox &&
+                control.RightToLeft != direction;
+            if (changeText || changeDirection)
+                changed.Add((control, caption, changeText, changeDirection));
+        }
+
+        var parents = changed.Select(x => x.Control.Parent)
+            .Concat(_localizedListViewHeaders.Keys
+                .Where(x => !x.IsDisposed).Select(x => x.Parent))
+            .OfType<Control>().Distinct().ToArray();
         foreach (var parent in parents)
             parent.SuspendLayout();
         try
         {
-            foreach (var (control, key) in _localizedCaptionControls.ToArray())
-                ApplyLocalizedCaption(control, key, direction);
+            foreach (var change in changed)
+            {
+                if (change.ChangeText)
+                    change.Control.Text = change.Caption;
+                if (change.ChangeDirection)
+                    change.Control.RightToLeft = direction;
+            }
             foreach (var list in _localizedListViewHeaders.Keys.ToArray())
                 ApplyLocalizedListViewHeaders(list);
         }
         finally
         {
-            // Layout each affected group once instead of once per translated
-            // button/label. MainForm's tab strip is already suspended by caller.
+            // Hidden pages retain translated Text but must not execute full
+            // FlowLayoutPanel/TableLayoutPanel passes now. Normal tab
+            // selection explicitly repairs/reflows the selected hierarchy.
             for (var i = parents.Length - 1; i >= 0; i--)
                 if (!parents[i].IsDisposed)
-                    parents[i].ResumeLayout(performLayout: true);
+                    parents[i].ResumeLayout(performLayout: parents[i].Visible);
         }
 
         // The summary is a mutable run result: translate only its original

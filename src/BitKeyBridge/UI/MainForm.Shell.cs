@@ -7,6 +7,7 @@ public sealed partial class MainForm
     private ToolStripMenuItem? _recoveryStepsMenu;
     private ToolStripMenuItem? _accessHealthMenu;
     private ToolStripMenuItem? _languageTopMenu;
+    private ToolStripMenuItem? _sectionExplanationsMenuItem;
     private readonly List<ToolStripMenuItem> _languageChoices = [];
     private string _uiLanguageCode = "en";
     private bool _shellLanguageApplied;
@@ -387,6 +388,21 @@ public sealed partial class MainForm
             null,
             (_, _) => OpenLatestRelease());
 
+        // Compact by default. Only noninteractive explanatory paragraphs
+        // are hidden; all controls, security checks and status remain.
+        tools.DropDownItems.Add(new ToolStripSeparator());
+        var explanations = new ToolStripMenuItem("Show explanations")
+        {
+            Name = "UiShowSectionExplanations",
+            CheckOnClick = true,
+            Checked = _showSectionExplanations,
+            ToolTipText = "Show or hide section descriptions; no settings or permissions change."
+        };
+        explanations.CheckedChanged += (_, _) =>
+            SetSectionExplanationsVisible(explanations.Checked);
+        _sectionExplanationsMenuItem = explanations;
+        tools.DropDownItems.Add(explanations);
+
         _toolsTopMenu = tools;
         menu.Items.Add(tools);
 
@@ -490,21 +506,37 @@ public sealed partial class MainForm
                 "Diagnostics", "Settings"
             };
             for (var i = 0; i < Math.Min(keys.Length, _mainTabs.TabPages.Count); i++)
-                _mainTabs.TabPages[i].Text =
-                    UiLanguageService.Translate(_uiLanguageCode, keys[i]);
+            {
+                var caption = UiLanguageService.Translate(_uiLanguageCode, keys[i]);
+                if (!string.Equals(_mainTabs.TabPages[i].Text, caption,
+                        StringComparison.Ordinal))
+                    _mainTabs.TabPages[i].Text = caption;
+            }
 
             if (_toolsTopMenu is not null)
-                _toolsTopMenu.Text =
-                    UiLanguageService.Translate(_uiLanguageCode, "Tools");
+            {
+                var caption = UiLanguageService.Translate(_uiLanguageCode, "Tools");
+                if (_toolsTopMenu.Text != caption)
+                    _toolsTopMenu.Text = caption;
+            }
             if (_recoveryStepsMenu is not null)
-                _recoveryStepsMenu.Text =
-                    UiLanguageService.Translate(_uiLanguageCode, "RecoveryStepsShortcut");
+            {
+                var caption = UiLanguageService.Translate(_uiLanguageCode, "RecoveryStepsShortcut");
+                if (_recoveryStepsMenu.Text != caption)
+                    _recoveryStepsMenu.Text = caption;
+            }
             if (_accessHealthMenu is not null)
-                _accessHealthMenu.Text =
-                    UiLanguageService.Translate(_uiLanguageCode, "AccessHealthShortcut");
+            {
+                var caption = UiLanguageService.Translate(_uiLanguageCode, "AccessHealthShortcut");
+                if (_accessHealthMenu.Text != caption)
+                    _accessHealthMenu.Text = caption;
+            }
             if (_languageTopMenu is not null)
-                _languageTopMenu.Text =
-                    UiLanguageService.Translate(_uiLanguageCode, "Language");
+            {
+                var caption = UiLanguageService.Translate(_uiLanguageCode, "Language");
+                if (_languageTopMenu.Text != caption)
+                    _languageTopMenu.Text = caption;
+            }
             foreach (var choice in _languageChoices)
                 choice.Checked = string.Equals(choice.Tag as string,
                     _uiLanguageCode, StringComparison.Ordinal);

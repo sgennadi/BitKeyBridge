@@ -21,6 +21,7 @@ internal static class UiStaticCaptionCatalog
             ["Audit"] = ["Аудит", "ביקורת"],
             ["Helpdesk"] = ["Поддержка", "תמיכה"],
             ["Tools"] = ["Инструменты", "כלים"],
+            ["Show explanations"] = ["Показать пояснения", "הצגת הסברים"],
             ["Open recovery export"] = ["Открыть файл экспорта", "פתיחת קובץ הייצוא"],
             ["Open export log"] = ["Открыть журнал экспорта", "פתיחת יומן הייצוא"],
             ["Open export folder"] = ["Открыть папку экспорта", "פתיחת תיקיית הייצוא"],

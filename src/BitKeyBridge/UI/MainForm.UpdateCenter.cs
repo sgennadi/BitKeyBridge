@@ -20,6 +20,7 @@ public sealed partial class MainForm
     private bool _updateCenterBuilt;
     private int _updateCenterStatusRequestId;
     private bool _updateCenterCheckingRelease;
+    private UpdateCenterSnapshot? _lastUpdateCenterSnapshot;
 
     private Control BuildUpdateCenter()
     {
@@ -271,7 +272,12 @@ public sealed partial class MainForm
             _updateCenterEnableAction.Text = T("UpdateCenterEnable");
         _compactUpdateCenter.Text = T("UpdateCenterCompact");
 
-        if (!_layoutSelfTest && IsHandleCreated)
+        // A language change is a presentation event, not a reason to
+        // re-query Task Scheduler, ProgramData and machine policy. Render
+        // the last read-only snapshot in the new language instead.
+        if (_lastUpdateCenterSnapshot is { } cached)
+            RenderUpdateCenter(cached);
+        else if (!_layoutSelfTest && IsHandleCreated)
             RefreshUpdateCenter();
     }
 
@@ -321,6 +327,7 @@ public sealed partial class MainForm
 
     private void RenderUpdateCenter(UpdateCenterSnapshot status)
     {
+        _lastUpdateCenterSnapshot = status;
         try
         {
             string T(string key) => UiLanguageService.Translate(_uiLanguageCode, key);

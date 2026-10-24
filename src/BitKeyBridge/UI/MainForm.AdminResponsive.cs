@@ -2,6 +2,38 @@ namespace BitKeyBridge;
 
 public sealed partial class MainForm
 {
+    // Descriptions are optional presentation text, not action buttons, policy
+    // warnings, recovery results or authorization checks. Hide them by default
+    // to keep the everyday administrative workflow compact; Tools can expand.
+    private readonly List<Label> _sectionExplanationLabels = [];
+    private bool _showSectionExplanations;
+
+    private void SetSectionExplanationsVisible(bool show)
+    {
+        if (_showSectionExplanations == show)
+            return;
+        _showSectionExplanations = show;
+        var labels = _sectionExplanationLabels.Where(x => !x.IsDisposed).ToArray();
+        var parents = labels.Select(x => x.Parent)
+            .OfType<Control>().Distinct().ToArray();
+        foreach (var parent in parents)
+            parent.SuspendLayout();
+        try
+        {
+            foreach (var label in labels)
+                label.Visible = show;
+        }
+        finally
+        {
+            for (var i = parents.Length - 1; i >= 0; i--)
+                if (!parents[i].IsDisposed)
+                    parents[i].ResumeLayout(performLayout: parents[i].Visible);
+        }
+        if (_sectionExplanationsMenuItem is not null &&
+            _sectionExplanationsMenuItem.Checked != show)
+            _sectionExplanationsMenuItem.Checked = show;
+    }
+
     private TabPage BuildUpdatesResponsiveTab()
     {
         var page =
@@ -1923,7 +1955,7 @@ public sealed partial class MainForm
         return panel;
     }
 
-    private static Control CreateSectionTitle(
+    private Control CreateSectionTitle(
         string title,
         string description)
     {
@@ -1943,35 +1975,29 @@ public sealed partial class MainForm
                 SizeType.Percent,
                 100F));
 
-        panel.Controls.Add(
-            new Label
-            {
-                Text = title,
-                Font =
-                    UiStyle.CreateSectionTitleFont(),
-                AutoSize = true,
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        2)
-            },
-            0,
-            0);
+        var heading = new Label
+        {
+            Text = title,
+            Font = UiStyle.CreateSectionTitleFont(),
+            AutoSize = true,
+            AccessibleDescription = description,
+            Margin = new Padding(0, 0, 0, 2)
+        };
+        panel.Controls.Add(heading, 0, 0);
 
-        panel.Controls.Add(
-            new Label
-            {
-                Text = description,
-                AutoSize = true,
-                MaximumSize =
-                    new Size(
-                        1000,
-                        0)
-            },
-            0,
-            1);
+        // Fixed explanatory text can be revealed from Tools without
+        // removing/recreating any form control or losing its translation.
+        var explanation = new Label
+        {
+            Text = description,
+            Name = "OptionalSectionExplanation",
+            Tag = "BKB.OptionalSectionExplanation",
+            AutoSize = true,
+            MaximumSize = new Size(1000, 0),
+            Visible = _showSectionExplanations
+        };
+        panel.Controls.Add(explanation, 0, 1);
+        _sectionExplanationLabels.Add(explanation);
 
         return panel;
     }

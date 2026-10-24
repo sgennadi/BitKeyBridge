@@ -570,6 +570,39 @@ public static class UiLayoutSelfTest
             if (FindByName(form, "UpdateCenterCompact") is not CheckBox updateDensity ||
                 updateDensity.Text != UiLanguageService.Translate("he", "UpdateCenterCompact"))
                 failures.Add("Hebrew Update Center switch did not localize.");
+
+            // All administrative controls remain in the form, but verbose
+            // optional descriptions start collapsed. They can be expanded
+            // from one consistent Tools menu action in every language.
+            var helpItem = form.MainMenuStrip?.Items
+                .Find("UiShowSectionExplanations", true)
+                .OfType<ToolStripMenuItem>().FirstOrDefault();
+            if (helpItem is null || helpItem.Checked ||
+                helpItem.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                    "he", "Show explanations"))
+                failures.Add("Compact administrative explanation menu was not available in Hebrew.");
+            if (helpItem is not null)
+            {
+                helpItem.Checked = true;
+                if (!helpItem.Checked)
+                    failures.Add("Could not expand optional admin section descriptions.");
+                helpItem.Checked = false;
+            }
+            var optionalCount = 0;
+            var explanationQueue = new Stack<Control>();
+            explanationQueue.Push(form);
+            while (explanationQueue.Count > 0)
+            {
+                var current = explanationQueue.Pop();
+                if (current is Label label &&
+                    string.Equals(label.Tag as string,
+                        "BKB.OptionalSectionExplanation", StringComparison.Ordinal))
+                    optionalCount++;
+                foreach (Control child in current.Controls)
+                    explanationQueue.Push(child);
+            }
+            if (optionalCount < 8)
+                failures.Add("Administrative explanations were removed instead of safely collapsed.");
             // WinForms originally mirrored the Form itself, recursively
             // resetting native child windows and sometimes blanking Hebrew
             // captions after a language switch. Only the tab strip may mirror.
@@ -627,6 +660,10 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                if (helpItem is not null &&
+                    helpItem.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Show explanations"))
+                    failures.Add("Section explanations menu was not translated: " + language);
                 if (tabs is not null &&
                     tabs.DrawMode != (language == "he" ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed))
                     failures.Add("Main tab renderer did not match the active RTL/LTR mode.");
