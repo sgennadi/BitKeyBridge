@@ -1,3 +1,14 @@
+## 0.32.2
+
+**Stable EN/RU/HE UI and DataGridView fix — UNSIGNED, x64/x86/ARM64.**
+
+- Complete static Russian/Hebrew captions for modal security and AD/LAPS/Entra guidance; fix previously untranslated connection choices, Start, BitLocker and LAPS table headers, and LAPS Coverage controls.
+- Preserve AD/Microsoft 365 SelectedIndex, exact recovery/account data, passwords, IDs and audit/RBAC checks across language changes.
+- Cache initial captions and perform batched updates rather than individual startup layout passes; retain dynamic-control localization.
+- Fit long localized grid headers to readable minimum column widths at high DPI and extend repeated RTL/LTR and late-added grid column regressions.
+- Generate three tested Windows self-contained ZIP assets, SHA256SUMS, SBOM, build provenance and optional exact-source/exact-hash, tamper-tested, canary installer. No silent opt-in, GPO/Intune deployment or signing-policy bypass.
+- Binaries remain **UNSIGNED**; dynamic runtime status translations and RDP/200% Hebrew latency need further real-machine validation.
+
 ## 0.32.1
 
 **Stable UI hotfix — exact source-gated release, x64/x86/ARM64.**

@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable v0.32.1 (unsigned; published only after final-SHA GitHub CI).** This UI/localization hotfix removes duplicate blank Hebrew RTL tabs, prevents clipping of the Language menu, and translates 179 administrative captions into Russian/Hebrew. Windows x64/x86/ARM64 self-contained packages and an exact-SHA-256-pinned optional managed canary installer are included after release. Published v0.32.0 remains available; no unsigned automatic-install consent or GPO/Intune task is changed.
+**Stable v0.32.2 (UNSIGNED; exact-source GitHub Actions release).** This version expands Russian/Hebrew translations for security dialogs, the connection-source chooser, and Start/BitLocker/LAPS grid headers; initial caption updates are batched without changing data or authorizations. x64/x86/ARM64 portable ZIPs include SHA256SUMS, SBOM, provenance and an opt-in hash-pinned canary installer. v0.32.1 remains available for rollback. No automatic-update consent, GPO/Intune enrollment, or signer trust setting is changed. Some runtime status text remains English, and on-device RDP/200% Hebrew latency still requires a managed pilot.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 

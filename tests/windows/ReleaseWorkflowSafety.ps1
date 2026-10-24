@@ -134,6 +134,29 @@ if ($release.IndexOf('Generate v0.32.1 canary installer pinned to actual built Z
     $release.IndexOf('Generate SHA256SUMS')) {
     throw 'The canary installer must pass tamper checks before checksum publication.'
 }
+# v0.32.2 must preserve exact-branch, same-commit security gates,
+# separate on-SHA CodeQL, and a validated/tamper-tested pinned installer.
+if (-not $pushBranches[0].Contains('"release/v0.32.2"') -or
+    -not $release.Contains("github.event.head_commit.message == 'Release v0.32.2'") -or
+    -not $release.Contains("github.ref != 'refs/heads/release/v0.32.2'") -or
+    -not $release.Contains("needs['codeql-stable-release'].result == 'success'") -or
+    -not $release.Contains("needs['legacy-upgrade-regression'].result == 'success'") -or
+    -not $release.Contains("needs['audit-broker-integration'].result == 'success'") -or
+    -not $release.Contains('docs/release-authorization-v0.32.2.md') -or
+    -not $release.Contains('docs/release-notes-v0.32.2.md') -or
+    -not $release.Contains('Generate v0.32.2 canary installer pinned to actual built ZIPs') -or
+    -not $release.Contains('Verify v0.32.2 canary installer and reject tampered ZIP') -or
+    -not $release.Contains('Attest v0.32.2 pinned canary installer') -or
+    -not $release.Contains("files+=(Install-BitKeyBridge-v0.32.2.ps1)")) {
+    throw 'Missing exact v0.32.2 release safeguards.'
+}
+if ($release.IndexOf('Generate v0.32.2 canary installer pinned to actual built ZIPs') -ge
+    $release.IndexOf('Generate SHA256SUMS') -or
+    $release.IndexOf('Verify v0.32.2 canary installer and reject tampered ZIP') -ge
+    $release.IndexOf('Generate SHA256SUMS')) {
+    throw 'v0.32.2 canary validation must precede SHA256 publication.'
+}
+
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch
