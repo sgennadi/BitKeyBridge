@@ -69,14 +69,9 @@ Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and
                [regex]::IsMatch($base, 'UiLayoutTelemetry\.RecordResponsivePhase\s*\(\s*started\s*,\s*initialRefresh\s*,\s*this\s+is\s+MainForm\s*\)') -and
                $telemetry.Contains('ColdMainForm.Summarize("Initial DPI - main window")') -and
                $telemetry.Contains('ColdOtherForms.Summarize("Initial DPI - other windows")')) 'Initial and subsequent DPI/font timings must distinguish the main window from other forms.'
-Assert-Source (
-    @('ThemeInstall', 'ControlDefaults', 'WorkArea', 'Layout', 'LabelWidths', 'ThemeRefresh') |
-        ForEach-Object { $base.Contains('UiLayoutTelemetry.DpiPhase.' + $_) } |
-        Where-Object { -not $_ } |
-        Measure-Object |
-        Select-Object -ExpandProperty Count |
-        ForEach-Object { $_ -eq 0 }
-) 'Every full DPI phase must retain its independent non-secret timing counter.'
+foreach ($phase in @('ThemeInstall', 'ControlDefaults', 'WorkArea', 'Layout', 'LabelWidths', 'ThemeRefresh')) {
+    Assert-Source ($base.Contains('UiLayoutTelemetry.DpiPhase.' + $phase)) "Missing non-secret DPI timing phase: $phase"
+}
 Assert-Source ($telemetry.Contains('DpiThemeInstall.Summarize("DPI phase - theme installation")') -and
                $telemetry.Contains('DpiControlDefaults.Summarize("DPI phase - control defaults")') -and
                $telemetry.Contains('DpiLayout.Summarize("DPI phase - WinForms PerformLayout")') -and
