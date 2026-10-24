@@ -507,7 +507,7 @@ internal static class UiStaticCaptionCatalog
             ["Account"] = ["Учётная запись", "חשבון"],
             ["Age"] = ["Возраст", "גיל"],
             ["Expires"] = ["Истекает", "תפוגה"],
-            ["Copy UI diagnostics (Ctrl+Shift+P)"] = ["Копировать диагностику интерфейса (Ctrl+Shift+P)", "העתקת אבחון ממשק (Ctrl+Shift+P)"],
+            ["Copy UI diagnostics"] = ["Копировать диагностику интерфейса", "העתקת אבחון ממשק"],
             ["Copy diagnostics"] = ["Копировать диагностику", "העתקת אבחון"],
             ["Dismiss"] = ["Закрыть", "סגירה"],
             ["Diagnostics copied. Secrets are redacted."] = ["Диагностика скопирована. Секреты скрыты.", "האבחון הועתק. מידע סודי הוסר."]

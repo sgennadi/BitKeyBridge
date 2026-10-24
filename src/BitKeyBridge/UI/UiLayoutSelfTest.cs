@@ -628,8 +628,10 @@ public static class UiLayoutSelfTest
             var copyUiMenu = form.MainMenuStrip?.Items
                 .Find("CopyUiPerformanceReportMenuItem", true)
                 .OfType<ToolStripMenuItem>().FirstOrDefault();
-            if (copyUiMenu is null)
-                failures.Add("Global UI performance copy shortcut is missing.");
+            if (copyUiMenu is null ||
+                copyUiMenu.ShortcutKeys != (Keys.Control | Keys.Shift | Keys.P) ||
+                !copyUiMenu.ShowShortcutKeys)
+                failures.Add("Global UI performance copy shortcut is missing or not registered.");
 
             var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
             if (tabs is null || !tabs.RightToLeftLayout ||
@@ -752,7 +754,7 @@ public static class UiLayoutSelfTest
                         language);
                 if (copyUiMenu is null ||
                     copyUiMenu.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
-                        language, "Copy UI diagnostics (Ctrl+Shift+P)"))
+                        language, "Copy UI diagnostics"))
                     failures.Add("Always-visible Tools diagnostic copy action lost its caption: " +
                         language);
                 // This picker is an enum-by-index, not a text-matched choice:

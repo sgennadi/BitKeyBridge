@@ -209,12 +209,8 @@ public sealed partial class MainForm
                     e.SuppressKeyPress = true;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == Keys.P)
-                {
-                    ShowUiPerformanceReport(copyImmediately: true);
-                    e.SuppressKeyPress = true;
-                    e.Handled = true;
-                }
+                // Ctrl+Shift+P uses the actual ToolStrip ShortcutKeys
+                // routing and stays usable when a TextBox or grid has focus.
                 return;
             }
             if (!e.Control || e.Alt || e.Shift)
@@ -401,10 +397,11 @@ public sealed partial class MainForm
         // The global diagnostic banner can be temporarily obscured while
         // WinForms rebuilds a mirrored tab handle. This persistent Tools
         // action and Ctrl+Shift+P always copy a FRESH non-secret report.
-        var copyUiReport = new ToolStripMenuItem(
-            "Copy UI diagnostics (Ctrl+Shift+P)")
+        var copyUiReport = new ToolStripMenuItem("Copy UI diagnostics")
         {
             Name = "CopyUiPerformanceReportMenuItem",
+            ShortcutKeys = Keys.Control | Keys.Shift | Keys.P,
+            ShowShortcutKeys = true,
             ToolTipText = "Copy current non-secret WinForms layout timings."
         };
         copyUiReport.Click += (_, _) => ShowUiPerformanceReport(copyImmediately: true);
