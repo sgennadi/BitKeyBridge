@@ -1,3 +1,14 @@
+## 0.32.1
+
+**Stable UI hotfix — exact source-gated release, x64/x86/ARM64.**
+
+- Fix duplicate/empty tab-header slots after switching to Hebrew RTL: use native WinForms tab rendering for mirrored Hebrew instead of conflicting custom OwnerDrawFixed.
+- Fix clipped Language / Язык / שפה top-menu caption; keep proper auto-sizing and full layout refresh after the language changes.
+- Translate 179 known static Russian and Hebrew administrative UI captions (Export & Automation, Updates, Coverage, Service, Audit) plus exported list column headings. Preserve user inputs, device identities, recovery credentials and live status.
+- Batch fixed-caption layout changes and record separate UI timings for chrome/RTL, captions and layout resume; preserve the existing on-SHA WinForms UI/HiDPI and RDP regressions.
+- Include an **opt-in** administrator-managed canary installer pinned to the exact v0.32.1 asset SHA-256 values after CI builds, tested on every architecture plus a tampered package. This does not enroll GPO/Intune assignments, bypass Windows/CyberArk/WDAC/AppLocker, or enable unsigned auto-install.
+- Signatures: **UNSIGNED** public binaries and GitHub build attestations. Real Windows/AD/Entra/RDP, protected-audit/SIEM and managed rollout acceptance remain separate requirements.
+
 ## 0.32.0
 
 **Stable source. New, unsigned release only from the exact gated release/v0.32.0 commit.**

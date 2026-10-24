@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable v0.32.0 (unsigned, subject to exact-head release CI).** Unifies RC9 with post-RC9 Hebrew/HiDPI fixes, unified Helpdesk search and the guarded updater. v0.30.5 remains available for rollback. Older RC notes below are historical; a Stable release does not authorize enterprise-wide unattended deployment.
+**Stable v0.32.1 (unsigned; published only after final-SHA GitHub CI).** This UI/localization hotfix removes duplicate blank Hebrew RTL tabs, prevents clipping of the Language menu, and translates 179 administrative captions into Russian/Hebrew. Windows x64/x86/ARM64 self-contained packages and an exact-SHA-256-pinned optional managed canary installer are included after release. Published v0.32.0 remains available; no unsigned automatic-install consent or GPO/Intune task is changed.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
