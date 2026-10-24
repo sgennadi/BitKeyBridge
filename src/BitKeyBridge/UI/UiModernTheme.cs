@@ -94,17 +94,21 @@ internal static class UiModernTheme
                 tabs.Alignment == TabAlignment.Top &&
                 tabs.Appearance == TabAppearance.Normal:
                 tabs.BackColor = UiStyle.ModernCanvas;
-                // Native mirrored WinForms tabs and OwnerDrawFixed disagree about
-                // header coordinates: Hebrew produced a second row of seven
-                // empty owner-drawn pills on the left of the real RTL headers.
-                // Let Windows draw mirrored tabs natively; retain the custom
-                // rounded renderer only for non-mirrored EN/RU headers.
-                tabs.DrawMode = tabs.RightToLeftLayout
+                // Keep the primary seven workspace tabs native in *all*
+                // languages. Toggling DrawMode on every EN/RU <-> Hebrew
+                // language switch forces an additional native TabControl
+                // handle recreation and extra UI-thread work. The ordinary
+                // Windows tab strip is also simpler, stable at 200% DPI and
+                // does not leave mirrored owner-draw phantom headers.
+                // Retain rounded owner-draw for nested non-mirrored tabs.
+                var mainNavigation = tabs.Name == "MainWorkspaceTabs";
+                tabs.DrawMode = mainNavigation || tabs.RightToLeftLayout
                     ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed;
                 tabs.Padding = new Point(
                     UiStyle.ModernTabHorizontalPadding,
                     UiStyle.ModernTabVerticalPadding);
-                tabs.DrawItem += DrawTab;
+                if (!mainNavigation)
+                    tabs.DrawItem += DrawTab;
                 tabs.FontChanged += (_, _) => tabs.Invalidate();
                 tabs.SelectedIndexChanged += (_, _) => tabs.Invalidate();
                 break;

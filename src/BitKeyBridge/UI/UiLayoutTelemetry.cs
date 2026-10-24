@@ -54,6 +54,9 @@ internal static class UiLayoutTelemetry
     private static readonly Counter ColdLanguageApply = new();
     private static readonly Counter WarmLanguageSwitch = new();
     private static readonly Counter LanguageChrome = new();
+    private static readonly Counter LanguageTabDirection = new();
+    private static readonly Counter LanguageTabMirroring = new();
+    private static readonly Counter LanguageMenuDirection = new();
     private static readonly Counter LanguageCaptions = new();
     private static readonly Counter LanguageResume = new();
 
@@ -65,6 +68,12 @@ internal static class UiLayoutTelemetry
     internal static void RecordLanguageSwitch(long start, bool initial) =>
         (initial ? ColdLanguageApply : WarmLanguageSwitch).Record(start);
     internal static void RecordLanguageChrome(long start) => LanguageChrome.Record(start);
+    internal static void RecordLanguageTabDirection(long start) =>
+        LanguageTabDirection.Record(start);
+    internal static void RecordLanguageTabMirroring(long start) =>
+        LanguageTabMirroring.Record(start);
+    internal static void RecordLanguageMenuDirection(long start) =>
+        LanguageMenuDirection.Record(start);
     internal static void RecordLanguageCaptions(long start) => LanguageCaptions.Record(start);
     internal static void RecordLanguageResume(long start) => LanguageResume.Record(start);
 
@@ -79,6 +88,9 @@ internal static class UiLayoutTelemetry
         ColdLanguageApply.Summarize("Initial language labels") + "\n" +
         WarmLanguageSwitch.Summarize("Language changes (warm)") + "\n" +
         LanguageChrome.Summarize("Language chrome / tab mirroring") + "\n" +
+        LanguageTabDirection.Summarize("Tab RTL direction setter") + "\n" +
+        LanguageTabMirroring.Summarize("Tab native mirror setter") + "\n" +
+        LanguageMenuDirection.Summarize("Top menu RTL setter") + "\n" +
         LanguageCaptions.Summarize("Language captions") + "\n" +
         LanguageResume.Summarize("Language layout resume") + "\n\n" +
         "If a tab still feels slow but these numbers are low, " +

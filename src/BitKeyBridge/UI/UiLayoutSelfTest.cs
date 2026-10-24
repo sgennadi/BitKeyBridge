@@ -665,8 +665,11 @@ public static class UiLayoutSelfTest
                         language, "Show explanations"))
                     failures.Add("Section explanations menu was not translated: " + language);
                 if (tabs is not null &&
-                    tabs.DrawMode != (language == "he" ? TabDrawMode.Normal : TabDrawMode.OwnerDrawFixed))
-                    failures.Add("Main tab renderer did not match the active RTL/LTR mode.");
+                    (tabs.DrawMode != TabDrawMode.Normal ||
+                     tabs.RightToLeftLayout != (language == "he") ||
+                     tabs.RightToLeft != (language == "he"
+                         ? RightToLeft.Yes : RightToLeft.No)))
+                    failures.Add("Native main tabs were recreated or lost correct RTL/LTR orientation.");
                 foreach (var lateAction in new[] { lateAction1, lateAction2 })
                 {
                     if (lateAction.Text != UiLanguageService.Translate(language, "MainRecoverySteps") ||

@@ -469,24 +469,27 @@ public sealed partial class MainForm
                 RightToLeft = RightToLeft.No;
             if (RightToLeftLayout)
                 RightToLeftLayout = false;
-            // A mirrored native tab strip cannot also use OwnerDrawFixed:
-            // DrawItem rectangles point to LTR positions, leaving duplicate
-            // blank pills while the actual Hebrew headers appear on the right.
-            // Change DrawMode before enabling native RTL mirroring and only
-            // restore custom drawing once LTR mirroring has been disabled.
-            if (rtl && _mainTabs.DrawMode != TabDrawMode.Normal)
+            // Preserve the same native main-tab paint mode for EN, RU and HE.
+            // This avoids a second expensive HWND recreation from switching
+            // OwnerDrawFixed <-> Normal, while real Hebrew tab mirroring and
+            // tab order continue to work through RightToLeftLayout.
+            if (_mainTabs.DrawMode != TabDrawMode.Normal)
                 _mainTabs.DrawMode = TabDrawMode.Normal;
+            var directionStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (_mainTabs.RightToLeft != direction)
                 _mainTabs.RightToLeft = direction;
+            UiLayoutTelemetry.RecordLanguageTabDirection(directionStarted);
+            var mirroringStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (_mainTabs.RightToLeftLayout != rtl)
                 _mainTabs.RightToLeftLayout = rtl;
-            if (!rtl && _mainTabs.DrawMode != TabDrawMode.OwnerDrawFixed)
-                _mainTabs.DrawMode = TabDrawMode.OwnerDrawFixed;
+            UiLayoutTelemetry.RecordLanguageTabMirroring(mirroringStarted);
             foreach (TabPage page in _mainTabs.TabPages)
                 if (page.RightToLeft != RightToLeft.No)
                     page.RightToLeft = RightToLeft.No;
+            var menuStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             if (MainMenuStrip is { } menu && menu.RightToLeft != direction)
                 menu.RightToLeft = direction;
+            UiLayoutTelemetry.RecordLanguageMenuDirection(menuStarted);
             UiLayoutTelemetry.RecordLanguageChrome(chromeStarted);
 
             // Recovery-key strings, passwords, GUIDs and account/device IDs
