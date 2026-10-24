@@ -242,6 +242,18 @@ public static class UiLayoutSelfTest
                 if (prompt.Text != domainTitle || !HasText(startup, startupTitle) ||
                     !HasText(prompt, connectText))
                     failures.Add("Modal dialog translation missing or stale: " + language);
+                // Explanatory labels created from concatenated source
+                // literals must be translated, not just dialog buttons.
+                if (!HasText(prompt, UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language,
+                        "Enter the account for this connection. The password stays in this process. " +
+                        "A domain or DC can be entered on a standalone computer. Empty DC uses automatic discovery.")))
+                    failures.Add("AD credential guidance was not localized: " + language);
+                if (!HasText(startup, UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language,
+                        "Select a source for this session. Recovery passwords remain hidden " +
+                        "until an authorized technician explicitly requests them.")))
+                    failures.Add("Startup source guidance was not localized: " + language);
                 if (prompt.Username != @"DOMAIN\helpdesk")
                     failures.Add("Dialog localization modified supplied AD account data.");
             }
