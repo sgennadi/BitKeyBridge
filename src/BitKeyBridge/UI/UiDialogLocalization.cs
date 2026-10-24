@@ -205,8 +205,8 @@ internal static class UiDialogLocalization
             MenuItems.Add(item, state);
         }
         state.Language = code;
-        if (UiStaticCaptionCatalog.Contains(item.Text))
-            state.English = item.Text;
+        if (item.Text is { } menuText && UiStaticCaptionCatalog.Contains(menuText))
+            state.English = menuText;
         if (state.English is { } english)
         {
             var translation = UiStaticCaptionCatalog.TranslateOrOriginal(code, english);
