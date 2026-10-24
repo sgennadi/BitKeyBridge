@@ -1,15 +1,15 @@
 # BitKeyBridge branch and release policy
 
-Updated: 2026-10-23. This document describes the desired repository model,
+Updated: 2026-10-24. This document describes the desired repository model,
 not an assertion that GitHub administrative rulesets have been installed.
 
 ## Source of truth
 
 | Area | Branch/ref | Rule |
 | --- | --- | --- |
-| Stable source | `main` | Equals the latest approved stable release's functionality. Retain v0.30.5 until the new v0.32.0 GitHub Stable release/tag exists, then merge exactly that released source. Do not merge unapproved RC code. |
+| Stable source | `main` | Contains the published v0.32.0 release as an immutable ancestor and approved post-release UI fixes (PR #106). Promote v0.32.1 release source only after its separate immutable release and full tests. |
 | Stable release | immutable `vX.Y.Z` tag | Exact release SHA, reproducible artifacts, release notes, all gates green, publishing authorization documented. |
-| Stable release preparation | `release/v0.32.0` | Dedicated exact-version CI and owner-approved **unsigned** Stable publication. Release subject must be exactly `Release v0.32.0`. |
+| Stable release preparation | `release/v0.32.1` | Exact-commit unsigned Stable hotfix with protected audit, CodeQL, migration/rollback and canary package validation. Publication subject exactly `Release v0.32.1`. |
 | Preview integration | `development/post-rc9-lookup-ux` | RC9 features and independently tested post-RC9 UX fixes; not a managed production rollout authorization. |
 | Public prerelease | immutable `vX.Y.Z-rc.N` tag | Dedicated `release/vX.Y.Z-rc.N` branch and pinned-head CI; must not become GitHub Latest. |
 | Development | `feature/*`, `fix/*`, `sync/*` | Pull request, CI, review; no automatic deployment or release. |

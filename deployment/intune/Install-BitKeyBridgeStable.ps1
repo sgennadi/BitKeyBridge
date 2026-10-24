@@ -140,7 +140,8 @@ function Validate-Package([string]$Zip,[string]$Rid,[string]$StageDirectory) {
     if (-not [string]::Equals($actual, $pins[$Rid], [StringComparison]::OrdinalIgnoreCase)) {
         throw ('Official {0} ZIP SHA-256 mismatch; refusing untrusted or modified package.' -f $releaseTag)
     }
-    Add-Type -AssemblyName System.IO.Compression
+    # ZipFile lives in the FileSystem assembly under Windows PowerShell 5.1.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zipFile = [IO.Compression.ZipFile]::OpenRead($Zip)
     try {
         if ($zipFile.Entries.Count -ne 1) { throw 'Package must contain exactly one file.' }
@@ -235,8 +236,8 @@ try {
         Validate-Package $PackagePath $rid $targetDir
         if (Test-Path -LiteralPath $targetExe -PathType Leaf) {
             $installedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($targetExe).FileVersion
-            $currentVersion = New-Object Version($installedVersion)
-            $newVersion = New-Object Version('0.32.0.0')
+            $currentVersion = [version]$installedVersion
+            $newVersion = [version]($releaseVersion + '.0')
             if ($currentVersion -gt $newVersion) {
                 throw 'Refusing an automatic downgrade from an installed newer version.'
             }
