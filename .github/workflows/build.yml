@@ -1202,6 +1202,10 @@ jobs:
           if ($tamperExit -eq 0) {
             throw 'SECURITY: Tampered release ZIP was accepted by the canary installer.'
           }
+          # The rejection is expected. A pwsh Actions step otherwise exits
+          # nonzero due to the LASTEXITCODE left by powershell.exe even when
+          # its explicitly asserted failure was correctly handled.
+          $global:LASTEXITCODE = 0
           Write-Host 'All three architecture hashes and negative tamper test passed. No installation performed.'
 
       - name: Generate SHA256SUMS
