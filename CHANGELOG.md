@@ -1,3 +1,14 @@
+## 0.32.4
+
+**Stable WinForms Hebrew Copy Diagnostics visibility fix (UNSIGNED x64/x86/ARM64).**
+
+- Fix the global redacted diagnostic banner on Hebrew/RTL and 200% scaling: action buttons are in the first row, have guaranteed minimum height, stay LTR, and are laid out within a full-width auto-sized diagnostic row.
+- Provide an additional persistent Copy diagnostics action in the global status bar, outside the mirrored TabControl and diagnostic banner, in the selected EN/RU/HE language from the first launch.
+- Copy through the bottom status bar or the existing native Ctrl+Shift+P shortcut opens a fresh non-secret UI timing report. Dismiss remains available in the banner.
+- Extend real WinForms runtime tests to check that both Copy/Dismiss are within visible parent rectangles, and that the status-bar link is available for EN/RU/HE with normal and double-size fonts. Preserve AD account status and recovery data.
+- Preserve all signed-only trust policies and RBAC. Gate release on architecture builds, CodeQL, LAPS, protected audit, legacy update/rollback, pinned-hash canary tamper tests, SHA256SUMS, SBOM and build provenance. Binaries remain **UNSIGNED**; no silent GPO/Intune install or machine opt-in.
+- Actual RDP native paint latency and on-device visual behavior need a managed Windows pilot; layout tests are not a substitute for production validation.
+
 ## 0.32.3
 
 **Stable Windows UI diagnostics hotfix — UNSIGNED x64/x86/ARM64.**

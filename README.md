@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**Stable v0.32.3 (UNSIGNED; exact-source GitHub Actions release).** Fixes diagnostics copy disappearing after language changes, adds Tools > Copy UI diagnostics (Ctrl+Shift+P) and prevents inherited RTL reflows across main workspace pages. Windows x64/x86/ARM64 ZIPs, SHA256SUMS, SBOM, provenance and optional pinned Canary installer are published only after final-source release checks. v0.32.2 remains available for rollback. No GPO/Intune enrollment, auto-update consent or signer trust changes. Real RDP Hebrew performance requires new on-device measurements.
+**Stable v0.32.4 (UNSIGNED; exact-source GitHub Actions release).** Fixes the disappearing Copy Diagnostics button in Hebrew by placing Copy/Dismiss in a stable top row, keeping the diagnostic banner LTR, and adding a persistent translated Copy diagnostics link in the lower status bar. Ctrl+Shift+P continues to copy current sanitized UI timings. Runtime WinForms tests check action visibility and bounding geometry at normal/double font size, along with Hebrew/Russian/English switches. Windows x64/x86/ARM64 portable ZIPs, SHA256SUMS, CycloneDX SBOM, provenance and an optional pinned Canary installer follow full release security checks. v0.32.3 remains available for rollback. No new unsigned-update consent, GPO/Intune enrollment or signing-policy exception. Confirm real RDP behavior in a managed pilot.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
