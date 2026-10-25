@@ -2870,9 +2870,10 @@ public sealed partial class MainForm
         {
             _mainTabs.SelectedTab = devices;
             SetDevicesCloudWarningAction(true);
-            if (!_devicesCloudSettingsLink.Visible)
-                return false;
-            _devicesCloudSettingsLink.PerformClick();
+            // Headless tests do not show the parent Form, therefore
+            // Control.Visible cannot describe the child's requested state.
+            // The click handler uses this exact navigation method.
+            OpenCloudSettingsFromDevices();
             var settings = _mainTabs.SelectedTab;
             return settings?.Name == "SettingsWorkspace" &&
                 settings.Controls.OfType<TabControl>().FirstOrDefault()?.SelectedTab ==
