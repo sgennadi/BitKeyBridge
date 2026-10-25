@@ -232,13 +232,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 if (!_running)
                     return;
 
-                e.Cancel =
-                    true;
-                _cancellation?.Cancel();
-                UiStyle.SetStatus(
-                    _status,
-                    "Cancelling setup...",
-                    UiStatusKind.Busy);
+                e.Cancel = true;
+                RequestSetupCancellation();
             };
 
         ShowStep(
@@ -647,22 +642,28 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             _step - 1);
     }
 
+    private void RequestSetupCancellation()
+    {
+        if (!_running || _cancellation is not { } cancellation ||
+            cancellation.IsCancellationRequested)
+            return;
+
+        _cancel.Enabled = false;
+        _progress.MarqueeAnimationSpeed = 0;
+        _progress.Visible = false;
+        UiStyle.SetStatus(_status, "Cancelling setup...", UiStatusKind.Warning);
+        cancellation.Cancel();
+    }
+
     private void CancelOrClose()
     {
         if (_running)
         {
-            _cancel.Enabled =
-                false;
-            _cancellation?.Cancel();
-            UiStyle.SetStatus(
-                _status,
-                "Cancelling setup...",
-                UiStatusKind.Busy);
+            RequestSetupCancellation();
             return;
         }
 
-        DialogResult =
-            DialogResult.Cancel;
+        DialogResult = DialogResult.Cancel;
         Close();
     }
 
@@ -779,8 +780,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         _running =
             true;
         _diagnostics.Clear();
-        _progress.Visible =
-            true;
+        _progress.MarqueeAnimationSpeed = 25;
+        _progress.Visible = true;
         UpdateNavigation();
 
         try
@@ -793,13 +794,16 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             using var setup =
                 new EntraSetupService();
 
-            var progress =
-                new Progress<string>(
-                    message =>
-                        UiStyle.SetStatus(
-                            _status,
-                            message,
-                            UiStatusKind.Busy));
+            var progress = new Progress<string>(message =>
+            {
+                // A queued progress callback must not overwrite Cancelled
+                // or Success after this modal operation has ended.
+                if (IsDisposed || Disposing || !_running ||
+                    !ReferenceEquals(_cancellation, cancellation) ||
+                    cancellation.IsCancellationRequested)
+                    return;
+                UiStyle.SetStatus(_status, message, UiStatusKind.Busy);
+            });
 
             SetupResult =
                 await setup.RunAsync(
@@ -942,10 +946,9 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                     null;
             }
 
-            _running =
-                false;
-            _progress.Visible =
-                false;
+            _running = false;
+            _progress.MarqueeAnimationSpeed = 0;
+            _progress.Visible = false;
             UpdateNavigation();
         }
     }
