@@ -5,6 +5,7 @@
 - Apply known static EN/RU/HE captions throughout nested Tools menus. Keep original English source strings independently of `ToolStripItem.Tag`, preserving command metadata, and update dynamically added submenu captions when their parent opens.
 - Change expensive per-control RTL properties only on visible workspaces during warm language switches. Defer hidden caption direction to `VisibleChanged`; keep caption text translated, recovery/identity fields LTR, and immediate direction updates in headless self-tests.
 - Avoid measuring wrapping labels twice during initial DPI/font refresh. Width calculations run once after the form's layout, preserving on-demand high-DPI reflows and hidden-page safety.
+- Skip a redundant whole-TabControl `ResumeLayout(true)` on warm user language switches; retain immediate cold/test layout and post one selected-viewport repair after translation. Keep full menu layout so Hebrew glyphs are not clipped.
 - Extend real WinForms regression tests for nested menu EN/RU/HE captions and command-tag integrity. No authorization, secret access, protected audit, update signing, or auto-deployment policy changes.
 - No performance claims before fresh native Windows/RDP measurements and a green exact-source CI run. Public v0.32.5 remains the rollback baseline.
 
