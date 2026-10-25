@@ -7,6 +7,7 @@
 - Skip redundant DataGridView `SuspendLayout/ResumeLayout` calls when neither caption nor computed minimum width changed, while still measuring new text and DPI-dependent widths when necessary.
 - Cache only catalogued DataGridView/ListView header text measurements in a bounded per-window FIFO cache, keyed by localized caption, font details, DPI and header style. Report non-secret cache hit/miss counters, and test DPI/font separation, identity rejection, and eviction.
 - Coalesce visible-label width updates after activating nested tabs into one UI callback and at most one explicit reflow per changed parent; preserve viewport-based truncation protection. Count label batches and actual changes without collecting label text.
+- Coalesce successive main/nested-tab navigation requests into a single posted WinForms callback that repairs the most recently selected page. Preserve timing attribution and count skipped callback postings without storing device or user identifiers.
 - Add source regression safeguards. No LAPS/BitLocker recovery retrieval, audit, permissions, authentication, signing or automatic deployment behavior changes.
 - Needs native Windows CI and manual Hebrew/Russian 100–200% scaling/RDP performance measurements before claiming reduced language-switch latency.
 

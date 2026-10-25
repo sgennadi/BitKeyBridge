@@ -1092,6 +1092,31 @@ public static class UiLayoutSelfTest
             form.Show();
             Application.DoEvents();
 
+            // Three requested viewport repairs during one UI-message turn
+            // must schedule just one native callback. A second burst must
+            // still execute rather than getting stranded behind a stale flag.
+            var firstNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            var queuedNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            if (!queuedNavigation.Pending ||
+                queuedNavigation.Posted != firstNavigation.Posted + 1 ||
+                queuedNavigation.Coalesced != firstNavigation.Coalesced + 2)
+                failures.Add("Rapid tab navigation posted redundant WinForms callbacks.");
+            Application.DoEvents();
+            var drainedNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            if (drainedNavigation.Pending ||
+                drainedNavigation.Dispatched != firstNavigation.Dispatched + 1)
+                failures.Add("Navigation coalescing lost the latest viewport repair.");
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            Application.DoEvents();
+            var secondNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            if (secondNavigation.Pending ||
+                secondNavigation.Posted != queuedNavigation.Posted + 1 ||
+                secondNavigation.Dispatched != drainedNavigation.Dispatched + 1)
+                failures.Add("Navigation reflow did not schedule after an earlier batch.");
+
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
                 initialStatus.RightToLeft != RightToLeft.No ||
                 initialStatus.Items.Find("GlobalCopyDiagnostics", false)

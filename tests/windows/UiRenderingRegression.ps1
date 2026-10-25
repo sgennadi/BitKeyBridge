@@ -38,6 +38,7 @@ $mainLocalization = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\
 $headerCache = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiHeaderWidthCache.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 $telemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutTelemetry.cs') -Raw
+$navigationTelemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiTabNavigationTelemetry.cs') -Raw
 $cleanup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\UpdateStagingCleanupService.cs') -Raw
 $housekeeping = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\HousekeepingService.cs') -Raw
 
@@ -97,6 +98,13 @@ Assert-Source ($telemetry.Contains('DpiThemeInstall.Summarize("DPI phase - theme
                $telemetry.Contains('DpiLabelWidths.Summarize("DPI phase - label widths")')) 'The DPI report must include all expensive layout-phase counters.'
 Assert-Source ($style.Contains('if (label.StatusKind == kind') -and $layoutSelfTest.Contains('Unchanged status text/kind forced a repaint')) 'Repeated unchanged status polls must not repaint.'
 Assert-Source ($viewport.Contains('_lastRepairedTabPath') -and $viewport.Contains('UiLayoutTelemetry.RecordViewport(viewportStarted)')) 'Selected-tab layout must avoid repeat repair and expose timing metrics.'
+Assert-Source ($viewport.Contains('_navigationReflowPosted') -and
+               $viewport.Contains('_navigationReflowLatestIndex') -and
+               $viewport.Contains('UiTabNavigationTelemetry.RecordCoalescedReflow()') -and
+               $viewport.Contains('_navigationReflowPostCount++') -and
+               $layoutSelfTest.Contains('Rapid tab navigation posted redundant WinForms callbacks.') -and
+               $layoutSelfTest.Contains('Navigation coalescing lost the latest viewport repair.') -and
+               $navigationTelemetry.Contains('Navigation reflow callbacks coalesced:')) 'Rapid navigation must coalesce UI callbacks, preserve final selected tab and report only aggregate metrics.'
 Assert-Source ($viewport.Contains('UiTabNavigationTelemetry.RecordDispatch') -and
                $viewport.Contains('UiTabNavigationTelemetry.RecordLayout') -and
                $shell.Contains('RecordMainTabHandleCreated') -and

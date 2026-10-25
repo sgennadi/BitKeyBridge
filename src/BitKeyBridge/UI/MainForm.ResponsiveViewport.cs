@@ -14,7 +14,30 @@ public sealed partial class MainForm
     private string _homeConnectionsRecentLayoutKey = string.Empty;
     private bool _homeConnectionsRecentReflowRunning;
     private string _lastRepairedTabPath = string.Empty;
-    private int _navigationReflowSequence;
+    // Multiple tab and nested-tab events in one UI-message burst share one
+    // BeginInvoke. Keep only the most recently requested page and start time.
+    private bool _navigationReflowPosted;
+    private int _navigationReflowLatestIndex;
+    private long _navigationReflowLatestStarted;
+    private int _navigationReflowPostCount;
+    private int _navigationReflowDispatchCount;
+    private int _navigationReflowCoalescedCount;
+
+    internal (int Posted, int Dispatched, int Coalesced, bool Pending)
+        PreviewNavigationReflowStateForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Navigation counters are test-only.");
+        return (_navigationReflowPostCount, _navigationReflowDispatchCount,
+            _navigationReflowCoalescedCount, _navigationReflowPosted);
+    }
+
+    internal void PreviewQueueNavigationReflowForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Navigation burst is test-only.");
+        QueueNavigationViewportReflow();
+    }
 
     private void InitializeMainViewport()
     {
@@ -46,45 +69,58 @@ public sealed partial class MainForm
     }
 
 
-    // Actual tab navigation is discrete, unlike high-frequency WM_SIZE bursts.
-    // Post exactly one pass after WinForms activates the selected page. Rapid
-    // navigation cancels stale posted callbacks rather than laying out tabs
-    // that are already hidden. This does not make LDAP/Graph calls.
+    // Tab navigation is discrete, unlike high-frequency WM_SIZE bursts.
+    // A rapid burst previously posted N BeginInvoke callbacks, N-1 of which
+    // checked their obsolete sequence and exited. Retain only one actual UI
+    // callback; it always uses the MOST RECENT selected tab and start time.
+    // No window, LDAP/Graph request or device state is reconstructed.
     private void QueueNavigationViewportReflow(long navigationStarted = 0)
     {
         if (!IsHandleCreated || IsDisposed || Disposing)
             return;
 
         _mainViewportIdleTimer.Stop();
-        var sequence = ++_navigationReflowSequence;
-        var selectedIndex = _mainTabs.SelectedIndex;
+        _navigationReflowLatestIndex = _mainTabs.SelectedIndex;
+        _navigationReflowLatestStarted = navigationStarted;
+        if (_navigationReflowPosted)
+        {
+            _navigationReflowCoalescedCount++;
+            UiTabNavigationTelemetry.RecordCoalescedReflow();
+            return;
+        }
+
+        _navigationReflowPosted = true;
         try
         {
             BeginInvoke((Action)(() =>
             {
+                _navigationReflowPosted = false;
                 if (IsDisposed || Disposing || !_mainTabs.IsHandleCreated ||
-                    sequence != _navigationReflowSequence ||
-                    _mainTabs.SelectedIndex != selectedIndex)
+                    _mainTabs.SelectedIndex != _navigationReflowLatestIndex)
                     return;
 
-                if (navigationStarted > 0)
+                _navigationReflowDispatchCount++;
+                var selectedIndex = _navigationReflowLatestIndex;
+                var started = _navigationReflowLatestStarted;
+                if (started > 0)
                     UiTabNavigationTelemetry.RecordDispatch(
-                        selectedIndex, navigationStarted);
+                        selectedIndex, started);
                 var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 ReflowMainViewport();
-                if (navigationStarted > 0)
+                if (started > 0)
                 {
                     UiTabNavigationTelemetry.RecordLayout(
                         selectedIndex, viewportStarted);
-                    UiTabNavigationTelemetry.Record(
-                        selectedIndex, navigationStarted);
+                    UiTabNavigationTelemetry.Record(selectedIndex, started);
                 }
             }));
+            _navigationReflowPostCount++;
         }
         catch (InvalidOperationException ex)
         {
-            // The handle can disappear between IsHandleCreated and BeginInvoke
-            // during shutdown or RDP teardown. A new Shown/resize will reflow.
+            _navigationReflowPosted = false;
+            // A destroyed HWND cannot process the callback; a later Shown
+            // or resize does the ordinary native viewport repair instead.
             System.Diagnostics.Debug.WriteLine(
                 "Navigation reflow was not scheduled: " + ex.GetType().Name);
         }
