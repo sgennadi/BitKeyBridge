@@ -859,12 +859,18 @@ public sealed partial class MainForm : DpiAwareForm
         if (cancellation is null)
             return;
 
-        _cloudConnectCancelButton.Enabled =
-            false;
+        if (cancellation.IsCancellationRequested)
+            return;
+
+        _cloudConnectCancelButton.Enabled = false;
+        // Cancellation is requested synchronously, but network work may
+        // still be unwinding. Stop the native marquee immediately.
+        _cloudProgress.MarqueeAnimationSpeed = 0;
+        _cloudProgress.Visible = false;
         UiStyle.SetStatus(
             _cloudStatus,
             "Cancelling Microsoft Graph operation...",
-            UiStatusKind.Busy);
+            UiStatusKind.Warning);
         cancellation.Cancel();
     }
 
@@ -885,8 +891,8 @@ public sealed partial class MainForm : DpiAwareForm
             !running;
         _cloudConnectCancelButton.Enabled =
             running;
-        _cloudProgress.Visible =
-            running;
+        _cloudProgress.MarqueeAnimationSpeed = running ? 25 : 0;
+        _cloudProgress.Visible = running;
 
         _cloudTenant.Enabled =
             !running;
@@ -1324,17 +1330,15 @@ public sealed partial class MainForm : DpiAwareForm
             UiStatusKind.Success);
     }
 
-    private async Task ShowDeviceCodeAsync(
-        DeviceCodeInfo info)
+    private Task ShowDeviceCodeAsync(DeviceCodeInfo info)
     {
-        using var dialog =
-            new DeviceCodeDialog(
-                info);
-
-        dialog.ShowDialog(
-            this);
-
-        await Task.CompletedTask;
+        using var dialog = new DeviceCodeDialog(info);
+        // Closing the sign-in window is NOT consent to keep waiting for a
+        // token. Only an explicit OK continues the device-code polling loop.
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            throw new OperationCanceledException(
+                "Microsoft Entra device-code sign-in was cancelled.");
+        return Task.CompletedTask;
     }
 
     private async Task RunCoverageAsync()
