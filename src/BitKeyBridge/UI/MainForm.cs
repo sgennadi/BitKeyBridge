@@ -665,11 +665,55 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudThumbprint.Enabled = _cloudAuthMode.SelectedIndex == 1;
     }
 
+    // A missing Tenant ID (or Client ID) is a local configuration
+    // prerequisite, not a Graph authentication exception. Never persist
+    // incomplete settings or start a network sign-in for these inputs.
+    internal static string? CloudConnectionPrerequisiteError(
+        string? tenantId, string? clientId, string? certificateThumbprint,
+        bool certificateMode)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId))
+            return "Enter a Microsoft Entra Tenant ID or verified domain in Connect / Change before signing in.";
+        if (!Guid.TryParse(clientId, out var applicationId) ||
+            applicationId == Guid.Empty)
+            return "Enter a valid, IT-approved Microsoft Entra application (Client ID) GUID in Connect / Change before signing in.";
+        if (certificateMode && string.IsNullOrWhiteSpace(certificateThumbprint))
+            return "Certificate sign-in requires a certificate thumbprint. Select Device Code or configure an approved certificate.";
+        return null;
+    }
+
     private async Task<bool> ConnectCloudAsync(bool forLaps = false, CancellationToken ct = default)
     {
         try
         {
             _cloudDiagnostics.Clear();
+            var prerequisite = CloudConnectionPrerequisiteError(
+                _cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text,
+                _cloudAuthMode.SelectedIndex == 1);
+            if (prerequisite is not null)
+            {
+                // Do not leave a token from another configuration usable.
+                _cloudToken = null;
+                _cloudTokenContext = string.Empty;
+                _cloudTokenHasLaps = false;
+                _cloudTokenHasRecovery = false;
+                var guidance = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, prerequisite);
+                UiStyle.SetStatus(_cloudStatus, guidance, UiStatusKind.Warning);
+                _cloudDiagnostics.ShowMessage(
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        _uiLanguageCode, "Microsoft Entra connection settings are incomplete."),
+                    guidance + Environment.NewLine +
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        _uiLanguageCode, "No Microsoft Graph authentication was attempted."));
+                if (forLaps)
+                    UiStyle.SetStatus(_lapsStatus, guidance, UiStatusKind.Warning);
+                RefreshHomeConnectionUi();
+                if (StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource))
+                    UiStyle.SetStatus(_homeCloudConnectionStatus,
+                        guidance, UiStatusKind.Warning);
+                return false;
+            }
             SaveCloudFields();
             UiStyle.SetStatus(
                 _cloudStatus,
@@ -815,13 +859,46 @@ public sealed partial class MainForm : DpiAwareForm
         if (cancellation is null)
             return;
 
-        _cloudConnectCancelButton.Enabled =
-            false;
+        if (cancellation.IsCancellationRequested)
+            return;
+
+        _cloudConnectCancelButton.Enabled = false;
+        // Cancellation is requested synchronously, but network work may
+        // still be unwinding. Stop the native marquee immediately.
+        _cloudProgress.MarqueeAnimationSpeed = 0;
+        _cloudProgress.Visible = false;
         UiStyle.SetStatus(
             _cloudStatus,
             "Cancelling Microsoft Graph operation...",
-            UiStatusKind.Busy);
+            UiStatusKind.Warning);
         cancellation.Cancel();
+    }
+
+    // Regression without network or credentials: confirm that pressing
+    // Cancel immediately stops the activity indicator, disables the button
+    // and signals the active operation to unwind.
+    internal bool PreviewCloudCancellationForUiSelfTest()
+    {
+        if (!_layoutSelfTest || _cloudConnectCancellation is not null ||
+            _cloudMaintenanceCancellation is not null)
+            return false;
+
+        using var cancellation = new CancellationTokenSource();
+        _cloudConnectCancellation = cancellation;
+        try
+        {
+            SetCloudOperationRunning(true);
+            CancelCloudConnection();
+            return cancellation.IsCancellationRequested &&
+                _cloudProgress.MarqueeAnimationSpeed == 0 &&
+                !_cloudProgress.Visible &&
+                !_cloudConnectCancelButton.Enabled;
+        }
+        finally
+        {
+            _cloudConnectCancellation = null;
+            SetCloudOperationRunning(false);
+        }
     }
 
     private void SetCloudOperationRunning(
@@ -841,8 +918,8 @@ public sealed partial class MainForm : DpiAwareForm
             !running;
         _cloudConnectCancelButton.Enabled =
             running;
-        _cloudProgress.Visible =
-            running;
+        _cloudProgress.MarqueeAnimationSpeed = running ? 25 : 0;
+        _cloudProgress.Visible = running;
 
         _cloudTenant.Enabled =
             !running;
@@ -968,13 +1045,17 @@ public sealed partial class MainForm : DpiAwareForm
 
             using var setup =
                 new EntraSetupService();
-            var progress =
-                new Progress<string>(
-                    message =>
-                        UiStyle.SetStatus(
-                            _cloudStatus,
-                            message,
-                            UiStatusKind.Busy));
+            // Progress<T> queues callbacks onto WinForms. A queued
+            // "Requesting device code..." must never resurrect the spinner
+            // or overwrite the final Canceled/Success message.
+            var progress = new Progress<string>(message =>
+            {
+                if (IsDisposed || Disposing ||
+                    !ReferenceEquals(_cloudMaintenanceCancellation, cancellation) ||
+                    cancellation.IsCancellationRequested)
+                    return;
+                UiStyle.SetStatus(_cloudStatus, message, UiStatusKind.Busy);
+            });
 
             var result =
                 await setup.RunAsync(
@@ -1141,13 +1222,17 @@ public sealed partial class MainForm : DpiAwareForm
             using var lifecycle =
                 new EntraCertificateLifecycleService();
 
-            var progress =
-                new Progress<string>(
-                    message =>
-                        UiStyle.SetStatus(
-                            _cloudStatus,
-                            message,
-                            UiStatusKind.Busy));
+            // Progress<T> queues callbacks onto WinForms. A queued
+            // "Requesting device code..." must never resurrect the spinner
+            // or overwrite the final Canceled/Success message.
+            var progress = new Progress<string>(message =>
+            {
+                if (IsDisposed || Disposing ||
+                    !ReferenceEquals(_cloudMaintenanceCancellation, cancellation) ||
+                    cancellation.IsCancellationRequested)
+                    return;
+                UiStyle.SetStatus(_cloudStatus, message, UiStatusKind.Busy);
+            });
 
             var result =
                 await lifecycle.RolloverAsync(
@@ -1280,17 +1365,15 @@ public sealed partial class MainForm : DpiAwareForm
             UiStatusKind.Success);
     }
 
-    private async Task ShowDeviceCodeAsync(
-        DeviceCodeInfo info)
+    private Task ShowDeviceCodeAsync(DeviceCodeInfo info)
     {
-        using var dialog =
-            new DeviceCodeDialog(
-                info);
-
-        dialog.ShowDialog(
-            this);
-
-        await Task.CompletedTask;
+        using var dialog = new DeviceCodeDialog(info);
+        // Closing the sign-in window is NOT consent to keep waiting for a
+        // token. Only an explicit OK continues the device-code polling loop.
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            throw new OperationCanceledException(
+                "Microsoft Entra device-code sign-in was cancelled.");
+        return Task.CompletedTask;
     }
 
     private async Task RunCoverageAsync()

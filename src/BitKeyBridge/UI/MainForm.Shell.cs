@@ -428,10 +428,11 @@ public sealed partial class MainForm
         };
         copyUiReport.Click += (_, _) => ShowUiPerformanceReport(copyImmediately: true);
         tools.DropDownItems.Add(copyUiReport);
-        tools.DropDownItems.Add(
+        var latestRelease = tools.DropDownItems.Add(
             "Latest GitHub release",
             null,
             (_, _) => OpenLatestRelease());
+        latestRelease.Name = "LatestGithubReleaseMenuItem";
 
         // Compact by default. Only noninteractive explanatory paragraphs
         // are hidden; all controls, security checks and status remain.
@@ -616,7 +617,11 @@ public sealed partial class MainForm
         finally
         {
             var resumeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-            _mainTabs.ResumeLayout(performLayout: true);
+            // Initial/show and headless UI tests require an immediate pass.
+            // Warm user-initiated changes schedule a single selected-viewport
+            // reflow from SetShellLanguage; forcing the entire TabControl tree
+            // here was a redundant synchronous layout during RTL transitions.
+            _mainTabs.ResumeLayout(performLayout: initialApply || _layoutSelfTest);
             // false reused the old menu layout after switching between
             // Language / Язык / שפה, sometimes clipping the final Hebrew glyph.
             MainMenuStrip?.ResumeLayout(performLayout: true);

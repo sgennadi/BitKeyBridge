@@ -22,8 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Pull requests may propose a FUTURE version, so validate the
+      # currently published stable base commit instead of PR merge HEAD.
+      # Pushes to main still validate the exact pushed commit; thus merging
+      # an unpublished version into main will fail this required guard.
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false

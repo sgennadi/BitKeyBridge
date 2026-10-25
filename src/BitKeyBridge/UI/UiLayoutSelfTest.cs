@@ -91,6 +91,12 @@ public static class UiLayoutSelfTest
         VerifyHebrewIdentityDirection(
             failures);
 
+        VerifyHelpdeskChecklistLocalization(
+            failures);
+
+        VerifyIntuneSetupWizardNavigation(failures);
+        VerifyDeviceCodeCancellation(failures);
+
         VerifyDiagnosticCopyVisibility(failures);
 
         // A DPI report must distinguish the initially measured MainForm from
@@ -625,6 +631,163 @@ public static class UiLayoutSelfTest
         }
     }
 
+    private static void VerifyDeviceCodeCancellation(List<string> failures)
+    {
+        try
+        {
+            // No Graph traffic or browser launch; do not Show the modal
+            // device-code window in this UI regression.
+            using var prompt = new DeviceCodeDialog(new DeviceCodeInfo
+            {
+                UserCode = "TEST-CODE",
+                VerificationUri = "https://microsoft.com/devicelogin",
+                Message = "Test fixture only",
+                ExpiresIn = 900
+            });
+            if (FindByName(prompt, "DeviceCodeActions") is not TableLayoutPanel actions ||
+                actions.RowCount != 1 || actions.ColumnCount != 2 ||
+                FindByName(prompt, "DeviceCodeCancel") is not Button cancel ||
+                FindByName(prompt, "DeviceCodeContinue") is not Button proceed ||
+                cancel.DialogResult != DialogResult.Cancel ||
+                proceed.DialogResult != DialogResult.OK ||
+                !ReferenceEquals(prompt.CancelButton, cancel) ||
+                !ReferenceEquals(prompt.AcceptButton, proceed))
+                failures.Add("Device Code dialog must expose distinct cancel and continue actions.");
+
+            using var main = new MainForm(
+                new AppConfig { AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false },
+                layoutSelfTest: true);
+            if (!main.PreviewCloudCancellationForUiSelfTest())
+                failures.Add("Cloud Cancel must immediately stop marquee and signal cancellation.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Device Code cancellation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Recreate the screenshot regression: DpiAwareForm forced horizontal
+    /// FlowLayoutPanel navigation to wrap, leaving only Cancel visible.
+    /// These tests display REAL WinForms handles; they never call Graph or
+    /// invoke the Configure & Verify operation.
+    /// </summary>
+    private static void VerifyIntuneSetupWizardNavigation(List<string> failures)
+    {
+        var config = new CloudAuthConfig
+        {
+            TenantId = "organizations",
+            ClientId = "11111111-1111-4111-8111-111111111111"
+        };
+        foreach (var language in new[] { "en", "ru", "he" })
+        {
+            foreach (var fontScale in new[] { 1F, 2F })
+            {
+                try
+                {
+                    using var wizard = new IntuneSetupWizardDialog(
+                        config, _ => Task.CompletedTask)
+                    {
+                        StartPosition = FormStartPosition.Manual,
+                        ClientSize = new Size(920, 720)
+                    };
+                    using var font = new Font(UiStyle.BodyFont.FontFamily,
+                        UiStyle.BodyFont.Size * fontScale,
+                        FontStyle.Regular, GraphicsUnit.Point);
+                    wizard.Font = font;
+                    wizard.Show();
+                    UiDialogLocalization.Apply(wizard, language);
+
+                    if (FindByName(wizard, "IntuneSetupWizardNavigation")
+                            is not TableLayoutPanel navigation ||
+                        FindByName(wizard, "IntuneSetupWizardFooter")
+                            is not TableLayoutPanel footer ||
+                        FindByName(wizard, "IntuneSetupWizardBack") is not Button back ||
+                        FindByName(wizard, "IntuneSetupWizardNext") is not Button next ||
+                        FindByName(wizard, "IntuneSetupWizardCancel") is not Button cancel)
+                    {
+                        failures.Add("Intune wizard navigation controls are missing: " +
+                            language + " / " + fontScale);
+                        continue;
+                    }
+
+                    var backCell = navigation.GetPositionFromControl(back);
+                    var nextCell = navigation.GetPositionFromControl(next);
+                    var cancelCell = navigation.GetPositionFromControl(cancel);
+                    if (navigation.ColumnCount != 3 ||
+                        navigation.RowCount != 1 ||
+                        navigation.RightToLeft != RightToLeft.No ||
+                        backCell.Column != 0 || backCell.Row != 0 ||
+                        nextCell.Column != 1 || nextCell.Row != 0 ||
+                        cancelCell.Column != 2 || cancelCell.Row != 0 ||
+                        !ReferenceEquals(wizard.AcceptButton, next) ||
+                        !ReferenceEquals(wizard.CancelButton, cancel))
+                        failures.Add("Intune wizard navigation must remain a single row with keyboard actions: " +
+                            language + " / " + fontScale);
+
+                    foreach (var step in new[] { 0, 1, 2 })
+                    {
+                        wizard.PreviewStepForUiSelfTest(step);
+                        UiDialogLocalization.Apply(wizard, language);
+                        wizard.PerformLayout();
+                        Application.DoEvents();
+
+                        var viewport = wizard.RectangleToScreen(wizard.ClientRectangle);
+                        var footerBounds = footer.RectangleToScreen(footer.ClientRectangle);
+                        var navBounds = navigation.RectangleToScreen(navigation.ClientRectangle);
+                        if (!viewport.Contains(footerBounds) ||
+                            !footerBounds.Contains(navBounds))
+                        {
+                            failures.Add("Intune wizard footer is clipped: " +
+                                language + " / " + fontScale + " / step " + step);
+                            continue;
+                        }
+
+                        foreach (var button in new[] { back, next, cancel })
+                        {
+                            var buttonBounds = button.RectangleToScreen(
+                                button.ClientRectangle);
+                            if (!button.Visible || button.IsDisposed ||
+                                buttonBounds.Width < UiStyle.MinimumButtonWidth ||
+                                buttonBounds.Height < UiStyle.MinimumButtonHeight ||
+                                !navBounds.Contains(buttonBounds) ||
+                                !footerBounds.Contains(buttonBounds) ||
+                                !viewport.Contains(buttonBounds))
+                            {
+                                failures.Add("Intune wizard button clipped or missing: " +
+                                    button.Name + " / " + language + " / " +
+                                    fontScale + " / step " + step);
+                            }
+                        }
+
+                        var expectedAction = step == 2
+                            ? UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Configure & Verify")
+                            : UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Next");
+                        if (next.Text != expectedAction)
+                            failures.Add("Intune wizard Next caption is not localized: " +
+                                language + " / step " + step);
+                    }
+
+                    if (!wizard.PreviewCancellationForUiSelfTest())
+                        failures.Add("Intune wizard Cancel failed to stop marquee or dismisses early: " +
+                            language + " / " + fontScale);
+                    if (wizard.SetupResult is not null)
+                        failures.Add("Navigation-only wizard test unexpectedly ran setup.");
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("Intune wizard navigation regression (" +
+                        language + " / " + fontScale + "): " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Regression for a visually missing copy button: the old check only
     /// looked up button names, while Hebrew WinForms AutoSize/RTL could
@@ -704,6 +867,93 @@ public static class UiLayoutSelfTest
         }
     }
 
+    private static void VerifyHelpdeskChecklistLocalization(List<string> failures)
+    {
+        var englishSteps = new[]
+        {
+            "Install the Windows service on a test workstation (administrator)",
+            "Configure a scoped RecoveryReaders group; disable admin bypass",
+            "Verify AD and Entra / Intune delegation independently",
+            "Provision protected audit and restart the service (administrator)",
+            "Sign in as an authorized non-admin and run Access Health",
+            "Verify unauthorized access is denied and secrets are never logged",
+            "Validate protected journal, RDP, 100-200% DPI and rollback"
+        };
+
+        try
+        {
+            using var main = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+
+            foreach (var language in new[] { "en", "ru", "he" })
+            {
+                main.PreviewShellLanguageForLayoutTest(language);
+                using var wizard = main.CreateHelpdeskDeploymentWizard();
+                UiDialogLocalization.Apply(wizard, language);
+
+                var list = FindByName(wizard, "HelpdeskDeploymentSteps")
+                    as CheckedListBox;
+                var progress = FindByName(wizard, "HelpdeskDeploymentProgress")
+                    as Label;
+                if (list is null || progress is null ||
+                    list.Items.Count != englishSteps.Length)
+                {
+                    failures.Add("Helpdesk localized checklist is missing items: " +
+                        language);
+                    continue;
+                }
+
+                for (var i = 0; i < englishSteps.Length; i++)
+                {
+                    var expected = UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, englishSteps[i]);
+                    if (expected == englishSteps[i] && language != "en")
+                        failures.Add("Helpdesk checklist caption missing from catalog: " +
+                            i + " (" + language + ")");
+                    if (!string.Equals(list.Items[i] as string, expected,
+                            StringComparison.Ordinal))
+                        failures.Add("Helpdesk checklist left untranslated: " +
+                            i + " (" + language + ")");
+                }
+
+                var template = UiLanguageService.Translate(
+                    language, "HelpdeskDeploymentProgressTemplate");
+                var expectedZero = string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    template, 0, englishSteps.Length);
+                if (progress.Text != expectedZero)
+                    failures.Add("Helpdesk initial progress translation incorrect: " +
+                        language);
+
+                // This checklist is informational, not an authorization or
+                // service operation. Its checked states must remain tied to
+                // positions, independent of translated display text.
+                list.SetItemChecked(0, true);
+                var expectedOne = string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    template, 1, englishSteps.Length);
+                if (!list.GetItemChecked(0) || progress.Text != expectedOne)
+                    failures.Add("Helpdesk progress counter lost state: " +
+                        language);
+
+                list.SetItemChecked(0, false);
+                if (list.GetItemChecked(0) || progress.Text != expectedZero)
+                    failures.Add("Helpdesk checklist did not clear its count: " +
+                        language);
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Helpdesk EN/RU/HE checklist regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
     private static void VerifyHebrewIdentityDirection(List<string> failures)
     {
         try
@@ -715,6 +965,28 @@ public static class UiLayoutSelfTest
                     HealthEndpointEnabled = false
                 },
                 layoutSelfTest: true);
+
+            // ToolStripItem.Tag can carry command state; language switching
+            // must not overwrite it with the original caption.
+            var copyItemBeforeTranslation = form.MainMenuStrip?.Items
+                .Find("CopyUiPerformanceReportMenuItem", true)
+                .OfType<ToolStripMenuItem>().FirstOrDefault();
+            var protectedMenuTag = new object();
+            if (copyItemBeforeTranslation is not null)
+                copyItemBeforeTranslation.Tag = protectedMenuTag;
+
+            // Exercise recursion: a static caption inside an unknown nested
+            // menu must be translated in all three languages.
+            var topTools = form.MainMenuStrip?.Items
+                .OfType<ToolStripMenuItem>()
+                .FirstOrDefault(item => item.DropDownItems
+                    .OfType<ToolStripMenuItem>().Any(child =>
+                        child.Name == "CopyUiPerformanceReportMenuItem"));
+            using var nestedMenu = new ToolStripMenuItem("Nested menu fixture");
+            using var nestedItem = new ToolStripMenuItem("Windows Event Log");
+            nestedMenu.DropDownItems.Add(nestedItem);
+            topTools?.DropDownItems.Add(nestedMenu);
+
             form.PreviewShellLanguageForLayoutTest("he");
             form.PreviewShowUiPerformanceReportForLayoutTest();
 
@@ -842,6 +1114,21 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                var expectedEventLog = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Windows Event Log");
+                var expectedLatestRelease = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Latest GitHub release");
+                var latestReleaseItem = form.MainMenuStrip?.Items
+                    .Find("LatestGithubReleaseMenuItem", true)
+                    .FirstOrDefault();
+                if (nestedItem.Text != expectedEventLog ||
+                    latestReleaseItem?.Text != expectedLatestRelease)
+                    failures.Add("Nested or top Tools menu caption not translated: " +
+                        language);
+                if (copyItemBeforeTranslation is not null &&
+                    !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
+                    failures.Add("Language switch overwrote ToolStrip command Tag: " +
+                        language);
                 // The performance report must not disappear when a
                 // high-DPI WinForms TabControl changes RTL orientation.
                 if (banner is null || !banner.HasActiveDiagnostics ||
@@ -1783,6 +2070,30 @@ public static class UiLayoutSelfTest
 
     private static void VerifyStartSourcePolicies(List<string> failures)
     {
+        // Incomplete Microsoft 365 configuration must be rejected locally.
+        // No sign-in callback, network request, disk write or Graph exception
+        // is needed to validate these non-secret prerequisites.
+        const string clientGuid = "11111111-1111-4111-8111-111111111111";
+        if (MainForm.CloudConnectionPrerequisiteError(null, clientGuid,
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError(" ", clientGuid,
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", "",
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", "not-a-guid",
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", Guid.Empty.ToString(),
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", clientGuid,
+                null, certificateMode: true) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", clientGuid,
+                null, certificateMode: false) is not null ||
+            MainForm.CloudConnectionPrerequisiteError("contoso.onmicrosoft.com",
+                clientGuid, "ABCD1234", certificateMode: true) is not null)
+        {
+            failures.Add("Cloud setup preflight must reject incomplete tenant/client/certificate before Graph sign-in.");
+        }
+
         // A Helpdesk GUI must never auto-elevate, and disabling the CLI UAC
         // prompt must not allow privileged maintenance without admin rights.
         if (UpdateTrustPolicy.CanEnableUnattended(false, "Example Publisher") ||

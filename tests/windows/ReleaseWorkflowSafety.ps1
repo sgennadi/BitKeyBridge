@@ -226,6 +226,46 @@ if ($release.IndexOf('Verify v0.32.5 canary installer and reject tampered ZIP') 
     throw 'v0.32.5 canary tamper checks must precede SHA256SUMS.'
 }
 
+# v0.33.0 must be an exact-message, exact-branch release. No tag-only
+# publication. All architecture, LAPS, two-user broker, legacy rollback and
+# same-SHA CodeQL checks are mandatory. Canary is hashed and tamper tested.
+if (-not $pushBranches[0].Contains('"release/v0.33.0"') -or
+    -not $release.Contains("github.ref == 'refs/heads/release/v0.33.0' &&") -or
+    -not $release.Contains("github.event.head_commit.message == 'Release v0.33.0'") -or
+    -not $release.Contains("github.ref != 'refs/tags/v0.33.0'") -or
+    -not $release.Contains("needs['codeql-stable-release'].result == 'success'") -or
+    -not $release.Contains("needs['audit-broker-integration'].result == 'success'") -or
+    -not $release.Contains("needs['legacy-upgrade-regression'].result == 'success'") -or
+    -not $release.Contains('docs/release-authorization-v0.33.0.md') -or
+    -not $release.Contains('docs/release-notes-v0.33.0.md') -or
+    -not $release.Contains('Generate v0.33.0 canary installer pinned to actual built ZIPs') -or
+    -not $release.Contains('Verify v0.33.0 canary installer and reject tampered ZIP') -or
+    -not $release.Contains('Attest v0.33.0 pinned canary installer') -or
+    -not $release.Contains('files+=(Install-BitKeyBridge-v0.33.0.ps1)')) {
+    throw 'Missing exact-source v0.33.0 stable release safeguards.'
+}
+if ($release.IndexOf('Generate v0.33.0 canary installer pinned to actual built ZIPs') -ge
+    $release.IndexOf('Verify v0.33.0 canary installer and reject tampered ZIP') -or
+    $release.IndexOf('Verify v0.33.0 canary installer and reject tampered ZIP') -ge
+    $release.IndexOf('Generate SHA256SUMS') -or
+    $release.IndexOf('Generate SHA256SUMS') -ge
+    $release.IndexOf('Create GitHub Release')) {
+    throw 'v0.33.0 canary tamper checks and hashes must precede publication.'
+}
+
+# PR provenance checks must examine the published main BASE, not a future
+# version proposed by a pull request. Direct pushes remain strictly gated.
+$stableWorkflowPath = Join-Path $PSScriptRoot '../../.github/workflows/main-stable-provenance.yml'
+$stableWorkflow = Get-Content -LiteralPath $stableWorkflowPath -Raw
+$expectedCheckout = 'ref: ${{ github.event_name == ''pull_request'' && github.event.pull_request.base.sha || github.sha }}'
+if (-not $stableWorkflow.Contains($expectedCheckout) -or
+    -not $stableWorkflow.Contains('branches: [main]') -or
+    -not $stableWorkflow.Contains('gh api "repos/$GITHUB_REPOSITORY/releases/latest"') -or
+    -not $stableWorkflow.Contains('git merge-base --is-ancestor "$tag_commit" HEAD') -or
+    $stableWorkflow.Contains('continue-on-error: true')) {
+    throw 'PR provenance must test published main base; pushes to main remain strict.'
+}
+
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch

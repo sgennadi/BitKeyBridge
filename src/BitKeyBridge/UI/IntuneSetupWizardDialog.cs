@@ -144,6 +144,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         var footer =
             new TableLayoutPanel
             {
+                Name = "IntuneSetupWizardFooter",
                 Dock =
                     DockStyle.Fill,
                 AutoSize =
@@ -165,24 +166,35 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             new ColumnStyle(
                 SizeType.AutoSize));
 
+        // DpiAwareForm explicitly sets WrapContents=true on ALL horizontal
+        // FlowLayoutPanels during first-show/DPI refresh, so disabling wrap
+        // on the old footer did not stick. A three-column TableLayoutPanel
+        // keeps Back, Next and Cancel in one measurable row at every DPI.
         var navigation =
-            new FlowLayoutPanel
+            new TableLayoutPanel
             {
-                Dock =
-                    DockStyle.Fill,
-                AutoSize =
-                    true,
-                WrapContents =
-                    true,
-                FlowDirection =
-                    FlowDirection.RightToLeft
+                Name = "IntuneSetupWizardNavigation",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                ColumnCount = 3,
+                RowCount = 1,
+                RightToLeft = RightToLeft.No,
+                Margin = Padding.Empty
             };
-        navigation.Controls.Add(
-            _cancel);
-        navigation.Controls.Add(
-            _next);
-        navigation.Controls.Add(
-            _back);
+        navigation.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        navigation.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        navigation.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _back.Name = "IntuneSetupWizardBack";
+        _next.Name = "IntuneSetupWizardNext";
+        _cancel.Name = "IntuneSetupWizardCancel";
+        _back.TabIndex = 0;
+        _next.TabIndex = 1;
+        _cancel.TabIndex = 2;
+        navigation.Controls.Add(_back, 0, 0);
+        navigation.Controls.Add(_next, 1, 0);
+        navigation.Controls.Add(_cancel, 2, 0);
         footer.Controls.Add(
             navigation,
             1,
@@ -220,13 +232,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 if (!_running)
                     return;
 
-                e.Cancel =
-                    true;
-                _cancellation?.Cancel();
-                UiStyle.SetStatus(
-                    _status,
-                    "Cancelling setup...",
-                    UiStatusKind.Busy);
+                e.Cancel = true;
+                RequestSetupCancellation();
             };
 
         ShowStep(
@@ -500,6 +507,10 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 2);
     }
 
+    // UI-only regression hook. It changes the visible wizard page but
+    // never triggers authentication, app registration, or any Graph call.
+    internal void PreviewStepForUiSelfTest(int step) => ShowStep(step);
+
     private void ShowStep(
         int step)
     {
@@ -631,22 +642,60 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             _step - 1);
     }
 
+    private void RequestSetupCancellation()
+    {
+        if (!_running || _cancellation is not { } cancellation ||
+            cancellation.IsCancellationRequested)
+            return;
+
+        _cancel.Enabled = false;
+        _progress.MarqueeAnimationSpeed = 0;
+        _progress.Visible = false;
+        UiStyle.SetStatus(_status, "Cancelling setup...", UiStatusKind.Warning);
+        cancellation.Cancel();
+    }
+
+    // Exercise the real Cancel handler without contacting Graph or creating
+    // an app registration. The test-only flag does not bypass any setup gate.
+    internal bool PreviewCancellationForUiSelfTest()
+    {
+        if (_running || _cancellation is not null)
+            return false;
+
+        using var cancellation = new CancellationTokenSource();
+        _cancellation = cancellation;
+        _running = true;
+        _progress.MarqueeAnimationSpeed = 25;
+        _progress.Visible = true;
+        try
+        {
+            UpdateNavigation();
+            CancelOrClose();
+            return cancellation.IsCancellationRequested &&
+                _cancel.DialogResult == DialogResult.None &&
+                !_cancel.Enabled &&
+                _progress.MarqueeAnimationSpeed == 0 &&
+                !_progress.Visible;
+        }
+        finally
+        {
+            _cancellation = null;
+            _running = false;
+            _progress.MarqueeAnimationSpeed = 0;
+            _progress.Visible = false;
+            UpdateNavigation();
+        }
+    }
+
     private void CancelOrClose()
     {
         if (_running)
         {
-            _cancel.Enabled =
-                false;
-            _cancellation?.Cancel();
-            UiStyle.SetStatus(
-                _status,
-                "Cancelling setup...",
-                UiStatusKind.Busy);
+            RequestSetupCancellation();
             return;
         }
 
-        DialogResult =
-            DialogResult.Cancel;
+        DialogResult = DialogResult.Cancel;
         Close();
     }
 
@@ -673,8 +722,11 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             _running
                 ? "Cancel operation"
                 : "Cancel";
-        _cancel.Enabled =
-            true;
+        // Button.DialogResult would otherwise try to dismiss ShowDialog
+        // before the operation has acknowledged cancellation.
+        _cancel.DialogResult = _running
+            ? DialogResult.None : DialogResult.Cancel;
+        _cancel.Enabled = true;
     }
 
     private static HashSet<string> ReadApplicationRoles(
@@ -763,8 +815,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         _running =
             true;
         _diagnostics.Clear();
-        _progress.Visible =
-            true;
+        _progress.MarqueeAnimationSpeed = 25;
+        _progress.Visible = true;
         UpdateNavigation();
 
         try
@@ -777,13 +829,16 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             using var setup =
                 new EntraSetupService();
 
-            var progress =
-                new Progress<string>(
-                    message =>
-                        UiStyle.SetStatus(
-                            _status,
-                            message,
-                            UiStatusKind.Busy));
+            var progress = new Progress<string>(message =>
+            {
+                // A queued progress callback must not overwrite Cancelled
+                // or Success after this modal operation has ended.
+                if (IsDisposed || Disposing || !_running ||
+                    !ReferenceEquals(_cancellation, cancellation) ||
+                    cancellation.IsCancellationRequested)
+                    return;
+                UiStyle.SetStatus(_status, message, UiStatusKind.Busy);
+            });
 
             SetupResult =
                 await setup.RunAsync(
@@ -926,10 +981,9 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                     null;
             }
 
-            _running =
-                false;
-            _progress.Visible =
-                false;
+            _running = false;
+            _progress.MarqueeAnimationSpeed = 0;
+            _progress.Visible = false;
             UpdateNavigation();
         }
     }

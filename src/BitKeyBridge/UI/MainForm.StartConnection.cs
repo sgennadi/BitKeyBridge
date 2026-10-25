@@ -279,8 +279,9 @@ public sealed partial class MainForm
     }
 
     private bool StartCloudAppConfigured() =>
-        !string.IsNullOrWhiteSpace(_cloudConfig.TenantId) &&
-        Guid.TryParse(_cloudConfig.ClientId, out _);
+        CloudConnectionPrerequisiteError(
+            _cloudConfig.TenantId, _cloudConfig.ClientId,
+            certificateThumbprint: null, certificateMode: false) is null;
 
     private void UpdateStartConnectionSourceControls()
     {

@@ -55,6 +55,12 @@ public sealed partial class MainForm
         Dictionary<DataGridViewColumn, (string English, int MinimumWidth)>>
         _localizedGridHeaders = new(ReferenceEqualityComparer.Instance);
     private static readonly object LocalizedCaptionObserverMarker = new();
+    // ToolStripItem is not a Control. Preserve caption source separately from
+    // Tag, which is reserved for application command data.
+    private readonly Dictionary<ToolStripItem, string> _localizedMenuSources =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly ConditionalWeakTable<ToolStripDropDownItem, object>
+        _observedLocalizedMenus = new();
     private bool _localizedCaptionCacheBuilt;
 
     private void ObserveLocalizedCaptionTree(
@@ -97,6 +103,8 @@ public sealed partial class MainForm
                 _localizedCaptionControls[control] = key;
                 control.Disposed += OnLocalizedCaptionControlDisposed;
                 control.TextChanged += OnLocalizedCaptionTextChanged;
+                if (UsesLocalizedCaptionDirection(control))
+                    control.VisibleChanged += OnLocalizedCaptionVisibleChanged;
                 // Cold startup: discover and cache captions first; the
                 // subsequent batched language pass suspends their parents.
                 // Dynamic controls still localize immediately.
@@ -160,6 +168,7 @@ public sealed partial class MainForm
             {
                 control.Disposed -= OnLocalizedCaptionControlDisposed;
                 control.TextChanged -= OnLocalizedCaptionTextChanged;
+                control.VisibleChanged -= OnLocalizedCaptionVisibleChanged;
             }
             if (control is ListView list && _localizedListViewHeaders.Remove(list))
                 list.Disposed -= OnLocalizedListViewDisposed;
@@ -177,6 +186,7 @@ public sealed partial class MainForm
         {
             _localizedCaptionControls.Remove(control);
             control.TextChanged -= OnLocalizedCaptionTextChanged;
+            control.VisibleChanged -= OnLocalizedCaptionVisibleChanged;
         }
     }
 
@@ -311,6 +321,91 @@ public sealed partial class MainForm
         }
     }
 
+    private static bool UsesLocalizedCaptionDirection(Control control) =>
+        control is Button or CheckBox or RadioButton or LinkLabel or GroupBox;
+
+    // Text is localized on every page, but a warm EN/RU/HE switch does not
+    // need to recreate native child handles in invisible workspaces.
+    // Before form handles exist (including headless UI tests), apply eagerly.
+    private bool CanUpdateCaptionDirection(Control control) =>
+        _layoutSelfTest || !IsHandleCreated || control.Visible;
+
+    private void OnLocalizedCaptionVisibleChanged(object? sender, EventArgs args)
+    {
+        if (sender is not Control control || !control.Visible ||
+            control.IsDisposed || control.Disposing ||
+            !_localizedCaptionControls.ContainsKey(control))
+            return;
+
+        var direction = UiLanguageService.IsRightToLeft(_uiLanguageCode)
+            ? RightToLeft.Yes : RightToLeft.No;
+        if (UsesLocalizedCaptionDirection(control) &&
+            control.RightToLeft != direction)
+            control.RightToLeft = direction;
+    }
+
+    private void OnLocalizedMenuDisposed(object? sender, EventArgs args)
+    {
+        if (sender is ToolStripItem item)
+        {
+            _localizedMenuSources.Remove(item);
+            item.Disposed -= OnLocalizedMenuDisposed;
+            if (item is ToolStripDropDownItem submenu &&
+                _observedLocalizedMenus.Remove(submenu))
+                submenu.DropDownOpening -= OnLocalizedMenuOpening;
+        }
+    }
+
+    private void OnLocalizedMenuOpening(object? sender, EventArgs args)
+    {
+        if (sender is ToolStripDropDownItem submenu && !IsDisposed)
+            ApplyKnownMenuCaptions(submenu.DropDownItems);
+    }
+
+    // This is intentionally limited to known fixed captions. It does not
+    // translate device IDs, dynamic results or arbitrary ToolStrip Tag values.
+    private void ApplyKnownMenuCaptions(ToolStripItemCollection items)
+    {
+        foreach (ToolStripItem item in items)
+        {
+            if (item is ToolStripSeparator)
+                continue;
+
+            if (!_localizedMenuSources.TryGetValue(item, out var original))
+            {
+                // Never infer a caption from Tag; it may be a command
+                // identifier, a security context, or a custom binding.
+                var source = item.Text;
+                if (!string.IsNullOrWhiteSpace(source) &&
+                    UiStaticCaptionCatalog.Contains(source))
+                {
+                    original = source;
+                    _localizedMenuSources.Add(item, source);
+                    item.Disposed += OnLocalizedMenuDisposed;
+                }
+            }
+
+            if (original is not null &&
+                UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, original,
+                    out var caption) &&
+                !string.Equals(item.Text, caption, StringComparison.Ordinal))
+                item.Text = caption;
+
+            if (item is ToolStripDropDownItem submenu)
+            {
+                if (!_observedLocalizedMenus.TryGetValue(submenu, out _))
+                {
+                    _observedLocalizedMenus.Add(submenu,
+                        LocalizedCaptionObserverMarker);
+                    submenu.DropDownOpening += OnLocalizedMenuOpening;
+                    if (!_localizedMenuSources.ContainsKey(submenu))
+                        submenu.Disposed += OnLocalizedMenuDisposed;
+                }
+                ApplyKnownMenuCaptions(submenu.DropDownItems);
+            }
+        }
+    }
+
     private string TranslateFixedCaption(string key) =>
         key.StartsWith(OriginalCaptionPrefix, StringComparison.Ordinal)
             ? UiStaticCaptionCatalog.TranslateOrOriginal(
@@ -330,7 +425,8 @@ public sealed partial class MainForm
 
         // Only captions follow RTL. Device identity, recovery keys and typed
         // input remain LTR; changing Form.RightToLeft recreates HWNDs.
-        if ((control is Button or CheckBox or RadioButton or LinkLabel or GroupBox) &&
+        if (UsesLocalizedCaptionDirection(control) &&
+            CanUpdateCaptionDirection(control) &&
             control.RightToLeft != direction)
             control.RightToLeft = direction;
     }
@@ -357,7 +453,8 @@ public sealed partial class MainForm
             var changeText = !string.IsNullOrWhiteSpace(caption) &&
                 !string.Equals(control.Text, caption, StringComparison.Ordinal);
             var changeDirection =
-                control is Button or CheckBox or RadioButton or LinkLabel or GroupBox &&
+                UsesLocalizedCaptionDirection(control) &&
+                CanUpdateCaptionDirection(control) &&
                 control.RightToLeft != direction;
             if (changeText || changeDirection)
                 changed.Add((control, caption, changeText, changeDirection));
@@ -423,23 +520,11 @@ public sealed partial class MainForm
             }
         }
 
-        // Top ToolStrip entries are not Controls and need explicit handling.
-        // Preserve their original English identity in Tag; never translate
-        // device IDs or dynamic status text.
+        // Menus are outside the WinForms Control tree. Cache original labels
+        // independently of Tag and update known nested entries as well.
         if (_toolsTopMenu is not null)
-            foreach (ToolStripItem item in _toolsTopMenu.DropDownItems)
-            {
-                if (item is ToolStripSeparator || item == _recoveryStepsMenu ||
-                    item == _accessHealthMenu)
-                    continue;
-                if (item.Tag is null)
-                    item.Tag = item.Text;
-                if (item.Tag is string original &&
-                    UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode,
-                        original, out var label) &&
-                    !string.Equals(item.Text, label, StringComparison.Ordinal))
-                    item.Text = label;
-            }
+            ApplyKnownMenuCaptions(_toolsTopMenu.DropDownItems);
+        ApplyKnownMenuCaptions(_homeConnectionToolsMenu.Items);
 
         SetCloudCaption(_cloudSaveButton, "MainSaveConfig", direction);
         SetCloudCaption(_cloudWizardButton, "MainEntraWizard", direction);

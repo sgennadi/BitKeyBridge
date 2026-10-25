@@ -276,34 +276,36 @@ public sealed class DeviceCodeDialog : DpiAwareForm
             0,
             5);
 
-        var buttons =
-            new FlowLayoutPanel
-            {
-                Dock =
-                    DockStyle.Top,
-                AutoSize =
-                    true,
-                FlowDirection =
-                    FlowDirection.RightToLeft,
-                WrapContents =
-                    true,
-                Margin =
-                    new Padding(0)
-            };
+        // Never wrap the sign-in actions out of view at large DPI.
+        var buttons = new TableLayoutPanel
+        {
+            Name = "DeviceCodeActions",
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            ColumnCount = 2,
+            RowCount = 1,
+            RightToLeft = RightToLeft.No,
+            Margin = Padding.Empty
+        };
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        buttons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var ok =
             UiStyle.CreateActionButton(
                 "OK",
                 DialogResult.OK);
-        buttons.Controls.Add(
-            ok);
-        root.Controls.Add(
-            buttons,
-            0,
-            6);
+        var cancel = UiStyle.CreateActionButton(
+            "Cancel", DialogResult.Cancel);
+        cancel.Name = "DeviceCodeCancel";
+        ok.Name = "DeviceCodeContinue";
+        buttons.Controls.Add(ok, 0, 0);
+        buttons.Controls.Add(cancel, 1, 0);
+        root.Controls.Add(buttons, 0, 6);
 
-        AcceptButton =
-            ok;
+        AcceptButton = ok;
+        CancelButton = cancel;
 
         Shown +=
             (_, _) =>

@@ -34,6 +34,26 @@ internal static class UiLanguageService
             ["Settings"] = ["Settings", "Настройки", "הגדרות"],
             ["Tools"] = ["Tools", "Инструменты", "כלים"],
             ["Language"] = ["Language", "Язык", "שפה"],
+            ["HelpdeskDeploymentProgressTemplate"] =
+                ["{0} of {1} steps marked complete",
+                 "Отмечено {0} из {1} этапов",
+                 "סומנו {0} מתוך {1} שלבים"],
+            ["HelpdeskStatusNotInstalled"] = ["not installed", "не установлена", "לא מותקן"],
+            ["HelpdeskStatusUnavailableQuery"] = ["unavailable (query failed)", "недоступно (ошибка запроса)", "לא זמין (השאילתה נכשלה)"],
+            ["HelpdeskStatusDisabled"] = ["disabled in configuration", "отключено в настройках", "מושבת בתצורה"],
+            ["HelpdeskStatusAuditOptional"] = ["enabled; strict audit not required", "включено; строгий аудит необязателен", "מופעל; ביקורת מחמירה אינה נדרשת"],
+            ["HelpdeskStatusAuditStrict"] = ["enabled; strict audit required (runtime unverified)", "включено; требуется строгий аудит (работа не проверена)", "מופעל; נדרשת ביקורת מחמירה (לא אומתה בזמן ריצה)"],
+            ["HelpdeskStatusAclVerified"] = ["protected ACL verified", "защищённый ACL проверен", "הרשאות ACL מוגנות אומתו"],
+            ["HelpdeskStatusAclUntrusted"] = ["not verified / untrusted", "не проверено / нет доверия", "לא אומת / אינו מהימן"],
+            ["HelpdeskStatusVerifyUnavailable"] = ["verification unavailable", "проверка недоступна", "האימות אינו זמין"],
+            ["HelpdeskStatusNotChecked"] = ["not checked", "не проверено", "לא נבדק"],
+            ["HelpdeskStatusChainValid"] = ["hash chain valid", "цепочка хешей корректна", "שרשרת הגיבובים תקינה"],
+            ["HelpdeskStatusChainInvalid"] = ["hash chain invalid or unavailable", "цепочка хешей некорректна или недоступна", "שרשרת הגיבובים שגויה או אינה זמינה"],
+            ["HelpdeskStatusNoReadAccess"] = ["unavailable (insufficient access or I/O error)", "недоступно (нет прав или ошибка ввода-вывода)", "לא זמין (אין הרשאה או שגיאת קלט/פלט)"],
+            ["HelpdeskStatusConnected"] = ["Connected", "Подключено", "מחובר"],
+            ["HelpdeskStatusDisconnected"] = ["Not connected", "Не подключено", "לא מחובר"],
+            ["HelpdeskStatusAllowed"] = ["Allowed", "Разрешено", "מותר"],
+            ["HelpdeskStatusDenied"] = ["Denied", "Запрещено", "נדחה"],
             ["Search"] = ["Search", "Поиск", "חיפוש"],
             ["Cancel"] = ["Cancel", "Отмена", "ביטול"],
             ["UpdateCenterTitle"] = ["Update Center 2.0", "Центр обновлений 2.0", "מרכז עדכונים 2.0"],
@@ -326,6 +346,50 @@ internal static class UiLanguageService
                         failures.Add("Missing localized shell resource: " + key);
                 }
             }
+
+            // Checklist progress is formatted at runtime, not translated
+            // from a fixed English "0 of 7" label. Both placeholders must
+            // remain valid in all three supported languages.
+            foreach (var language in SupportedLanguages.Select(x => x.Code))
+            {
+                var template = Translate(language, "HelpdeskDeploymentProgressTemplate");
+                try
+                {
+                    var value = string.Format(CultureInfo.InvariantCulture,
+                        template, 2, 7);
+                    if (!value.Contains("2", StringComparison.Ordinal) ||
+                        !value.Contains("7", StringComparison.Ordinal))
+                        failures.Add("Helpdesk progress template lost a count: " + language);
+                }
+                catch (FormatException)
+                {
+                    failures.Add("Invalid Helpdesk progress template: " + language);
+                }
+            }
+
+            // Diagnostic status messages must stay in a scoped display-only
+            // resource set; never make the global static-caption observer
+            // capture mutable security/service result labels.
+            var readinessKeys = new[]
+            {
+                "HelpdeskStatusNotInstalled", "HelpdeskStatusUnavailableQuery",
+                "HelpdeskStatusDisabled", "HelpdeskStatusAuditOptional",
+                "HelpdeskStatusAuditStrict", "HelpdeskStatusAclVerified",
+                "HelpdeskStatusAclUntrusted", "HelpdeskStatusVerifyUnavailable",
+                "HelpdeskStatusNotChecked", "HelpdeskStatusChainValid",
+                "HelpdeskStatusChainInvalid", "HelpdeskStatusNoReadAccess",
+                "HelpdeskStatusConnected", "HelpdeskStatusDisconnected",
+                "HelpdeskStatusAllowed", "HelpdeskStatusDenied"
+            };
+            foreach (var language in SupportedLanguages.Select(x => x.Code))
+                foreach (var key in readinessKeys)
+                {
+                    var value = Translate(language, key);
+                    if (string.IsNullOrWhiteSpace(value) ||
+                        string.Equals(value, key, StringComparison.Ordinal))
+                        failures.Add("Helpdesk scoped status resource missing: " +
+                            key + " (" + language + ")");
+                }
 
             foreach (var language in SupportedLanguages.Select(x => x.Code))
             {
