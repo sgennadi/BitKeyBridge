@@ -376,7 +376,8 @@ public sealed partial class MainForm
                 // Never infer a caption from Tag; it may be a command
                 // identifier, a security context, or a custom binding.
                 var source = item.Text;
-                if (UiStaticCaptionCatalog.Contains(source))
+                if (!string.IsNullOrWhiteSpace(source) &&
+                    UiStaticCaptionCatalog.Contains(source))
                 {
                     original = source;
                     _localizedMenuSources.Add(item, source);
