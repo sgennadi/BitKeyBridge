@@ -74,6 +74,8 @@ public static class UiLayoutSelfTest
 
         VerifyUnchangedStatusDoesNotRepaint(failures);
 
+        VerifyFixedHeaderWidthCaching(failures);
+
         VerifyWrappingStatusMeasurement(
             failures);
 
@@ -230,6 +232,75 @@ public static class UiLayoutSelfTest
         return failures.Count == 0
             ? 0
             : 1;
+    }
+
+    private static void VerifyFixedHeaderWidthCaching(List<string> failures)
+    {
+        // Real TextRenderer measurement. The same fixed caption/font/DPI
+        // must reuse a result; changes to DPI/font/header style cannot.
+        try
+        {
+            using var regular = new Font(UiStyle.BodyFont, FontStyle.Regular);
+            using var bold = new Font(UiStyle.BodyFont, FontStyle.Bold);
+            var cache = new UiHeaderWidthCache(capacity: 4);
+            var caption = UiStaticCaptionCatalog.TranslateOrOriginal("he", "Back");
+            var first = cache.Measure(
+                "Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            var expected = TextRenderer.MeasureText(
+                caption, regular, new Size(4096, 1024),
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding |
+                TextFormatFlags.NoPrefix).Width +
+                UiStyle.ScaleLogicalPixels(26, 96);
+            var second = cache.Measure(
+                "Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (first != expected || second != expected ||
+                cache.CacheHits != 1 || cache.CacheMisses != 1 ||
+                cache.EntryCount != 1)
+                failures.Add("Fixed header width cache did not reuse an identical measurement.");
+
+            cache.Measure("Back", caption, regular, 144,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            cache.Measure("Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.ListView);
+            cache.Measure("Back", caption, bold, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (cache.CacheMisses != 4 || cache.EntryCount != 4)
+                failures.Add("Fixed header width cache mixed font, DPI or rendering styles.");
+
+            // Device identifiers, account values and recovery keys are not
+            // permitted as a key, even if caller passes a text measurement.
+            var unknownRejected = false;
+            try
+            {
+                cache.Measure("device-identity-not-a-caption", "SENSITIVE",
+                    regular, 96, UiHeaderWidthCache.HeaderKind.DataGrid);
+            }
+            catch (ArgumentException)
+            {
+                unknownRejected = true;
+            }
+            if (!unknownRejected)
+                failures.Add("Fixed header width cache accepted arbitrary live metadata.");
+
+            cache.Measure("Back", caption, regular, 192,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (cache.EntryCount != cache.Capacity || cache.CacheMisses != 5)
+                failures.Add("Fixed header cache exceeded its bounded capacity.");
+            cache.Measure("Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (cache.CacheMisses != 6)
+                failures.Add("Fixed header cache did not evict the oldest measurement.");
+            if (!UiLayoutTelemetry.Report().Contains(
+                    "Fixed-header width cache: hits=", StringComparison.Ordinal))
+                failures.Add("Non-secret header cache diagnostics were not reported.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Fixed header width cache regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private static void VerifyModalDialogLocalization(List<string> failures)
