@@ -34,6 +34,7 @@ internal static class UiLanguageService
             ["Settings"] = ["Settings", "Настройки", "הגדרות"],
             ["Tools"] = ["Tools", "Инструменты", "כלים"],
             ["Language"] = ["Language", "Язык", "שפה"],
+            ["DevicesConfigureCloud"] = ["Configure Cloud...", "Настроить облако...", "הגדרת ענן..."],
             ["HelpdeskDeploymentProgressTemplate"] =
                 ["{0} of {1} steps marked complete",
                  "Отмечено {0} из {1} этапов",

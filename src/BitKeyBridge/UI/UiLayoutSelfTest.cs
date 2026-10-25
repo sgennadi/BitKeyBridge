@@ -96,6 +96,7 @@ public static class UiLayoutSelfTest
 
         VerifyIntuneSetupWizardNavigation(failures);
         VerifyDeviceCodeCancellation(failures);
+        VerifyDevicesCloudShortcut(failures);
 
         VerifyDiagnosticCopyVisibility(failures);
 
@@ -628,6 +629,27 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    private static void VerifyDevicesCloudShortcut(List<string> failures)
+    {
+        try
+        {
+            using var main = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+            if (!main.PreviewDevicesCloudShortcutForUiTest())
+                failures.Add("Devices missing-Cloud action failed to open Settings > Cloud.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Devices Cloud navigation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 
