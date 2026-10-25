@@ -509,6 +509,10 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 2);
     }
 
+    // UI-only regression hook. It changes the visible wizard page but
+    // never triggers authentication, app registration, or any Graph call.
+    internal void PreviewStepForUiSelfTest(int step) => ShowStep(step);
+
     private void ShowStep(
         int step)
     {
