@@ -95,6 +95,7 @@ public static class UiLayoutSelfTest
             failures);
 
         VerifyIntuneSetupWizardNavigation(failures);
+        VerifyDeviceCodeCancellation(failures);
 
         VerifyDiagnosticCopyVisibility(failures);
 
@@ -627,6 +628,43 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    private static void VerifyDeviceCodeCancellation(List<string> failures)
+    {
+        try
+        {
+            // No Graph traffic or browser launch; do not Show the modal
+            // device-code window in this UI regression.
+            using var prompt = new DeviceCodeDialog(new DeviceCodeInfo
+            {
+                UserCode = "TEST-CODE",
+                VerificationUri = "https://microsoft.com/devicelogin",
+                Message = "Test fixture only",
+                ExpiresIn = 900
+            });
+            if (FindByName(prompt, "DeviceCodeActions") is not TableLayoutPanel actions ||
+                actions.RowCount != 1 || actions.ColumnCount != 2 ||
+                FindByName(prompt, "DeviceCodeCancel") is not Button cancel ||
+                FindByName(prompt, "DeviceCodeContinue") is not Button proceed ||
+                cancel.DialogResult != DialogResult.Cancel ||
+                proceed.DialogResult != DialogResult.OK ||
+                !ReferenceEquals(prompt.CancelButton, cancel) ||
+                !ReferenceEquals(prompt.AcceptButton, proceed))
+                failures.Add("Device Code dialog must expose distinct cancel and continue actions.");
+
+            using var main = new MainForm(
+                new AppConfig { AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false },
+                layoutSelfTest: true);
+            if (!main.PreviewCloudCancellationForUiSelfTest())
+                failures.Add("Cloud Cancel must immediately stop marquee and signal cancellation.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Device Code cancellation regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
 
