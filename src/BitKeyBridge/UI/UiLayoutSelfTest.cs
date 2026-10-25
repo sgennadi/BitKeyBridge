@@ -254,6 +254,35 @@ public static class UiLayoutSelfTest
             using var prompt = new AdCredentialPromptDialog(@"DOMAIN\helpdesk");
             using var startup = new StartupConnectionWizardDialog(
                 StartConnectionPolicy.ActiveDirectory);
+
+            // Test real TextBox and ToolStrip properties, not only labels.
+            // Previously translated placeholders did not return to English
+            // after switching RU/HE. Caller-owned dynamic hints and text
+            // must not be overwritten by the static-caption localizer.
+            using var hints = new DpiAwareForm { Text = "Choose a connection" };
+            using var menu = new ContextMenuStrip();
+            var localizedAction = new ToolStripMenuItem("Back")
+            {
+                ToolTipText = "Copy diagnostics",
+                Tag = "fixed-command-token"
+            };
+            menu.Items.Add(localizedAction);
+            var tenant = new TextBox
+            {
+                Name = "LanguageRoundtripTenant",
+                PlaceholderText = "Tenant GUID or verified domain",
+                Text = "contoso.onmicrosoft.com",
+                ContextMenuStrip = menu
+            };
+            var dynamicHint = new TextBox
+            {
+                Name = "LanguageRoundtripDynamic",
+                PlaceholderText = "custom hint: 12345",
+                Text = "live value: 67890"
+            };
+            hints.Controls.Add(tenant);
+            hints.Controls.Add(dynamicHint);
+
             foreach (var (language, domainTitle, startupTitle, connectText) in
                 new[]
                 {
@@ -265,6 +294,22 @@ public static class UiLayoutSelfTest
             {
                 UiDialogLocalization.Apply(prompt, language);
                 UiDialogLocalization.Apply(startup, language);
+                UiDialogLocalization.Apply(hints, language);
+                if (tenant.PlaceholderText !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Tenant GUID or verified domain") ||
+                    localizedAction.ToolTipText !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Copy diagnostics") ||
+                    localizedAction.Text !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Back") ||
+                    (string?)localizedAction.Tag != "fixed-command-token" ||
+                    tenant.Text != "contoso.onmicrosoft.com" ||
+                    dynamicHint.Text != "live value: 67890" ||
+                    dynamicHint.PlaceholderText != "custom hint: 12345")
+                    failures.Add("RU/HE/EN modal hint roundtrip or live data regression: " +
+                        language);
                 if (prompt.Text != domainTitle || !HasText(startup, startupTitle) ||
                     !HasText(prompt, connectText))
                     failures.Add("Modal dialog translation missing or stale: " + language);
@@ -283,6 +328,27 @@ public static class UiLayoutSelfTest
                 if (prompt.Username != @"DOMAIN\helpdesk")
                     failures.Add("Dialog localization modified supplied AD account data.");
             }
+
+            // Replacing a known hint with runtime information must not
+            // silently restore old translations. A NEW known English hint
+            // must become the new baseline instead of reverting to the old.
+            tenant.PlaceholderText = "operator supplied hint";
+            localizedAction.ToolTipText = "runtime tooltip";
+            UiDialogLocalization.Apply(hints, "he");
+            if (tenant.PlaceholderText != "operator supplied hint" ||
+                localizedAction.ToolTipText != "runtime tooltip")
+                failures.Add("Modal localizer rewrote externally updated hints.");
+
+            tenant.PlaceholderText = "Domain DNS name (optional)";
+            localizedAction.ToolTipText = "Copy diagnostics";
+            UiDialogLocalization.Apply(hints, "ru");
+            if (tenant.PlaceholderText !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Domain DNS name (optional)") ||
+                localizedAction.ToolTipText !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics"))
+                failures.Add("Modal localizer did not adopt new known English hints.");
         }
         catch (Exception ex)
         {
