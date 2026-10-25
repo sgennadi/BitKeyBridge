@@ -259,7 +259,10 @@ public sealed partial class MainForm
         var headerFont = grid.ColumnHeadersDefaultCellStyle.Font ?? grid.Font;
         var flags = TextFormatFlags.SingleLine |
                     TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
-        grid.SuspendLayout();
+        // A repeated switch to the same language, or a visible-page
+        // refresh with unchanged headers, must not force a grid layout.
+        // Defer SuspendLayout until an actual header or width change.
+        var suspended = false;
         try
         {
             foreach (DataGridViewColumn column in grid.Columns)
@@ -268,19 +271,30 @@ public sealed partial class MainForm
                     continue;
                 var caption = UiStaticCaptionCatalog.TranslateOrOriginal(
                     _uiLanguageCode, source.English);
-                if (!string.Equals(column.HeaderText, caption, StringComparison.Ordinal))
-                    column.HeaderText = caption;
+                var captionChanged = !string.Equals(
+                    column.HeaderText, caption, StringComparison.Ordinal);
                 var required = TextRenderer.MeasureText(
                     caption, headerFont, new Size(4096, 1024), flags).Width +
                     UiStyle.ScaleLogicalPixels(26, grid.DeviceDpi);
                 var width = Math.Max(source.MinimumWidth, required);
-                if (column.MinimumWidth != width)
+                var widthChanged = column.MinimumWidth != width;
+                if (!captionChanged && !widthChanged)
+                    continue;
+                if (!suspended)
+                {
+                    grid.SuspendLayout();
+                    suspended = true;
+                }
+                if (captionChanged)
+                    column.HeaderText = caption;
+                if (widthChanged)
                     column.MinimumWidth = width;
             }
         }
         finally
         {
-            grid.ResumeLayout(performLayout: grid.Visible);
+            if (suspended)
+                grid.ResumeLayout(performLayout: grid.Visible);
         }
     }
 
