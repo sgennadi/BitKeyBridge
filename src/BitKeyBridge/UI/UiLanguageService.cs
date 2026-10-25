@@ -367,6 +367,30 @@ internal static class UiLanguageService
                 }
             }
 
+            // Diagnostic status messages must stay in a scoped display-only
+            // resource set; never make the global static-caption observer
+            // capture mutable security/service result labels.
+            var readinessKeys = new[]
+            {
+                "HelpdeskStatusNotInstalled", "HelpdeskStatusUnavailableQuery",
+                "HelpdeskStatusDisabled", "HelpdeskStatusAuditOptional",
+                "HelpdeskStatusAuditStrict", "HelpdeskStatusAclVerified",
+                "HelpdeskStatusAclUntrusted", "HelpdeskStatusVerifyUnavailable",
+                "HelpdeskStatusNotChecked", "HelpdeskStatusChainValid",
+                "HelpdeskStatusChainInvalid", "HelpdeskStatusNoReadAccess",
+                "HelpdeskStatusConnected", "HelpdeskStatusDisconnected",
+                "HelpdeskStatusAllowed", "HelpdeskStatusDenied"
+            };
+            foreach (var language in SupportedLanguages.Select(x => x.Code))
+                foreach (var key in readinessKeys)
+                {
+                    var value = Translate(language, key);
+                    if (string.IsNullOrWhiteSpace(value) ||
+                        string.Equals(value, key, StringComparison.Ordinal))
+                        failures.Add("Helpdesk scoped status resource missing: " +
+                            key + " (" + language + ")");
+                }
+
             foreach (var language in SupportedLanguages.Select(x => x.Code))
             {
                 foreach (var kind in Enum.GetValues<MetadataFailureKind>()
