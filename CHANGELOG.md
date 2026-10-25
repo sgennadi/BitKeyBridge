@@ -5,6 +5,7 @@
 - Preserve known English modal placeholder and menu-tooltip sources separately from their currently translated EN/RU/HE values; repeated language changes restore the correct text without rewriting user-entered identities or caller-supplied dynamic hints.
 - Add native WinForms tests for HE → RU → EN → RU roundtrips and replacement of previously localized placeholders/tooltips with unknown or newly catalogued English values. Preserve menu command `Tag` and existing account/tenant data.
 - Skip redundant DataGridView `SuspendLayout/ResumeLayout` calls when neither caption nor computed minimum width changed, while still measuring new text and DPI-dependent widths when necessary.
+- Cache only catalogued DataGridView/ListView header text measurements in a bounded per-window FIFO cache, keyed by localized caption, font details, DPI and header style. Report non-secret cache hit/miss counters, and test DPI/font separation, identity rejection, and eviction.
 - Add source regression safeguards. No LAPS/BitLocker recovery retrieval, audit, permissions, authentication, signing or automatic deployment behavior changes.
 - Needs native Windows CI and manual Hebrew/Russian 100–200% scaling/RDP performance measurements before claiming reduced language-switch latency.
 
