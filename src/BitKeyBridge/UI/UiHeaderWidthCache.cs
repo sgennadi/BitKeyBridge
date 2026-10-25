@@ -61,6 +61,20 @@ internal sealed class UiHeaderWidthCache
             return cached;
         }
 
+        // Validate the VALUE as well as the English source: otherwise a
+        // future caller could pass a real recovery secret as caption while
+        // using a known sourceEnglish. Cached hits are already validated.
+        if (!string.Equals(localizedCaption, sourceEnglish, StringComparison.Ordinal) &&
+            !string.Equals(localizedCaption,
+                UiStaticCaptionCatalog.TranslateOrOriginal("ru", sourceEnglish),
+                StringComparison.Ordinal) &&
+            !string.Equals(localizedCaption,
+                UiStaticCaptionCatalog.TranslateOrOriginal("he", sourceEnglish),
+                StringComparison.Ordinal))
+            throw new ArgumentException(
+                "Header measurement requires a catalogued localized caption.",
+                nameof(localizedCaption));
+
         var width = kind switch
         {
             HeaderKind.DataGrid => TextRenderer.MeasureText(
