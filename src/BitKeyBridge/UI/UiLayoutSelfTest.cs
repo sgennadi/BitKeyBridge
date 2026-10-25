@@ -284,6 +284,21 @@ public static class UiLayoutSelfTest
             if (!unknownRejected)
                 failures.Add("Fixed header width cache accepted arbitrary live metadata.");
 
+            // Supplying a valid catalogue source alone is not enough:
+            // reject arbitrary caller data masquerading as its translation.
+            var spoofedRejected = false;
+            try
+            {
+                cache.Measure("Back", "SENSITIVE", regular, 96,
+                    UiHeaderWidthCache.HeaderKind.DataGrid);
+            }
+            catch (ArgumentException)
+            {
+                spoofedRejected = true;
+            }
+            if (!spoofedRejected || cache.CacheMisses != 4)
+                failures.Add("Fixed header width cache accepted an untrusted caption value.");
+
             cache.Measure("Back", caption, regular, 192,
                 UiHeaderWidthCache.HeaderKind.DataGrid);
             if (cache.EntryCount != cache.Capacity || cache.CacheMisses != 5)
