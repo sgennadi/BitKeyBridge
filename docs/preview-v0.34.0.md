@@ -6,7 +6,7 @@
 
 1. Modal dialogs: retain the original English for recognized `TextBox.PlaceholderText` and `ToolStripItem.ToolTipText`, in addition to existing fixed captions; allow repeated RU → HE → EN and HE → RU transitions without retaining old-language hints.
 2. Caller-provided runtime placeholders/tooltips, user-entered text, usernames, device identifiers and secret fields are NOT translated. The original known English source is replaced only when the owner explicitly supplies a different, catalogued English literal.
-3. MainForm DataGridView columns: keep exact localized header text and minimum column widths, but avoid suspending/resuming a grid when no caption/width change is required. Do not touch cells, source records or the selected device.
+3. MainForm DataGridView/ListView columns: keep exact localized header text and minimum column widths, but avoid suspending/resuming a grid when no caption/width change is required. Cache only catalogue-approved header measurements, bounded to 512 entries per MainForm and separated by font/DPI/style. Do not touch cells, source records or the selected device. Non-secret UI telemetry reports cache hits/misses.
 4. No Graph, AD, BitLocker, LAPS, audit, updater trust, admin authorization, machine assignment or signed-only policy changes.
 
 ## Required GitHub Actions QA before moving out of draft
