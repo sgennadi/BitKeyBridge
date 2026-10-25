@@ -7,7 +7,7 @@
 - Avoid measuring wrapping labels twice during initial DPI/font refresh. Width calculations run once after the form's layout, preserving on-demand high-DPI reflows and hidden-page safety.
 - Skip a redundant whole-TabControl `ResumeLayout(true)` on warm user language switches; retain immediate cold/test layout and post one selected-viewport repair after translation. Keep full menu layout so Hebrew glyphs are not clipped.
 - Extend real WinForms regression tests for nested menu EN/RU/HE captions and command-tag integrity. No authorization, secret access, protected audit, update signing, or auto-deployment policy changes.
-- Localize the seven-step Helpdesk preparation checklist, localized live readiness labels and diagnostic statuses, and count-preserving progress in EN/RU/HE; add 38 previously missing fixed-caption translations across Helpdesk, Start, and cloud configuration. Never modify actual service identities or security decisions.
+- Localize the seven-step Helpdesk preparation checklist, localized live readiness labels and diagnostic statuses, and count-preserving progress in EN/RU/HE; add 26 fixed-caption translations plus 16 scoped Helpdesk diagnostic state translations across Helpdesk, Start and cloud configuration. Never modify actual service identities or security decisions.
 - Correct stable-source provenance on pull requests to validate the already-published base commit; a direct push to `main` still requires an exact published stable tag and immutable ancestry. Keep the v0.33 release job blocked pending separate authorization.
 - No performance claims before fresh native Windows/RDP measurements and a green exact-source CI run. Public v0.32.5 remains the rollback baseline.
 
