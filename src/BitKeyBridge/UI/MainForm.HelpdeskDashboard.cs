@@ -152,6 +152,18 @@ public sealed partial class MainForm
     // Shared by the real dialog and the offline 100-200% UI regression test.
     internal DpiAwareForm CreateHelpdeskDeploymentWizard()
     {
+        // The wizard is modal; snapshot the chosen UI language for all static
+        // checklist entries and non-secret readiness labels. The seven items
+        // are NOT Controls, so the ordinary dialog caption walker misses them.
+        var language = _uiLanguageCode;
+        string Caption(string english) =>
+            UiStaticCaptionCatalog.TranslateOrOriginal(language, english);
+
+        string ProgressText(int completed, int total) =>
+            string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                UiLanguageService.Translate(language, "HelpdeskDeploymentProgressTemplate"),
+                completed, total);
+
         // Read-only guided preparation. All privileged changes remain in the
         // existing administrator UI / CLI with their own authorization gates.
         var wizard = new DpiAwareForm
@@ -198,7 +210,7 @@ public sealed partial class MainForm
             HorizontalScrollbar = true,
             AccessibleName = "Helpdesk deployment preparation checklist"
         };
-        steps.Items.AddRange(new object[]
+        var englishSteps = new[]
         {
             "Install the Windows service on a test workstation (administrator)",
             "Configure a scoped RecoveryReaders group; disable admin bypass",
@@ -207,7 +219,8 @@ public sealed partial class MainForm
             "Sign in as an authorized non-admin and run Access Health",
             "Verify unauthorized access is denied and secrets are never logged",
             "Validate protected journal, RDP, 100-200% DPI and rollback"
-        });
+        };
+        steps.Items.AddRange(englishSteps.Select(step => (object)Caption(step)).ToArray());
         layout.Controls.Add(steps, 0, 1);
 
         // Live, non-privileged checks: these never read recovery secrets or
@@ -236,16 +249,20 @@ public sealed partial class MainForm
         {
             if (wizard.IsDisposed || healthResults.IsDisposed)
                 return;
+            // Translate only known fixed labels and diagnostic states.
+            // Never rewrite live service identities or authorization data.
+            var localizedName = Caption(name);
+            var localizedResult = Caption(result);
             var item = healthResults.Items.Cast<ListViewItem>()
-                .FirstOrDefault(entry => entry.Text == name);
+                .FirstOrDefault(entry => entry.Text == localizedName);
             if (item is null)
             {
-                item = new ListViewItem(name);
-                item.SubItems.Add(result);
+                item = new ListViewItem(localizedName);
+                item.SubItems.Add(localizedResult);
                 healthResults.Items.Add(item);
             }
             else
-                item.SubItems[1].Text = result;
+                item.SubItems[1].Text = localizedResult;
         }
         var readinessRunning = false;
         async void CheckReadiness()
@@ -339,7 +356,7 @@ public sealed partial class MainForm
             Name = "HelpdeskDeploymentProgress",
             AutoSize = true,
             AccessibleName = "Completed deployment preparation steps",
-            Text = "0 of 7 steps marked complete",
+            Text = ProgressText(0, steps.Items.Count),
             Margin = new Padding(0, 8, 0, 8)
         };
         // The checklist is a manual aid, not a security validation result.
@@ -350,7 +367,7 @@ public sealed partial class MainForm
                 count++;
             else if (args.NewValue != CheckState.Checked && args.CurrentValue == CheckState.Checked)
                 count--;
-            progress.Text = $"{count} of {steps.Items.Count} steps marked complete";
+            progress.Text = ProgressText(count, steps.Items.Count);
         };
 
         var guidance = new Label
