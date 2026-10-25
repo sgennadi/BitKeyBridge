@@ -710,7 +710,7 @@ public static class UiLayoutSelfTest
                 try
                 {
                     using var wizard = new IntuneSetupWizardDialog(
-                        config, _ => Task.CompletedTask)
+                        config, _ => Task.CompletedTask, language)
                     {
                         StartPosition = FormStartPosition.Manual,
                         ClientSize = new Size(920, 720)
@@ -794,6 +794,9 @@ public static class UiLayoutSelfTest
                                 language + " / step " + step);
                     }
 
+                    if (!wizard.PreviewTenantValidationForUiSelfTest())
+                        failures.Add("Intune wizard allowed a missing, generic or malformed tenant: " +
+                            language + " / " + fontScale);
                     if (!wizard.PreviewCancellationForUiSelfTest())
                         failures.Add("Intune wizard Cancel failed to stop marquee or dismisses early: " +
                             language + " / " + fontScale);
@@ -2096,6 +2099,30 @@ public static class UiLayoutSelfTest
         // No sign-in callback, network request, disk write or Graph exception
         // is needed to validate these non-secret prerequisites.
         const string clientGuid = "11111111-1111-4111-8111-111111111111";
+        // Privileged app creation requires a specific tenant, unlike
+        // ordinary delegated Device Code where "organizations" can be used.
+        var invalidAdminTenants = new string?[]
+        {
+            null, "", " ", "organizations", "common", "consumers",
+            "00000000-0000-0000-0000-000000000000",
+            "not-a-tenant", "https://contoso.onmicrosoft.com",
+            "contoso.onmicrosoft.com/path", "contoso..com",
+            "-bad.contoso.com", "contoso.com:443"
+        };
+        foreach (var tenant in invalidAdminTenants)
+            if (EntraSetupService.ValidateTenantForAdministrativeSetup(
+                    tenant) is null)
+                failures.Add("Administrative Graph preflight accepted an ambiguous tenant.");
+
+        foreach (var tenant in new[]
+        {
+            "contoso.onmicrosoft.com", "Contoso.COM",
+            "11111111-1111-4111-8111-111111111111"
+        })
+            if (EntraSetupService.ValidateTenantForAdministrativeSetup(
+                    tenant) is not null)
+                failures.Add("Administrative Graph preflight rejected a valid tenant.");
+
         if (MainForm.CloudConnectionPrerequisiteError(null, clientGuid,
                 null, certificateMode: false) is null ||
             MainForm.CloudConnectionPrerequisiteError(" ", clientGuid,
