@@ -205,7 +205,8 @@ public sealed class CloudConnectionWizardDialog : DpiAwareForm
         }
 
         if (_approvedApp.Checked &&
-            !Guid.TryParse(ClientId, out _))
+            (!Guid.TryParse(ClientId, out var applicationId) ||
+             applicationId == Guid.Empty))
         {
             MessageBox.Show(this, "Enter the application (client) GUID approved by IT.",
                 "Microsoft Entra connection", MessageBoxButtons.OK,
