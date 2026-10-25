@@ -1018,13 +1018,17 @@ public sealed partial class MainForm : DpiAwareForm
 
             using var setup =
                 new EntraSetupService();
-            var progress =
-                new Progress<string>(
-                    message =>
-                        UiStyle.SetStatus(
-                            _cloudStatus,
-                            message,
-                            UiStatusKind.Busy));
+            // Progress<T> queues callbacks onto WinForms. A queued
+            // "Requesting device code..." must never resurrect the spinner
+            // or overwrite the final Canceled/Success message.
+            var progress = new Progress<string>(message =>
+            {
+                if (IsDisposed || Disposing ||
+                    !ReferenceEquals(_cloudMaintenanceCancellation, cancellation) ||
+                    cancellation.IsCancellationRequested)
+                    return;
+                UiStyle.SetStatus(_cloudStatus, message, UiStatusKind.Busy);
+            });
 
             var result =
                 await setup.RunAsync(
@@ -1191,13 +1195,17 @@ public sealed partial class MainForm : DpiAwareForm
             using var lifecycle =
                 new EntraCertificateLifecycleService();
 
-            var progress =
-                new Progress<string>(
-                    message =>
-                        UiStyle.SetStatus(
-                            _cloudStatus,
-                            message,
-                            UiStatusKind.Busy));
+            // Progress<T> queues callbacks onto WinForms. A queued
+            // "Requesting device code..." must never resurrect the spinner
+            // or overwrite the final Canceled/Success message.
+            var progress = new Progress<string>(message =>
+            {
+                if (IsDisposed || Disposing ||
+                    !ReferenceEquals(_cloudMaintenanceCancellation, cancellation) ||
+                    cancellation.IsCancellationRequested)
+                    return;
+                UiStyle.SetStatus(_cloudStatus, message, UiStatusKind.Busy);
+            });
 
             var result =
                 await lifecycle.RolloverAsync(
