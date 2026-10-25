@@ -94,6 +94,8 @@ public static class UiLayoutSelfTest
         VerifyHelpdeskChecklistLocalization(
             failures);
 
+        VerifyIntuneSetupWizardNavigation(failures);
+
         VerifyDiagnosticCopyVisibility(failures);
 
         // A DPI report must distinguish the initially measured MainForm from
@@ -633,6 +635,117 @@ public static class UiLayoutSelfTest
     /// looked up button names, while Hebrew WinForms AutoSize/RTL could
     /// clip both action controls outside their visible parent rectangle.
     /// </summary>
+    /// <summary>
+    /// Recreate the screenshot regression: a wrapped navigation FlowLayoutPanel
+    /// in an AutoSize footer displayed Cancel but clipped Next and Back.
+    /// These tests display REAL WinForms handles; they never call Graph or
+    /// invoke the Configure & Verify operation.
+    /// </summary>
+    private static void VerifyIntuneSetupWizardNavigation(List<string> failures)
+    {
+        var config = new CloudAuthConfig
+        {
+            TenantId = "organizations",
+            ClientId = "11111111-1111-4111-8111-111111111111"
+        };
+        foreach (var language in new[] { "en", "ru", "he" })
+        {
+            foreach (var fontScale in new[] { 1F, 2F })
+            {
+                try
+                {
+                    using var wizard = new IntuneSetupWizardDialog(
+                        config, _ => Task.CompletedTask)
+                    {
+                        StartPosition = FormStartPosition.Manual,
+                        ClientSize = new Size(920, 720)
+                    };
+                    using var font = new Font(UiStyle.BodyFont.FontFamily,
+                        UiStyle.BodyFont.Size * fontScale,
+                        FontStyle.Regular, GraphicsUnit.Point);
+                    wizard.Font = font;
+                    wizard.Show();
+                    UiDialogLocalization.Apply(wizard, language);
+
+                    if (FindByName(wizard, "IntuneSetupWizardNavigation")
+                            is not FlowLayoutPanel navigation ||
+                        FindByName(wizard, "IntuneSetupWizardFooter")
+                            is not TableLayoutPanel footer ||
+                        FindByName(wizard, "IntuneSetupWizardBack") is not Button back ||
+                        FindByName(wizard, "IntuneSetupWizardNext") is not Button next ||
+                        FindByName(wizard, "IntuneSetupWizardCancel") is not Button cancel)
+                    {
+                        failures.Add("Intune wizard navigation controls are missing: " +
+                            language + " / " + fontScale);
+                        continue;
+                    }
+
+                    if (navigation.WrapContents ||
+                        navigation.FlowDirection != FlowDirection.RightToLeft ||
+                        navigation.RightToLeft != RightToLeft.No ||
+                        !ReferenceEquals(wizard.AcceptButton, next) ||
+                        !ReferenceEquals(wizard.CancelButton, cancel))
+                        failures.Add("Intune wizard navigation may wrap or lose keyboard actions: " +
+                            language + " / " + fontScale);
+
+                    foreach (var step in new[] { 0, 1, 2 })
+                    {
+                        wizard.PreviewStepForUiSelfTest(step);
+                        UiDialogLocalization.Apply(wizard, language);
+                        wizard.PerformLayout();
+                        Application.DoEvents();
+
+                        var viewport = wizard.RectangleToScreen(wizard.ClientRectangle);
+                        var footerBounds = footer.RectangleToScreen(footer.ClientRectangle);
+                        var navBounds = navigation.RectangleToScreen(navigation.ClientRectangle);
+                        if (!viewport.Contains(footerBounds) ||
+                            !footerBounds.Contains(navBounds))
+                        {
+                            failures.Add("Intune wizard footer is clipped: " +
+                                language + " / " + fontScale + " / step " + step);
+                            continue;
+                        }
+
+                        foreach (var button in new[] { back, next, cancel })
+                        {
+                            var buttonBounds = button.RectangleToScreen(
+                                button.ClientRectangle);
+                            if (!button.Visible || button.IsDisposed ||
+                                buttonBounds.Width < UiStyle.MinimumButtonWidth ||
+                                buttonBounds.Height < UiStyle.MinimumButtonHeight ||
+                                !navBounds.Contains(buttonBounds) ||
+                                !footerBounds.Contains(buttonBounds) ||
+                                !viewport.Contains(buttonBounds))
+                            {
+                                failures.Add("Intune wizard button clipped or missing: " +
+                                    button.Name + " / " + language + " / " +
+                                    fontScale + " / step " + step);
+                            }
+                        }
+
+                        var expectedAction = step == 2
+                            ? UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Configure & Verify")
+                            : UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Next");
+                        if (next.Text != expectedAction)
+                            failures.Add("Intune wizard Next caption is not localized: " +
+                                language + " / step " + step);
+                    }
+
+                    if (wizard.SetupResult is not null)
+                        failures.Add("Navigation-only wizard test unexpectedly ran setup.");
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("Intune wizard navigation regression (" +
+                        language + " / " + fontScale + "): " +
+                        DiagnosticRedaction.Sanitize(ex.Message));
+                }
+            }
+        }
+    }
+
     private static void VerifyDiagnosticCopyVisibility(List<string> failures)
     {
         try
