@@ -24,6 +24,13 @@ lineage. The existing v0.32.5 release and installed fleets are unchanged.
 - Run repeatable WinForms test sequences EN -> RU -> HE -> EN, including
   dynamic control registration, deep menus, LTR secret inputs, native
   TabControl mirroring, and 100%-200% UI scaling.
+- Translate all seven Helpdesk deployment checklist items, non-secret readiness
+  status labels, and checked-step counts in EN/RU/HE. Keep CheckedListBox
+  check state independent of localized captions and do not translate live
+  Windows service identities or recovery data.
+- On pull requests, validate the published stable main base commit instead of
+  requiring an unreleased PR head to be published. Keep strict latest-release
+  and immutable-tag ancestry enforcement for pushes directly to main.
 - Keep existing authorization, JIT, RBAC, audit journal/SIEM, recovery
   secret handling, release trust, rollback holds and update opt-in unchanged.
 
