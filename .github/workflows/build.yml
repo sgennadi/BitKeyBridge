@@ -40,7 +40,7 @@ jobs:
             $sdks = @(dotnet --list-sdks)
           }
           $available = @($sdks | Where-Object {
-            $_ -match '^10\\.0\\.\\d+\\s+\\['
+            $_ -match '^10\.0\.\d+\s+\['
           }).Count -gt 0
           "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           if ($available) { Write-Host 'Using preinstalled .NET 10 SDK.' }
@@ -77,7 +77,7 @@ jobs:
             $sdks = @(dotnet --list-sdks)
           }
           $available = @($sdks | Where-Object {
-            $_ -match '^10\\.0\\.\\d+\\s+\\['
+            $_ -match '^10\.0\.\d+\s+\['
           }).Count -gt 0
           "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           if ($available) { Write-Host 'Using preinstalled .NET 10 SDK.' }
