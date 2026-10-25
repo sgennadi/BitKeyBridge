@@ -113,6 +113,11 @@ Assert-Source ($mainLocalization.Contains('if (!captionChanged && !widthChanged)
 Assert-Source ($mainLocalization.Contains('private readonly UiHeaderWidthCache _headerWidthCache = new();') -and
                $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.DataGrid') -and
                $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.ListView')) 'MainForm header localization must reuse fixed-caption measurements for both WinForms grid and list headers.'
+Assert-Source ($mainLocalization.Contains('if (!textChanged && !widthChanged)') -and
+               $mainLocalization.Contains('list.BeginUpdate();') -and
+               $mainLocalization.Contains('if (updating && !list.IsDisposed)') -and
+               -not $mainLocalization.Contains('.Concat(_localizedListViewHeaders.Keys')) 'No-op and hidden ListView headers must not force native repaints or parent layout passes.'
+Assert-Source ($layoutSelfTest.Contains('Export scope ListView headers were not localized:')) 'Native RU/HE/EN tests must continue verifying ListView caption translations.'
 Assert-Source ($headerCache.Contains('UiStaticCaptionCatalog.Contains(sourceEnglish)') -and
                $headerCache.Contains('UiStaticCaptionCatalog.TranslateOrOriginal("ru", sourceEnglish)') -and
                $headerCache.Contains('UiStaticCaptionCatalog.TranslateOrOriginal("he", sourceEnglish)') -and
