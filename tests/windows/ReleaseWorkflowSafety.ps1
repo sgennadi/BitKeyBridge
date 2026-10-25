@@ -236,6 +236,21 @@ if (-not $pushBranches[0].Contains('"release/v0.33.0"') -or
     throw 'v0.33.0 QA branch must not publish without an explicit approved gate.'
 }
 
+# PR provenance checks must examine the published main BASE, not a future
+# version proposed by a pull request. Direct pushes remain strictly gated.
+$stableWorkflowPath = Join-Path $PSScriptRoot '../../.github/workflows/main-stable-provenance.yml'
+$stableWorkflow = Get-Content -LiteralPath $stableWorkflowPath -Raw
+$expectedCheckout = @'
+ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+'@.Trim()
+if (-not $stableWorkflow.Contains($expectedCheckout) -or
+    -not $stableWorkflow.Contains('branches: [main]') -or
+    -not $stableWorkflow.Contains('gh api "repos/$GITHUB_REPOSITORY/releases/latest"') -or
+    -not $stableWorkflow.Contains('git merge-base --is-ancestor "$tag_commit" HEAD') -or
+    $stableWorkflow.Contains('continue-on-error: true')) {
+    throw 'PR provenance must test published main base; pushes to main remain strict.'
+}
+
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch
