@@ -1,6 +1,6 @@
 ## 0.33.0
 
-**In development — WinForms RTL/localization and cold-layout optimizations. NOT PUBLISHED.**
+**UNSIGNED Stable candidate — release gate prepared; final exact-source CI pending.**
 
 - Apply known static EN/RU/HE captions throughout nested Tools menus. Keep original English source strings independently of `ToolStripItem.Tag`, preserving command metadata, and update dynamically added submenu captions when their parent opens.
 - Change expensive per-control RTL properties only on visible workspaces during warm language switches. Defer hidden caption direction to `VisibleChanged`; keep caption text translated, recovery/identity fields LTR, and immediate direction updates in headless self-tests.
@@ -12,6 +12,7 @@
 - Fix Intune / Entra Setup Wizard navigation: Back, Next and Cancel now occupy a stable, non-wrapping three-column footer. The old horizontal FlowLayoutPanel was forcibly re-wrapped by DpiAwareForm on load/DPI refresh, leaving only Cancel visible. Cover all three steps, EN/RU/HE and 100%/200% text scaling in native WinForms tests without connecting to Graph.
 - Reject missing tenant ID, missing/malformed/all-zero client GUID and missing certificate thumbprint **before** saving settings or starting Microsoft Graph sign-in. Show localized actionable setup instructions instead of `ArgumentException: tenantId is required`, and discard any stale token. Never auto-run administrative setup or silently grant permissions.
 - Fix interrupted Microsoft Entra Device Code sign-in: closing/cancelling the modal window now stops token polling, and an explicit Cancel action is shown. Cancel from Cloud Settings immediately stops the marquee; guard delayed Progress callbacks after cancellation and dispose. Apply the same cancellation semantics to First-Run / Repair, certificate rollover and the Intune setup wizard. Add no-network UI and PowerShell source regressions.
+- A dedicated v0.33.0 release guard now requires exact-branch/message, same-SHA three-architecture native UI/LAPS/CodeQL/broker/rollback success, owner release authorization, SHA256/SBOM/provenance and a tamper-tested pinned Canary installer. No automated rollout or signed-only bypass.
 - No performance claims before fresh native Windows/RDP measurements and a green exact-source CI run. Public v0.32.5 remains the rollback baseline.
 
 ## 0.32.5

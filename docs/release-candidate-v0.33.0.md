@@ -1,6 +1,6 @@
 # BitKeyBridge v0.33.0 — development and acceptance plan
 
-**State:** development only, UNSIGNED, not a published Stable or prerelease.
+**State:** release workflow prepared; publication pending exact-source CI and the explicitly gated release commit. UNSIGNED; not yet published.
 
 **Source:** `release/v0.33.0`, starting from the published v0.32.5
 lineage. The existing v0.32.5 release and installed fleets are unchanged.
@@ -47,9 +47,11 @@ lineage. The existing v0.32.5 release and installed fleets are unchanged.
 4. Two-identity protected Audit Broker integration on disposable GitHub
    Windows runners.
 5. Legacy upgrade, staging and rollback validation from supported baselines.
-6. No publishing from this branch or from the v0.33.0 tag until a dedicated,
-   reviewed exact-source stable release gate is added with owner authorization.
-   In particular, a generic `Release v0.33.0` message is insufficient.
+6. Publishing is permitted only by the dedicated, approved `Release v0.33.0`
+   branch commit after all the above same-SHA checks have succeeded. The
+   workflow verifies the authorization file, release notes, tamper-tested
+   SHA-pinned Canary installer, SHA256SUMS and provenance before publishing.
+   A tag push alone cannot release v0.33.0.
 
 ## Native Windows acceptance before stable / fleet deployment
 
