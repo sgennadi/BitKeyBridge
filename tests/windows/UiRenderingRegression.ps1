@@ -114,12 +114,15 @@ Assert-Source ($mainLocalization.Contains('private readonly UiHeaderWidthCache _
                $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.DataGrid') -and
                $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.ListView')) 'MainForm header localization must reuse fixed-caption measurements for both WinForms grid and list headers.'
 Assert-Source ($headerCache.Contains('UiStaticCaptionCatalog.Contains(sourceEnglish)') -and
+               $headerCache.Contains('UiStaticCaptionCatalog.TranslateOrOriginal("ru", sourceEnglish)') -and
+               $headerCache.Contains('UiStaticCaptionCatalog.TranslateOrOriginal("he", sourceEnglish)') -and
                $headerCache.Contains('DefaultMaxMeasurements = 512') -and
                $headerCache.Contains('if (_widths.Count >= _capacity)') -and
                $headerCache.Contains('font.GdiCharSet') -and
                $headerCache.Contains('font.GdiVerticalFont')) 'Fixed header cache must reject arbitrary values, bound retention, and differentiate font/DPI contexts.'
 Assert-Source ($layoutSelfTest.Contains('VerifyFixedHeaderWidthCaching(failures)') -and
                $layoutSelfTest.Contains('Fixed header width cache accepted arbitrary live metadata.') -and
+               $layoutSelfTest.Contains('Fixed header width cache accepted an untrusted caption value.') -and
                $layoutSelfTest.Contains('Fixed header cache did not evict the oldest measurement.')) 'Native WinForms tests must verify cache identity, rejection, eviction, and DPI/font separation.'
 Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
                $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
