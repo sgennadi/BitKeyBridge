@@ -12,6 +12,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
     private readonly Label _stepDescription = new();
     private readonly Panel _pageHost = new();
     private readonly TextBox _tenant = new();
+    private readonly UiStatusLabel _tenantValidation = new();
+    private readonly string _uiLanguage;
     private readonly CheckBox _bitLocker = new();
     private readonly CheckBox _devices = new();
     private readonly CheckBox _intuneRotation = new();
@@ -40,8 +42,11 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
     public IntuneSetupWizardDialog(
         CloudAuthConfig existingConfig,
-        Func<DeviceCodeInfo, Task> showDeviceCode)
+        Func<DeviceCodeInfo, Task> showDeviceCode,
+        string? uiLanguage = null)
     {
+        _uiLanguage = UiLanguageService.Normalize(
+            uiLanguage ?? UiLanguageService.ReadPreferred());
         _existingConfig =
             existingConfig ??
             new CloudAuthConfig();
@@ -100,6 +105,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         Controls.Add(
             root);
 
+        _stepCaption.Name = "IntuneWizardStepCaption";
         _stepCaption.AutoSize =
             true;
         _stepCaption.Font =
@@ -115,6 +121,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             0,
             0);
 
+        _stepDescription.Name = "IntuneWizardStepDescription";
         _stepDescription.AutoSize =
             true;
         _stepDescription.MaximumSize =
@@ -264,9 +271,10 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             "Wizard administrator status";
         UiStyle.SetStatus(
             status,
-            admin
-                ? "Administrator rights are available. The local certificate can be created and configured."
-                : "Administrator rights are required. Restart BitKeyBridge elevated before running this wizard.",
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                admin
+                    ? "Administrator rights are available. The local certificate can be created and configured."
+                    : "Administrator rights are required. Restart BitKeyBridge elevated before running this wizard."),
             admin
                 ? UiStatusKind.Success
                 : UiStatusKind.Error);
@@ -295,21 +303,34 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         page.Controls.Add(
             tenantLabel);
 
-        _tenant.Dock =
-            DockStyle.Top;
+        _tenant.Name = "IntuneSetupWizardTenantId";
+        _tenant.PlaceholderText = "Tenant GUID or verified domain";
+        _tenant.Dock = DockStyle.Top;
+        var initialTenant = _existingConfig.TenantId?.Trim() ?? string.Empty;
         _tenant.Text =
-            string.IsNullOrWhiteSpace(
-                _existingConfig.TenantId)
-                ? "organizations"
-                : _existingConfig.TenantId;
+            EntraSetupService.ValidateTenantForAdministrativeSetup(
+                initialTenant) is null ? initialTenant : string.Empty;
         _tenant.Margin =
             new Padding(
                 0,
                 0,
                 0,
                 UiStyle.SectionGap);
-        page.Controls.Add(
-            _tenant);
+        page.Controls.Add(_tenant);
+
+        _tenantValidation.Name = "IntuneSetupWizardTenantValidationStatus";
+        UiStyle.ConfigureStatusLabel(_tenantValidation);
+        _tenantValidation.AccessibleName = "Intune tenant validation guidance";
+        _tenantValidation.Margin =
+            new Padding(0, 0, 0, UiStyle.SectionGap);
+        void ShowTenantGuidance() => UiStyle.SetStatus(
+            _tenantValidation,
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                "Enter an exact tenant GUID or verified domain for administrative setup."),
+            UiStatusKind.Neutral);
+        _tenant.TextChanged += (_, _) => ShowTenantGuidance();
+        ShowTenantGuidance();
+        page.Controls.Add(_tenantValidation);
 
         page.Controls.Add(
             CreateBody(
@@ -372,6 +393,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             CreateHeading(
                 "Review, configure and verify"));
 
+        _review.Name = "IntuneWizardReview";
         _review.ReadOnly =
             true;
         _review.Dock =
@@ -401,7 +423,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             "Intune setup wizard status";
         UiStyle.SetStatus(
             _status,
-            "Review the settings, then choose Configure & Verify.",
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                "Review the settings, then choose Configure & Verify."),
             UiStatusKind.Neutral);
         page.Controls.Add(
             _status);
@@ -553,12 +576,17 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
     private void UpdateReview()
     {
+        // RichTextBox contains dynamic tenant IDs and fixed text. Translate
+        // only fixed review labels; never change tenant identifiers, Graph
+        // permission identifiers or certificate values.
+        string Caption(string english) =>
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage, english);
+
         _review.Text =
-            "Tenant: " +
-            _tenant.Text.Trim() +
+            Caption("Tenant:") + " " + _tenant.Text.Trim() +
             Environment.NewLine +
             Environment.NewLine +
-            "Microsoft Graph permissions:" +
+            Caption("Microsoft Graph permissions:") +
             Environment.NewLine +
             "  • BitlockerKey.Read.All" +
             Environment.NewLine +
@@ -571,23 +599,81 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
                 : string.Empty) +
             Environment.NewLine +
             Environment.NewLine +
-            "Setup actions:" +
+            Caption("Setup actions:") +
             Environment.NewLine +
-            "  • Create or repair App Registration" +
+            "  • " + Caption("Create or repair App Registration") +
             Environment.NewLine +
-            "  • Create or repair Enterprise Application" +
+            "  • " + Caption("Create or repair Enterprise Application") +
             Environment.NewLine +
-            "  • Grant application permissions and tenant-wide delegated admin consent" +
+            "  • " + Caption("Grant application permissions and tenant-wide delegated admin consent") +
             Environment.NewLine +
-            "  • Create/reuse a LocalMachine certificate and upload its public key" +
+            "  • " + Caption("Create/reuse a LocalMachine certificate and upload its public key") +
             Environment.NewLine +
-            "  • Save only tenant/client/certificate metadata" +
+            "  • " + Caption("Save only tenant/client/certificate metadata") +
             Environment.NewLine +
-            "  • Test BitLocker metadata and Intune managed-device read access" +
+            "  • " + Caption("Test BitLocker metadata and Intune managed-device read access") +
             Environment.NewLine +
             Environment.NewLine +
-            "The wizard does not rotate a BitLocker key or retrieve a LAPS password. " +
-            "Existing tenant write grants are not revoked automatically; review Enterprise Applications permissions.";
+            Caption("The wizard does not rotate a BitLocker key or retrieve a LAPS password. Existing tenant write grants are not revoked automatically; review Enterprise Applications permissions.");
+    }
+
+    private bool ValidateTenantForSetup()
+    {
+        var error = EntraSetupService.ValidateTenantForAdministrativeSetup(
+            _tenant.Text);
+        if (error is null)
+        {
+            UiStyle.SetStatus(_tenantValidation,
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Tenant is ready for administrative setup."),
+                UiStatusKind.Success);
+            return true;
+        }
+
+        UiStyle.SetStatus(_tenantValidation,
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage, error),
+            UiStatusKind.Warning);
+        if (_step != 1)
+            ShowStep(1);
+        if (_tenant.CanFocus)
+            _tenant.Focus();
+        return false;
+    }
+
+    // Uses the actual Next handler; never starts Graph or creates an app.
+    internal bool PreviewTenantValidationForUiSelfTest()
+    {
+        if (_running || _completed)
+            return false;
+        var originalStep = _step;
+        var originalTenant = _tenant.Text;
+        try
+        {
+            ShowStep(1);
+            _tenant.Text = "organizations";
+            MoveNextAsync().GetAwaiter().GetResult();
+            var aliasRejected = _step == 1 &&
+                _tenantValidation.Text ==
+                    UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                        "Choose a specific tenant GUID or verified domain; organizations, common and consumers cannot be used for administrator setup.");
+
+            _tenant.Text = "not-a-tenant";
+            MoveNextAsync().GetAwaiter().GetResult();
+            var malformedRejected = _step == 1 &&
+                _tenantValidation.Text ==
+                    UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                        "Enter a valid Microsoft Entra tenant GUID or verified DNS domain.");
+
+            _tenant.Text = "contoso.onmicrosoft.com";
+            MoveNextAsync().GetAwaiter().GetResult();
+            return aliasRejected && malformedRejected && _step == 2 &&
+                SetupResult is null;
+        }
+        finally
+        {
+            _tenant.Text = originalTenant;
+            ShowStep(originalStep);
+        }
     }
 
     private async Task MoveNextAsync()
@@ -615,17 +701,15 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
         if (_step == 1)
         {
-            if (string.IsNullOrWhiteSpace(
-                    _tenant.Text))
-            {
-                _tenant.Focus();
+            if (!ValidateTenantForSetup())
                 return;
-            }
-
-            ShowStep(
-                2);
+            ShowStep(2);
             return;
         }
+
+        // Validate again immediately before any privileged Graph operation.
+        if (!ValidateTenantForSetup())
+            return;
 
         await RunSetupAsync();
     }
@@ -823,7 +907,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         {
             UiStyle.SetStatus(
                 _status,
-                "Starting native Entra / Intune setup...",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Starting native Entra / Intune setup..."),
                 UiStatusKind.Busy);
 
             using var setup =
@@ -860,7 +945,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
             UiStyle.SetStatus(
                 _status,
-                "Configuration written. Verifying certificate authentication...",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Configuration written. Verifying certificate authentication..."),
                 UiStatusKind.Busy);
 
             using var graph =
@@ -914,7 +1000,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
             UiStyle.SetStatus(
                 _status,
-                "Setup and non-destructive Graph verification completed successfully.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Setup and non-destructive Graph verification completed successfully."),
                 UiStatusKind.Success);
 
             _diagnostics.ShowMessage(
@@ -954,14 +1041,16 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         {
             UiStyle.SetStatus(
                 _status,
-                "Setup canceled. Re-running the wizard is safe and repairs partially completed configuration.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Setup canceled. Re-running the wizard is safe and repairs partially completed configuration."),
                 UiStatusKind.Warning);
         }
         catch (Exception ex)
         {
             UiStyle.SetStatus(
                 _status,
-                "Setup failed. Review diagnostics below; the wizard can be run again to repair configuration.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Setup failed. Review diagnostics below; the wizard can be run again to repair configuration."),
                 UiStatusKind.Error);
 
             _diagnostics.ShowError(

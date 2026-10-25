@@ -27,6 +27,7 @@ $homeSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\Mai
 $startConnectionSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.StartConnection.cs') -Raw
 $startupWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\StartupConnectionWizardDialog.cs') -Raw
 $cloudWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\CloudConnectionWizardDialog.cs') -Raw
+$setupService = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\EntraSetupService.cs') -Raw
 $cloudMain = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.cs') -Raw
 $intuneSetup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\IntuneSetupWizardDialog.cs') -Raw
 $deviceCodeDialog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DeviceCodeDialog.cs') -Raw
@@ -115,6 +116,11 @@ Assert-Source ($startConnectionSource.Contains('HomeConnectionPrimaryActions') -
 Assert-Source ($startConnectionSource.Contains('_startAdIdentityPanel.Visible = ad && _connectionOptionsExpanded') -and $startConnectionSource.Contains('_startDirectActionsPanel.Visible = _connectionOptionsExpanded')) 'Extra AD controls must stay collapsed until the operator expands Connection options.'
 Assert-Source ($startupWizardSource.Contains('Start without a connection') -and $startupWizardSource.Contains('UiStyle.CreateActionButton("Cancel", DialogResult.Cancel)')) 'Offline entry and cancellation must be distinct connection wizard actions.'
 Assert-Source ($cloudWizardSource.Contains('CloudWizardPermissionsToggle') -and $cloudWizardSource.Contains('if (_adminSetup.Checked)') -and $cloudWizardSource.Contains('_tenant.Enabled = _approvedApp.Checked')) 'Cloud permissions guidance must be expandable and administrator bootstrap cannot require an existing app.'
+Assert-Source ($setupService.Contains('ValidateTenantForAdministrativeSetup(tenant)') -and $setupService.Contains('throw new ArgumentException(tenantError, nameof(tenant))')) 'Privileged Entra setup must reject ambiguous tenant before Graph.'
+Assert-Source ($intuneSetup.Contains('PreviewTenantValidationForUiSelfTest()') -and $intuneSetup.Contains('if (!ValidateTenantForSetup())')) 'Intune setup must validate tenant both before Next and Configure & Verify.'
+Assert-Source ($cloudMain.Contains('var tenantProblem = EntraSetupService.ValidateTenantForAdministrativeSetup(')) 'First-Run / Repair must not persist or consent to ambiguous tenant.'
+Assert-Source ($cloudWizardSource.Contains('applicationId == Guid.Empty')) 'Ordinary Cloud sign-in wizard must reject zero application GUID.'
+Assert-Source ($layoutSelfTest.Contains('invalidAdminTenants') -and $layoutSelfTest.Contains('Administrative Graph preflight')) 'Offline UI self-test must reject alias, malformed and empty admin tenants.'
 Assert-Source ($cloudMain.Contains('if (dialog.ShowDialog(this) != DialogResult.OK)') -and $cloudMain.Contains('throw new OperationCanceledException(')) 'Closing the Device Code dialog must cancel token polling rather than leave a progress marquee running.'
 Assert-Source ($deviceCodeDialog.Contains('DialogResult.Cancel') -and $deviceCodeDialog.Contains('CancelButton = cancel') -and $deviceCodeDialog.Contains('DeviceCodeActions')) 'Device Code must have an explicit Cancel action in a non-wrapping footer.'
 Assert-Source ($cloudMain.Contains('_cloudProgress.MarqueeAnimationSpeed = 0;') -and $cloudMain.Contains('_cloudProgress.Visible = false;') -and $cloudMain.Contains('cancellation.IsCancellationRequested')) 'Cancel must stop the Graph marquee immediately and suppress duplicate cancellation.'

@@ -710,7 +710,7 @@ public static class UiLayoutSelfTest
                 try
                 {
                     using var wizard = new IntuneSetupWizardDialog(
-                        config, _ => Task.CompletedTask)
+                        config, _ => Task.CompletedTask, language)
                     {
                         StartPosition = FormStartPosition.Manual,
                         ClientSize = new Size(920, 720)
@@ -756,6 +756,20 @@ public static class UiLayoutSelfTest
                         wizard.PerformLayout();
                         Application.DoEvents();
 
+                        var englishStep = step switch
+                        {
+                            0 => "Step 1 of 3 — Prerequisites",
+                            1 => "Step 2 of 3 — Capabilities",
+                            _ => "Step 3 of 3 — Configure & verify"
+                        };
+                        var expectedStep = UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, englishStep);
+                        if (FindByName(wizard, "IntuneWizardStepCaption")
+                                is not Label stepHeading ||
+                            stepHeading.Text != expectedStep)
+                            failures.Add("Intune wizard step title is not localized: " +
+                                language + " / step " + step);
+
                         var viewport = wizard.RectangleToScreen(wizard.ClientRectangle);
                         var footerBounds = footer.RectangleToScreen(footer.ClientRectangle);
                         var navBounds = navigation.RectangleToScreen(navigation.ClientRectangle);
@@ -794,6 +808,22 @@ public static class UiLayoutSelfTest
                                 language + " / step " + step);
                     }
 
+                    wizard.PreviewStepForUiSelfTest(2);
+                    UiDialogLocalization.Apply(wizard, language);
+                    var expectedReview = UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Setup actions:");
+                    if (FindByName(wizard, "IntuneWizardReview")
+                            is not RichTextBox review ||
+                        !review.Text.Contains(expectedReview,
+                            StringComparison.Ordinal) ||
+                        !review.Text.Contains("BitlockerKey.Read.All",
+                            StringComparison.Ordinal))
+                        failures.Add("Intune wizard review translation lost static captions or Graph scope IDs: " +
+                            language + " / " + fontScale);
+
+                    if (!wizard.PreviewTenantValidationForUiSelfTest())
+                        failures.Add("Intune wizard allowed a missing, generic or malformed tenant: " +
+                            language + " / " + fontScale);
                     if (!wizard.PreviewCancellationForUiSelfTest())
                         failures.Add("Intune wizard Cancel failed to stop marquee or dismisses early: " +
                             language + " / " + fontScale);
@@ -2096,6 +2126,30 @@ public static class UiLayoutSelfTest
         // No sign-in callback, network request, disk write or Graph exception
         // is needed to validate these non-secret prerequisites.
         const string clientGuid = "11111111-1111-4111-8111-111111111111";
+        // Privileged app creation requires a specific tenant, unlike
+        // ordinary delegated Device Code where "organizations" can be used.
+        var invalidAdminTenants = new string?[]
+        {
+            null, "", " ", "organizations", "common", "consumers",
+            "00000000-0000-0000-0000-000000000000",
+            "not-a-tenant", "https://contoso.onmicrosoft.com",
+            "contoso.onmicrosoft.com/path", "contoso..com",
+            "-bad.contoso.com", "contoso.com:443"
+        };
+        foreach (var tenant in invalidAdminTenants)
+            if (EntraSetupService.ValidateTenantForAdministrativeSetup(
+                    tenant) is null)
+                failures.Add("Administrative Graph preflight accepted an ambiguous tenant.");
+
+        foreach (var tenant in new[]
+        {
+            "contoso.onmicrosoft.com", "Contoso.COM",
+            "11111111-1111-4111-8111-111111111111"
+        })
+            if (EntraSetupService.ValidateTenantForAdministrativeSetup(
+                    tenant) is not null)
+                failures.Add("Administrative Graph preflight rejected a valid tenant.");
+
         if (MainForm.CloudConnectionPrerequisiteError(null, clientGuid,
                 null, certificateMode: false) is null ||
             MainForm.CloudConnectionPrerequisiteError(" ", clientGuid,

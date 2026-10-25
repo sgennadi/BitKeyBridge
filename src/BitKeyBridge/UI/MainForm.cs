@@ -990,7 +990,23 @@ public sealed partial class MainForm : DpiAwareForm
             return;
         }
 
-        SaveCloudFields();
+        // First-Run / Repair is another privileged Graph setup path. Reject
+        // blank/generic tenant IDs before any config save, consent or network.
+        var tenantProblem = EntraSetupService.ValidateTenantForAdministrativeSetup(
+            _cloudTenant.Text);
+        if (tenantProblem is not null)
+        {
+            var guidance = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, tenantProblem);
+            UiStyle.SetStatus(_cloudStatus, guidance, UiStatusKind.Warning);
+            _cloudDiagnostics.ShowMessage(
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguageCode,
+                    "Microsoft Entra connection settings are incomplete."),
+                guidance);
+            if (_cloudTenant.CanFocus)
+                _cloudTenant.Focus();
+            return;
+        }
 
         var usingDefaultBootstrap =
             string.IsNullOrWhiteSpace(
@@ -2368,7 +2384,8 @@ public sealed partial class MainForm : DpiAwareForm
         using var wizard =
             new IntuneSetupWizardDialog(
                 _cloudConfig,
-                ShowDeviceCodeAsync);
+                ShowDeviceCodeAsync,
+                _uiLanguageCode);
 
         if (wizard.ShowDialog(this) !=
             DialogResult.OK)
