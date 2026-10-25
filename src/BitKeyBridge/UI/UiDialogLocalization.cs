@@ -14,6 +14,13 @@ internal static class UiDialogLocalization
     {
         internal string Language = "en";
         internal string? English;
+        // Only catalogued UI hints are translated. Remember their English
+        // source and last generated value so HE -> RU -> EN roundtrips do
+        // not retain stale localized placeholders or menu tooltips.
+        internal string? OriginalPlaceholder;
+        internal string? LastLocalizedPlaceholder;
+        internal string? OriginalToolTip;
+        internal string? LastLocalizedToolTip;
         internal bool Updating;
     }
 
@@ -52,6 +59,19 @@ internal static class UiDialogLocalization
             GroupBox or TabPage or LinkLabel ||
         control is Label and not UiStatusLabel;
 
+    private static string TranslatePreservedHint(
+        string current, string? previous, ref string? english, string code)
+    {
+        // Changed externally since the previous localization: start from the
+        // new English literal only if it is in the fixed catalog. An unknown
+        // hint belongs to the caller (possibly dynamic identity metadata).
+        if (!string.Equals(current, previous, StringComparison.Ordinal))
+            english = UiStaticCaptionCatalog.Contains(current) ? current : null;
+        return english is null
+            ? current
+            : UiStaticCaptionCatalog.TranslateOrOriginal(code, english);
+    }
+
     private static void ApplyControls(Control control, string code)
     {
         if (control.IsDisposed || control.Disposing)
@@ -85,11 +105,17 @@ internal static class UiDialogLocalization
             UpdateCaption(control, state);
         }
 
-        if (control is TextBox textBox &&
-            UiStaticCaptionCatalog.TryTranslate(code, textBox.PlaceholderText,
-                out var placeholder) &&
-            textBox.PlaceholderText != placeholder)
-            textBox.PlaceholderText = placeholder;
+        if (control is TextBox textBox)
+        {
+            var placeholder = TranslatePreservedHint(
+                textBox.PlaceholderText, state.LastLocalizedPlaceholder,
+                ref state.OriginalPlaceholder, code);
+            if (!string.Equals(textBox.PlaceholderText, placeholder,
+                    StringComparison.Ordinal))
+                textBox.PlaceholderText = placeholder;
+            state.LastLocalizedPlaceholder =
+                state.OriginalPlaceholder is null ? null : placeholder;
+        }
 
         if (control is ListView list)
             foreach (ColumnHeader header in list.Columns)
@@ -213,6 +239,15 @@ internal static class UiDialogLocalization
             if (item.Text != translation)
                 item.Text = translation;
         }
+
+        var tooltip = TranslatePreservedHint(
+            item.ToolTipText, state.LastLocalizedToolTip,
+            ref state.OriginalToolTip, code);
+        if (!string.Equals(item.ToolTipText, tooltip, StringComparison.Ordinal))
+            item.ToolTipText = tooltip;
+        state.LastLocalizedToolTip =
+            state.OriginalToolTip is null ? null : tooltip;
+
         if (item is ToolStripDropDownItem menu)
             foreach (ToolStripItem child in menu.DropDownItems)
                 ApplyMenuItem(child, code);
