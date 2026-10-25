@@ -1,5 +1,7 @@
 # BitKeyBridge
 
+**v0.33.0 is under development on `release/v0.33.0`; it is not published.** It targets warm EN/RU/HE switches, nested menu translation, preserving ToolStrip command data, and reducing redundant initial label measurements. Source changes and automated regressions do not establish a Windows/RDP speedup; security/production acceptance and immutable release approval remain separate. Latest publicly released Stable is v0.32.5.
+
 **Stable v0.32.5 (UNSIGNED; exact-source GitHub Actions release).** Adds non-secret performance breakdowns for WinForms initial DPI/font refresh, actual warm native RTL mirroring and tab handle recreation, and separate UI callback wait versus viewport reflow for Start/BitLocker/LAPS/Devices/Helpdesk/Diagnostics/Settings. Preserves native Hebrew layout, LTR recovery and identifier fields, and Copy diagnostics via status bar, Tools or Ctrl+Shift+P. Portable Windows x64/x86/ARM64 ZIPs include SHA256SUMS, SBOM, provenance and an optional exact-hash-pinned Canary installer after all security gates. v0.32.4 remains available for rollback. This release adds instrumentation rather than claiming measured speed improvements; fresh Windows/RDP timings are needed. No GPO/Intune enrollment, new unsigned-update opt-in or signed-only trust bypass.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
