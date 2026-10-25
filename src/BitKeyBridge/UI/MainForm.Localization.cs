@@ -34,7 +34,8 @@ public sealed partial class MainForm
             ["RunProtectedAuditCheckButton"] = "MainCheckProtectedAudit",
             ["RunUiPerformanceDiagnosticsButton"] = "MainUiPerformance",
             ["ResetVisualLayoutButton"] = "MainResetLayout",
-            ["CloudEnableRotationPermission"] = "MainCloudRotation"
+            ["CloudEnableRotationPermission"] = "MainCloudRotation",
+            ["DevicesOpenCloudSettingsButton"] = "DevicesConfigureCloud"
         };
 
     // Strong references are kept only to controls with fixed captions.
