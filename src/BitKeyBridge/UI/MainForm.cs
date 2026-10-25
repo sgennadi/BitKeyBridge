@@ -1928,6 +1928,7 @@ public sealed partial class MainForm : DpiAwareForm
         _unifiedProgress.Visible =
             true;
         _unifiedDiagnostics.Clear();
+        SetDevicesCloudWarningAction(false);
 
         try
         {
@@ -2010,6 +2011,7 @@ public sealed partial class MainForm : DpiAwareForm
                         : "Active Directory is not connected and Cloud is not configured.",
                     UiStatusKind.Error);
 
+                SetDevicesCloudWarningAction(!cloudReady);
                 if (cloudConfigured)
                 {
                     _unifiedDiagnostics.ShowMessage(
@@ -2102,6 +2104,8 @@ public sealed partial class MainForm : DpiAwareForm
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
 
+            SetDevicesCloudWarningAction(!cloudReady);
+
             if (sourceReport?.IsPartial == true)
             {
                 _unifiedDiagnostics.ShowMessage(
@@ -2138,6 +2142,7 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (OperationCanceledException)
         {
+            SetDevicesCloudWarningAction(false);
             UiStyle.SetStatus(
                 _unifiedStatus,
                 "Device search canceled.",
@@ -2145,6 +2150,7 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
+            SetDevicesCloudWarningAction(false);
             UiStyle.SetStatus(
                 _unifiedStatus,
                 "Device search failed. Review diagnostics below.",
