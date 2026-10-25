@@ -35,6 +35,7 @@ $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyB
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $dialogLocalizer = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiDialogLocalization.cs') -Raw
 $mainLocalization = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Localization.cs') -Raw
+$headerCache = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiHeaderWidthCache.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 $telemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutTelemetry.cs') -Raw
 $cleanup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\UpdateStagingCleanupService.cs') -Raw
@@ -109,6 +110,20 @@ Assert-Source ($layoutSelfTest.Contains('RU/HE/EN modal hint roundtrip or live d
 Assert-Source ($mainLocalization.Contains('if (!captionChanged && !widthChanged)') -and
                $mainLocalization.Contains('if (suspended)') -and
                $mainLocalization.Contains('grid.ResumeLayout(performLayout: grid.Visible)')) 'Localized DataGridView must skip no-op layout while remeasuring real text or DPI changes.'
+Assert-Source ($mainLocalization.Contains('private readonly UiHeaderWidthCache _headerWidthCache = new();') -and
+               $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.DataGrid') -and
+               $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.ListView')) 'MainForm header localization must reuse fixed-caption measurements for both WinForms grid and list headers.'
+Assert-Source ($headerCache.Contains('UiStaticCaptionCatalog.Contains(sourceEnglish)') -and
+               $headerCache.Contains('DefaultMaxMeasurements = 512') -and
+               $headerCache.Contains('if (_widths.Count >= _capacity)') -and
+               $headerCache.Contains('font.GdiCharSet') -and
+               $headerCache.Contains('font.GdiVerticalFont')) 'Fixed header cache must reject arbitrary values, bound retention, and differentiate font/DPI contexts.'
+Assert-Source ($layoutSelfTest.Contains('VerifyFixedHeaderWidthCaching(failures)') -and
+               $layoutSelfTest.Contains('Fixed header width cache accepted arbitrary live metadata.') -and
+               $layoutSelfTest.Contains('Fixed header cache did not evict the oldest measurement.')) 'Native WinForms tests must verify cache identity, rejection, eviction, and DPI/font separation.'
+Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
+               $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
+               $telemetry.Contains('RecordHeaderWidthCacheMiss()')) 'Header-cache diagnostics must aggregate only hit/miss counts without retaining any live captions.'
 Assert-Source ($cleanup.Contains('LastModifiedTreeUtcOrRejectReparse') -and $cleanup.Contains('UpdateRollbackHoldService.IsActiveForVersion') -and $housekeeping.Contains('UpdateStagingCleanupService.Run(')) 'Daily housekeeping must safely prune only old updater staging folders, preserving rollback and reparse-point protections.'
 Assert-Source ($layoutSelfTest.Contains('VerifyNestedWorkspaceViewport(main, formName, scenario, failures)')) 'WinForms runtime must test real nested sizes after tab switches.'
 Assert-Source ($layoutSelfTest.Contains('content.Size = new Size(') -and $layoutSelfTest.Contains('main.ReflowMainViewport()')) 'Runtime must reproduce a stale 200x100-style content viewport.'
