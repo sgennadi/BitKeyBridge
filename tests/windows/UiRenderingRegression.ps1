@@ -33,6 +33,8 @@ $intuneSetup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\In
 $deviceCodeDialog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DeviceCodeDialog.cs') -Raw
 $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
+$dialogLocalizer = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiDialogLocalization.cs') -Raw
+$mainLocalization = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Localization.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
 $telemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutTelemetry.cs') -Raw
 $cleanup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\UpdateStagingCleanupService.cs') -Raw
@@ -96,6 +98,17 @@ Assert-Source ($viewport.Contains('UiTabNavigationTelemetry.RecordDispatch') -an
 Assert-Source ($diagnostics.Contains('RunUiPerformanceDiagnosticsButton') -and $diagnostics.Contains('UiTabNavigationTelemetry.Report()') -and $telemetry.Contains('Interlocked.Increment')) 'Diagnostics must expose bounded navigation and non-secret repaint timings.'
 Assert-Source ($shell.Contains('ApplyLocalizedShellCaptions(rtl)') -and $shell.Contains('RightToLeftLayout = false')) 'Hebrew selection must not re-create all native MainForm controls.'
 Assert-Source ($layoutSelfTest.Contains('Language switch left an empty or stale caption')) 'Native UI tests must reject blank/stale captions after Hebrew-Russian-English switches.'
+Assert-Source ($dialogLocalizer.Contains('TranslatePreservedHint(') -and
+               $dialogLocalizer.Contains('OriginalPlaceholder') -and
+               $dialogLocalizer.Contains('LastLocalizedPlaceholder') -and
+               $dialogLocalizer.Contains('OriginalToolTip') -and
+               $dialogLocalizer.Contains('LastLocalizedToolTip')) 'Modal localization must round-trip known placeholder and menu tooltip text across EN/RU/HE.'
+Assert-Source ($layoutSelfTest.Contains('RU/HE/EN modal hint roundtrip or live data regression') -and
+               $layoutSelfTest.Contains('Modal localizer rewrote externally updated hints.') -and
+               $layoutSelfTest.Contains('Modal localizer did not adopt new known English hints.')) 'Runtime localization test must preserve user text and dynamically replaced hints.'
+Assert-Source ($mainLocalization.Contains('if (!captionChanged && !widthChanged)') -and
+               $mainLocalization.Contains('if (suspended)') -and
+               $mainLocalization.Contains('grid.ResumeLayout(performLayout: grid.Visible)')) 'Localized DataGridView must skip no-op layout while remeasuring real text or DPI changes.'
 Assert-Source ($cleanup.Contains('LastModifiedTreeUtcOrRejectReparse') -and $cleanup.Contains('UpdateRollbackHoldService.IsActiveForVersion') -and $housekeeping.Contains('UpdateStagingCleanupService.Run(')) 'Daily housekeeping must safely prune only old updater staging folders, preserving rollback and reparse-point protections.'
 Assert-Source ($layoutSelfTest.Contains('VerifyNestedWorkspaceViewport(main, formName, scenario, failures)')) 'WinForms runtime must test real nested sizes after tab switches.'
 Assert-Source ($layoutSelfTest.Contains('content.Size = new Size(') -and $layoutSelfTest.Contains('main.ReflowMainViewport()')) 'Runtime must reproduce a stale 200x100-style content viewport.'
