@@ -226,6 +226,16 @@ if ($release.IndexOf('Verify v0.32.5 canary installer and reject tampered ZIP') 
     throw 'v0.32.5 canary tamper checks must precede SHA256SUMS.'
 }
 
+# v0.33.0 is currently a QA source branch, NOT an authorized release.
+# Run Windows/CodeQL/broker/migration gates, but reject generic/tag publishing
+# until a separately approved exact-SHA release flow is implemented.
+if (-not $pushBranches[0].Contains('"release/v0.33.0"') -or
+    -not $release.Contains("github.ref != 'refs/heads/release/v0.33.0'") -or
+    -not $release.Contains("github.ref != 'refs/tags/v0.33.0'") -or
+    $release.Contains("github.event.head_commit.message == 'Release v0.33.0'")) {
+    throw 'v0.33.0 QA branch must not publish without an explicit approved gate.'
+}
+
 # The v0.30.4 reliability PR must run the TWO-identity protected audit
 # broker integration test, not just compile the broker code.
 if ($workflow -notmatch
