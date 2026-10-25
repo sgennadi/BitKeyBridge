@@ -256,14 +256,10 @@ public class DpiAwareForm : Form
                     ResponsiveLabelDisposed;
             }
 
-            // Hidden tabs/groups can temporarily report a very small layout
-            // width. Never let that transient geometry permanently shrink a
-            // wrapping label such as the AD credential-status surface.
-            if (label.Visible)
-            {
-                RefreshResponsiveLabelWidth(
-                    label);
-            }
+            // Widths are computed in RefreshResponsiveLabelWidths()
+            // after the final form layout, once per refresh. Measuring here
+            // as well doubled TableLayoutPanel.GetColumnWidths() calls and
+            // could use transient hidden-page geometry at startup.
         }
 
         foreach (Control child in
