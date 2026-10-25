@@ -12,6 +12,8 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
     private readonly Label _stepDescription = new();
     private readonly Panel _pageHost = new();
     private readonly TextBox _tenant = new();
+    private readonly UiStatusLabel _tenantValidation = new();
+    private readonly string _uiLanguage;
     private readonly CheckBox _bitLocker = new();
     private readonly CheckBox _devices = new();
     private readonly CheckBox _intuneRotation = new();
@@ -40,8 +42,11 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
     public IntuneSetupWizardDialog(
         CloudAuthConfig existingConfig,
-        Func<DeviceCodeInfo, Task> showDeviceCode)
+        Func<DeviceCodeInfo, Task> showDeviceCode,
+        string? uiLanguage = null)
     {
+        _uiLanguage = UiLanguageService.Normalize(
+            uiLanguage ?? UiLanguageService.ReadPreferred());
         _existingConfig =
             existingConfig ??
             new CloudAuthConfig();
@@ -295,21 +300,34 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         page.Controls.Add(
             tenantLabel);
 
-        _tenant.Dock =
-            DockStyle.Top;
+        _tenant.Name = "IntuneSetupWizardTenantId";
+        _tenant.PlaceholderText = "Tenant GUID or verified domain";
+        _tenant.Dock = DockStyle.Top;
+        var initialTenant = _existingConfig.TenantId?.Trim() ?? string.Empty;
         _tenant.Text =
-            string.IsNullOrWhiteSpace(
-                _existingConfig.TenantId)
-                ? "organizations"
-                : _existingConfig.TenantId;
+            EntraSetupService.ValidateTenantForAdministrativeSetup(
+                initialTenant) is null ? initialTenant : string.Empty;
         _tenant.Margin =
             new Padding(
                 0,
                 0,
                 0,
                 UiStyle.SectionGap);
-        page.Controls.Add(
-            _tenant);
+        page.Controls.Add(_tenant);
+
+        _tenantValidation.Name = "IntuneSetupWizardTenantValidationStatus";
+        UiStyle.ConfigureStatusLabel(_tenantValidation);
+        _tenantValidation.AccessibleName = "Intune tenant validation guidance";
+        _tenantValidation.Margin =
+            new Padding(0, 0, 0, UiStyle.SectionGap);
+        void ShowTenantGuidance() => UiStyle.SetStatus(
+            _tenantValidation,
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                "Enter an exact tenant GUID or verified domain for administrative setup."),
+            UiStatusKind.Neutral);
+        _tenant.TextChanged += (_, _) => ShowTenantGuidance();
+        ShowTenantGuidance();
+        page.Controls.Add(_tenantValidation);
 
         page.Controls.Add(
             CreateBody(
@@ -590,6 +608,65 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             "Existing tenant write grants are not revoked automatically; review Enterprise Applications permissions.";
     }
 
+    private bool ValidateTenantForSetup()
+    {
+        var error = EntraSetupService.ValidateTenantForAdministrativeSetup(
+            _tenant.Text);
+        if (error is null)
+        {
+            UiStyle.SetStatus(_tenantValidation,
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                    "Tenant is ready for administrative setup."),
+                UiStatusKind.Success);
+            return true;
+        }
+
+        UiStyle.SetStatus(_tenantValidation,
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage, error),
+            UiStatusKind.Warning);
+        if (_step != 1)
+            ShowStep(1);
+        if (_tenant.CanFocus)
+            _tenant.Focus();
+        return false;
+    }
+
+    // Uses the actual Next handler; never starts Graph or creates an app.
+    internal bool PreviewTenantValidationForUiSelfTest()
+    {
+        if (_running || _completed)
+            return false;
+        var originalStep = _step;
+        var originalTenant = _tenant.Text;
+        try
+        {
+            ShowStep(1);
+            _tenant.Text = "organizations";
+            MoveNextAsync().GetAwaiter().GetResult();
+            var aliasRejected = _step == 1 &&
+                _tenantValidation.Text ==
+                    UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                        "Choose a specific tenant GUID or verified domain; organizations, common and consumers cannot be used for administrator setup.");
+
+            _tenant.Text = "not-a-tenant";
+            MoveNextAsync().GetAwaiter().GetResult();
+            var malformedRejected = _step == 1 &&
+                _tenantValidation.Text ==
+                    UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                        "Enter a valid Microsoft Entra tenant GUID or verified DNS domain.");
+
+            _tenant.Text = "contoso.onmicrosoft.com";
+            MoveNextAsync().GetAwaiter().GetResult();
+            return aliasRejected && malformedRejected && _step == 2 &&
+                SetupResult is null;
+        }
+        finally
+        {
+            _tenant.Text = originalTenant;
+            ShowStep(originalStep);
+        }
+    }
+
     private async Task MoveNextAsync()
     {
         if (_running)
@@ -615,17 +692,15 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
 
         if (_step == 1)
         {
-            if (string.IsNullOrWhiteSpace(
-                    _tenant.Text))
-            {
-                _tenant.Focus();
+            if (!ValidateTenantForSetup())
                 return;
-            }
-
-            ShowStep(
-                2);
+            ShowStep(2);
             return;
         }
+
+        // Validate again immediately before any privileged Graph operation.
+        if (!ValidateTenantForSetup())
+            return;
 
         await RunSetupAsync();
     }
