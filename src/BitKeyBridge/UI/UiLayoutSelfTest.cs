@@ -756,6 +756,20 @@ public static class UiLayoutSelfTest
                         wizard.PerformLayout();
                         Application.DoEvents();
 
+                        var englishStep = step switch
+                        {
+                            0 => "Step 1 of 3 — Prerequisites",
+                            1 => "Step 2 of 3 — Capabilities",
+                            _ => "Step 3 of 3 — Configure & verify"
+                        };
+                        var expectedStep = UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, englishStep);
+                        if (FindByName(wizard, "IntuneWizardStepCaption")
+                                is not Label stepHeading ||
+                            stepHeading.Text != expectedStep)
+                            failures.Add("Intune wizard step title is not localized: " +
+                                language + " / step " + step);
+
                         var viewport = wizard.RectangleToScreen(wizard.ClientRectangle);
                         var footerBounds = footer.RectangleToScreen(footer.ClientRectangle);
                         var navBounds = navigation.RectangleToScreen(navigation.ClientRectangle);
