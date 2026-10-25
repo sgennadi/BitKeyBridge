@@ -17,6 +17,44 @@ public sealed class EntraSetupService : IDisposable
     private const string ManagedDevicesReadWritePermission = "DeviceManagementManagedDevices.ReadWrite.All";
     private const string LapsPermission = "DeviceLocalCredential.Read.All";
 
+    // Delegated sign-in may use a generic endpoint. Creating tenant-wide
+    // applications and consent grants requires an exact tenant instead.
+    internal static string? ValidateTenantForAdministrativeSetup(string? tenant)
+    {
+        if (string.IsNullOrWhiteSpace(tenant))
+            return "Enter a specific Microsoft Entra tenant GUID or verified domain before continuing.";
+
+        var value = tenant.Trim();
+        if (value.Equals("organizations", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("common", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("consumers", StringComparison.OrdinalIgnoreCase))
+            return "Choose a specific tenant GUID or verified domain; organizations, common and consumers cannot be used for administrator setup.";
+
+        if (Guid.TryParse(value, out var tenantGuid))
+            return tenantGuid == Guid.Empty
+                ? "Enter a valid Microsoft Entra tenant GUID or verified DNS domain."
+                : null;
+
+        if (value.Length > 253 || value.Contains("://", StringComparison.Ordinal) ||
+            value.IndexOfAny(['/', '\\', ':', '?', '#', '@']) >= 0)
+            return "Enter a valid Microsoft Entra tenant GUID or verified DNS domain.";
+
+        var labels = value.Split('.');
+        if (labels.Length < 2 || labels[^1].Length < 2 ||
+            labels[^1].All(char.IsAsciiDigit))
+            return "Enter a valid Microsoft Entra tenant GUID or verified DNS domain.";
+
+        foreach (var label in labels)
+        {
+            if (label.Length is < 1 or > 63 ||
+                !char.IsAsciiLetterOrDigit(label[0]) ||
+                !char.IsAsciiLetterOrDigit(label[^1]) ||
+                label.Any(ch => !char.IsAsciiLetterOrDigit(ch) && ch != '-'))
+                return "Enter a valid Microsoft Entra tenant GUID or verified DNS domain.";
+        }
+        return null;
+    }
+
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
     private readonly CertificateService _certificates = new();
 
@@ -32,7 +70,11 @@ public sealed class EntraSetupService : IDisposable
         bool includeLapsPermissions = false,
         bool includeIntuneRotationPermissions = false)
     {
-        tenant = string.IsNullOrWhiteSpace(tenant) ? "organizations" : tenant.Trim();
+        // Administrative setup grants tenant-wide Graph consent. Never
+        // choose an arbitrary tenant through "organizations" or "common".
+        if (ValidateTenantForAdministrativeSetup(tenant) is { } tenantError)
+            throw new ArgumentException(tenantError, nameof(tenant));
+        tenant = tenant.Trim();
         displayName = string.IsNullOrWhiteSpace(displayName) ? "BitKeyBridge" : displayName.Trim();
         var effectiveBootstrapClientId = string.IsNullOrWhiteSpace(bootstrapClientId)
             ? DefaultBootstrapClientId
