@@ -690,8 +690,11 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             _running
                 ? "Cancel operation"
                 : "Cancel";
-        _cancel.Enabled =
-            true;
+        // Button.DialogResult would otherwise try to dismiss ShowDialog
+        // before the operation has acknowledged cancellation.
+        _cancel.DialogResult = _running
+            ? DialogResult.None : DialogResult.Cancel;
+        _cancel.Enabled = true;
     }
 
     private static HashSet<string> ReadApplicationRoles(
