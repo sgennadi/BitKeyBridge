@@ -64,6 +64,10 @@ Assert-Source ($style.Contains('panel.VisibleChanged += (_, _) => ResizeChildren
 Assert-Source ($shell.Contains('page.AutoScroll = false')) 'Outer TabPage AutoScroll must not fight nested Dock=Fill viewports.'
 Assert-Source ($shell.Contains('nested.SelectedIndexChanged += (_, _) => QueueNavigationViewportReflow()')) 'Nested tabs must use one immediate visible-layout repair instead of WM_SIZE debounce.'
 Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnostics.Contains('DiagnosticToolsActions')) 'Diagnostics layout must expose stable regression targets.'
+Assert-Source ($shell.Contains('_mainTabs.ResumeLayout(performLayout: initialApply || _layoutSelfTest)')) 'Warm language changes must defer redundant TabControl-wide layout until selected-viewport reflow.'
+Assert-Source ($shell.Contains('QueueNavigationViewportReflow();')) 'Warm language changes must schedule selected viewport repair after translation.'
+Assert-Source ($base.Contains('RefreshResponsiveLabelWidths();')) 'Wrapping labels must be measured after the form layout.'
+Assert-Source ($base.Contains('Widths are computed in RefreshResponsiveLabelWidths()')) 'Cold DPI registration must not measure the same wrapping label twice.'
 Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and
                $base.Contains('UiLayoutTelemetry.RecordResponsiveForm(started)') -and
                [regex]::IsMatch($base, 'UiLayoutTelemetry\.RecordResponsivePhase\s*\(\s*started\s*,\s*initialRefresh\s*,\s*this\s+is\s+MainForm\s*\)') -and
