@@ -701,12 +701,17 @@ public sealed partial class MainForm : DpiAwareForm
                     _uiLanguageCode, prerequisite);
                 UiStyle.SetStatus(_cloudStatus, guidance, UiStatusKind.Warning);
                 _cloudDiagnostics.ShowMessage(
-                    "Microsoft Entra connection settings are incomplete.",
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        _uiLanguageCode, "Microsoft Entra connection settings are incomplete."),
                     guidance + Environment.NewLine +
-                    "No Microsoft Graph authentication was attempted.");
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        _uiLanguageCode, "No Microsoft Graph authentication was attempted."));
                 if (forLaps)
                     UiStyle.SetStatus(_lapsStatus, guidance, UiStatusKind.Warning);
                 RefreshHomeConnectionUi();
+                if (StartConnectionPolicy.NeedsMicrosoftCloud(SelectedStartSource))
+                    UiStyle.SetStatus(_homeCloudConnectionStatus,
+                        guidance, UiStatusKind.Warning);
                 return false;
             }
             SaveCloudFields();
