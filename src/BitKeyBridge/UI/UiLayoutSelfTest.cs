@@ -636,8 +636,8 @@ public static class UiLayoutSelfTest
     /// clip both action controls outside their visible parent rectangle.
     /// </summary>
     /// <summary>
-    /// Recreate the screenshot regression: a wrapped navigation FlowLayoutPanel
-    /// in an AutoSize footer displayed Cancel but clipped Next and Back.
+    /// Recreate the screenshot regression: DpiAwareForm forced horizontal
+    /// FlowLayoutPanel navigation to wrap, leaving only Cancel visible.
     /// These tests display REAL WinForms handles; they never call Graph or
     /// invoke the Configure & Verify operation.
     /// </summary>
@@ -668,7 +668,7 @@ public static class UiLayoutSelfTest
                     UiDialogLocalization.Apply(wizard, language);
 
                     if (FindByName(wizard, "IntuneSetupWizardNavigation")
-                            is not FlowLayoutPanel navigation ||
+                            is not TableLayoutPanel navigation ||
                         FindByName(wizard, "IntuneSetupWizardFooter")
                             is not TableLayoutPanel footer ||
                         FindByName(wizard, "IntuneSetupWizardBack") is not Button back ||
@@ -680,12 +680,18 @@ public static class UiLayoutSelfTest
                         continue;
                     }
 
-                    if (navigation.WrapContents ||
-                        navigation.FlowDirection != FlowDirection.RightToLeft ||
+                    if (navigation.ColumnCount != 3 ||
+                        navigation.RowCount != 1 ||
                         navigation.RightToLeft != RightToLeft.No ||
+                        navigation.GetPositionFromControl(back) !=
+                            new TableLayoutPanelCellPosition(0, 0) ||
+                        navigation.GetPositionFromControl(next) !=
+                            new TableLayoutPanelCellPosition(1, 0) ||
+                        navigation.GetPositionFromControl(cancel) !=
+                            new TableLayoutPanelCellPosition(2, 0) ||
                         !ReferenceEquals(wizard.AcceptButton, next) ||
                         !ReferenceEquals(wizard.CancelButton, cancel))
-                        failures.Add("Intune wizard navigation may wrap or lose keyboard actions: " +
+                        failures.Add("Intune wizard navigation must remain a single row with keyboard actions: " +
                             language + " / " + fontScale);
 
                     foreach (var step in new[] { 0, 1, 2 })
