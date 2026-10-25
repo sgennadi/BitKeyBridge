@@ -105,6 +105,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         Controls.Add(
             root);
 
+        _stepCaption.Name = "IntuneWizardStepCaption";
         _stepCaption.AutoSize =
             true;
         _stepCaption.Font =
@@ -120,6 +121,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             0,
             0);
 
+        _stepDescription.Name = "IntuneWizardStepDescription";
         _stepDescription.AutoSize =
             true;
         _stepDescription.MaximumSize =
@@ -269,9 +271,10 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             "Wizard administrator status";
         UiStyle.SetStatus(
             status,
-            admin
-                ? "Administrator rights are available. The local certificate can be created and configured."
-                : "Administrator rights are required. Restart BitKeyBridge elevated before running this wizard.",
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguage,
+                admin
+                    ? "Administrator rights are available. The local certificate can be created and configured."
+                    : "Administrator rights are required. Restart BitKeyBridge elevated before running this wizard."),
             admin
                 ? UiStatusKind.Success
                 : UiStatusKind.Error);
