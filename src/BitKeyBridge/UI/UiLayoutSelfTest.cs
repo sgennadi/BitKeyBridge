@@ -2023,6 +2023,30 @@ public static class UiLayoutSelfTest
 
     private static void VerifyStartSourcePolicies(List<string> failures)
     {
+        // Incomplete Microsoft 365 configuration must be rejected locally.
+        // No sign-in callback, network request, disk write or Graph exception
+        // is needed to validate these non-secret prerequisites.
+        const string clientGuid = "11111111-1111-4111-8111-111111111111";
+        if (MainForm.CloudConnectionPrerequisiteError(null, clientGuid,
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError(" ", clientGuid,
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", "",
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", "not-a-guid",
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", Guid.Empty.ToString(),
+                null, certificateMode: false) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", clientGuid,
+                null, certificateMode: true) is null ||
+            MainForm.CloudConnectionPrerequisiteError("organizations", clientGuid,
+                null, certificateMode: false) is not null ||
+            MainForm.CloudConnectionPrerequisiteError("contoso.onmicrosoft.com",
+                clientGuid, "ABCD1234", certificateMode: true) is not null)
+        {
+            failures.Add("Cloud setup preflight must reject incomplete tenant/client/certificate before Graph sign-in.");
+        }
+
         // A Helpdesk GUI must never auto-elevate, and disabling the CLI UAC
         // prompt must not allow privileged maintenance without admin rights.
         if (UpdateTrustPolicy.CanEnableUnattended(false, "Example Publisher") ||
