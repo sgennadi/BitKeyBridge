@@ -874,6 +874,33 @@ public sealed partial class MainForm : DpiAwareForm
         cancellation.Cancel();
     }
 
+    // Regression without network or credentials: confirm that pressing
+    // Cancel immediately stops the activity indicator, disables the button
+    // and signals the active operation to unwind.
+    internal bool PreviewCloudCancellationForUiSelfTest()
+    {
+        if (!_layoutSelfTest || _cloudConnectCancellation is not null ||
+            _cloudMaintenanceCancellation is not null)
+            return false;
+
+        using var cancellation = new CancellationTokenSource();
+        _cloudConnectCancellation = cancellation;
+        try
+        {
+            SetCloudOperationRunning(true);
+            CancelCloudConnection();
+            return cancellation.IsCancellationRequested &&
+                _cloudProgress.MarqueeAnimationSpeed == 0 &&
+                !_cloudProgress.Visible &&
+                !_cloudConnectCancelButton.Enabled;
+        }
+        finally
+        {
+            _cloudConnectCancellation = null;
+            SetCloudOperationRunning(false);
+        }
+    }
+
     private void SetCloudOperationRunning(
         bool running)
     {
