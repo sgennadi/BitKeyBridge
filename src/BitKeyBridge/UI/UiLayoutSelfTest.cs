@@ -631,11 +631,6 @@ public static class UiLayoutSelfTest
     }
 
     /// <summary>
-    /// Regression for a visually missing copy button: the old check only
-    /// looked up button names, while Hebrew WinForms AutoSize/RTL could
-    /// clip both action controls outside their visible parent rectangle.
-    /// </summary>
-    /// <summary>
     /// Recreate the screenshot regression: DpiAwareForm forced horizontal
     /// FlowLayoutPanel navigation to wrap, leaving only Cancel visible.
     /// These tests display REAL WinForms handles; they never call Graph or
@@ -752,6 +747,11 @@ public static class UiLayoutSelfTest
         }
     }
 
+    /// <summary>
+    /// Regression for a visually missing copy button: the old check only
+    /// looked up button names, while Hebrew WinForms AutoSize/RTL could
+    /// clip both action controls outside their visible parent rectangle.
+    /// </summary>
     private static void VerifyDiagnosticCopyVisibility(List<string> failures)
     {
         try
