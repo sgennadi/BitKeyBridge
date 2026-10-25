@@ -1,6 +1,6 @@
 # BitKeyBridge v0.33.1 — development acceptance
 
-**Status:** QA-only, not yet published. v0.33.0 is the current Stable and rollback baseline.
+**Status:** exact-source v0.33.1 release acceptance checklist. Public GitHub publication is separately gated; managed Entra/Intune and Windows/RDP deployment acceptance remains outstanding regardless of public release status. v0.33.0 is the rollback baseline.
 
 ## Changes
 
