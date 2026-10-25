@@ -164,6 +164,36 @@ public sealed partial class MainForm
                 UiLanguageService.Translate(language, "HelpdeskDeploymentProgressTemplate"),
                 completed, total);
 
+        // Read-only health states are mutable diagnostic values, never
+        // global fixed captions. Translating them only at this display
+        // boundary prevents later MainForm language switches from replacing
+        // a live service or authorization result with stale template text.
+        string StatusCaption(string status)
+        {
+            var resource = status switch
+            {
+                "not installed" => "HelpdeskStatusNotInstalled",
+                "unavailable (query failed)" => "HelpdeskStatusUnavailableQuery",
+                "disabled in configuration" => "HelpdeskStatusDisabled",
+                "enabled; strict audit not required" => "HelpdeskStatusAuditOptional",
+                "enabled; strict audit required (runtime unverified)" => "HelpdeskStatusAuditStrict",
+                "protected ACL verified" => "HelpdeskStatusAclVerified",
+                "not verified / untrusted" => "HelpdeskStatusAclUntrusted",
+                "verification unavailable" => "HelpdeskStatusVerifyUnavailable",
+                "not checked" => "HelpdeskStatusNotChecked",
+                "hash chain valid" => "HelpdeskStatusChainValid",
+                "hash chain invalid or unavailable" => "HelpdeskStatusChainInvalid",
+                "unavailable (insufficient access or I/O error)" => "HelpdeskStatusNoReadAccess",
+                "Connected" => "HelpdeskStatusConnected",
+                "Not connected" => "HelpdeskStatusDisconnected",
+                "Allowed" => "HelpdeskStatusAllowed",
+                "Denied" => "HelpdeskStatusDenied",
+                _ => null
+            };
+            return resource is null ? Caption(status) :
+                UiLanguageService.Translate(language, resource);
+        }
+
         // Read-only guided preparation. All privileged changes remain in the
         // existing administrator UI / CLI with their own authorization gates.
         var wizard = new DpiAwareForm
@@ -252,7 +282,7 @@ public sealed partial class MainForm
             // Translate only known fixed labels and diagnostic states.
             // Never rewrite live service identities or authorization data.
             var localizedName = Caption(name);
-            var localizedResult = Caption(result);
+            var localizedResult = StatusCaption(result);
             var item = healthResults.Items.Cast<ListViewItem>()
                 .FirstOrDefault(entry => entry.Text == localizedName);
             if (item is null)
