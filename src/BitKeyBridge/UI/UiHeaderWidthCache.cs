@@ -21,14 +21,22 @@ internal sealed class UiHeaderWidthCache
         GraphicsUnit Unit, byte CharacterSet, bool Vertical, int Dpi,
         HeaderKind Kind);
 
-    private const int MaxMeasurements = 512;
+    private const int DefaultMaxMeasurements = 512;
+    private readonly int _capacity;
     private readonly Dictionary<MeasurementKey, int> _widths = new();
     private readonly Queue<MeasurementKey> _insertionOrder = new();
+
+    internal UiHeaderWidthCache(int capacity = DefaultMaxMeasurements)
+    {
+        if (capacity < 1 || capacity > DefaultMaxMeasurements)
+            throw new ArgumentOutOfRangeException(nameof(capacity));
+        _capacity = capacity;
+    }
 
     internal int CacheHits { get; private set; }
     internal int CacheMisses { get; private set; }
     internal int EntryCount => _widths.Count;
-    internal int Capacity => MaxMeasurements;
+    internal int Capacity => _capacity;
 
     internal int Measure(
         string sourceEnglish, string localizedCaption, Font font, int dpi,
@@ -64,7 +72,7 @@ internal sealed class UiHeaderWidthCache
                 UiStyle.ScaleLogicalPixels(18, dpi)
         };
 
-        if (_widths.Count >= MaxMeasurements)
+        if (_widths.Count >= _capacity)
         {
             var oldest = _insertionOrder.Dequeue();
             _widths.Remove(oldest);
