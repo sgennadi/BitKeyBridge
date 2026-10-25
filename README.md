@@ -1,8 +1,8 @@
 # BitKeyBridge
 
-**v0.33.1 — development / QA only, not published.** Based on published v0.33.0 with PR #108 Devices-to-Cloud navigation and stricter tenant validation before any administrator app registration/consent operation. The Intune wizard provides localized inline validation in EN/RU/HE. No new permissions, credentials, or recovery-secret reads.
+**v0.33.1 — Entra/Intune maintenance release (UNSIGNED distribution; exact-source CI gated).** Builds on v0.33.0 with PR #108 Devices → Settings → Cloud navigation, strict tenant-specific validation before administrator app registration/consent, and EN/RU/HE inline validation in the Intune wizard. It does not add permissions, credentials or recovery-secret reads. The [v0.33.1 GitHub release](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.33.1) is available only if GitHub Actions has completed its protected publication gates; the source branch alone is not a published binary.
 
-**Latest Stable: v0.33.0 (UNSIGNED, published 2026-10-25).** Download self-contained Windows x64/x86/ARM64 ZIPs from [GitHub Releases](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.33.0). The release corrects missing wizard navigation actions and Device Code cancellation while retaining protected audit, signed-only update restrictions and manual Canary approval. Prior v0.32.5 remains available for rollback. Publication does not authorize automatic GPO/Intune deployment or prove managed-machine Windows/RDP acceptance.
+**Rollback baseline: v0.33.0 (UNSIGNED, published 2026-10-25).** Download the previous self-contained Windows x64/x86/ARM64 ZIPs from [GitHub Releases](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.33.0). This release fixed wizard navigation and Device Code cancellation while retaining protected audit, signed-only update restrictions and manual Canary approval. v0.32.5 also remains available. Publication does not authorize automatic GPO/Intune deployment or prove managed-machine Windows/RDP acceptance.
 
 BitKeyBridge is a native Windows recovery and administration utility for **BitLocker** and **LAPS** across on-premises Active Directory, Microsoft Entra ID, and Intune.
 
