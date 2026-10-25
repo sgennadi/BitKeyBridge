@@ -59,6 +59,8 @@ public sealed partial class MainForm
     // Tag, which is reserved for application command data.
     private readonly Dictionary<ToolStripItem, string> _localizedMenuSources =
         new(ReferenceEqualityComparer.Instance);
+    private readonly ConditionalWeakTable<ToolStripDropDownItem, object>
+        _observedLocalizedMenus = new();
     private bool _localizedCaptionCacheBuilt;
 
     private void ObserveLocalizedCaptionTree(
@@ -348,7 +350,16 @@ public sealed partial class MainForm
         {
             _localizedMenuSources.Remove(item);
             item.Disposed -= OnLocalizedMenuDisposed;
+            if (item is ToolStripDropDownItem submenu &&
+                _observedLocalizedMenus.Remove(submenu))
+                submenu.DropDownOpening -= OnLocalizedMenuOpening;
         }
+    }
+
+    private void OnLocalizedMenuOpening(object? sender, EventArgs args)
+    {
+        if (sender is ToolStripDropDownItem submenu && !IsDisposed)
+            ApplyKnownMenuCaptions(submenu.DropDownItems);
     }
 
     // This is intentionally limited to known fixed captions. It does not
@@ -380,7 +391,17 @@ public sealed partial class MainForm
                 item.Text = caption;
 
             if (item is ToolStripDropDownItem submenu)
+            {
+                if (!_observedLocalizedMenus.TryGetValue(submenu, out _))
+                {
+                    _observedLocalizedMenus.Add(submenu,
+                        LocalizedCaptionObserverMarker);
+                    submenu.DropDownOpening += OnLocalizedMenuOpening;
+                    if (!_localizedMenuSources.ContainsKey(submenu))
+                        submenu.Disposed += OnLocalizedMenuDisposed;
+                }
                 ApplyKnownMenuCaptions(submenu.DropDownItems);
+            }
         }
     }
 
