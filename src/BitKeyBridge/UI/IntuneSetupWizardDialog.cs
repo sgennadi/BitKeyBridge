@@ -393,6 +393,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             CreateHeading(
                 "Review, configure and verify"));
 
+        _review.Name = "IntuneWizardReview";
         _review.ReadOnly =
             true;
         _review.Dock =
