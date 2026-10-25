@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0", "release/v0.32.1", "release/v0.32.2", "release/v0.32.3", "release/v0.32.4", "release/v0.32.5" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0", "release/v0.32.1", "release/v0.32.2", "release/v0.32.3", "release/v0.32.4", "release/v0.32.5", "release/v0.33.0" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -649,7 +649,8 @@ jobs:
         github.ref == 'refs/heads/release/v0.32.2' ||
         github.ref == 'refs/heads/release/v0.32.3' ||
         github.ref == 'refs/heads/release/v0.32.4' ||
-         github.ref == 'refs/heads/release/v0.32.5'))
+         github.ref == 'refs/heads/release/v0.32.5' ||
+         github.ref == 'refs/heads/release/v0.33.0'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 30
@@ -696,7 +697,8 @@ jobs:
         github.ref == 'refs/heads/release/v0.32.2' ||
         github.ref == 'refs/heads/release/v0.32.3' ||
         github.ref == 'refs/heads/release/v0.32.4' ||
-         github.ref == 'refs/heads/release/v0.32.5'))
+         github.ref == 'refs/heads/release/v0.32.5' ||
+         github.ref == 'refs/heads/release/v0.33.0'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -867,7 +869,8 @@ jobs:
        github.ref == 'refs/heads/release/v0.32.2' ||
        github.ref == 'refs/heads/release/v0.32.3' ||
        github.ref == 'refs/heads/release/v0.32.4' ||
-       github.ref == 'refs/heads/release/v0.32.5')
+       github.ref == 'refs/heads/release/v0.32.5' ||
+       github.ref == 'refs/heads/release/v0.33.0')
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
@@ -933,6 +936,8 @@ jobs:
          github.ref != 'refs/heads/release/v0.32.3' &&
          github.ref != 'refs/heads/release/v0.32.4' &&
          github.ref != 'refs/heads/release/v0.32.5' &&
+         github.ref != 'refs/heads/release/v0.33.0' &&
+         github.ref != 'refs/tags/v0.33.0' &&
          (startsWith(github.ref, 'refs/tags/v') ||
           (github.event_name == 'push' &&
            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
