@@ -15,7 +15,7 @@
 - Native `--ui-self-test`: modal placeholder and context-menu tooltip language roundtrips EN/RU/HE, dynamic hints preserved, menu `Tag` unchanged, populated Tenant ID unchanged, all startup and existing 100–200% DPI/RTL checks preserved.
 - Existing offline `--self-test`, LAPS regressions and CodeQL.
 - Manual Windows RDP / physical 100%, 150%, 175% and 200% text scaling: no blank glyphs or clipped labels when repeatedly switching English, Russian and Hebrew.
-- Measure warm language-switch mean/p95, native tab handle churn, initial DPI/font refresh and selected-page callback/reflow separately using non-secret diagnostics; do not claim speed improvement solely from static code inspection.
+- Measure warm language-switch mean/p95, native tab handle churn, initial DPI/font refresh, visible-label batch counts and selected-page callback/reflow separately using non-secret diagnostics; do not claim speed improvement solely from static code inspection.
 
 ## Explicitly NOT authorized
 

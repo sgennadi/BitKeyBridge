@@ -74,6 +74,14 @@ Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnosti
 Assert-Source ($shell.Contains('_mainTabs.ResumeLayout(performLayout: initialApply || _layoutSelfTest)')) 'Warm language changes must defer redundant TabControl-wide layout until selected-viewport reflow.'
 Assert-Source ($shell.Contains('QueueNavigationViewportReflow();')) 'Warm language changes must schedule selected viewport repair after translation.'
 Assert-Source ($base.Contains('RefreshResponsiveLabelWidths();')) 'Wrapping labels must be measured after the form layout.'
+Assert-Source ($base.Contains('_pendingVisibleLabelWidths') -and
+               $base.Contains('DrainPendingVisibleLabelWidths') -and
+               $base.Contains('_visibleLabelWidthRefreshPosted') -and
+               $base.Contains('if (RefreshResponsiveLabelWidth(label))') -and
+               $base.Contains('RecordVisibleLabelBatch(changed, reflowed)')) 'Visible label activation must coalesce posted callbacks and reflow each parent only when widths changed.'
+Assert-Source ($layoutSelfTest.Contains('VerifyVisibleLabelReflowCoalescing(failures)') -and
+               $layoutSelfTest.Contains('Two visible labels scheduled more than one layout callback.') -and
+               $telemetry.Contains('Visible-label width batches: batches=')) 'Native WinForms test must verify visibility bursts and non-secret batched-layout counters.'
 Assert-Source ($base.Contains('Widths are computed in RefreshResponsiveLabelWidths()')) 'Cold DPI registration must not measure the same wrapping label twice.'
 Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and
                $base.Contains('UiLayoutTelemetry.RecordResponsiveForm(started)') -and

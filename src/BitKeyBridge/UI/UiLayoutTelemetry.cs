@@ -79,6 +79,9 @@ internal static class UiLayoutTelemetry
     private static readonly Counter LanguageMenuDirection = new();
     private static readonly Counter LanguageCaptions = new();
     private static readonly Counter LanguageResume = new();
+    private static long _visibleLabelBatches;
+    private static long _visibleLabelWidthChanges;
+    private static long _visibleLabelParentReflows;
     // Counts only: never retain header text, font names or device metadata.
     private static long _headerWidthCacheHits;
     private static long _headerWidthCacheMisses;
@@ -141,6 +144,12 @@ internal static class UiLayoutTelemetry
         LanguageMenuDirection.Record(start);
     internal static void RecordLanguageCaptions(long start) => LanguageCaptions.Record(start);
     internal static void RecordLanguageResume(long start) => LanguageResume.Record(start);
+    internal static void RecordVisibleLabelBatch(int changed, int parentReflows)
+    {
+        Interlocked.Increment(ref _visibleLabelBatches);
+        Interlocked.Add(ref _visibleLabelWidthChanges, Math.Max(0, changed));
+        Interlocked.Add(ref _visibleLabelParentReflows, Math.Max(0, parentReflows));
+    }
     internal static void RecordHeaderWidthCacheHit() =>
         Interlocked.Increment(ref _headerWidthCacheHits);
     internal static void RecordHeaderWidthCacheMiss() =>
@@ -173,6 +182,9 @@ internal static class UiLayoutTelemetry
         LanguageMenuDirection.Summarize("Top menu RTL setter") + "\n" +
         LanguageCaptions.Summarize("Language captions") + "\n" +
         LanguageResume.Summarize("Language layout resume") + "\n" +
+        $"Visible-label width batches: batches={Interlocked.Read(ref _visibleLabelBatches)}, " +
+        $"widthChanges={Interlocked.Read(ref _visibleLabelWidthChanges)}, " +
+        $"parentReflows={Interlocked.Read(ref _visibleLabelParentReflows)}\n" +
         $"Fixed-header width cache: hits={Interlocked.Read(ref _headerWidthCacheHits)}, " +
         $"misses={Interlocked.Read(ref _headerWidthCacheMisses)}\n\n" +
         "If a tab still feels slow but these numbers are low, " +

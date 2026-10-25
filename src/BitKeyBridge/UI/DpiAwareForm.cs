@@ -9,6 +9,16 @@ public class DpiAwareForm : Form
 {
     private readonly Dictionary<Label, Size> _labelMaximumSizes =
         new();
+    // A tab with many captions can fire dozens of VisibleChanged events.
+    // Batch them once on the UI thread; never capture or log label contents.
+    private readonly HashSet<Label> _pendingVisibleLabelWidths = new();
+    private bool _visibleLabelWidthRefreshPosted;
+    private int _visibleLabelWidthBatchCount;
+
+    internal int VisibleLabelWidthBatchCountForUiSelfTest =>
+        _visibleLabelWidthBatchCount;
+    internal int PendingVisibleLabelWidthsForUiSelfTest =>
+        _pendingVisibleLabelWidths.Count;
 
     // WinForms can send hundreds of WM_SIZE notifications while dragging or
     // reconnecting an RDP session. Batch expensive text measurement.
@@ -58,6 +68,7 @@ public class DpiAwareForm : Form
         };
         Disposed += (_, _) =>
         {
+            _pendingVisibleLabelWidths.Clear();
             _responsiveLabelTimer.Dispose();
             _responsiveLayoutTimer.Dispose();
         };
@@ -274,30 +285,69 @@ public class DpiAwareForm : Form
         object? sender,
         EventArgs e)
     {
-        if (sender is not Label label ||
-            !label.Visible ||
-            label.IsDisposed ||
-            IsDisposed ||
-            !IsHandleCreated)
-        {
+        if (sender is not Label label || !label.Visible || label.IsDisposed ||
+            IsDisposed || Disposing || !IsHandleCreated)
             return;
+
+        _pendingVisibleLabelWidths.Add(label);
+        if (_visibleLabelWidthRefreshPosted)
+            return;
+
+        _visibleLabelWidthRefreshPosted = true;
+        try
+        {
+            // Exactly one posted callback for a burst of newly visible
+            // labels. It runs after WinForms has activated the tab/page.
+            BeginInvoke(new MethodInvoker(DrainPendingVisibleLabelWidths));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or
+                                   ObjectDisposedException)
+        {
+            _visibleLabelWidthRefreshPosted = false;
+            _pendingVisibleLabelWidths.Clear();
+            System.Diagnostics.Debug.WriteLine(
+                "Visible-label reflow was not scheduled: " + ex.GetType().Name);
+        }
+    }
+
+    private void DrainPendingVisibleLabelWidths()
+    {
+        _visibleLabelWidthRefreshPosted = false;
+        var pending = _pendingVisibleLabelWidths.ToArray();
+        _pendingVisibleLabelWidths.Clear();
+
+        if (IsDisposed || Disposing || !IsHandleCreated)
+            return;
+
+        // MaximumSize already requests layout on an actual width change.
+        // Preserve one explicit parent reflow per parent at most; never
+        // force N identical layouts for N captions on one selected tab.
+        var parents = new HashSet<Control>();
+        var changed = 0;
+        foreach (var label in pending)
+        {
+            if (label.IsDisposed || !label.Visible || label.Parent is null)
+                continue;
+
+            if (RefreshResponsiveLabelWidth(label))
+            {
+                changed++;
+                if (!label.Parent.IsDisposed)
+                    parents.Add(label.Parent);
+            }
         }
 
-        BeginInvoke(
-            new MethodInvoker(
-                () =>
-                {
-                    if (label.IsDisposed ||
-                        !label.Visible ||
-                        IsDisposed)
-                    {
-                        return;
-                    }
+        var reflowed = 0;
+        foreach (var parent in parents)
+        {
+            if (parent.IsDisposed || !parent.Visible)
+                continue;
+            parent.PerformLayout();
+            reflowed++;
+        }
 
-                    RefreshResponsiveLabelWidth(
-                        label);
-                    label.Parent?.PerformLayout();
-                }));
+        _visibleLabelWidthBatchCount++;
+        UiLayoutTelemetry.RecordVisibleLabelBatch(changed, reflowed);
     }
 
     private void ResponsiveLabelDisposed(
@@ -305,7 +355,10 @@ public class DpiAwareForm : Form
         EventArgs e)
     {
         if (sender is Label label)
+        {
             _labelMaximumSizes.Remove(label);
+            _pendingVisibleLabelWidths.Remove(label);
+        }
     }
 
     private void RefreshResponsiveLabelWidths()
@@ -323,7 +376,7 @@ public class DpiAwareForm : Form
         }
     }
 
-    private void RefreshResponsiveLabelWidth(
+    private bool RefreshResponsiveLabelWidth(
         Label label)
     {
         if (!_labelMaximumSizes.TryGetValue(
@@ -332,7 +385,7 @@ public class DpiAwareForm : Form
             designMaximum.Width <= 0 ||
             label.Parent is null)
         {
-            return;
+            return false;
         }
 
         var availableWidth =
@@ -340,7 +393,7 @@ public class DpiAwareForm : Form
                 label);
 
         if (availableWidth <= 0)
-            return;
+            return false;
 
         var maximumWidth =
             Math.Max(
@@ -354,12 +407,13 @@ public class DpiAwareForm : Form
                 maximumWidth,
                 designMaximum.Height);
 
-        if (label.MaximumSize !=
+        if (label.MaximumSize ==
             target)
-        {
-            label.MaximumSize =
-                target;
-        }
+            return false;
+
+        label.MaximumSize =
+            target;
+        return true;
     }
 
     private static int GetAvailableWidth(

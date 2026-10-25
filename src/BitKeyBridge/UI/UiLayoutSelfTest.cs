@@ -73,6 +73,7 @@ public static class UiLayoutSelfTest
             failures);
 
         VerifyUnchangedStatusDoesNotRepaint(failures);
+        VerifyVisibleLabelReflowCoalescing(failures);
 
         VerifyFixedHeaderWidthCaching(failures);
 
@@ -232,6 +233,79 @@ public static class UiLayoutSelfTest
         return failures.Count == 0
             ? 0
             : 1;
+    }
+
+    private static void VerifyVisibleLabelReflowCoalescing(List<string> failures)
+    {
+        try
+        {
+            using var dialog = new DpiAwareForm
+            {
+                Size = new Size(620, 360),
+                StartPosition = FormStartPosition.Manual
+            };
+            using var host = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false
+            };
+            var first = new Label
+            {
+                AutoSize = true,
+                Visible = false,
+                MaximumSize = new Size(900, 0),
+                Text = "First fixed-width label on a hidden page"
+            };
+            var second = new Label
+            {
+                AutoSize = true,
+                Visible = false,
+                MaximumSize = new Size(900, 0),
+                Text = "Second fixed-width label on a hidden page"
+            };
+            host.Controls.Add(first);
+            host.Controls.Add(second);
+            dialog.Controls.Add(host);
+            dialog.Show();
+            Application.DoEvents();
+
+            var baseline = dialog.VisibleLabelWidthBatchCountForUiSelfTest;
+            first.Visible = true;
+            second.Visible = true;
+            if (dialog.PendingVisibleLabelWidthsForUiSelfTest != 2)
+                failures.Add("Visible label widths were not coalesced before UI dispatch.");
+            Application.DoEvents();
+
+            if (dialog.VisibleLabelWidthBatchCountForUiSelfTest != baseline + 1 ||
+                dialog.PendingVisibleLabelWidthsForUiSelfTest != 0)
+                failures.Add("Two visible labels scheduled more than one layout callback.");
+            if (first.MaximumSize.Width <= 0 || second.MaximumSize.Width <= 0 ||
+                first.MaximumSize.Width > host.ClientSize.Width ||
+                second.MaximumSize.Width > host.ClientSize.Width)
+                failures.Add("Batched visible labels were not constrained to their viewport.");
+
+            // A no-op pump must not perform an additional parent reflow.
+            Application.DoEvents();
+            if (dialog.VisibleLabelWidthBatchCountForUiSelfTest != baseline + 1)
+                failures.Add("Idle UI dispatch repeated a visible-label layout batch.");
+
+            first.Visible = false;
+            second.Visible = false;
+            first.Visible = true;
+            second.Visible = true;
+            Application.DoEvents();
+            if (dialog.VisibleLabelWidthBatchCountForUiSelfTest != baseline + 2)
+                failures.Add("Second tab activation did not coalesce visible labels.");
+            if (!UiLayoutTelemetry.Report().Contains(
+                    "Visible-label width batches: batches=", StringComparison.Ordinal))
+                failures.Add("Non-secret visible-label layout telemetry is missing.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Visible-label coalescing regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
     }
 
     private static void VerifyFixedHeaderWidthCaching(List<string> failures)
