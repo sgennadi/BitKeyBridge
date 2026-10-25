@@ -715,6 +715,28 @@ public static class UiLayoutSelfTest
                     HealthEndpointEnabled = false
                 },
                 layoutSelfTest: true);
+
+            // ToolStripItem.Tag can carry command state; language switching
+            // must not overwrite it with the original caption.
+            var copyItemBeforeTranslation = form.MainMenuStrip?.Items
+                .Find("CopyUiPerformanceReportMenuItem", true)
+                .OfType<ToolStripMenuItem>().FirstOrDefault();
+            var protectedMenuTag = new object();
+            if (copyItemBeforeTranslation is not null)
+                copyItemBeforeTranslation.Tag = protectedMenuTag;
+
+            // Exercise recursion: a static caption inside an unknown nested
+            // menu must be translated in all three languages.
+            var topTools = form.MainMenuStrip?.Items
+                .OfType<ToolStripMenuItem>()
+                .FirstOrDefault(item => item.DropDownItems
+                    .OfType<ToolStripMenuItem>().Any(child =>
+                        child.Name == "CopyUiPerformanceReportMenuItem"));
+            using var nestedMenu = new ToolStripMenuItem("Nested menu fixture");
+            using var nestedItem = new ToolStripMenuItem("Windows Event Log");
+            nestedMenu.DropDownItems.Add(nestedItem);
+            topTools?.DropDownItems.Add(nestedMenu);
+
             form.PreviewShellLanguageForLayoutTest("he");
             form.PreviewShowUiPerformanceReportForLayoutTest();
 
@@ -842,6 +864,21 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                var expectedEventLog = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Windows Event Log");
+                var expectedLatestRelease = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    language, "Latest GitHub release");
+                var latestReleaseItem = form.MainMenuStrip?.Items
+                    .Find("LatestGithubReleaseMenuItem", true)
+                    .FirstOrDefault();
+                if (nestedItem.Text != expectedEventLog ||
+                    latestReleaseItem?.Text != expectedLatestRelease)
+                    failures.Add("Nested or top Tools menu caption not translated: " +
+                        language);
+                if (copyItemBeforeTranslation is not null &&
+                    !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
+                    failures.Add("Language switch overwrote ToolStrip command Tag: " +
+                        language);
                 // The performance report must not disappear when a
                 // high-DPI WinForms TabControl changes RTL orientation.
                 if (banner is null || !banner.HasActiveDiagnostics ||
