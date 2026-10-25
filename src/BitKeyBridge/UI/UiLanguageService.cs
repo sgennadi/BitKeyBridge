@@ -34,6 +34,10 @@ internal static class UiLanguageService
             ["Settings"] = ["Settings", "Настройки", "הגדרות"],
             ["Tools"] = ["Tools", "Инструменты", "כלים"],
             ["Language"] = ["Language", "Язык", "שפה"],
+            ["HelpdeskDeploymentProgressTemplate"] =
+                ["{0} of {1} steps marked complete",
+                 "Отмечено {0} из {1} этапов",
+                 "סומנו {0} מתוך {1} שלבים"],
             ["Search"] = ["Search", "Поиск", "חיפוש"],
             ["Cancel"] = ["Cancel", "Отмена", "ביטול"],
             ["UpdateCenterTitle"] = ["Update Center 2.0", "Центр обновлений 2.0", "מרכז עדכונים 2.0"],
