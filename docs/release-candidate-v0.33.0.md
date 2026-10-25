@@ -31,6 +31,11 @@ lineage. The existing v0.32.5 release and installed fleets are unchanged.
 - On pull requests, validate the published stable main base commit instead of
   requiring an unreleased PR head to be published. Keep strict latest-release
   and immutable-tag ancestry enforcement for pushes directly to main.
+- Cancel a pending Entra Device Code, admin first-run, certificate rollover or
+  Intune wizard session deterministically; immediately stop marquee animation,
+  ignore queued progress messages and preserve a final canceled status. Closing
+  a Device Code dialog is cancellation, not continued token polling. UI tests
+  must never initiate real Graph sign-in or open a browser.
 - Keep existing authorization, JIT, RBAC, audit journal/SIEM, recovery
   secret handling, release trust, rollback holds and update opt-in unchanged.
 
