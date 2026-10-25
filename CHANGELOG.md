@@ -9,6 +9,8 @@
 - Extend real WinForms regression tests for nested menu EN/RU/HE captions and command-tag integrity. No authorization, secret access, protected audit, update signing, or auto-deployment policy changes.
 - Localize the seven-step Helpdesk preparation checklist, localized live readiness labels and diagnostic statuses, and count-preserving progress in EN/RU/HE; add 26 fixed-caption translations plus 16 scoped Helpdesk diagnostic state translations across Helpdesk, Start and cloud configuration. Never modify actual service identities or security decisions.
 - Correct stable-source provenance on pull requests to validate the already-published base commit; a direct push to `main` still requires an exact published stable tag and immutable ancestry. Keep the v0.33 release job blocked pending separate authorization.
+- Fix Intune / Entra Setup Wizard navigation: Back, Next and Cancel now occupy a stable, non-wrapping three-column footer. The old horizontal FlowLayoutPanel was forcibly re-wrapped by DpiAwareForm on load/DPI refresh, leaving only Cancel visible. Cover all three steps, EN/RU/HE and 100%/200% text scaling in native WinForms tests without connecting to Graph.
+- Reject missing tenant ID, missing/malformed/all-zero client GUID and missing certificate thumbprint **before** saving settings or starting Microsoft Graph sign-in. Show localized actionable setup instructions instead of `ArgumentException: tenantId is required`, and discard any stale token. Never auto-run administrative setup or silently grant permissions.
 - No performance claims before fresh native Windows/RDP measurements and a green exact-source CI run. Public v0.32.5 remains the rollback baseline.
 
 ## 0.32.5
