@@ -91,6 +91,9 @@ public static class UiLayoutSelfTest
         VerifyHebrewIdentityDirection(
             failures);
 
+        VerifyHelpdeskChecklistLocalization(
+            failures);
+
         VerifyDiagnosticCopyVisibility(failures);
 
         // A DPI report must distinguish the initially measured MainForm from
@@ -700,6 +703,93 @@ public static class UiLayoutSelfTest
         catch (Exception ex)
         {
             failures.Add("Diagnostic copy visibility regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private static void VerifyHelpdeskChecklistLocalization(List<string> failures)
+    {
+        var englishSteps = new[]
+        {
+            "Install the Windows service on a test workstation (administrator)",
+            "Configure a scoped RecoveryReaders group; disable admin bypass",
+            "Verify AD and Entra / Intune delegation independently",
+            "Provision protected audit and restart the service (administrator)",
+            "Sign in as an authorized non-admin and run Access Health",
+            "Verify unauthorized access is denied and secrets are never logged",
+            "Validate protected journal, RDP, 100-200% DPI and rollback"
+        };
+
+        try
+        {
+            using var main = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+
+            foreach (var language in new[] { "en", "ru", "he" })
+            {
+                main.PreviewShellLanguageForLayoutTest(language);
+                using var wizard = main.CreateHelpdeskDeploymentWizard();
+                UiDialogLocalization.Apply(wizard, language);
+
+                var list = FindByName(wizard, "HelpdeskDeploymentSteps")
+                    as CheckedListBox;
+                var progress = FindByName(wizard, "HelpdeskDeploymentProgress")
+                    as Label;
+                if (list is null || progress is null ||
+                    list.Items.Count != englishSteps.Length)
+                {
+                    failures.Add("Helpdesk localized checklist is missing items: " +
+                        language);
+                    continue;
+                }
+
+                for (var i = 0; i < englishSteps.Length; i++)
+                {
+                    var expected = UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, englishSteps[i]);
+                    if (expected == englishSteps[i] && language != "en")
+                        failures.Add("Helpdesk checklist caption missing from catalog: " +
+                            i + " (" + language + ")");
+                    if (!string.Equals(list.Items[i] as string, expected,
+                            StringComparison.Ordinal))
+                        failures.Add("Helpdesk checklist left untranslated: " +
+                            i + " (" + language + ")");
+                }
+
+                var template = UiLanguageService.Translate(
+                    language, "HelpdeskDeploymentProgressTemplate");
+                var expectedZero = string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    template, 0, englishSteps.Length);
+                if (progress.Text != expectedZero)
+                    failures.Add("Helpdesk initial progress translation incorrect: " +
+                        language);
+
+                // This checklist is informational, not an authorization or
+                // service operation. Its checked states must remain tied to
+                // positions, independent of translated display text.
+                list.SetItemChecked(0, true);
+                var expectedOne = string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    template, 1, englishSteps.Length);
+                if (!list.GetItemChecked(0) || progress.Text != expectedOne)
+                    failures.Add("Helpdesk progress counter lost state: " +
+                        language);
+
+                list.SetItemChecked(0, false);
+                if (list.GetItemChecked(0) || progress.Text != expectedZero)
+                    failures.Add("Helpdesk checklist did not clear its count: " +
+                        language);
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Helpdesk EN/RU/HE checklist regression: " +
                 DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
