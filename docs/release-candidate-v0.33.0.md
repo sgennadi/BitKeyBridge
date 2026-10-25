@@ -17,6 +17,10 @@ lineage. The existing v0.32.5 release and installed fleets are unchanged.
 - During initial DPI layout, register wrapping labels once and measure their
   available width once **after** layout rather than redundantly during the
   registration tree walk and again in the final measurement pass.
+- Preserve immediate initial and headless UI layout while deferring a redundant
+  full TabControl layout during warm language changes to the existing
+  one-pass selected-viewport navigation reflow; keep MenuStrip remeasurement
+  synchronous so Hebrew Language text remains uncut.
 - Run repeatable WinForms test sequences EN -> RU -> HE -> EN, including
   dynamic control registration, deep menus, LTR secret inputs, native
   TabControl mirroring, and 100%-200% UI scaling.
