@@ -1,3 +1,13 @@
+## 0.33.1
+
+**Development / QA only. NOT PUBLISHED.** Latest Stable is v0.33.0.
+
+- Integrate verified PR #108: a localized Configure Cloud shortcut from Devices opens the existing authorized Settings → Cloud tab without erasing the AD device search or starting an authentication request.
+- Privileged Entra First-Run / Repair and the three-step Intune setup wizard now reject empty, malformed, all-zero or generic (`organizations`, `common`, `consumers`) tenant identifiers **before Graph registration and consent**. They require a specific tenant GUID or verified DNS domain.
+- Add inline EN/RU/HE tenant validation to the wizard, reject all-zero Client IDs in delegated onboarding and maintain the distinction between normal device-code sign-in and tenant-wide administrative provisioning.
+- Extend no-network WinForms/PowerShell regression coverage of wizard Next navigation, tenant validation and cancellation. Existing RBAC, LAPS/BitLocker secret handling, protected audit and signed-only deployment rules remain unchanged.
+- Real managed-tenant Intune, Hebrew RDP/HiDPI and deployment acceptance are separate from Windows CI; no v0.33.1 release is authorized by this development branch.
+
 ## 0.33.0
 
 **UNSIGNED Stable candidate — release gate prepared; final exact-source CI pending.**
