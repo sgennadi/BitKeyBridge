@@ -2857,6 +2857,35 @@ public sealed partial class MainForm
             _cloudTenant.Focus();
     }
 
+    internal bool PreviewDevicesCloudShortcutForUiTest()
+    {
+        if (!_layoutSelfTest || _cloudSettingsPage is null)
+            return false;
+        var devices = _mainTabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "DevicesWorkspace");
+        if (devices is null)
+            return false;
+        var previous = _mainTabs.SelectedTab;
+        try
+        {
+            _mainTabs.SelectedTab = devices;
+            SetDevicesCloudWarningAction(true);
+            if (!_devicesCloudSettingsLink.Visible)
+                return false;
+            _devicesCloudSettingsLink.PerformClick();
+            var settings = _mainTabs.SelectedTab;
+            return settings?.Name == "SettingsWorkspace" &&
+                settings.Controls.OfType<TabControl>().FirstOrDefault()?.SelectedTab ==
+                    _cloudSettingsPage &&
+                _unifiedCancellation is null;
+        }
+        finally
+        {
+            SetDevicesCloudWarningAction(false);
+            _mainTabs.SelectedTab = previous;
+        }
+    }
+
     private TabPage BuildCloudAdministrationTab()
     {
         var page = new TabPage("Cloud");
