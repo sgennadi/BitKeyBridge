@@ -59,14 +59,14 @@ internal static class UiDialogLocalization
             GroupBox or TabPage or LinkLabel ||
         control is Label and not UiStatusLabel;
 
-    private static string TranslatePreservedHint(
-        string current, string? previous, ref string? english, string code)
+    private static string? TranslatePreservedHint(
+        string? current, string? previous, ref string? english, string code)
     {
-        // Changed externally since the previous localization: start from the
-        // new English literal only if it is in the fixed catalog. An unknown
-        // hint belongs to the caller (possibly dynamic identity metadata).
+        // ToolStripItem.ToolTipText can legitimately be null. Never turn a
+        // missing/dynamic hint into a fabricated translatable caption.
         if (!string.Equals(current, previous, StringComparison.Ordinal))
-            english = UiStaticCaptionCatalog.Contains(current) ? current : null;
+            english = !string.IsNullOrEmpty(current) &&
+                UiStaticCaptionCatalog.Contains(current) ? current : null;
         return english is null
             ? current
             : UiStaticCaptionCatalog.TranslateOrOriginal(code, english);
@@ -112,7 +112,7 @@ internal static class UiDialogLocalization
                 ref state.OriginalPlaceholder, code);
             if (!string.Equals(textBox.PlaceholderText, placeholder,
                     StringComparison.Ordinal))
-                textBox.PlaceholderText = placeholder;
+                textBox.PlaceholderText = placeholder ?? string.Empty;
             state.LastLocalizedPlaceholder =
                 state.OriginalPlaceholder is null ? null : placeholder;
         }
