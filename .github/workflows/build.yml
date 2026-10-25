@@ -27,7 +27,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      # GitHub's Windows 2025 / VS2026 image already ships a .NET 10
+      # SDK. Prefer its installed SDK to avoid unnecessary setup-dotnet
+      # downloads (transient 409 from dotnetorigin). If the image changes,
+      # restore the usual setup-dotnet path rather than silently downgrading.
+      - name: Detect preinstalled .NET 10 SDK
+        id: sdk_check
+        shell: pwsh
+        run: |
+          $sdks = @()
+          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            $sdks = @(dotnet --list-sdks)
+          }
+          $available = @($sdks | Where-Object {
+            $_ -match '^10\\.0\\.\\d+\\s+\\['
+          }).Count -gt 0
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($available) { Write-Host 'Using preinstalled .NET 10 SDK.' }
+          else { Write-Host '.NET 10 not preinstalled; using setup-dotnet.' }
       - name: Setup .NET 10
+        if: steps.sdk_check.outputs.available != 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
@@ -45,7 +64,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # GitHub's Windows 2025 / VS2026 image already ships a .NET 10
+      # SDK. Prefer its installed SDK to avoid unnecessary setup-dotnet
+      # downloads (transient 409 from dotnetorigin). If the image changes,
+      # restore the usual setup-dotnet path rather than silently downgrading.
+      - name: Detect preinstalled .NET 10 SDK
+        id: sdk_check
+        shell: pwsh
+        run: |
+          $sdks = @()
+          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            $sdks = @(dotnet --list-sdks)
+          }
+          $available = @($sdks | Where-Object {
+            $_ -match '^10\\.0\\.\\d+\\s+\\['
+          }).Count -gt 0
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($available) { Write-Host 'Using preinstalled .NET 10 SDK.' }
+          else { Write-Host '.NET 10 not preinstalled; using setup-dotnet.' }
       - name: Setup .NET 10
+        if: steps.sdk_check.outputs.available != 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
