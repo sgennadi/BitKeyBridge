@@ -166,32 +166,35 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             new ColumnStyle(
                 SizeType.AutoSize));
 
-        // The old wrapped FlowLayoutPanel could measure its preferred width
-        // as ONE button in the TableLayoutPanel's AutoSize column, wrapping
-        // Next/Back below the visible footer (especially at 150-200% DPI).
-        // A single, non-wrapping right-anchored row must always show all
-        // three navigation actions at the bottom of the wizard.
+        // DpiAwareForm explicitly sets WrapContents=true on ALL horizontal
+        // FlowLayoutPanels during first-show/DPI refresh, so disabling wrap
+        // on the old footer did not stick. A three-column TableLayoutPanel
+        // keeps Back, Next and Cancel in one measurable row at every DPI.
         var navigation =
-            new FlowLayoutPanel
+            new TableLayoutPanel
             {
                 Name = "IntuneSetupWizardNavigation",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                WrapContents = false,
-                FlowDirection = FlowDirection.RightToLeft,
+                ColumnCount = 3,
+                RowCount = 1,
                 RightToLeft = RightToLeft.No,
                 Margin = Padding.Empty
             };
-        _cancel.Name = "IntuneSetupWizardCancel";
-        _next.Name = "IntuneSetupWizardNext";
+        navigation.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        navigation.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        navigation.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        navigation.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         _back.Name = "IntuneSetupWizardBack";
-        navigation.Controls.Add(
-            _cancel);
-        navigation.Controls.Add(
-            _next);
-        navigation.Controls.Add(
-            _back);
+        _next.Name = "IntuneSetupWizardNext";
+        _cancel.Name = "IntuneSetupWizardCancel";
+        _back.TabIndex = 0;
+        _next.TabIndex = 1;
+        _cancel.TabIndex = 2;
+        navigation.Controls.Add(_back, 0, 0);
+        navigation.Controls.Add(_next, 1, 0);
+        navigation.Controls.Add(_cancel, 2, 0);
         footer.Controls.Add(
             navigation,
             1,
