@@ -63,6 +63,8 @@ public sealed partial class MainForm
     private readonly ConditionalWeakTable<ToolStripDropDownItem, object>
         _observedLocalizedMenus = new();
     private bool _localizedCaptionCacheBuilt;
+    // Per-form bounded and source-validated; never caches arbitrary row values.
+    private readonly UiHeaderWidthCache _headerWidthCache = new();
 
     private void ObserveLocalizedCaptionTree(
         Control root, bool applyImmediately = true)
@@ -257,8 +259,6 @@ public sealed partial class MainForm
         // MinimumWidth permits horizontal scrolling instead of cutting longer
         // Hebrew and Russian captions at 175%-200% DPI.
         var headerFont = grid.ColumnHeadersDefaultCellStyle.Font ?? grid.Font;
-        var flags = TextFormatFlags.SingleLine |
-                    TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
         // A repeated switch to the same language, or a visible-page
         // refresh with unchanged headers, must not force a grid layout.
         // Defer SuspendLayout until an actual header or width change.
@@ -273,9 +273,9 @@ public sealed partial class MainForm
                     _uiLanguageCode, source.English);
                 var captionChanged = !string.Equals(
                     column.HeaderText, caption, StringComparison.Ordinal);
-                var required = TextRenderer.MeasureText(
-                    caption, headerFont, new Size(4096, 1024), flags).Width +
-                    UiStyle.ScaleLogicalPixels(26, grid.DeviceDpi);
+                var required = _headerWidthCache.Measure(
+                    source.English, caption, headerFont, grid.DeviceDpi,
+                    UiHeaderWidthCache.HeaderKind.DataGrid);
                 var width = Math.Max(source.MinimumWidth, required);
                 var widthChanged = column.MinimumWidth != width;
                 if (!captionChanged && !widthChanged)
@@ -314,8 +314,9 @@ public sealed partial class MainForm
             // Longer Hebrew/Russian titles must never disappear under fixed
             // narrow 70-80px English header widths. Scrolling is preferable
             // to truncation; the original width is restored in English.
-            var required = TextRenderer.MeasureText(translation, list.Font).Width +
-                UiStyle.ScaleLogicalPixels(18, list.DeviceDpi);
+            var required = _headerWidthCache.Measure(
+                english, translation, list.Font, list.DeviceDpi,
+                UiHeaderWidthCache.HeaderKind.ListView);
             var width = Math.Max(originalWidth, required);
             if (column.Width != width)
                 column.Width = width;
