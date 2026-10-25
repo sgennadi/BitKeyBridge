@@ -79,6 +79,9 @@ internal static class UiLayoutTelemetry
     private static readonly Counter LanguageMenuDirection = new();
     private static readonly Counter LanguageCaptions = new();
     private static readonly Counter LanguageResume = new();
+    // Counts only: never retain header text, font names or device metadata.
+    private static long _headerWidthCacheHits;
+    private static long _headerWidthCacheMisses;
 
     internal static void RecordViewport(long start) => MainViewport.Record(start);
     internal static void RecordResponsiveForm(long start) => ResponsiveForm.Record(start);
@@ -138,6 +141,10 @@ internal static class UiLayoutTelemetry
         LanguageMenuDirection.Record(start);
     internal static void RecordLanguageCaptions(long start) => LanguageCaptions.Record(start);
     internal static void RecordLanguageResume(long start) => LanguageResume.Record(start);
+    internal static void RecordHeaderWidthCacheHit() =>
+        Interlocked.Increment(ref _headerWidthCacheHits);
+    internal static void RecordHeaderWidthCacheMiss() =>
+        Interlocked.Increment(ref _headerWidthCacheMisses);
 
     internal static string Report() =>
         "WinForms layout timings for this process (non-secret, since startup). " +
@@ -165,7 +172,9 @@ internal static class UiLayoutTelemetry
         $"Main tab native handles (lifetime): created={Interlocked.Read(ref _mainTabHandleCreated)}, destroyed={Interlocked.Read(ref _mainTabHandleDestroyed)}\n" +
         LanguageMenuDirection.Summarize("Top menu RTL setter") + "\n" +
         LanguageCaptions.Summarize("Language captions") + "\n" +
-        LanguageResume.Summarize("Language layout resume") + "\n\n" +
+        LanguageResume.Summarize("Language layout resume") + "\n" +
+        $"Fixed-header width cache: hits={Interlocked.Read(ref _headerWidthCacheHits)}, " +
+        $"misses={Interlocked.Read(ref _headerWidthCacheMisses)}\n\n" +
         "If a tab still feels slow but these numbers are low, " +
         "the delay may be a synchronous data operation or native paint. " +
         "This report contains no device names, passwords or tokens.";
