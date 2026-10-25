@@ -302,24 +302,49 @@ public sealed partial class MainForm
     {
         if (list.IsDisposed || !_localizedListViewHeaders.TryGetValue(list, out var sources))
             return;
-        for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+
+        // Native ListView column changes are not parent layout changes.
+        // A warm switch with identical text/width must do no BeginUpdate,
+        // parent SuspendLayout or forced reflow. Only repaint an existing
+        // visible list if at least one header really needs updating.
+        var updating = false;
+        try
         {
-            var (english, originalWidth) = sources[i];
-            if (!UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
-                    out var translation))
-                continue;
-            var column = list.Columns[i];
-            if (!string.Equals(column.Text, translation, StringComparison.Ordinal))
-                column.Text = translation;
-            // Longer Hebrew/Russian titles must never disappear under fixed
-            // narrow 70-80px English header widths. Scrolling is preferable
-            // to truncation; the original width is restored in English.
-            var required = _headerWidthCache.Measure(
-                english, translation, list.Font, list.DeviceDpi,
-                UiHeaderWidthCache.HeaderKind.ListView);
-            var width = Math.Max(originalWidth, required);
-            if (column.Width != width)
-                column.Width = width;
+            for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+            {
+                var (english, originalWidth) = sources[i];
+                if (!UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
+                        out var translation))
+                    continue;
+
+                var column = list.Columns[i];
+                var textChanged = !string.Equals(
+                    column.Text, translation, StringComparison.Ordinal);
+                // Scrolling beats clipping 70-80px English column widths at
+                // 175%-200% DPI; restore at least original width in English.
+                var required = _headerWidthCache.Measure(
+                    english, translation, list.Font, list.DeviceDpi,
+                    UiHeaderWidthCache.HeaderKind.ListView);
+                var width = Math.Max(originalWidth, required);
+                var widthChanged = column.Width != width;
+                if (!textChanged && !widthChanged)
+                    continue;
+
+                if (!updating && list.IsHandleCreated && list.Visible)
+                {
+                    list.BeginUpdate();
+                    updating = true;
+                }
+                if (textChanged)
+                    column.Text = translation;
+                if (widthChanged)
+                    column.Width = width;
+            }
+        }
+        finally
+        {
+            if (updating && !list.IsDisposed)
+                list.EndUpdate();
         }
     }
 
@@ -476,9 +501,10 @@ public sealed partial class MainForm
                 changed.Add((control, caption, changeText, changeDirection));
         }
 
+        // Header-only ListViews redraw their own native columns on demand.
+        // Do not suspend/resume entire parent panels of unchanged/hidden
+        // lists on every RU/HE switch; only actual caption controls need it.
         var parents = changed.Select(x => x.Control.Parent)
-            .Concat(_localizedListViewHeaders.Keys
-                .Where(x => !x.IsDisposed).Select(x => x.Parent))
             .OfType<Control>().Distinct().ToArray();
         foreach (var parent in parents)
             parent.SuspendLayout();
