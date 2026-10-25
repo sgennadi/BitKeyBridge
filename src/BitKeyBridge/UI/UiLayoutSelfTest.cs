@@ -772,6 +772,9 @@ public static class UiLayoutSelfTest
                                 language + " / step " + step);
                     }
 
+                    if (!wizard.PreviewCancellationForUiSelfTest())
+                        failures.Add("Intune wizard Cancel failed to stop marquee or dismisses early: " +
+                            language + " / " + fontScale);
                     if (wizard.SetupResult is not null)
                         failures.Add("Navigation-only wizard test unexpectedly ran setup.");
                 }
