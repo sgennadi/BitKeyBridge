@@ -617,7 +617,11 @@ public sealed partial class MainForm
         finally
         {
             var resumeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-            _mainTabs.ResumeLayout(performLayout: true);
+            // Initial/show and headless UI tests require an immediate pass.
+            // Warm user-initiated changes schedule a single selected-viewport
+            // reflow from SetShellLanguage; forcing the entire TabControl tree
+            // here was a redundant synchronous layout during RTL transitions.
+            _mainTabs.ResumeLayout(performLayout: initialApply || _layoutSelfTest);
             // false reused the old menu layout after switching between
             // Language / Язык / שפה, sometimes clipping the final Hebrew glyph.
             MainMenuStrip?.ResumeLayout(performLayout: true);
