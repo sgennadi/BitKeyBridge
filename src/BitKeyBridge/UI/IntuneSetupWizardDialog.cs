@@ -655,6 +655,38 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         cancellation.Cancel();
     }
 
+    // Exercise the real Cancel handler without contacting Graph or creating
+    // an app registration. The test-only flag does not bypass any setup gate.
+    internal bool PreviewCancellationForUiSelfTest()
+    {
+        if (_running || _cancellation is not null)
+            return false;
+
+        using var cancellation = new CancellationTokenSource();
+        _cancellation = cancellation;
+        _running = true;
+        _progress.MarqueeAnimationSpeed = 25;
+        _progress.Visible = true;
+        try
+        {
+            UpdateNavigation();
+            CancelOrClose();
+            return cancellation.IsCancellationRequested &&
+                _cancel.DialogResult == DialogResult.None &&
+                !_cancel.Enabled &&
+                _progress.MarqueeAnimationSpeed == 0 &&
+                !_progress.Visible;
+        }
+        finally
+        {
+            _cancellation = null;
+            _running = false;
+            _progress.MarqueeAnimationSpeed = 0;
+            _progress.Visible = false;
+            UpdateNavigation();
+        }
+    }
+
     private void CancelOrClose()
     {
         if (_running)
