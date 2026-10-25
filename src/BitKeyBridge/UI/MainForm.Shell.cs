@@ -428,10 +428,11 @@ public sealed partial class MainForm
         };
         copyUiReport.Click += (_, _) => ShowUiPerformanceReport(copyImmediately: true);
         tools.DropDownItems.Add(copyUiReport);
-        tools.DropDownItems.Add(
+        var latestRelease = tools.DropDownItems.Add(
             "Latest GitHub release",
             null,
             (_, _) => OpenLatestRelease());
+        latestRelease.Name = "LatestGithubReleaseMenuItem";
 
         // Compact by default. Only noninteractive explanatory paragraphs
         // are hidden; all controls, security checks and status remain.
