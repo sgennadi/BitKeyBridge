@@ -326,7 +326,7 @@ public sealed partial class MainForm
     // need to recreate native child handles in invisible workspaces.
     // Before form handles exist (including headless UI tests), apply eagerly.
     private bool CanUpdateCaptionDirection(Control control) =>
-        !IsHandleCreated || control.Visible;
+        _layoutSelfTest || !IsHandleCreated || control.Visible;
 
     private void OnLocalizedCaptionVisibleChanged(object? sender, EventArgs args)
     {
@@ -362,8 +362,9 @@ public sealed partial class MainForm
 
             if (!_localizedMenuSources.TryGetValue(item, out var original))
             {
-                var source = item.Tag is string tag &&
-                    UiStaticCaptionCatalog.Contains(tag) ? tag : item.Text;
+                // Never infer a caption from Tag; it may be a command
+                // identifier, a security context, or a custom binding.
+                var source = item.Text;
                 if (UiStaticCaptionCatalog.Contains(source))
                 {
                     original = source;
