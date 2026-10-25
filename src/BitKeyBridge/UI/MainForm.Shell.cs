@@ -3,6 +3,9 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly TabControl _mainTabs = new();
+    private TabPage? _cloudSettingsPage;
+    private readonly Button _devicesCloudSettingsLink = new();
+    private readonly TableLayoutPanel _devicesSearchStatusRow = new();
     private ToolStripMenuItem? _toolsTopMenu;
     private ToolStripMenuItem? _recoveryStepsMenu;
     private ToolStripMenuItem? _accessHealthMenu;
@@ -2526,7 +2529,25 @@ public sealed partial class MainForm
         UiStyle.ApplyStatusLabel(
             _unifiedStatus,
             UiStatusKind.Neutral);
-        root.Controls.Add(_unifiedStatus, 0, 1);
+        _devicesSearchStatusRow.Name = "DevicesCloudWarningActions";
+        _devicesSearchStatusRow.Dock = DockStyle.Top;
+        _devicesSearchStatusRow.AutoSize = true;
+        _devicesSearchStatusRow.ColumnCount = 2;
+        _devicesSearchStatusRow.RowCount = 1;
+        _devicesSearchStatusRow.ColumnStyles.Add(
+            new ColumnStyle(SizeType.Percent, 100F));
+        _devicesSearchStatusRow.ColumnStyles.Add(
+            new ColumnStyle(SizeType.AutoSize));
+        _devicesSearchStatusRow.Controls.Add(_unifiedStatus, 0, 0);
+        _devicesCloudSettingsLink.Name = "DevicesOpenCloudSettingsButton";
+        _devicesCloudSettingsLink.Text = "Configure Cloud...";
+        _devicesCloudSettingsLink.AccessibleName = "Open Cloud settings";
+        _devicesCloudSettingsLink.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+        UiStyle.ConfigureActionButton(_devicesCloudSettingsLink);
+        _devicesCloudSettingsLink.Click += (_, _) => OpenCloudSettingsFromDevices();
+        _devicesSearchStatusRow.Controls.Add(_devicesCloudSettingsLink, 1, 0);
+        _devicesCloudSettingsLink.Visible = false;
+        root.Controls.Add(_devicesSearchStatusRow, 0, 1);
 
         _unifiedProgress.Name =
             "UnifiedSearchProgress";
@@ -2762,7 +2783,8 @@ public sealed partial class MainForm
         // Everyday settings are immediately visible; enterprise features live
         // under a single explicit group instead of competing at the top level.
         nested.TabPages.Add(BuildHelpdeskBasicsResponsiveTab());
-        nested.TabPages.Add(BuildCloudAdministrationTab());
+        _cloudSettingsPage = BuildCloudAdministrationTab();
+        nested.TabPages.Add(_cloudSettingsPage);
         nested.TabPages.Add(BuildUpdatesResponsiveTab());
 
         var enterprise = new TabPage("Enterprise")
@@ -2806,6 +2828,33 @@ public sealed partial class MainForm
 
         tab.Controls.Add(nested);
         return tab;
+    }
+
+    private void SetDevicesCloudWarningAction(bool needed)
+    {
+        // Never suggest an admin-only destination to an unauthorized user.
+        _devicesCloudSettingsLink.Visible = needed &&
+            _cloudSettingsPage is not null &&
+            _mainTabs.TabPages.Cast<TabPage>().Any(
+                page => page.Name == "SettingsWorkspace");
+    }
+
+    private void OpenCloudSettingsFromDevices()
+    {
+        // Only navigate to the existing authorized page. Do not trigger
+        // authentication, consent, setup, or a second device search.
+        var settings = _mainTabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "SettingsWorkspace");
+        if (settings is null || _cloudSettingsPage is null ||
+            settings.Controls.OfType<TabControl>().FirstOrDefault() is not { } tabs ||
+            !tabs.TabPages.Contains(_cloudSettingsPage))
+            return;
+
+        _mainTabs.SelectedTab = settings;
+        tabs.SelectedTab = _cloudSettingsPage;
+        QueueNavigationViewportReflow();
+        if (_cloudTenant.CanFocus)
+            _cloudTenant.Focus();
     }
 
     private TabPage BuildCloudAdministrationTab()
