@@ -144,6 +144,7 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
         var footer =
             new TableLayoutPanel
             {
+                Name = "IntuneSetupWizardFooter",
                 Dock =
                     DockStyle.Fill,
                 AutoSize =
@@ -165,18 +166,26 @@ public sealed class IntuneSetupWizardDialog : DpiAwareForm
             new ColumnStyle(
                 SizeType.AutoSize));
 
+        // The old wrapped FlowLayoutPanel could measure its preferred width
+        // as ONE button in the TableLayoutPanel's AutoSize column, wrapping
+        // Next/Back below the visible footer (especially at 150-200% DPI).
+        // A single, non-wrapping right-anchored row must always show all
+        // three navigation actions at the bottom of the wizard.
         var navigation =
             new FlowLayoutPanel
             {
-                Dock =
-                    DockStyle.Fill,
-                AutoSize =
-                    true,
-                WrapContents =
-                    true,
-                FlowDirection =
-                    FlowDirection.RightToLeft
+                Name = "IntuneSetupWizardNavigation",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                WrapContents = false,
+                FlowDirection = FlowDirection.RightToLeft,
+                RightToLeft = RightToLeft.No,
+                Margin = Padding.Empty
             };
+        _cancel.Name = "IntuneSetupWizardCancel";
+        _next.Name = "IntuneSetupWizardNext";
+        _back.Name = "IntuneSetupWizardBack";
         navigation.Controls.Add(
             _cancel);
         navigation.Controls.Add(
