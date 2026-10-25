@@ -331,6 +331,26 @@ internal static class UiLanguageService
                 }
             }
 
+            // Checklist progress is formatted at runtime, not translated
+            // from a fixed English "0 of 7" label. Both placeholders must
+            // remain valid in all three supported languages.
+            foreach (var language in SupportedLanguages.Select(x => x.Code))
+            {
+                var template = Translate(language, "HelpdeskDeploymentProgressTemplate");
+                try
+                {
+                    var value = string.Format(CultureInfo.InvariantCulture,
+                        template, 2, 7);
+                    if (!value.Contains("2", StringComparison.Ordinal) ||
+                        !value.Contains("7", StringComparison.Ordinal))
+                        failures.Add("Helpdesk progress template lost a count: " + language);
+                }
+                catch (FormatException)
+                {
+                    failures.Add("Invalid Helpdesk progress template: " + language);
+                }
+            }
+
             foreach (var language in SupportedLanguages.Select(x => x.Code))
             {
                 foreach (var kind in Enum.GetValues<MetadataFailureKind>()
