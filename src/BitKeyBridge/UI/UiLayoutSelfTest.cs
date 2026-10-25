@@ -680,15 +680,15 @@ public static class UiLayoutSelfTest
                         continue;
                     }
 
+                    var backCell = navigation.GetPositionFromControl(back);
+                    var nextCell = navigation.GetPositionFromControl(next);
+                    var cancelCell = navigation.GetPositionFromControl(cancel);
                     if (navigation.ColumnCount != 3 ||
                         navigation.RowCount != 1 ||
                         navigation.RightToLeft != RightToLeft.No ||
-                        navigation.GetPositionFromControl(back) !=
-                            new TableLayoutPanelCellPosition(0, 0) ||
-                        navigation.GetPositionFromControl(next) !=
-                            new TableLayoutPanelCellPosition(1, 0) ||
-                        navigation.GetPositionFromControl(cancel) !=
-                            new TableLayoutPanelCellPosition(2, 0) ||
+                        backCell.Column != 0 || backCell.Row != 0 ||
+                        nextCell.Column != 1 || nextCell.Row != 0 ||
+                        cancelCell.Column != 2 || cancelCell.Row != 0 ||
                         !ReferenceEquals(wizard.AcceptButton, next) ||
                         !ReferenceEquals(wizard.CancelButton, cancel))
                         failures.Add("Intune wizard navigation must remain a single row with keyboard actions: " +
