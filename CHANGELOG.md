@@ -1,6 +1,6 @@
 ## 0.33.1
 
-**Development / QA only. NOT PUBLISHED.** Latest Stable is v0.33.0.
+**UNSIGNED Stable release contents; publication strictly gated by the exact-source Windows, CodeQL, protected audit, rollback and SHA-pinned canary workflow.** Previous published Stable v0.33.0 is the rollback baseline. Release publication does not authorize managed GPO/Intune rollout.
 
 - Integrate verified PR #108: a localized Configure Cloud shortcut from Devices opens the existing authorized Settings → Cloud tab without erasing the AD device search or starting an authentication request.
 - Privileged Entra First-Run / Repair and the three-step Intune setup wizard now reject empty, malformed, all-zero or generic (`organizations`, `common`, `consumers`) tenant identifiers **before Graph registration and consent**. They require a specific tenant GUID or verified DNS domain.
