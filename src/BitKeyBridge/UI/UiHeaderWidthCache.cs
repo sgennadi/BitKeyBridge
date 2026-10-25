@@ -51,19 +51,10 @@ internal sealed class UiHeaderWidthCache
 
         ArgumentNullException.ThrowIfNull(localizedCaption);
         ArgumentNullException.ThrowIfNull(font);
-        var key = new MeasurementKey(
-            localizedCaption, font.Name, font.Size, font.Style, font.Unit,
-            font.GdiCharSet, font.GdiVerticalFont, dpi, kind);
-        if (_widths.TryGetValue(key, out var cached))
-        {
-            CacheHits++;
-            UiLayoutTelemetry.RecordHeaderWidthCacheHit();
-            return cached;
-        }
 
-        // Validate the VALUE as well as the English source: otherwise a
-        // future caller could pass a real recovery secret as caption while
-        // using a known sourceEnglish. Cached hits are already validated.
+        // Validate every request BEFORE looking up a cache hit. Otherwise
+        // passing another known English source with the same cached rendered
+        // caption could bypass its source/translation association.
         if (!string.Equals(localizedCaption, sourceEnglish, StringComparison.Ordinal) &&
             !string.Equals(localizedCaption,
                 UiStaticCaptionCatalog.TranslateOrOriginal("ru", sourceEnglish),
@@ -74,6 +65,16 @@ internal sealed class UiHeaderWidthCache
             throw new ArgumentException(
                 "Header measurement requires a catalogued localized caption.",
                 nameof(localizedCaption));
+
+        var key = new MeasurementKey(
+            localizedCaption, font.Name, font.Size, font.Style, font.Unit,
+            font.GdiCharSet, font.GdiVerticalFont, dpi, kind);
+        if (_widths.TryGetValue(key, out var cached))
+        {
+            CacheHits++;
+            UiLayoutTelemetry.RecordHeaderWidthCacheHit();
+            return cached;
+        }
 
         var width = kind switch
         {
