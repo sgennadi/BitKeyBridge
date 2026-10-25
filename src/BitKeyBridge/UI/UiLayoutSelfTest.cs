@@ -808,6 +808,19 @@ public static class UiLayoutSelfTest
                                 language + " / step " + step);
                     }
 
+                    wizard.PreviewStepForUiSelfTest(2);
+                    UiDialogLocalization.Apply(wizard, language);
+                    var expectedReview = UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Setup actions:");
+                    if (FindByName(wizard, "IntuneWizardReview")
+                            is not RichTextBox review ||
+                        !review.Text.Contains(expectedReview,
+                            StringComparison.Ordinal) ||
+                        !review.Text.Contains("BitlockerKey.Read.All",
+                            StringComparison.Ordinal))
+                        failures.Add("Intune wizard review translation lost static captions or Graph scope IDs: " +
+                            language + " / " + fontScale);
+
                     if (!wizard.PreviewTenantValidationForUiSelfTest())
                         failures.Add("Intune wizard allowed a missing, generic or malformed tenant: " +
                             language + " / " + fontScale);
