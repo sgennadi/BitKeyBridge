@@ -295,15 +295,16 @@ public sealed class DeviceCodeDialog : DpiAwareForm
             UiStyle.CreateActionButton(
                 "OK",
                 DialogResult.OK);
-        buttons.Controls.Add(
-            ok);
-        root.Controls.Add(
-            buttons,
-            0,
-            6);
+        var cancel = UiStyle.CreateActionButton(
+            "Cancel", DialogResult.Cancel);
+        cancel.Name = "DeviceCodeCancel";
+        ok.Name = "DeviceCodeContinue";
+        buttons.Controls.Add(ok);
+        buttons.Controls.Add(cancel);
+        root.Controls.Add(buttons, 0, 6);
 
-        AcceptButton =
-            ok;
+        AcceptButton = ok;
+        CancelButton = cancel;
 
         Shown +=
             (_, _) =>
