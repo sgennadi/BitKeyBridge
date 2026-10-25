@@ -27,6 +27,9 @@ $homeSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\Mai
 $startConnectionSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.StartConnection.cs') -Raw
 $startupWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\StartupConnectionWizardDialog.cs') -Raw
 $cloudWizardSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\CloudConnectionWizardDialog.cs') -Raw
+$cloudMain = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.cs') -Raw
+$intuneSetup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\IntuneSetupWizardDialog.cs') -Raw
+$deviceCodeDialog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DeviceCodeDialog.cs') -Raw
 $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
@@ -112,6 +115,12 @@ Assert-Source ($startConnectionSource.Contains('HomeConnectionPrimaryActions') -
 Assert-Source ($startConnectionSource.Contains('_startAdIdentityPanel.Visible = ad && _connectionOptionsExpanded') -and $startConnectionSource.Contains('_startDirectActionsPanel.Visible = _connectionOptionsExpanded')) 'Extra AD controls must stay collapsed until the operator expands Connection options.'
 Assert-Source ($startupWizardSource.Contains('Start without a connection') -and $startupWizardSource.Contains('UiStyle.CreateActionButton("Cancel", DialogResult.Cancel)')) 'Offline entry and cancellation must be distinct connection wizard actions.'
 Assert-Source ($cloudWizardSource.Contains('CloudWizardPermissionsToggle') -and $cloudWizardSource.Contains('if (_adminSetup.Checked)') -and $cloudWizardSource.Contains('_tenant.Enabled = _approvedApp.Checked')) 'Cloud permissions guidance must be expandable and administrator bootstrap cannot require an existing app.'
+Assert-Source ($cloudMain.Contains('if (dialog.ShowDialog(this) != DialogResult.OK)') -and $cloudMain.Contains('throw new OperationCanceledException(')) 'Closing the Device Code dialog must cancel token polling rather than leave a progress marquee running.'
+Assert-Source ($deviceCodeDialog.Contains('DialogResult.Cancel') -and $deviceCodeDialog.Contains('CancelButton = cancel') -and $deviceCodeDialog.Contains('DeviceCodeActions')) 'Device Code must have an explicit Cancel action in a non-wrapping footer.'
+Assert-Source ($cloudMain.Contains('_cloudProgress.MarqueeAnimationSpeed = 0;') -and $cloudMain.Contains('_cloudProgress.Visible = false;') -and $cloudMain.Contains('cancellation.IsCancellationRequested')) 'Cancel must stop the Graph marquee immediately and suppress duplicate cancellation.'
+Assert-Source ($cloudMain.Contains('!ReferenceEquals(_cloudMaintenanceCancellation, cancellation)') -and $intuneSetup.Contains('!ReferenceEquals(_cancellation, cancellation)')) 'Stale queued Entra progress callbacks must not revive busy status after operation completion.'
+Assert-Source ($intuneSetup.Contains('RequestSetupCancellation()') -and $intuneSetup.Contains('_progress.MarqueeAnimationSpeed = 0;')) 'Intune setup cancellation must stop its modal marquee too.'
+Assert-Source ($layoutSelfTest.Contains('VerifyDeviceCodeCancellation(failures)') -and $layoutSelfTest.Contains('PreviewCloudCancellationForUiSelfTest()')) 'Native WinForms tests must exercise cancellation without connecting to Microsoft Graph.'
 Assert-Source ($helpdeskSettingsSource.Contains('HelpdeskProfilesToggle') -and $helpdeskSettingsSource.Contains('HelpdeskRecoveryPolicyToggle')) 'Infrequent settings must use compact expandable groups.'
 Assert-Source ($helpdeskSettingsSource.Contains('HelpdeskRecoveryPolicyOverview') -and $helpdeskSettingsSource.Contains('Saved recovery policy:')) 'Collapsed recovery policies must leave the saved audit gate visible.'
 Assert-Source ($helpdesk.Contains('_setHelpdeskRecoveryPolicyExpanded?.Invoke(true)') -and $helpdeskSettingsSource.Contains('SetRecoveryPolicyExpanded(bool expanded)')) 'Helpdesk Setup & Permissions must reveal the policy without simulating a hidden-button click.'
