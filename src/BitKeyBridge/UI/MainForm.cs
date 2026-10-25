@@ -665,11 +665,50 @@ public sealed partial class MainForm : DpiAwareForm
         _cloudThumbprint.Enabled = _cloudAuthMode.SelectedIndex == 1;
     }
 
+    // A missing Tenant ID (or Client ID) is a local configuration
+    // prerequisite, not a Graph authentication exception. Never persist
+    // incomplete settings or start a network sign-in for these inputs.
+    internal static string? CloudConnectionPrerequisiteError(
+        string? tenantId, string? clientId, string? certificateThumbprint,
+        bool certificateMode)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId))
+            return "Enter a Microsoft Entra Tenant ID or verified domain in Connect / Change before signing in.";
+        if (!Guid.TryParse(clientId, out var applicationId) ||
+            applicationId == Guid.Empty)
+            return "Enter a valid, IT-approved Microsoft Entra application (Client ID) GUID in Connect / Change before signing in.";
+        if (certificateMode && string.IsNullOrWhiteSpace(certificateThumbprint))
+            return "Certificate sign-in requires a certificate thumbprint. Select Device Code or configure an approved certificate.";
+        return null;
+    }
+
     private async Task<bool> ConnectCloudAsync(bool forLaps = false, CancellationToken ct = default)
     {
         try
         {
             _cloudDiagnostics.Clear();
+            var prerequisite = CloudConnectionPrerequisiteError(
+                _cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text,
+                _cloudAuthMode.SelectedIndex == 1);
+            if (prerequisite is not null)
+            {
+                // Do not leave a token from another configuration usable.
+                _cloudToken = null;
+                _cloudTokenContext = string.Empty;
+                _cloudTokenHasLaps = false;
+                _cloudTokenHasRecovery = false;
+                var guidance = UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, prerequisite);
+                UiStyle.SetStatus(_cloudStatus, guidance, UiStatusKind.Warning);
+                _cloudDiagnostics.ShowMessage(
+                    "Microsoft Entra connection settings are incomplete.",
+                    guidance + Environment.NewLine +
+                    "No Microsoft Graph authentication was attempted.");
+                if (forLaps)
+                    UiStyle.SetStatus(_lapsStatus, guidance, UiStatusKind.Warning);
+                RefreshHomeConnectionUi();
+                return false;
+            }
             SaveCloudFields();
             UiStyle.SetStatus(
                 _cloudStatus,
