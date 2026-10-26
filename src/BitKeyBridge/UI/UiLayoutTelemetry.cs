@@ -139,6 +139,13 @@ internal static class UiLayoutTelemetry
     private static readonly Counter LanguageMenuDirection = new();
     private static readonly Counter LanguageCaptions = new(recentPercentiles: true);
     private static readonly Counter LanguageResume = new(recentPercentiles: true);
+    // User-initiated language changes also include a deferred UI callback.
+    // These bounded counters measure through selected-page ReflowMainViewport,
+    // not native paint or RDP transport. No language text or device data.
+    private static readonly Counter LanguageViewportDispatch = new(recentPercentiles: true);
+    private static readonly Counter LanguageViewportReflow = new(recentPercentiles: true);
+    private static readonly Counter LanguageViewportReady = new(recentPercentiles: true);
+    private static long _languageViewportSuperseded;
     private static long _visibleLabelBatches;
     private static long _visibleLabelWidthChanges;
     private static long _visibleLabelParentReflows;
@@ -215,6 +222,14 @@ internal static class UiLayoutTelemetry
         LanguageMenuDirection.Record(start);
     internal static void RecordLanguageCaptions(long start) => LanguageCaptions.Record(start);
     internal static void RecordLanguageResume(long start) => LanguageResume.Record(start);
+    internal static void RecordLanguageViewportDispatch(long queued) =>
+        LanguageViewportDispatch.Record(queued);
+    internal static void RecordLanguageViewportReflow(long started) =>
+        LanguageViewportReflow.Record(started);
+    internal static void RecordLanguageViewportReady(long started) =>
+        LanguageViewportReady.Record(started);
+    internal static void RecordLanguageViewportSuperseded() =>
+        Interlocked.Increment(ref _languageViewportSuperseded);
     internal static void RecordVisibleLabelBatch(int changed, int parentReflows)
     {
         Interlocked.Increment(ref _visibleLabelBatches);
@@ -278,6 +293,10 @@ internal static class UiLayoutTelemetry
         foreach (var expected in new[] {
             "Language changes (warm)", "Language EN/RU -> Hebrew",
             "Language Hebrew -> EN/RU", "Language EN <-> RU",
+            "Language to selected viewport ready",
+            "Language after-apply UI dispatch",
+            "Language selected viewport reflow",
+            "Language viewport measurements superseded",
             "recent=", "p50=", "p95="
         })
             if (!report.Contains(expected, StringComparison.Ordinal))
@@ -315,6 +334,10 @@ internal static class UiLayoutTelemetry
         LanguageMenuDirection.Summarize("Top menu RTL setter") + "\n" +
         LanguageCaptions.Summarize("Language captions") + "\n" +
         LanguageResume.Summarize("Language layout resume") + "\n" +
+        LanguageViewportDispatch.Summarize("Language after-apply UI dispatch") + "\n" +
+        LanguageViewportReflow.Summarize("Language selected viewport reflow") + "\n" +
+        LanguageViewportReady.Summarize("Language to selected viewport ready") + "\n" +
+        $"Language viewport measurements superseded: {Interlocked.Read(ref _languageViewportSuperseded)}\n" +
         $"Visible-label width batches: batches={Interlocked.Read(ref _visibleLabelBatches)}, " +
         $"widthChanges={Interlocked.Read(ref _visibleLabelWidthChanges)}, " +
         $"parentReflows={Interlocked.Read(ref _visibleLabelParentReflows)}\n" +
