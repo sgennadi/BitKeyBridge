@@ -13,6 +13,8 @@ public class DpiAwareForm : Form
     // Batch them once on the UI thread; never capture or log label contents.
     private readonly HashSet<Label> _pendingVisibleLabelWidths = new();
     private bool _visibleLabelWidthRefreshPosted;
+    private int _visibleLabelHandleGeneration;
+    private bool _responsiveHandleRecreated;
     private int _visibleLabelWidthBatchCount;
 
     internal int VisibleLabelWidthBatchCountForUiSelfTest =>
@@ -72,6 +74,31 @@ public class DpiAwareForm : Form
             _responsiveLabelTimer.Dispose();
             _responsiveLayoutTimer.Dispose();
         };
+    }
+
+    // A WinForms HWND may be recreated on RTL, DPI and RDP transitions.
+    // BeginInvoke callbacks queued against the old handle may never run;
+    // invalidate them and allow the next visible tab to schedule normally.
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        unchecked { _visibleLabelHandleGeneration++; }
+        _pendingVisibleLabelWidths.Clear();
+        _visibleLabelWidthRefreshPosted = false;
+        _responsiveLabelTimer.Stop();
+        _responsiveLayoutTimer.Stop();
+        _responsiveHandleRecreated = _responsiveLayoutInitialized &&
+            !IsDisposed && !Disposing;
+        base.OnHandleDestroyed(e);
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (_responsiveHandleRecreated && !IsDisposed && !Disposing)
+        {
+            _responsiveHandleRecreated = false;
+            QueueResponsiveLayoutRefresh();
+        }
     }
 
     protected override void OnLoad(EventArgs e)
@@ -298,7 +325,9 @@ public class DpiAwareForm : Form
         {
             // Exactly one posted callback for a burst of newly visible
             // labels. It runs after WinForms has activated the tab/page.
-            BeginInvoke(new MethodInvoker(DrainPendingVisibleLabelWidths));
+            var generation = _visibleLabelHandleGeneration;
+            BeginInvoke(new MethodInvoker(
+                () => DrainPendingVisibleLabelWidths(generation)));
         }
         catch (Exception ex) when (ex is InvalidOperationException or
                                    ObjectDisposedException)
@@ -310,8 +339,12 @@ public class DpiAwareForm : Form
         }
     }
 
-    private void DrainPendingVisibleLabelWidths()
+    private void DrainPendingVisibleLabelWidths(int generation)
     {
+        // Do not clear a newer HWND's pending queue if a stale callback
+        // somehow arrives after RecreateHandle().
+        if (generation != _visibleLabelHandleGeneration)
+            return;
         _visibleLabelWidthRefreshPosted = false;
         var pending = _pendingVisibleLabelWidths.ToArray();
         _pendingVisibleLabelWidths.Clear();
