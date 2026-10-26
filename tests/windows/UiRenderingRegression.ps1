@@ -158,6 +158,19 @@ Assert-Source ($mainLocalization.Contains('LastGenerated') -and
                $layoutSelfTest.Contains('Language switch rewrote runtime menu caption or editable value:') -and
                $layoutSelfTest.Contains('Main grid/list localization overwrote live header data:') -and
                $layoutSelfTest.Contains('Main grid/list failed to adopt replacement English captions:')) 'Runtime ToolStrip and native columns must not relocalize caller-owned values or cache sensitive metadata.'
+# Direction-aware p50/p95 timings expose slow native Hebrew mirroring
+# without retaining any text, device identifiers, tenant IDs or keys.
+Assert-Source ($telemetry.Contains('RecentCapacity = 128') -and
+               $telemetry.Contains('Array.Sort(snapshot)') -and
+               $telemetry.Contains('RecentPercentiles()') -and
+               $telemetry.Contains('Language EN/RU -> Hebrew') -and
+               $telemetry.Contains('Language Hebrew -> EN/RU') -and
+               $telemetry.Contains('Language EN <-> RU') -and
+               $telemetry.Contains('WarmLanguageSwitch = new(recentPercentiles: true)') -and
+               $telemetry.Contains('RunOfflineTests()') -and
+               $shell.Contains('_lastAppliedShellRtl = rtl;') -and
+               $shell.Contains('started, initialApply, previousRtl, rtl') -and
+               $layoutSelfTest.Contains('"p50=", "p95=", "recent="')) 'UI latency report must distinguish Hebrew direction and retain bounded non-secret p50/p95 tests.'
 Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
                $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
                $telemetry.Contains('RecordHeaderWidthCacheMiss()')) 'Header-cache diagnostics must aggregate only hit/miss counts without retaining any live captions.'
