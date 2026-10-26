@@ -17,6 +17,8 @@ public sealed partial class MainForm
     // Multiple tab and nested-tab events in one UI-message burst share one
     // BeginInvoke. Keep only the most recently requested page and start time.
     private bool _navigationReflowPosted;
+    private int _navigationReflowHandleGeneration;
+    private bool _mainViewportHandleRecreated;
     private int _navigationReflowLatestIndex;
     private long _navigationReflowLatestStarted;
     private int _navigationReflowPostCount;
@@ -43,6 +45,13 @@ public sealed partial class MainForm
         QueueNavigationViewportReflow();
     }
 
+    internal void PreviewRecreateNativeHandleForUiSelfTest()
+    {
+        if (!_layoutSelfTest || !IsHandleCreated || IsDisposed || Disposing)
+            throw new InvalidOperationException("HWND recreation is test-only.");
+        RecreateHandle();
+    }
+
     private void InitializeMainViewport()
     {
         AutoScroll = false;
@@ -58,6 +67,27 @@ public sealed partial class MainForm
         FontChanged += (_, _) => QueueMainViewportReflow();
         Shown += (_, _) => QueueMainViewportReflow();
         FormClosed += (_, _) => _mainViewportIdleTimer.Dispose();
+        HandleDestroyed += (_, _) =>
+        {
+            // A queued callback belongs to the old native HWND, and may
+            // never execute after RTL/DPI/RDP handle recreation. Its late
+            // arrival must not clear or reflow a newly queued selected page.
+            unchecked { _navigationReflowHandleGeneration++; }
+            _navigationReflowPosted = false;
+            _navigationReflowLatestStarted = 0;
+            _mainViewportHandleRecreated = !IsDisposed && !Disposing;
+            if (_mainViewportHandleRecreated)
+                _mainViewportIdleTimer.Stop();
+        };
+        HandleCreated += (_, _) =>
+        {
+            if (!_mainViewportHandleRecreated || IsDisposed || Disposing)
+                return;
+            _mainViewportHandleRecreated = false;
+            // The new native window must repair its current selected page,
+            // even if no fresh SelectedIndexChanged event arrives.
+            QueueNavigationViewportReflow();
+        };
     }
 
     private void QueueMainViewportReflow()
@@ -104,8 +134,11 @@ public sealed partial class MainForm
         _navigationReflowPosted = true;
         try
         {
+            var generation = _navigationReflowHandleGeneration;
             BeginInvoke((Action)(() =>
             {
+                if (generation != _navigationReflowHandleGeneration)
+                    return;
                 _navigationReflowPosted = false;
                 if (IsDisposed || Disposing || !_mainTabs.IsHandleCreated ||
                     _mainTabs.SelectedIndex != _navigationReflowLatestIndex)
@@ -129,7 +162,8 @@ public sealed partial class MainForm
             }));
             _navigationReflowPostCount++;
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or
+                                   ObjectDisposedException)
         {
             _navigationReflowPosted = false;
             // A destroyed HWND cannot process the callback; a later Shown
