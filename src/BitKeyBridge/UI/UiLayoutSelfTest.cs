@@ -1770,6 +1770,63 @@ public static class UiLayoutSelfTest
                         language);
             }
 
+
+            // MainForm's native grid/list headers can also be overwritten by
+            // live device or account details after an initial static caption
+            // was translated. Such data must never be cached or localized.
+            DataGridViewColumn? dynamicGridHeader = null;
+            if (FindByName(form, "LapsCoverageChanges") is DataGridView sourceGrid)
+                dynamicGridHeader = sourceGrid.Columns
+                    .Cast<DataGridViewColumn>()
+                    .FirstOrDefault(column => column.HeaderText ==
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            "he", "Change type"));
+
+            ColumnHeader? dynamicListHeader = null;
+            var headerSearch = new Stack<Control>();
+            headerSearch.Push(form);
+            while (headerSearch.Count > 0)
+            {
+                var current = headerSearch.Pop();
+                if (current is ListView list && dynamicListHeader is null)
+                    dynamicListHeader = list.Columns.Cast<ColumnHeader>()
+                        .FirstOrDefault(column => column.Text ==
+                            UiStaticCaptionCatalog.TranslateOrOriginal("he", "Scope"));
+                foreach (Control child in current.Controls)
+                    headerSearch.Push(child);
+            }
+            if (dynamicGridHeader is null || dynamicListHeader is null)
+                failures.Add("Native main-window dynamic column fixture was not found.");
+            else
+            {
+                dynamicGridHeader.HeaderText = "runtime account: user@example.invalid";
+                dynamicListHeader.Text = "runtime device: PC-001";
+                foreach (var language in new[] { "ru", "en", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    if (dynamicGridHeader.HeaderText !=
+                            "runtime account: user@example.invalid" ||
+                        dynamicListHeader.Text != "runtime device: PC-001")
+                        failures.Add("Main grid/list localization overwrote live header data: " +
+                            language);
+                }
+
+                dynamicGridHeader.HeaderText = "Change type";
+                dynamicListHeader.Text = "Scope";
+                foreach (var language in new[] { "ru", "en", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    if (dynamicGridHeader.HeaderText !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Change type") ||
+                        dynamicListHeader.Text !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Scope"))
+                        failures.Add("Main grid/list failed to adopt replacement English captions: " +
+                            language);
+                }
+            }
+
             if (FindByName(form, "LapsCoverageChanges") is DataGridView lateGrid)
             {
                 // Use centralized column factory (HiDPI/WinForms policy).
