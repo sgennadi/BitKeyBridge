@@ -468,9 +468,10 @@ public static class UiLayoutSelfTest
             // to ToolStripItem.Text: callers may later replace any with live
             // device/identity metadata that must remain untouched.
             var localizedList = new ListView { Name = "LanguageRoundtripList" };
-            localizedList.Columns.Add("Back", 120);
+            UiStyle.ConfigureListViewColumns(localizedList, ("Back", 120));
             var localizedGrid = new DataGridView { Name = "LanguageRoundtripGrid" };
-            localizedGrid.Columns.Add("LanguageRoundtripHeader", "Back");
+            localizedGrid.Columns.AddRange(UiStyle.CreateSortableTextColumn(
+                "LanguageRoundtripHeader", "Back"));
             hints.Controls.Add(tenant);
             hints.Controls.Add(dynamicHint);
             hints.Controls.Add(localizedList);
