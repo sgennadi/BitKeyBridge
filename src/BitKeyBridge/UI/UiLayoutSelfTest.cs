@@ -120,7 +120,11 @@ public static class UiLayoutSelfTest
             "DPI phase - work-area adjustment",
             "DPI phase - WinForms PerformLayout",
             "DPI phase - label widths",
-            "DPI phase - theme refresh"
+            "DPI phase - theme refresh",
+            "Language EN/RU -> Hebrew",
+            "Language Hebrew -> EN/RU",
+            "Language EN <-> RU",
+            "p50=", "p95=", "recent="
         })
             if (!performanceReport.Contains(expected, StringComparison.Ordinal))
                 failures.Add("Missing DPI timing phase: " + expected);
