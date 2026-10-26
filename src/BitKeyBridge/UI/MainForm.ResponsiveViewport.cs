@@ -67,7 +67,7 @@ public sealed partial class MainForm
     // change through the eventual selected-tab reflow, not just ApplyLanguage.
     private void QueueLanguageViewportReflow(long languageStarted)
     {
-        if (languageStarted <= 0 || IsDisposed || Disposing)
+        if (languageStarted <= 0 || !IsHandleCreated || IsDisposed || Disposing)
             return;
 
         if (_languageViewportStarted > 0)
@@ -211,6 +211,10 @@ public sealed partial class MainForm
                                    ObjectDisposedException)
         {
             _navigationReflowPosted = false;
+            // The message was never posted: an unrecorded stopwatch must
+            // not be attached to a later unrelated tab change.
+            _languageViewportStarted = 0;
+            _languageViewportQueued = 0;
             // A destroyed HWND cannot process the callback; a later Shown
             // or resize does the ordinary native viewport repair instead.
             System.Diagnostics.Debug.WriteLine(
