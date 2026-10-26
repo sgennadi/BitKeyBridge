@@ -477,8 +477,9 @@ public sealed partial class MainForm
                     // The caller changed this caption after localization.
                     // A new catalogued English caption becomes the new source;
                     // arbitrary device/account/runtime text stays untouched.
-                    if (UiStaticCaptionCatalog.Contains(item.Text))
-                        _localizedMenuSources[item] = (item.Text, item.Text);
+                    if (item.Text is { } editedCaption &&
+                        UiStaticCaptionCatalog.Contains(editedCaption))
+                        _localizedMenuSources[item] = (editedCaption, editedCaption);
                     else
                         _localizedMenuSources.Remove(item);
                 }
