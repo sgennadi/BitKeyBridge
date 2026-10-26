@@ -58,8 +58,10 @@ public sealed partial class MainForm
     private static readonly object LocalizedCaptionObserverMarker = new();
     // ToolStripItem is not a Control. Preserve caption source separately from
     // Tag, which is reserved for application command data.
-    private readonly Dictionary<ToolStripItem, string> _localizedMenuSources =
-        new(ReferenceEqualityComparer.Instance);
+    // Track both the known English source and our last generated caption.
+    // A runtime replacement belongs to the caller, not to the localizer.
+    private readonly Dictionary<ToolStripItem, (string English, string LastGenerated)>
+        _localizedMenuSources = new(ReferenceEqualityComparer.Instance);
     private readonly ConditionalWeakTable<ToolStripDropDownItem, object>
         _observedLocalizedMenus = new();
     private bool _localizedCaptionCacheBuilt;
@@ -409,28 +411,43 @@ public sealed partial class MainForm
     {
         foreach (ToolStripItem item in items)
         {
-            if (item is ToolStripSeparator)
+            // ToolStripTextBox/ComboBox are editable values, even when their
+            // current text happens to equal a known static UI caption.
+            if (item is ToolStripSeparator or ToolStripTextBox or ToolStripComboBox)
                 continue;
 
-            if (!_localizedMenuSources.TryGetValue(item, out var original))
+            if (_localizedMenuSources.TryGetValue(item, out var source))
             {
-                // Never infer a caption from Tag; it may be a command
-                // identifier, a security context, or a custom binding.
-                var source = item.Text;
-                if (!string.IsNullOrWhiteSpace(source) &&
-                    UiStaticCaptionCatalog.Contains(source))
+                if (!string.Equals(item.Text, source.LastGenerated,
+                        StringComparison.Ordinal))
                 {
-                    original = source;
-                    _localizedMenuSources.Add(item, source);
-                    item.Disposed += OnLocalizedMenuDisposed;
+                    // The caller changed this caption after localization.
+                    // A new catalogued English caption becomes the new source;
+                    // arbitrary device/account/runtime text stays untouched.
+                    if (UiStaticCaptionCatalog.Contains(item.Text))
+                        _localizedMenuSources[item] = (item.Text, item.Text);
+                    else
+                        _localizedMenuSources.Remove(item);
                 }
             }
+            else if (!string.IsNullOrWhiteSpace(item.Text) &&
+                     UiStaticCaptionCatalog.Contains(item.Text))
+            {
+                // Never infer captions from ToolStripItem.Tag: it can contain
+                // a command or security binding. Subscribe to Dispose once.
+                _localizedMenuSources.Add(item, (item.Text, item.Text));
+                item.Disposed -= OnLocalizedMenuDisposed;
+                item.Disposed += OnLocalizedMenuDisposed;
+            }
 
-            if (original is not null &&
-                UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, original,
-                    out var caption) &&
-                !string.Equals(item.Text, caption, StringComparison.Ordinal))
-                item.Text = caption;
+            if (_localizedMenuSources.TryGetValue(item, out source) &&
+                UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode,
+                    source.English, out var caption))
+            {
+                if (!string.Equals(item.Text, caption, StringComparison.Ordinal))
+                    item.Text = caption;
+                _localizedMenuSources[item] = (source.English, caption);
+            }
 
             if (item is ToolStripDropDownItem submenu)
             {
@@ -440,7 +457,10 @@ public sealed partial class MainForm
                         LocalizedCaptionObserverMarker);
                     submenu.DropDownOpening += OnLocalizedMenuOpening;
                     if (!_localizedMenuSources.ContainsKey(submenu))
+                    {
+                        submenu.Disposed -= OnLocalizedMenuDisposed;
                         submenu.Disposed += OnLocalizedMenuDisposed;
+                    }
                 }
                 ApplyKnownMenuCaptions(submenu.DropDownItems);
             }
