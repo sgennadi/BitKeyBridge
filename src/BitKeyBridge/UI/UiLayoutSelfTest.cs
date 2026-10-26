@@ -1248,6 +1248,7 @@ public static class UiLayoutSelfTest
             // synchronous caption translation. Two changes in one message
             // burst must keep the newest timestamp and end with no pending
             // language stopwatch. Tests do not change saved user preferences.
+            var beforeLanguage = UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
             form.PreviewShellLanguageForLayoutTest("he");
             if (!form.PreviewLanguageViewportPendingForUiSelfTest())
                 failures.Add("Deferred language viewport timer did not start.");
@@ -1255,13 +1256,21 @@ public static class UiLayoutSelfTest
             if (!form.PreviewLanguageViewportPendingForUiSelfTest())
                 failures.Add("Rapid language change lost latest viewport timing.");
             Application.DoEvents();
-            if (form.PreviewLanguageViewportPendingForUiSelfTest())
+            var afterLanguage = UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                afterLanguage.Ready <= beforeLanguage.Ready ||
+                afterLanguage.Superseded <= beforeLanguage.Superseded)
                 failures.Add("Rapid language changes stranded the deferred viewport timer.");
 
             form.PreviewShellLanguageForLayoutTest("he");
+            var beforeRecreatedLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
             form.PreviewRecreateNativeHandleForUiSelfTest();
             Application.DoEvents();
-            if (form.PreviewLanguageViewportPendingForUiSelfTest())
+            var afterRecreatedLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                afterRecreatedLanguage.Ready <= beforeRecreatedLanguage.Ready)
                 failures.Add("HWND recreation stranded the latest language viewport measurement.");
 
             form.PreviewShellLanguageForLayoutTest("en");
