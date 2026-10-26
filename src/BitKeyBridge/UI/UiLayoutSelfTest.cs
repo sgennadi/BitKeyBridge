@@ -1244,6 +1244,35 @@ public static class UiLayoutSelfTest
                     failures.Add("HWND recreation stranded the latest navigation reflow.");
             }
 
+            // Measure a REAL deferred selected-page pass, not only the
+            // synchronous caption translation. Two changes in one message
+            // burst must keep the newest timestamp and end with no pending
+            // language stopwatch. Tests do not change saved user preferences.
+            form.PreviewShellLanguageForLayoutTest("he");
+            if (!form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("Deferred language viewport timer did not start.");
+            form.PreviewShellLanguageForLayoutTest("ru");
+            if (!form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("Rapid language change lost latest viewport timing.");
+            Application.DoEvents();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("Rapid language changes stranded the deferred viewport timer.");
+
+            form.PreviewShellLanguageForLayoutTest("he");
+            form.PreviewRecreateNativeHandleForUiSelfTest();
+            Application.DoEvents();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("HWND recreation stranded the latest language viewport measurement.");
+
+            form.PreviewShellLanguageForLayoutTest("en");
+            Application.DoEvents();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                !UiLayoutTelemetry.Report().Contains(
+                    "Language to selected viewport ready: runs=", StringComparison.Ordinal) ||
+                !UiLayoutTelemetry.Report().Contains(
+                    "Language viewport measurements superseded:", StringComparison.Ordinal))
+                failures.Add("Deferred language p50/p95 diagnostics were not completed.");
+            
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
                 initialStatus.RightToLeft != RightToLeft.No ||
                 initialStatus.Items.Find("GlobalCopyDiagnostics", false)
