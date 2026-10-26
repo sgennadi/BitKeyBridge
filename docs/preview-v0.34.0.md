@@ -18,6 +18,7 @@
 - Existing offline `--self-test`, LAPS regressions and CodeQL.
 - Manual Windows RDP / physical 100%, 150%, 175% and 200% text scaling: no blank glyphs or clipped labels when repeatedly switching English, Russian and Hebrew.
 - Direction-specific latency diagnostics must report bounded recent p50/p95 for EN/RU to Hebrew, Hebrew to EN/RU and EN/RU-only switches, plus tab mirror, captions and layout resume. Compare p50/p95 and native handle counts across physical Windows and Hebrew RDP; do not collect device, account, tenant or secret data in timings.
+- Count the complete user language change through the deferred selected-viewport reflow (not merely caption translation). Native tests must exercise burst coalescing, discarded earlier timings and HWND recreation; only completed layout work is measured, never native paint/RDP network latency or tenant/device data.
 - Measure warm language-switch mean/p95, native tab handle churn, initial DPI/font refresh, visible-label batch counts and selected-page callback/reflow separately using non-secret diagnostics; do not claim speed improvement solely from static code inspection.
 - Native navigation burst test must prove three queued tab updates post one callback, run only the latest visible-page repair, and permit a second burst; compare actual tab switching p50/p95 before/after optimization.
 - Real UI navigation regression cycles Start, BitLocker, and LAPS, then a nested no-timing request; verify the main switch timer survives, the final tab is repaired and the TabPages/TabControl native handle are not recreated.
