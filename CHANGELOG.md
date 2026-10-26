@@ -13,6 +13,7 @@
 - Invalidate queued label-width and navigation callbacks when a WinForms native HWND is recreated (e.g. RTL/DPI/RDP); schedule fresh viewport measurement for the new window. Add real HWND recreation tests to ensure no stale callback strands the latest tab or visible labels.
 - Protect caller-owned runtime ToolStrip item captions and editable ToolStripTextBox/ComboBox values from menu translation; when a menu item receives a different known English UI caption, adopt it without mutating command `Tag`.
 - Preserve caller-provided DataGridView/ListView header text across all language switches; remember only catalogued static captions and never retain live device/account header text in UI translation state. Add native EN/RU/HE replacement and restoration tests plus a source guard.
+- Add direction-aware non-secret language-switch diagnostics: bounded last-128 p50/p95 for warm overall, tab RTL/mirroring, caption/layout phases and EN/RU to Hebrew, Hebrew to EN/RU and EN/RU-only transitions. Add deterministic percentile/eviction tests and UI source guards; no device or account values are retained.
 - Add source regression safeguards. No LAPS/BitLocker recovery retrieval, audit, permissions, authentication, signing or automatic deployment behavior changes.
 - Needs native Windows CI and manual Hebrew/Russian 100–200% scaling/RDP performance measurements before claiming reduced language-switch latency.
 
