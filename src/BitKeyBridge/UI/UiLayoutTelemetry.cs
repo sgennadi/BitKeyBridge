@@ -30,6 +30,8 @@ internal static class UiLayoutTelemetry
                 _recentTicks = new long[RecentCapacity];
         }
 
+        internal long Runs => Interlocked.Read(ref _count);
+
         internal void Record(long started) =>
             RecordDurationTicks(Math.Max(0, Stopwatch.GetTimestamp() - started));
 
@@ -254,6 +256,22 @@ internal static class UiLayoutTelemetry
         if (defaultCounter.Summarize("Untracked phase").Contains(
                 "p95=", StringComparison.Ordinal))
             failures.Add("High-frequency UI layout counters unexpectedly allocate percentile windows.");
+
+        // Initial apply and Hebrew -> Hebrew must not be counted as a
+        // direction change. Test the three categories without user data.
+        var priorTo = WarmLanguageToHebrew.Runs;
+        var priorFrom = WarmLanguageFromHebrew.Runs;
+        var priorLtr = WarmLanguageLtrOnly.Runs;
+        var started = Stopwatch.GetTimestamp();
+        RecordLanguageSwitch(started, initial: true, previousRtl: false, currentRtl: true);
+        RecordLanguageSwitch(started, initial: false, previousRtl: true, currentRtl: true);
+        RecordLanguageSwitch(started, initial: false, previousRtl: false, currentRtl: true);
+        RecordLanguageSwitch(started, initial: false, previousRtl: true, currentRtl: false);
+        RecordLanguageSwitch(started, initial: false, previousRtl: false, currentRtl: false);
+        if (WarmLanguageToHebrew.Runs != priorTo + 1 ||
+            WarmLanguageFromHebrew.Runs != priorFrom + 1 ||
+            WarmLanguageLtrOnly.Runs != priorLtr + 1)
+            failures.Add("Warm UI direction transitions were classified incorrectly.");
 
         // All buckets are UI-direction booleans, never tenant/username/device metadata.
         var report = Report();
