@@ -171,6 +171,19 @@ Assert-Source ($telemetry.Contains('RecentCapacity = 128') -and
                $shell.Contains('_lastAppliedShellRtl = rtl;') -and
                $shell.Contains('started, initialApply, previousRtl, rtl') -and
                $layoutSelfTest.Contains('"p50=", "p95=", "recent="')) 'UI latency report must distinguish Hebrew direction and retain bounded non-secret p50/p95 tests.'
+# One language change has two phases: synchronous captions and a posted
+# selected-viewport reflow. Do not report only the first and call UI "ready".
+Assert-Source ($shell.Contains('QueueLanguageViewportReflow(started);') -and
+               $viewport.Contains('private void QueueLanguageViewportReflow(long languageStarted)') -and
+               $viewport.Contains('_languageViewportStarted = languageStarted') -and
+               $viewport.Contains('UiLayoutTelemetry.RecordLanguageViewportDispatch(languageQueued)') -and
+               $viewport.Contains('UiLayoutTelemetry.RecordLanguageViewportReflow(viewportStarted)') -and
+               $viewport.Contains('UiLayoutTelemetry.RecordLanguageViewportReady(languageStarted)') -and
+               $viewport.Contains('generation != _navigationReflowHandleGeneration') -and
+               $telemetry.Contains('Language to selected viewport ready') -and
+               $telemetry.Contains('Language viewport measurements superseded:') -and
+               $layoutSelfTest.Contains('Rapid language changes stranded the deferred viewport timer.') -and
+               $layoutSelfTest.Contains('HWND recreation stranded the latest language viewport measurement.')) 'Full language-switch diagnostics must wait for latest native selected-viewport reflow and survive HWND recreation.'
 Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
                $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
                $telemetry.Contains('RecordHeaderWidthCacheMiss()')) 'Header-cache diagnostics must aggregate only hit/miss counts without retaining any live captions.'
