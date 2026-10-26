@@ -8,6 +8,8 @@
 2. Caller-provided runtime placeholders/tooltips, user-entered text, usernames, device identifiers and secret fields are NOT translated. The original known English source is replaced only when the owner explicitly supplies a different, catalogued English literal.
 3. MainForm DataGridView/ListView columns: keep exact localized header text and minimum column widths, but avoid suspending/resuming a grid when no caption/width change is required. Cache only catalogue-approved header measurements, bounded to 512 entries per MainForm and separated by font/DPI/style. Do not touch cells, source records or the selected device. Non-secret UI telemetry reports cache hits/misses.
 4. No Graph, AD, BitLocker, LAPS, audit, updater trust, admin authorization, machine assignment or signed-only policy changes.
+5. Main menu and native grid/list column localization must honor caller changes made after a translated static caption. Menu TextBox/ComboBox values and ToolStripItem.Tag remain untouched; replacing an item with a NEW catalogued English caption is allowed and then translated. Runtime values must never enter localization caches or diagnostics.
+6. Native WinForms HWND recreation on DPI/RTL/RDP resets posted callback generations; stale callbacks must not discard the new selected page or strand visible label widths.
 
 ## Required GitHub Actions QA before moving out of draft
 
