@@ -21,6 +21,10 @@ public sealed partial class MainForm
     private bool _mainViewportHandleRecreated;
     private int _navigationReflowLatestIndex;
     private long _navigationReflowLatestStarted;
+    // Latest user-requested language change (timings only, no language or
+    // identity strings). Superseded changes are not mistaken for completed.
+    private long _languageViewportStarted;
+    private long _languageViewportQueued;
     private int _navigationReflowPostCount;
     private int _navigationReflowDispatchCount;
     private int _navigationReflowCoalescedCount;
@@ -52,6 +56,27 @@ public sealed partial class MainForm
         RecreateHandle();
     }
 
+    internal bool PreviewLanguageViewportPendingForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Language timing state is test-only.");
+        return _languageViewportStarted > 0;
+    }
+
+    // Called after the synchronous captions pass. Measure the user-requested
+    // change through the eventual selected-tab reflow, not just ApplyLanguage.
+    private void QueueLanguageViewportReflow(long languageStarted)
+    {
+        if (languageStarted <= 0 || IsDisposed || Disposing)
+            return;
+
+        if (_languageViewportStarted > 0)
+            UiLayoutTelemetry.RecordLanguageViewportSuperseded();
+        _languageViewportStarted = languageStarted;
+        _languageViewportQueued = System.Diagnostics.Stopwatch.GetTimestamp();
+        QueueNavigationViewportReflow();
+    }
+
     private void InitializeMainViewport()
     {
         AutoScroll = false;
@@ -75,7 +100,15 @@ public sealed partial class MainForm
             unchecked { _navigationReflowHandleGeneration++; }
             _navigationReflowPosted = false;
             _navigationReflowLatestStarted = 0;
+            // Retain the last language stopwatch across RecreateHandle; the
+            // replacement HWND will get its own callback below. A stale
+            // callback's generation check must never record it as complete.
             _mainViewportHandleRecreated = !IsDisposed && !Disposing;
+            if (!_mainViewportHandleRecreated)
+            {
+                _languageViewportStarted = 0;
+                _languageViewportQueued = 0;
+            }
             if (_mainViewportHandleRecreated)
                 _mainViewportIdleTimer.Stop();
         };
@@ -147,12 +180,24 @@ public sealed partial class MainForm
                 _navigationReflowDispatchCount++;
                 var selectedIndex = _navigationReflowLatestIndex;
                 var started = _navigationReflowLatestStarted;
+                var languageStarted = _languageViewportStarted;
+                var languageQueued = _languageViewportQueued;
                 if (started > 0)
                     UiTabNavigationTelemetry.RecordDispatch(
                         selectedIndex, started);
+                if (languageStarted > 0 && languageQueued > 0)
+                    UiLayoutTelemetry.RecordLanguageViewportDispatch(languageQueued);
                 var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 ReflowMainViewport();
                 _navigationReflowLastDispatchedIndex = selectedIndex;
+                if (languageStarted > 0 &&
+                    languageStarted == _languageViewportStarted)
+                {
+                    UiLayoutTelemetry.RecordLanguageViewportReflow(viewportStarted);
+                    UiLayoutTelemetry.RecordLanguageViewportReady(languageStarted);
+                    _languageViewportStarted = 0;
+                    _languageViewportQueued = 0;
+                }
                 if (started > 0)
                 {
                     UiTabNavigationTelemetry.RecordLayout(
