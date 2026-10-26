@@ -230,6 +230,9 @@ internal static class UiLayoutTelemetry
         LanguageViewportReady.Record(started);
     internal static void RecordLanguageViewportSuperseded() =>
         Interlocked.Increment(ref _languageViewportSuperseded);
+
+    internal static (long Ready, long Superseded) LanguageViewportCountsForUiSelfTest() =>
+        (LanguageViewportReady.Runs, Interlocked.Read(ref _languageViewportSuperseded));
     internal static void RecordVisibleLabelBatch(int changed, int parentReflows)
     {
         Interlocked.Increment(ref _visibleLabelBatches);
