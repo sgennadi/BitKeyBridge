@@ -14,6 +14,7 @@
 - Protect caller-owned runtime ToolStrip item captions and editable ToolStripTextBox/ComboBox values from menu translation; when a menu item receives a different known English UI caption, adopt it without mutating command `Tag`.
 - Preserve caller-provided DataGridView/ListView header text across all language switches; remember only catalogued static captions and never retain live device/account header text in UI translation state. Add native EN/RU/HE replacement and restoration tests plus a source guard.
 - Add direction-aware non-secret language-switch diagnostics: bounded last-128 p50/p95 for warm overall, tab RTL/mirroring, caption/layout phases and EN/RU to Hebrew, Hebrew to EN/RU and EN/RU-only transitions. Add deterministic percentile/eviction tests and UI source guards; no device or account values are retained.
+- Measure the complete user-requested language-to-selected-viewport cycle, including asynchronous WinForms callback dispatch and the final selected-page reflow. Keep only the newest stopwatch in a language-switch burst, survive HWND recreation, and expose completed/cancelled measurements without capturing device or account metadata; add native UI and source regressions.
 - Add source regression safeguards. No LAPS/BitLocker recovery retrieval, audit, permissions, authentication, signing or automatic deployment behavior changes.
 - Needs native Windows CI and manual Hebrew/Russian 100–200% scaling/RDP performance measurements before claiming reduced language-switch latency.
 
