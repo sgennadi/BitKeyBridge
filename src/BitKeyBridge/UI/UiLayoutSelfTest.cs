@@ -1411,9 +1411,26 @@ public static class UiLayoutSelfTest
             using var nestedMenu = new ToolStripMenuItem("Nested menu fixture");
             using var nestedItem = new ToolStripMenuItem("Windows Event Log");
             nestedMenu.DropDownItems.Add(nestedItem);
+            // Real ToolStripItems are not Controls. After a fixed-caption
+            // translation, operators may replace the item with runtime
+            // device text. Editable menu fields must never be translated.
+            var dynamicMenuTag = new object();
+            using var mutableMenuItem = new ToolStripMenuItem("Back")
+            {
+                Tag = dynamicMenuTag
+            };
+            using var menuInput = new ToolStripTextBox { Text = "Back" };
+            using var menuChoice = new ToolStripComboBox { Text = "Back" };
+            nestedMenu.DropDownItems.Add(mutableMenuItem);
+            nestedMenu.DropDownItems.Add(menuInput);
+            nestedMenu.DropDownItems.Add(menuChoice);
             topTools?.DropDownItems.Add(nestedMenu);
 
             form.PreviewShellLanguageForLayoutTest("he");
+            if (mutableMenuItem.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                    "he", "Back"))
+                failures.Add("Nested fixed menu fixture did not translate to Hebrew.");
+            mutableMenuItem.Text = "live device: test-001";
             form.PreviewShowUiPerformanceReportForLayoutTest();
 
             var banner = FindByName(form, "ApplicationDiagnostics") as UiDiagnosticPanel;
@@ -1554,6 +1571,11 @@ public static class UiLayoutSelfTest
                 if (copyItemBeforeTranslation is not null &&
                     !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
                     failures.Add("Language switch overwrote ToolStrip command Tag: " +
+                        language);
+                if (mutableMenuItem.Text != "live device: test-001" ||
+                    !ReferenceEquals(mutableMenuItem.Tag, dynamicMenuTag) ||
+                    menuInput.Text != "Back" || menuChoice.Text != "Back")
+                    failures.Add("Language switch rewrote runtime menu caption or editable value: " +
                         language);
                 // The performance report must not disappear when a
                 // high-DPI WinForms TabControl changes RTL orientation.
@@ -1731,6 +1753,21 @@ public static class UiLayoutSelfTest
                     tabs.TabPages.Cast<TabPage>().Any(
                         page => string.IsNullOrWhiteSpace(page.Text)))
                     failures.Add("Language switch left an empty main workspace tab.");
+            }
+
+            // Adopting a NEW known English caption must still work after
+            // runtime text was preserved. It must not touch menu bindings.
+            mutableMenuItem.Text = "Copy diagnostics";
+            foreach (var language in new[] { "ru", "en", "he" })
+            {
+                form.PreviewShellLanguageForLayoutTest(language);
+                if (mutableMenuItem.Text !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Copy diagnostics") ||
+                    !ReferenceEquals(mutableMenuItem.Tag, dynamicMenuTag) ||
+                    menuInput.Text != "Back" || menuChoice.Text != "Back")
+                    failures.Add("Runtime menu source replacement failed EN/RU/HE: " +
+                        language);
             }
 
             if (FindByName(form, "LapsCoverageChanges") is DataGridView lateGrid)
