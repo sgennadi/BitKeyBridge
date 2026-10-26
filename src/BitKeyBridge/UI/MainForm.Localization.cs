@@ -47,13 +47,15 @@ public sealed partial class MainForm
     private readonly ConditionalWeakTable<Control, object> _localizedCaptionObserved = new();
     // List-view header source literals are captured only once, before
     // translation, and are not mistaken for live AD/Graph result values.
-    private readonly Dictionary<ListView, (string English, int InitialWidth)[]> _localizedListViewHeaders =
-        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<ListView,
+        (string? English, int InitialWidth, string? LastGenerated)[]>
+        _localizedListViewHeaders = new(ReferenceEqualityComparer.Instance);
     // WinForms DataGridViewColumn is not a Control. Cache source headers by
     // object identity so language switching never translates a previously
     // translated caption again or changes any cell values.
     private readonly Dictionary<DataGridView,
-        Dictionary<DataGridViewColumn, (string English, int MinimumWidth)>>
+        Dictionary<DataGridViewColumn,
+            (string? English, int MinimumWidth, string? LastGenerated)>>
         _localizedGridHeaders = new(ReferenceEqualityComparer.Instance);
     private static readonly object LocalizedCaptionObserverMarker = new();
     // ToolStripItem is not a Control. Preserve caption source separately from
@@ -123,8 +125,16 @@ public sealed partial class MainForm
                 list.Columns.Cast<ColumnHeader>().Any(x =>
                     UiStaticCaptionCatalog.Contains(x.Text)))
             {
+                // Retain only recognized static English labels, never
+                // runtime metadata stored in a native column header.
                 _localizedListViewHeaders[list] = list.Columns.Cast<ColumnHeader>()
-                    .Select(x => (x.Text, x.Width)).ToArray();
+                    .Select(x =>
+                    {
+                        var known = UiStaticCaptionCatalog.Contains(x.Text);
+                        return (English: known ? x.Text : null,
+                            InitialWidth: x.Width,
+                            LastGenerated: known ? x.Text : null);
+                    }).ToArray();
                 list.Disposed += OnLocalizedListViewDisposed;
                 if (applyImmediately)
                     ApplyLocalizedListViewHeaders(list);
@@ -133,7 +143,8 @@ public sealed partial class MainForm
             if (control is DataGridView grid)
             {
                 _localizedGridHeaders[grid] = new Dictionary<DataGridViewColumn,
-                    (string English, int MinimumWidth)>(ReferenceEqualityComparer.Instance);
+                    (string? English, int MinimumWidth, string? LastGenerated)>(
+                        ReferenceEqualityComparer.Instance);
                 grid.ColumnAdded += OnLocalizedGridColumnAdded;
                 grid.ColumnRemoved += OnLocalizedGridColumnRemoved;
                 grid.Disposed += OnLocalizedGridDisposed;
@@ -247,7 +258,7 @@ public sealed partial class MainForm
             if (!headers.ContainsKey(column) &&
                 column.HeaderText is { } caption &&
                 UiStaticCaptionCatalog.Contains(caption))
-                headers.Add(column, (caption, column.MinimumWidth));
+                headers.Add(column, (caption, column.MinimumWidth, caption));
         }
     }
 
@@ -271,12 +282,33 @@ public sealed partial class MainForm
             {
                 if (!headers.TryGetValue(column, out var source))
                     continue;
+                // A header may be changed by the caller between language
+                // switches. Never overwrite runtime data, and never store it
+                // in this catalogue-only localization cache.
+                if (source.English is null ||
+                    !string.Equals(column.HeaderText, source.LastGenerated,
+                        StringComparison.Ordinal))
+                {
+                    if (UiStaticCaptionCatalog.Contains(column.HeaderText))
+                    {
+                        source = (column.HeaderText, column.MinimumWidth,
+                            column.HeaderText);
+                        headers[column] = source;
+                    }
+                    else
+                    {
+                        headers[column] = (null, source.MinimumWidth, null);
+                        continue;
+                    }
+                }
+                if (source.English is not { } english)
+                    continue;
                 var caption = UiStaticCaptionCatalog.TranslateOrOriginal(
-                    _uiLanguageCode, source.English);
+                    _uiLanguageCode, english);
                 var captionChanged = !string.Equals(
                     column.HeaderText, caption, StringComparison.Ordinal);
                 var required = _headerWidthCache.Measure(
-                    source.English, caption, headerFont, grid.DeviceDpi,
+                    english, caption, headerFont, grid.DeviceDpi,
                     UiHeaderWidthCache.HeaderKind.DataGrid);
                 var width = Math.Max(source.MinimumWidth, required);
                 var widthChanged = column.MinimumWidth != width;
@@ -288,7 +320,10 @@ public sealed partial class MainForm
                     suspended = true;
                 }
                 if (captionChanged)
+                {
                     column.HeaderText = caption;
+                    headers[column] = (english, source.MinimumWidth, caption);
+                }
                 if (widthChanged)
                     column.MinimumWidth = width;
             }
@@ -314,12 +349,27 @@ public sealed partial class MainForm
         {
             for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
             {
-                var (english, originalWidth) = sources[i];
-                if (!UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
+                var source = sources[i];
+                var column = list.Columns[i];
+                if (source.English is null ||
+                    !string.Equals(column.Text, source.LastGenerated,
+                        StringComparison.Ordinal))
+                {
+                    if (UiStaticCaptionCatalog.Contains(column.Text))
+                    {
+                        source = (column.Text, column.Width, column.Text);
+                        sources[i] = source;
+                    }
+                    else
+                    {
+                        sources[i] = (null, source.InitialWidth, null);
+                        continue;
+                    }
+                }
+                if (source.English is not { } english ||
+                    !UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
                         out var translation))
                     continue;
-
-                var column = list.Columns[i];
                 var textChanged = !string.Equals(
                     column.Text, translation, StringComparison.Ordinal);
                 // Scrolling beats clipping 70-80px English column widths at
@@ -327,7 +377,7 @@ public sealed partial class MainForm
                 var required = _headerWidthCache.Measure(
                     english, translation, list.Font, list.DeviceDpi,
                     UiHeaderWidthCache.HeaderKind.ListView);
-                var width = Math.Max(originalWidth, required);
+                var width = Math.Max(source.InitialWidth, required);
                 var widthChanged = column.Width != width;
                 if (!textChanged && !widthChanged)
                     continue;
@@ -338,7 +388,10 @@ public sealed partial class MainForm
                     updating = true;
                 }
                 if (textChanged)
+                {
                     column.Text = translation;
+                    sources[i] = (english, source.InitialWidth, translation);
+                }
                 if (widthChanged)
                     column.Width = width;
             }
