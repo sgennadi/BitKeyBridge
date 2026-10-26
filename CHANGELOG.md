@@ -11,6 +11,8 @@
 - Preserve main-tab stopwatch data when a nested tab requests a reflow in the same pending navigation batch, and verify real multi-tab bursts keep the latest selection and native tab handle intact.
 - Preserve caller-owned runtime menu text and DataGridView/ListView header values across EN/RU/HE switches; only exact catalogued English replacements become new localization sources. Cover command `Tag`, dynamic account/device values and native column controls in regression tests.
 - Invalidate queued label-width and navigation callbacks when a WinForms native HWND is recreated (e.g. RTL/DPI/RDP); schedule fresh viewport measurement for the new window. Add real HWND recreation tests to ensure no stale callback strands the latest tab or visible labels.
+- Protect caller-owned runtime ToolStrip item captions and editable ToolStripTextBox/ComboBox values from menu translation; when a menu item receives a different known English UI caption, adopt it without mutating command `Tag`.
+- Preserve caller-provided DataGridView/ListView header text across all language switches; remember only catalogued static captions and never retain live device/account header text in UI translation state. Add native EN/RU/HE replacement and restoration tests plus a source guard.
 - Add source regression safeguards. No LAPS/BitLocker recovery retrieval, audit, permissions, authentication, signing or automatic deployment behavior changes.
 - Needs native Windows CI and manual Hebrew/Russian 100–200% scaling/RDP performance measurements before claiming reduced language-switch latency.
 
