@@ -440,8 +440,17 @@ public static class UiLayoutSelfTest
                 PlaceholderText = "custom hint: 12345",
                 Text = "live value: 67890"
             };
+            // Exercise native ListView/DataGridView header captions in addition
+            // to ToolStripItem.Text: callers may later replace any with live
+            // device/identity metadata that must remain untouched.
+            var localizedList = new ListView { Name = "LanguageRoundtripList" };
+            localizedList.Columns.Add("Back", 120);
+            var localizedGrid = new DataGridView { Name = "LanguageRoundtripGrid" };
+            localizedGrid.Columns.Add("LanguageRoundtripHeader", "Back");
             hints.Controls.Add(tenant);
             hints.Controls.Add(dynamicHint);
+            hints.Controls.Add(localizedList);
+            hints.Controls.Add(localizedGrid);
 
             foreach (var (language, domainTitle, startupTitle, connectText) in
                 new[]
@@ -464,6 +473,10 @@ public static class UiLayoutSelfTest
                     localizedAction.Text !=
                         UiStaticCaptionCatalog.TranslateOrOriginal(
                             language, "Back") ||
+                    localizedList.Columns[0].Text !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(language, "Back") ||
+                    localizedGrid.Columns[0].HeaderText !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(language, "Back") ||
                     (string?)localizedAction.Tag != "fixed-command-token" ||
                     tenant.Text != "contoso.onmicrosoft.com" ||
                     dynamicHint.Text != "live value: 67890" ||
@@ -494,21 +507,39 @@ public static class UiLayoutSelfTest
             // must become the new baseline instead of reverting to the old.
             tenant.PlaceholderText = "operator supplied hint";
             localizedAction.ToolTipText = "runtime tooltip";
+            localizedAction.Text = "Current device: 001";
+            localizedList.Columns[0].Text = "device-001";
+            localizedGrid.Columns[0].HeaderText = "account@example.invalid";
             UiDialogLocalization.Apply(hints, "he");
             if (tenant.PlaceholderText != "operator supplied hint" ||
-                localizedAction.ToolTipText != "runtime tooltip")
-                failures.Add("Modal localizer rewrote externally updated hints.");
+                localizedAction.ToolTipText != "runtime tooltip" ||
+                localizedAction.Text != "Current device: 001" ||
+                localizedList.Columns[0].Text != "device-001" ||
+                localizedGrid.Columns[0].HeaderText != "account@example.invalid")
+                failures.Add("Modal localizer rewrote externally updated hints or headers.");
 
             tenant.PlaceholderText = "Domain DNS name (optional)";
             localizedAction.ToolTipText = "Copy diagnostics";
+            localizedAction.Text = "Copy diagnostics";
+            localizedList.Columns[0].Text = "Copy diagnostics";
+            localizedGrid.Columns[0].HeaderText = "Copy diagnostics";
             UiDialogLocalization.Apply(hints, "ru");
             if (tenant.PlaceholderText !=
                     UiStaticCaptionCatalog.TranslateOrOriginal(
                         "ru", "Domain DNS name (optional)") ||
                 localizedAction.ToolTipText !=
                     UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics") ||
+                localizedAction.Text !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics") ||
+                localizedList.Columns[0].Text !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics") ||
+                localizedGrid.Columns[0].HeaderText !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
                         "ru", "Copy diagnostics"))
-                failures.Add("Modal localizer did not adopt new known English hints.");
+                failures.Add("Modal localizer did not adopt new known English hints or headers.");
         }
         catch (Exception ex)
         {
