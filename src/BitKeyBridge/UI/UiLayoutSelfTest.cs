@@ -541,7 +541,7 @@ public static class UiLayoutSelfTest
                 localizedAction.Text != "Current device: 001" ||
                 localizedList.Columns[0].Text != "device-001" ||
                 localizedGrid.Columns[0].HeaderText != "account@example.invalid")
-                failures.Add("Modal localizer rewrote externally updated hints or headers.");
+                failures.Add("Modal localizer rewrote externally updated hints.");
 
             tenant.PlaceholderText = "Domain DNS name (optional)";
             localizedAction.ToolTipText = "Copy diagnostics";
@@ -564,7 +564,7 @@ public static class UiLayoutSelfTest
                 localizedGrid.Columns[0].HeaderText !=
                     UiStaticCaptionCatalog.TranslateOrOriginal(
                         "ru", "Copy diagnostics"))
-                failures.Add("Modal localizer did not adopt new known English hints or headers.");
+                failures.Add("Modal localizer did not adopt new known English hints.");
         }
         catch (Exception ex)
         {
