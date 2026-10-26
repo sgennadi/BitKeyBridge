@@ -2,6 +2,11 @@ namespace BitKeyBridge;
 
 public static class UiLayoutSelfTest
 {
+    private sealed class RecreatedHandleLayoutForm : DpiAwareForm
+    {
+        internal void RecreateNativeHandleForTest() => RecreateHandle();
+    }
+
     private sealed record Scenario(
         string Name,
         Size ClientSize,
@@ -239,7 +244,7 @@ public static class UiLayoutSelfTest
     {
         try
         {
-            using var dialog = new DpiAwareForm
+            using var dialog = new RecreatedHandleLayoutForm
             {
                 Size = new Size(620, 360),
                 StartPosition = FormStartPosition.Manual
@@ -300,6 +305,25 @@ public static class UiLayoutSelfTest
             if (!UiLayoutTelemetry.Report().Contains(
                     "Visible-label width batches: batches=", StringComparison.Ordinal))
                 failures.Add("Non-secret visible-label layout telemetry is missing.");
+
+            // Simulate the native HWND recreation caused by RTL/DPI/RDP.
+            // A previously posted callback may be discarded by WinForms;
+            // new visible-label updates must not remain permanently blocked.
+            var beforeRecreation = dialog.VisibleLabelWidthBatchCountForUiSelfTest;
+            first.Visible = false;
+            second.Visible = false;
+            first.Visible = true;
+            second.Visible = true;
+            dialog.RecreateNativeHandleForTest();
+            Application.DoEvents();
+            first.Visible = false;
+            second.Visible = false;
+            first.Visible = true;
+            second.Visible = true;
+            Application.DoEvents();
+            if (dialog.PendingVisibleLabelWidthsForUiSelfTest != 0 ||
+                dialog.VisibleLabelWidthBatchCountForUiSelfTest <= beforeRecreation)
+                failures.Add("HWND recreation stranded a coalesced label-width batch.");
         }
         catch (Exception ex)
         {
@@ -1200,6 +1224,19 @@ public static class UiLayoutSelfTest
                     failures.Add("Second real-tab navigation did not display latest selection.");
                 mainTabs.SelectedIndex = 0;
                 Application.DoEvents();
+
+                // Recreate the native parent HWND while navigation repair is
+                // pending. Any callback for the old HWND must be ignored, and
+                // a new callback must reflow the current selected page.
+                var beforeRecreation = form.PreviewNavigationReflowStateForUiSelfTest();
+                form.PreviewQueueNavigationReflowForUiSelfTest();
+                form.PreviewRecreateNativeHandleForUiSelfTest();
+                Application.DoEvents();
+                var afterRecreation = form.PreviewNavigationReflowStateForUiSelfTest();
+                if (afterRecreation.Pending ||
+                    afterRecreation.LastDispatchedIndex != mainTabs.SelectedIndex ||
+                    afterRecreation.Dispatched <= beforeRecreation.Dispatched)
+                    failures.Add("HWND recreation stranded the latest navigation reflow.");
             }
 
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
