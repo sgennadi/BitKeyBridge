@@ -558,7 +558,10 @@ public sealed partial class MainForm
                 _adServer, _adDomain, _adUsername,
                 _cloudTenant, _cloudClient, _cloudThumbprint
             })
-                literal.RightToLeft = RightToLeft.No;
+            {
+                if (literal.RightToLeft != RightToLeft.No)
+                    literal.RightToLeft = RightToLeft.No;
+            }
 
             var keys = new[]
             {
@@ -598,15 +601,27 @@ public sealed partial class MainForm
                     _languageTopMenu.Text = caption;
             }
             foreach (var choice in _languageChoices)
-                choice.Checked = string.Equals(choice.Tag as string,
+            {
+                var selected = string.Equals(choice.Tag as string,
                     _uiLanguageCode, StringComparison.Ordinal);
+                if (choice.Checked != selected)
+                    choice.Checked = selected;
+            }
 
-            _homeSearchButton.Text =
-                UiLanguageService.Translate(_uiLanguageCode, "Search");
-            _homeSearchCancelButton.Text =
-                UiLanguageService.Translate(_uiLanguageCode, "Cancel");
-            _globalConnectionStatus.ToolTipText =
-                UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+            // Avoid redundant native Text/Checked/property invalidation,
+            // including common EN -> RU switches that do not mirror tabs.
+            var searchCaption = UiLanguageService.Translate(_uiLanguageCode, "Search");
+            if (!string.Equals(_homeSearchButton.Text, searchCaption, StringComparison.Ordinal))
+                _homeSearchButton.Text = searchCaption;
+            var cancelCaption = UiLanguageService.Translate(_uiLanguageCode, "Cancel");
+            if (!string.Equals(_homeSearchCancelButton.Text, cancelCaption,
+                    StringComparison.Ordinal))
+                _homeSearchCancelButton.Text = cancelCaption;
+            var connectionTooltip = UiLanguageService.Translate(
+                _uiLanguageCode, "ConnectionSettings");
+            if (!string.Equals(_globalConnectionStatus.ToolTipText,
+                    connectionTooltip, StringComparison.Ordinal))
+                _globalConnectionStatus.ToolTipText = connectionTooltip;
             var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
