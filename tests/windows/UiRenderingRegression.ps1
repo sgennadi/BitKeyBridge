@@ -149,6 +149,15 @@ Assert-Source ($layoutSelfTest.Contains('VerifyFixedHeaderWidthCaching(failures)
                $layoutSelfTest.Contains('Fixed header width cache accepted arbitrary live metadata.') -and
                $layoutSelfTest.Contains('Fixed header width cache accepted an untrusted caption value.') -and
                $layoutSelfTest.Contains('Fixed header cache did not evict the oldest measurement.')) 'Native WinForms tests must verify cache identity, rejection, eviction, and DPI/font separation.'
+# Protect caller-owned data after an initial known UI caption was translated.
+# Native regression exercises real menu items and ListView/DataGridView headers.
+Assert-Source ($mainLocalization.Contains('LastGenerated') -and
+               $mainLocalization.Contains('ToolStripSeparator or ToolStripTextBox or ToolStripComboBox') -and
+               $mainLocalization.Contains('headers[column] = (null, source.MinimumWidth, null)') -and
+               $mainLocalization.Contains('sources[i] = (null, source.InitialWidth, null)') -and
+               $layoutSelfTest.Contains('Language switch rewrote runtime menu caption or editable value:') -and
+               $layoutSelfTest.Contains('Main grid/list localization overwrote live header data:') -and
+               $layoutSelfTest.Contains('Main grid/list failed to adopt replacement English captions:')) 'Runtime ToolStrip and native columns must not relocalize caller-owned values or cache sensitive metadata.'
 Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
                $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
                $telemetry.Contains('RecordHeaderWidthCacheMiss()')) 'Header-cache diagnostics must aggregate only hit/miss counts without retaining any live captions.'
