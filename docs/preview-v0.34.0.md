@@ -17,6 +17,7 @@
 - Manual Windows RDP / physical 100%, 150%, 175% and 200% text scaling: no blank glyphs or clipped labels when repeatedly switching English, Russian and Hebrew.
 - Measure warm language-switch mean/p95, native tab handle churn, initial DPI/font refresh, visible-label batch counts and selected-page callback/reflow separately using non-secret diagnostics; do not claim speed improvement solely from static code inspection.
 - Native navigation burst test must prove three queued tab updates post one callback, run only the latest visible-page repair, and permit a second burst; compare actual tab switching p50/p95 before/after optimization.
+- Real UI navigation regression cycles Start, BitLocker, and LAPS, then a nested no-timing request; verify the main switch timer survives, the final tab is repaired and the TabPages/TabControl native handle are not recreated.
 
 ## Explicitly NOT authorized
 

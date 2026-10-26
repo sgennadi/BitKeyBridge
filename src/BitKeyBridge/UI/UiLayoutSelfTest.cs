@@ -1117,6 +1117,60 @@ public static class UiLayoutSelfTest
                 secondNavigation.Dispatched != drainedNavigation.Dispatched + 1)
                 failures.Add("Navigation reflow did not schedule after an earlier batch.");
 
+            // Exercise real WinForms SelectedIndexChanged events, rather
+            // than just manually queueing three identical root-page repairs.
+            // A nested-tab event with no stopwatch must not erase timing
+            // of the final main-tab change. Retain the same TabPage objects,
+            // selected layout and main native HWND across both bursts.
+            if (FindByName(form, "MainWorkspaceTabs") is not TabControl mainTabs ||
+                mainTabs.TabPages.Count < 3)
+            {
+                failures.Add("Main navigation tabs are missing from the UI fixture.");
+            }
+            else
+            {
+                var initialTabHandle = mainTabs.Handle;
+                var originalPages = mainTabs.TabPages.Cast<TabPage>().ToArray();
+                var beforeRealNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                mainTabs.SelectedIndex = 1;
+                mainTabs.SelectedIndex = 2;
+                mainTabs.SelectedIndex = 0;
+                form.PreviewQueueNavigationReflowForUiSelfTest();
+                var queuedRealNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                if (!queuedRealNavigation.Pending ||
+                    queuedRealNavigation.Posted != beforeRealNavigation.Posted + 1 ||
+                    queuedRealNavigation.Coalesced < beforeRealNavigation.Coalesced + 3 ||
+                    queuedRealNavigation.RequestedIndex != 0 ||
+                    !queuedRealNavigation.HasPendingTiming)
+                    failures.Add("Main/nested tab burst lost final selection or timing.");
+
+                Application.DoEvents();
+                var afterRealNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                if (afterRealNavigation.Pending ||
+                    afterRealNavigation.Dispatched !=
+                        beforeRealNavigation.Dispatched + 1 ||
+                    afterRealNavigation.LastDispatchedIndex != 0 ||
+                    mainTabs.SelectedIndex != 0 ||
+                    mainTabs.Handle != initialTabHandle ||
+                    !originalPages.SequenceEqual(
+                        mainTabs.TabPages.Cast<TabPage>()))
+                    failures.Add("Rapid real-tab navigation lost page state or recreated tabs.");
+
+                mainTabs.SelectedIndex = 2;
+                Application.DoEvents();
+                var finalNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                if (finalNavigation.Pending ||
+                    finalNavigation.LastDispatchedIndex != 2 ||
+                    finalNavigation.Dispatched != afterRealNavigation.Dispatched + 1)
+                    failures.Add("Second real-tab navigation did not display latest selection.");
+                mainTabs.SelectedIndex = 0;
+                Application.DoEvents();
+            }
+
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
                 initialStatus.RightToLeft != RightToLeft.No ||
                 initialStatus.Items.Find("GlobalCopyDiagnostics", false)

@@ -104,6 +104,10 @@ Assert-Source ($viewport.Contains('_navigationReflowPosted') -and
                $viewport.Contains('_navigationReflowPostCount++') -and
                $layoutSelfTest.Contains('Rapid tab navigation posted redundant WinForms callbacks.') -and
                $layoutSelfTest.Contains('Navigation coalescing lost the latest viewport repair.') -and
+               $layoutSelfTest.Contains('Main/nested tab burst lost final selection or timing.') -and
+               $layoutSelfTest.Contains('Rapid real-tab navigation lost page state or recreated tabs.') -and
+               $viewport.Contains('_navigationReflowLastDispatchedIndex = selectedIndex') -and
+               $viewport.Contains('_navigationReflowLatestIndex != selectedIndex') -and
                $navigationTelemetry.Contains('Navigation reflow callbacks coalesced:')) 'Rapid navigation must coalesce UI callbacks, preserve final selected tab and report only aggregate metrics.'
 Assert-Source ($viewport.Contains('UiTabNavigationTelemetry.RecordDispatch') -and
                $viewport.Contains('UiTabNavigationTelemetry.RecordLayout') -and

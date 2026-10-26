@@ -22,14 +22,18 @@ public sealed partial class MainForm
     private int _navigationReflowPostCount;
     private int _navigationReflowDispatchCount;
     private int _navigationReflowCoalescedCount;
+    private int _navigationReflowLastDispatchedIndex = -1;
 
-    internal (int Posted, int Dispatched, int Coalesced, bool Pending)
+    internal (int Posted, int Dispatched, int Coalesced, bool Pending,
+              int RequestedIndex, int LastDispatchedIndex, bool HasPendingTiming)
         PreviewNavigationReflowStateForUiSelfTest()
     {
         if (!_layoutSelfTest)
             throw new InvalidOperationException("Navigation counters are test-only.");
         return (_navigationReflowPostCount, _navigationReflowDispatchCount,
-            _navigationReflowCoalescedCount, _navigationReflowPosted);
+            _navigationReflowCoalescedCount, _navigationReflowPosted,
+            _navigationReflowLatestIndex, _navigationReflowLastDispatchedIndex,
+            _navigationReflowLatestStarted > 0);
     }
 
     internal void PreviewQueueNavigationReflowForUiSelfTest()
@@ -80,8 +84,16 @@ public sealed partial class MainForm
             return;
 
         _mainViewportIdleTimer.Stop();
-        _navigationReflowLatestIndex = _mainTabs.SelectedIndex;
-        _navigationReflowLatestStarted = navigationStarted;
+        var selectedIndex = _mainTabs.SelectedIndex;
+        // A nested-tab callback has no top-level navigation stopwatch.
+        // Preserve the latest top-level switch timing when nested events
+        // belong to that same still-pending selected main page. Do NOT
+        // preserve it across separate queued operations or main-page changes.
+        if (!_navigationReflowPosted ||
+            _navigationReflowLatestIndex != selectedIndex ||
+            navigationStarted > 0)
+            _navigationReflowLatestStarted = navigationStarted;
+        _navigationReflowLatestIndex = selectedIndex;
         if (_navigationReflowPosted)
         {
             _navigationReflowCoalescedCount++;
@@ -107,6 +119,7 @@ public sealed partial class MainForm
                         selectedIndex, started);
                 var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 ReflowMainViewport();
+                _navigationReflowLastDispatchedIndex = selectedIndex;
                 if (started > 0)
                 {
                     UiTabNavigationTelemetry.RecordLayout(
