@@ -489,12 +489,13 @@ public sealed partial class MainForm
         var next = UiLanguageService.Normalize(code);
         if (string.Equals(next, _uiLanguageCode, StringComparison.Ordinal))
             return;
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
             UiLanguageService.SavePreferred(next);
             _uiLanguageCode = next;
             ApplyShellLanguage();
-            QueueNavigationViewportReflow();
+            QueueLanguageViewportReflow(started);
         }
         catch (Exception ex)
         {
@@ -663,8 +664,15 @@ public sealed partial class MainForm
     {
         if (!_layoutSelfTest)
             throw new InvalidOperationException("Language preview is restricted to UI tests.");
-        _uiLanguageCode = UiLanguageService.Normalize(code);
+        var next = UiLanguageService.Normalize(code);
+        var changed = !string.Equals(next, _uiLanguageCode, StringComparison.Ordinal);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        _uiLanguageCode = next;
         ApplyShellLanguage();
+        // Test the same deferred path as a user click without changing the
+        // saved preference or scheduling work for hidden/offline fixtures.
+        if (changed && Visible && IsHandleCreated)
+            QueueLanguageViewportReflow(started);
     }
 
     private TabPage BuildHomeWorkspaceTab()
