@@ -14,6 +14,9 @@ public sealed partial class MainForm
     private readonly List<ToolStripMenuItem> _languageChoices = [];
     private string _uiLanguageCode = "en";
     private bool _shellLanguageApplied;
+    // Prior *applied* direction survives updates to the selected language
+    // value and remains separate from user preferences and Win32 handle data.
+    private bool _lastAppliedShellRtl;
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly Button _connectAdButton = new();
@@ -505,6 +508,7 @@ public sealed partial class MainForm
     {
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var initialApply = !_shellLanguageApplied;
+        var previousRtl = _lastAppliedShellRtl;
         var rtl = UiLanguageService.IsRightToLeft(_uiLanguageCode);
         var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
         // Mirroring the entire Form HWND can recreate native child controls
@@ -634,7 +638,9 @@ public sealed partial class MainForm
                 _appDiagnostics.BringToFront();
             UiLayoutTelemetry.RecordLanguageResume(resumeStarted);
             _shellLanguageApplied = true;
-            UiLayoutTelemetry.RecordLanguageSwitch(started, initialApply);
+            _lastAppliedShellRtl = rtl;
+            UiLayoutTelemetry.RecordLanguageSwitch(
+                started, initialApply, previousRtl, rtl);
         }
     }
 
