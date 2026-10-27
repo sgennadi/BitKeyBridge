@@ -184,6 +184,12 @@ Assert-Source ($shell.Contains('QueueLanguageViewportReflow(started);') -and
                $telemetry.Contains('Language viewport measurements superseded:') -and
                $layoutSelfTest.Contains('Rapid language changes stranded the deferred viewport timer.') -and
                $layoutSelfTest.Contains('HWND recreation stranded the latest language viewport measurement.')) 'Full language-switch diagnostics must wait for latest native selected-viewport reflow and survive HWND recreation.'
+Assert-Source ($viewport.Contains('if (_mainViewportReflowRunning)') -and
+               $viewport.Contains('if (_languageViewportStarted > 0 && IsHandleCreated') -and
+               $viewport.Contains('QueueMainViewportReflow();') -and
+               $viewport.Contains('internal void PreviewHoldMainViewportReflowForUiSelfTest(bool busy)') -and
+               $layoutSelfTest.Contains('Busy native layout falsely completed language viewport timing.') -and
+               $layoutSelfTest.Contains('Busy native layout retry stranded language viewport timing.')) 'Overlapping WinForms layout may not prematurely complete language timing and must retry with the latest selected geometry.'
 Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
                $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
                $telemetry.Contains('RecordHeaderWidthCacheMiss()')) 'Header-cache diagnostics must aggregate only hit/miss counts without retaining any live captions.'
