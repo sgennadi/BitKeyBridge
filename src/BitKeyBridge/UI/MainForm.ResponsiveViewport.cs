@@ -63,6 +63,13 @@ public sealed partial class MainForm
         return _languageViewportStarted > 0;
     }
 
+    internal void PreviewHoldMainViewportReflowForUiSelfTest(bool busy)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Viewport busy fixture is test-only.");
+        _mainViewportReflowRunning = busy;
+    }
+
     // Called after the synchronous captions pass. Measure the user-requested
     // change through the eventual selected-tab reflow, not just ApplyLanguage.
     private void QueueLanguageViewportReflow(long languageStarted)
@@ -188,16 +195,11 @@ public sealed partial class MainForm
                 if (languageStarted > 0 && languageQueued > 0)
                     UiLayoutTelemetry.RecordLanguageViewportDispatch(languageQueued);
                 var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                // ReflowMainViewport() may skip an overlapping native layout.
+                // Only the successful geometry pass itself may mark language
+                // timing ready; a skipped callback leaves it for a later pass.
                 ReflowMainViewport();
                 _navigationReflowLastDispatchedIndex = selectedIndex;
-                if (languageStarted > 0 &&
-                    languageStarted == _languageViewportStarted)
-                {
-                    UiLayoutTelemetry.RecordLanguageViewportReflow(viewportStarted);
-                    UiLayoutTelemetry.RecordLanguageViewportReady(languageStarted);
-                    _languageViewportStarted = 0;
-                    _languageViewportQueued = 0;
-                }
                 if (started > 0)
                 {
                     UiTabNavigationTelemetry.RecordLayout(
@@ -528,6 +530,19 @@ public sealed partial class MainForm
             // UiModernTheme.Refresh(shell) rebuilt every rounded HWND region and
             // invalidated all tab controls on each window resize. It belongs
             // only in the shared theme/DPI refresh path, NOT in WM_SIZE.
+
+            // A callback can be dispatched while native WinForms layout is
+            // busy; it must not claim a completed repaint if the method above
+            // returned early. Consuming the stopwatch only here also covers
+            // a real WM_SIZE/timer pass that beats the queued callback.
+            if (_languageViewportStarted > 0 && _languageViewportQueued > 0)
+            {
+                var languageStarted = _languageViewportStarted;
+                UiLayoutTelemetry.RecordLanguageViewportReflow(viewportStarted);
+                UiLayoutTelemetry.RecordLanguageViewportReady(languageStarted);
+                _languageViewportStarted = 0;
+                _languageViewportQueued = 0;
+            }
         }
         finally
         {
