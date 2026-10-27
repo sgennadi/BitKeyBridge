@@ -33,6 +33,8 @@ $intuneSetup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\In
 $deviceCodeDialog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DeviceCodeDialog.cs') -Raw
 $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
+$languageResources = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLanguageService.cs') -Raw
+$captionCatalog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStaticCaptionCatalog.cs') -Raw
 $dialogLocalizer = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiDialogLocalization.cs') -Raw
 $mainLocalization = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Localization.cs') -Raw
 $headerCache = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiHeaderWidthCache.cs') -Raw
@@ -46,6 +48,18 @@ function Assert-Source([bool] $condition, [string] $reason) {
     if (-not $condition) { throw "UI repaint regression: $reason" }
 }
 
+# Always exercise the FULL fixed-caption resources, not a curated sample
+# of visible controls. Real domain/product identifiers remain untouched.
+Assert-Source ($languageResources.Contains('foreach (var (key, words) in Messages)') -and
+               $languageResources.Contains('Untranslated Russian shell resource:') -and
+               $languageResources.Contains('Untranslated Hebrew shell resource:') -and
+               $languageResources.Contains('HasLanguageScript(') -and
+               $captionCatalog.Contains('UntranslatedTechnicalCaptions') -and
+               $captionCatalog.Contains('Untranslated Russian static UI caption:') -and
+               $captionCatalog.Contains('Untranslated Hebrew static UI caption:') -and
+               $captionCatalog.Contains('Stale technical-caption exception:') -and
+               $captionCatalog.Contains('Идентификатор восстановления Entra:') -and
+               $captionCatalog.Contains('Ролевой доступ BitKeyBridge (RBAC)')) 'All fixed RU/HE captions must be validated, with only exact technical-name exemptions.'
 Assert-Source ($project.Contains('<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>')) 'PerMonitorV2 must remain enabled.'
 Assert-Source ($viewport.Contains('Interval = 55')) 'Main viewport must batch WM_SIZE events.'
 Assert-Source ($viewport.Contains('ClientSizeChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must respond to client width changes.'
