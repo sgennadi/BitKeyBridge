@@ -15,6 +15,7 @@
 
 - Multi-architecture Windows x64/x86/ARM64 build and strict PowerShell source regressions.
 - Native `--ui-self-test`: modal placeholder and context-menu tooltip language roundtrips EN/RU/HE, dynamic hints preserved, menu `Tag` unchanged, populated Tenant ID unchanged, all startup and existing 100–200% DPI/RTL checks preserved.
+- Native UI test must audit all registered fixed caption Controls, ToolStripItems and DataGridView/ListView headers after each EN/RU/HE switch. It must prove its stale-English detection with a synthetic registered action and recovery after another language pass. Only counts and fixed resource IDs may be asserted, never device identities, input fields or recovery secret values.
 - Existing offline `--self-test`, LAPS regressions and CodeQL.
 - Offline resource acceptance must cover the complete EN/RU/HE shell and static-caption dictionaries, rejecting missing Russian/Hebrew script except exact technical product names. Keep explicit regression fixtures for Russian Entra Recovery ID and BitKeyBridge RBAC. Never inspect dynamic account/device fields or recovery secrets in these resource checks.
 - Manual Windows RDP / physical 100%, 150%, 175% and 200% text scaling: no blank glyphs or clipped labels when repeatedly switching English, Russian and Hebrew.
