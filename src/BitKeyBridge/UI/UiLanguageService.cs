@@ -463,6 +463,17 @@ internal static class UiLanguageService
             }
 
             failures.AddRange(UiStaticCaptionCatalog.ValidateLanguages());
+            // Previously missing Russian captions are explicit regressions;
+            // brand/product identifiers must remain unchanged when intended.
+            if (UiStaticCaptionCatalog.TranslateOrOriginal("ru", "Entra Recovery ID:") !=
+                    "Идентификатор восстановления Entra:" ||
+                UiStaticCaptionCatalog.TranslateOrOriginal("ru", "BitKeyBridge RBAC") !=
+                    "Ролевой доступ BitKeyBridge (RBAC)" ||
+                UiStaticCaptionCatalog.TranslateOrOriginal("he", "Entra Recovery ID:") !=
+                    "מזהה שחזור Entra:" ||
+                UiStaticCaptionCatalog.TranslateOrOriginal("ru", "BitLocker") !=
+                    "BitLocker")
+                failures.Add("Russian recovery ID / RBAC localization regressed.");
             foreach (var original in new[]
             {
                 "Export & Automation", "Recovery Export Storage",
