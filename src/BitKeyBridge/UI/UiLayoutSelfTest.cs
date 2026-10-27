@@ -1312,6 +1312,21 @@ public static class UiLayoutSelfTest
                 afterBusyLanguage.Ready != beforeBusyLanguage.Ready + 1)
                 failures.Add("Busy native layout retry stranded language viewport timing.");
 
+            // The busy-layout fixture deliberately finishes in Russian.
+            // Check the actual Russian status-link caption before returning
+            // to the original English baseline for subsequent assertions.
+            if (FindByName(form, "GlobalStatusBar") is not StatusStrip russianStatus ||
+                russianStatus.Items.Find("GlobalCopyDiagnostics", false)
+                    .FirstOrDefault() is not ToolStripStatusLabel russianCopy ||
+                russianCopy.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                    "ru", "Copy diagnostics"))
+                failures.Add("Busy-language viewport repair lost the Russian status copy link.");
+
+            form.PreviewShellLanguageForLayoutTest("en");
+            Application.DoEvents();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("English baseline restoration left viewport timing pending.");
+
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
                 initialStatus.RightToLeft != RightToLeft.No ||
                 initialStatus.Items.Find("GlobalCopyDiagnostics", false)
