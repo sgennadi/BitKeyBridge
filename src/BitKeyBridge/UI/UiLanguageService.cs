@@ -254,6 +254,16 @@ internal static class UiLanguageService
     internal static bool IsRightToLeft(string? language) =>
         Normalize(language) == "he";
 
+    // Resource coverage only. Do NOT run script checks against user-entered
+    // identities, computer names, recovery values or dynamic status text.
+    internal static bool HasLanguageScript(string language, string value) =>
+        Normalize(language) switch
+        {
+            "ru" => value.Any(static c => c >= '\u0400' && c <= '\u052f'),
+            "he" => value.Any(static c => c >= '\u0590' && c <= '\u05ff'),
+            _ => true
+        };
+
     internal static string Translate(string? language, string key)
     {
         if (!Messages.TryGetValue(key, out var words))
@@ -300,6 +310,28 @@ internal static class UiLanguageService
         var failures = new List<string>();
         try
         {
+            // All shell resources must have three nonempty translations.
+            // Some technical product names are deliberately language-neutral.
+            foreach (var (key, words) in Messages)
+            {
+                if (words.Length != 3 || words.Any(string.IsNullOrWhiteSpace))
+                {
+                    failures.Add("Missing EN/RU/HE shell resource: " + key);
+                    continue;
+                }
+                if (!HasLanguageScript("ru", words[1]) &&
+                    key is not ("BitLocker" or "LAPS" or "RecoveryStatusOk"))
+                    failures.Add("Untranslated Russian shell resource: " + key);
+                if (!HasLanguageScript("he", words[2]) &&
+                    key is not ("BitLocker" or "LAPS"))
+                    failures.Add("Untranslated Hebrew shell resource: " + key);
+            }
+            if (!HasLanguageScript("ru", "Тест") ||
+                !HasLanguageScript("he", "בדיקה") ||
+                HasLanguageScript("ru", "Untranslated") ||
+                HasLanguageScript("he", "Untranslated"))
+                failures.Add("Language-script coverage validator is incorrect.");
+
             if (Normalize("ru-RU") != "ru" ||
                 Normalize("he-IL") != "he" ||
                 Normalize("en-US") != "en" ||
