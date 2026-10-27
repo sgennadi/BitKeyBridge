@@ -911,6 +911,121 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  preview-qa-bundle:
+    # Manual EN/RU/HE and RDP QA ONLY; no signed release, release tag,
+    # deployment, updater activation, credentials or signing keys.
+    # Package only after every ephemeral integration gate is green.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+      github.event.pull_request.number == 110
+    needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact QA source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download tested x64 preview
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: preview-qa
+
+      - name: Download tested x86 preview
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: preview-qa
+
+      - name: Download tested ARM64 preview
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: preview-qa
+
+      - name: Verify artifact structure and pin SHA-256 checksums
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$GITHUB_HEAD_REF" = "feature/v0.34.0-localization-and-ui-speed"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$PR_HEAD_SHA" != ""
+          version=$(python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('src/BitKeyBridge/BitKeyBridge.csproj').getroot()
+          versions = [node.text.strip() for node in root.findall('./PropertyGroup/Version') if node.text]
+          if len(versions) != 1:
+              raise SystemExit('Exactly one project Version node required')
+          print(versions[0])
+          PY
+          )
+          [[ "$version" =~ ^0[.]34[.]0-preview[.][0-9]+$ ]] || {
+            echo 'This QA workflow is restricted to v0.34 preview builds.'
+            exit 1
+          }
+          for rid in win-x64 win-x86 win-arm64; do
+            zip="preview-qa/BitKeyBridge-$rid.zip"
+            test -s "$zip"
+            entries="$(unzip -Z1 "$zip")"
+            test "$entries" = 'BitKeyBridge.exe' || {
+              echo "Unexpected ZIP structure: $rid"
+              exit 1
+            }
+          done
+          cp tests/windows/BitKeyBridge-DomainPreflight.cmd preview-qa/
+          (
+            cd preview-qa
+            sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+            printf 'QA preview version: %s\nPR: #110\nHead SHA: %s\nVerified merge source SHA: %s\nUnsigned QA artifact only\n' \
+              "$version" "$PR_HEAD_SHA" "$GITHUB_SHA" > BUILD-INFO.txt
+            cat > README-TEST.txt <<'EOF'
+          BITKEYBRIDGE 0.34 — UNSIGNED DEVELOPMENT QA
+          ============================================
+          These files are NOT an organization-signed production release.
+          Never auto-deploy or install through GPO, Intune or a scheduled update.
+          Do not run on a domain controller or production helpdesk machine.
+
+          Verify SHA256SUMS.txt before extracting the archive for your CPU.
+          Use a disposable Windows test machine or isolated RDP session.
+          The EXE is a portable single-file app; do not replace a production EXE.
+
+          From a regular (non-elevated) CMD in the extracted folder:
+              BitKeyBridge.exe --version
+              BitKeyBridge.exe --self-test --no-elevation
+              BitKeyBridge.exe --ui-self-test --no-elevation
+              BitKeyBridge.exe --audit-broker-preflight --no-elevation
+
+          Open the application manually. Cycle EN > RU > HE > RU > EN
+          at 100%, 150%, 175% and 200% Windows scaling; also test RDP.
+          Verify no empty controls, clipped Hebrew/Russian labels or vanished
+          Copy diagnostics action. Check the selected device remains unchanged.
+          Run the existing UI performance diagnostics (Ctrl+Shift+P) and
+          compare language p50/p95, selected viewport and HWND counts to
+          Stable v0.33.1. These metrics exclude native OS paint/RDP transport.
+
+          Do not paste secret-bearing data into bug reports. Use only the
+          sanitized UI-performance report, never raw keys or authentication.
+          Organization signing, managed-domain standard-user acceptance,
+          updater canary and rollback approval are separate release gates.
+          EOF
+          )
+
+      - name: Upload source-pinned unsigned manual QA bundle (Actions only)
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-v0.34-Preview-QA-UNSIGNED
+          path: preview-qa/
+          if-no-files-found: error
+          retention-days: 30
+
   codeql-stable-release:
     # Require on-SHA security scanning before publication.
     if: >-
