@@ -1840,7 +1840,29 @@ public static class UiLayoutSelfTest
                     tabs.TabPages.Cast<TabPage>().Any(
                         page => string.IsNullOrWhiteSpace(page.Text)))
                     failures.Add("Language switch left an empty main workspace tab.");
+
+                // Audit every REGISTERED static source, rather than only the
+                // hand-picked controls above. Output is numeric only; never
+                // retain or report user-entered text or recovery material.
+                var captionAudit = form.PreviewFixedCaptionAuditForUiSelfTest();
+                if (captionAudit.Controls < 10 ||
+                    captionAudit.Menus < 1 || captionAudit.Headers < 5)
+                    failures.Add("Static caption audit did not cover controls, menus and headers.");
+                if (captionAudit.Stale != 0)
+                    failures.Add("Static caption audit found stale EN/RU/HE values: " +
+                        language + " (count=" + captionAudit.Stale + ").");
             }
+
+            // Confirm this audit can DETECT an actual stale English caption
+            // after Hebrew localization, then verify the ordinary language
+            // pass repairs it. The fixture is a fixed registered action.
+            lateAction1.Text = UiLanguageService.Translate("en", "MainRecoverySteps");
+            var intentionallyStale = form.PreviewFixedCaptionAuditForUiSelfTest();
+            if (intentionallyStale.Stale < 1)
+                failures.Add("Static caption audit failed to detect a stale English label.");
+            form.PreviewShellLanguageForLayoutTest("he");
+            if (form.PreviewFixedCaptionAuditForUiSelfTest().Stale != 0)
+                failures.Add("Static caption audit did not recover after Hebrew repair.");
 
             // Adopting a NEW known English caption must still work after
             // runtime text was preserved. It must not touch menu bindings.
