@@ -467,7 +467,18 @@ public sealed partial class MainForm
 
     internal void ReflowMainViewport()
     {
-        if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width <= 0)
+        if (_mainViewportReflowRunning)
+        {
+            // A language switch needs a completed geometry pass. If an
+            // overlapping native layout skipped this attempt, retry once
+            // the 55-ms idle debounce is available rather than silently
+            // leaving its measurement pending forever.
+            if (_languageViewportStarted > 0 && IsHandleCreated &&
+                !IsDisposed && !Disposing)
+                QueueMainViewportReflow();
+            return;
+        }
+        if (IsDisposed || Disposing || ClientSize.Width <= 0)
             return;
 
         var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
