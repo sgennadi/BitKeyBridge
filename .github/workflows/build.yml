@@ -672,13 +672,18 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
+  # v0.34 Preview's integration jobs are restricted to PR #110 by both
+  # exact source branch name and pull request number. They run on ephemeral
+  # hosted Windows with synthetic data; neither publish nor sign releases.
   legacy-upgrade-regression:
     # Only run on disposable hosted Windows. Exercises the ACTUAL elevated
     # apply/rollback implementation with synthetic config and DPAPI fixtures.
     if: >-
       (github.event_name == 'pull_request' &&
        (github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
-        github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
+        github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018' ||
+         (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+          github.event.pull_request.number == 110))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
@@ -726,7 +731,9 @@ jobs:
         github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
         github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017' ||
          github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
-         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
+         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018' ||
+         (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+          github.event.pull_request.number == 110))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
@@ -775,7 +782,11 @@ jobs:
     # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
-      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
+      (github.head_ref == 'feature/protected-audit-broker-20261014' ||
+       github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
+       github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
+       (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+        github.event.pull_request.number == 110))
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
