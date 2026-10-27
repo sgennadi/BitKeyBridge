@@ -521,6 +521,96 @@ public sealed partial class MainForm
         }
     }
 
+    // UI-self-test only: aggregate recognized static captions without ever
+    // logging or returning UI contents, account names, devices or secrets.
+    // Caller-owned dynamic replacement text is intentionally ignored.
+    internal (int Controls, int Menus, int Headers, int Stale)
+        PreviewFixedCaptionAuditForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Caption audit is test-only.");
+
+        static bool IsStale(string? actual, string english, string language,
+            bool shell)
+        {
+            string Localize(string code) => shell
+                ? UiLanguageService.Translate(code, english)
+                : UiStaticCaptionCatalog.TranslateOrOriginal(code, english);
+
+            if (string.Equals(actual, Localize(language),
+                    StringComparison.Ordinal))
+                return false;
+            if (string.IsNullOrWhiteSpace(actual))
+                return true;
+            // Arbitrary caller-provided content is not a stale translation.
+            // Only exact English/Russian/Hebrew versions of this fixed source
+            // are counted; contents never leave this test-only method.
+            return new[] { "en", "ru", "he" }.Any(code =>
+                string.Equals(actual, Localize(code),
+                    StringComparison.Ordinal));
+        }
+
+        var controls = 0;
+        var menus = 0;
+        var headers = 0;
+        var stale = 0;
+
+        foreach (var (control, key) in _localizedCaptionControls)
+        {
+            if (control.IsDisposed || control.Disposing)
+                continue;
+            var shell = !key.StartsWith(OriginalCaptionPrefix,
+                StringComparison.Ordinal);
+            var english = shell ? key : key[OriginalCaptionPrefix.Length..];
+            controls++;
+            if (IsStale(control.Text, english, _uiLanguageCode, shell))
+                stale++;
+        }
+
+        foreach (var (item, source) in _localizedMenuSources)
+        {
+            if (item.IsDisposed)
+                continue;
+            menus++;
+            if (IsStale(item.Text, source.English, _uiLanguageCode,
+                    shell: false))
+                stale++;
+        }
+
+        foreach (var (grid, sources) in _localizedGridHeaders)
+        {
+            if (grid.IsDisposed || grid.Disposing)
+                continue;
+            foreach (var (column, source) in sources)
+            {
+                if (source.English is not { } english ||
+                    !grid.Columns.Contains(column))
+                    continue;
+                headers++;
+                if (IsStale(column.HeaderText, english, _uiLanguageCode,
+                        shell: false))
+                    stale++;
+            }
+        }
+
+        foreach (var (list, sources) in _localizedListViewHeaders)
+        {
+            if (list.IsDisposed || list.Disposing)
+                continue;
+            for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+            {
+                if (sources[i].English is not { } english)
+                    continue;
+                headers++;
+                if (IsStale(list.Columns[i].Text, english, _uiLanguageCode,
+                        shell: false))
+                    stale++;
+            }
+        }
+
+        return (controls, menus, headers, stale);
+    }
+
     private string TranslateFixedCaption(string key) =>
         key.StartsWith(OriginalCaptionPrefix, StringComparison.Ordinal)
             ? UiStaticCaptionCatalog.TranslateOrOriginal(
