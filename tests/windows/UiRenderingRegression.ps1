@@ -60,6 +60,17 @@ Assert-Source ($languageResources.Contains('foreach (var (key, words) in Message
                $captionCatalog.Contains('Stale technical-caption exception:') -and
                $captionCatalog.Contains('Идентификатор восстановления Entra:') -and
                $captionCatalog.Contains('Ролевой доступ BitKeyBridge (RBAC)')) 'All fixed RU/HE captions must be validated, with only exact technical-name exemptions.'
+# Native UI audit must detect stale fixed text after every language switch,
+# including a deliberately injected stale English action, without disclosing it.
+Assert-Source ($mainLocalization.Contains('PreviewFixedCaptionAuditForUiSelfTest()') -and
+               $mainLocalization.Contains('if (!_layoutSelfTest)') -and
+               $mainLocalization.Contains('if (item.IsDisposed)') -and
+               $mainLocalization.Contains('if (grid.IsDisposed || grid.Disposing)') -and
+               $mainLocalization.Contains('if (list.IsDisposed || list.Disposing)') -and
+               $layoutSelfTest.Contains('Static caption audit did not cover controls, menus and headers.') -and
+               $layoutSelfTest.Contains('Static caption audit found stale EN/RU/HE values:') -and
+               $layoutSelfTest.Contains('Static caption audit failed to detect a stale English label.') -and
+               $layoutSelfTest.Contains('Static caption audit did not recover after Hebrew repair.')) 'EN/RU/HE native UI test must audit all registered fixed captions while protecting runtime identity and secret values.'
 Assert-Source ($project.Contains('<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>')) 'PerMonitorV2 must remain enabled.'
 Assert-Source ($viewport.Contains('Interval = 55')) 'Main viewport must batch WM_SIZE events.'
 Assert-Source ($viewport.Contains('ClientSizeChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must respond to client width changes.'
