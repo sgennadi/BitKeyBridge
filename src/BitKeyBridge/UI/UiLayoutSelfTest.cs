@@ -1281,7 +1281,37 @@ public static class UiLayoutSelfTest
                 !UiLayoutTelemetry.Report().Contains(
                     "Language viewport measurements superseded:", StringComparison.Ordinal))
                 failures.Add("Deferred language p50/p95 diagnostics were not completed.");
-            
+
+            // A native layout can already be running when the language
+            // callback arrives. Dispatch alone must not record a completed
+            // geometry pass or clear the pending language stopwatch.
+            var beforeBusyLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            form.PreviewHoldMainViewportReflowForUiSelfTest(true);
+            try
+            {
+                form.PreviewShellLanguageForLayoutTest("ru");
+                Application.DoEvents();
+                var whileBusyLanguage =
+                    UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+                if (!form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                    whileBusyLanguage.Ready != beforeBusyLanguage.Ready)
+                    failures.Add("Busy native layout falsely completed language viewport timing.");
+            }
+            finally
+            {
+                form.PreviewHoldMainViewportReflowForUiSelfTest(false);
+            }
+            // A successful follow-up WM_SIZE/idle viewport pass completes
+            // the exact same stopwatch without inventing a new language
+            // change or recording the skipped attempt as a success.
+            form.ReflowMainViewport();
+            var afterBusyLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                afterBusyLanguage.Ready != beforeBusyLanguage.Ready + 1)
+                failures.Add("Busy native layout retry stranded language viewport timing.");
+
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
                 initialStatus.RightToLeft != RightToLeft.No ||
                 initialStatus.Items.Find("GlobalCopyDiagnostics", false)
