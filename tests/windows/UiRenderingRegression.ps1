@@ -33,6 +33,8 @@ $intuneSetup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\In
 $deviceCodeDialog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DeviceCodeDialog.cs') -Raw
 $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
+$recoveryGraphics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiRecoveryCard.cs') -Raw
+$statusLabel = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStatusLabel.cs') -Raw
 $languageResources = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLanguageService.cs') -Raw
 $captionCatalog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStaticCaptionCatalog.cs') -Raw
 $dialogLocalizer = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiDialogLocalization.cs') -Raw
@@ -83,6 +85,20 @@ Assert-Source ($theme.Contains('if (control.IsHandleCreated)') -and
                $theme.Contains('marker.LastRoundedSize = Size.Empty') -and
                $telemetry.Contains('Theme controls installed=') -and
                $layoutSelfTest.Contains('Deferred rounded region was not applied on HandleCreated.')) 'Cold theme must defer native rounded GDI regions and test eventual handle creation.'
+# Binary Control.Region masks truncate anti-aliased button edges and cut
+# away status borders; corner radius must be drawn with GDI+ in client bounds.
+Assert-Source ($theme.Contains('UiRecoveryGraphics.ConfigureRoundedButton(') -and
+               $theme.Contains('button.FlatAppearance.BorderSize = 0;') -and
+               -not $theme.Contains('SetupRoundedRegion(button,') -and
+               -not $theme.Contains('SetupRoundedRegion(status,') -and
+               $style.Contains('UiRecoveryGraphics.ConfigureRoundedButton(') -and
+               -not $style.Contains('button.Region = new Region(path)') -and
+               $recoveryGraphics.Contains('new GraphicsPath(FillMode.Alternate)') -and
+               $recoveryGraphics.Contains('InsideStrokeBounds(') -and
+               $recoveryGraphics.Contains('PixelOffsetMode.HighQuality') -and
+               $statusLabel.Contains('UiRecoveryGraphics.InsideStrokeBounds(Size, stroke)') -and
+               $layoutSelfTest.Contains('Antialiased button corner mask was not painted.') -and
+               $layoutSelfTest.Contains('Rounded border stroke exceeds client bounds.')) 'Rounded graphics must paint complete anti-aliased strokes without clipped native button regions.'
 Assert-Source ($theme.Contains('if (Markers.TryGetValue(root, out _))')) 'Repeat theme application must be O(1).'
 Assert-Source ($theme.Contains('root.ControlAdded += (_, args) =>') -and
                $theme.Contains('if (args.Control is { } child) Apply(child);')) 'Newly added controls must receive the theme through the null-safe, non-recursive handler.'
