@@ -646,10 +646,10 @@ public static class UiLayoutSelfTest
                     new Rectangle(Point.Empty, banner.Size));
                 // The gradient must contain visibly different navy/blue
                 // regions, not a solid color or a missing paint callback.
-                var left = image.GetPixel(8, image.Height / 2);
+                var navyPixel = image.GetPixel(8, image.Height / 2);
                 var right = image.GetPixel(image.Width - 8, image.Height / 2);
-                if (left.ToArgb() == right.ToArgb() ||
-                    left.ToArgb() == UiStyle.ModernCanvas.ToArgb())
+                if (navyPixel.ToArgb() == right.ToArgb() ||
+                    navyPixel.ToArgb() == UiStyle.ModernCanvas.ToArgb())
                     failures.Add("NI-style navy-to-blue banner did not paint.");
             }
         }
