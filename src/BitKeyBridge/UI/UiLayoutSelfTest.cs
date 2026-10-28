@@ -624,7 +624,12 @@ public static class UiLayoutSelfTest
             host.Controls.Add(search);
             host.Controls.Add(reveal);
 
+            var themeBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
             UiModernTheme.Apply(host);
+            var themeAfter = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            if (themeAfter.Installed <= themeBefore.Installed ||
+                themeAfter.Deferred <= themeBefore.Deferred)
+                failures.Add("Theme failed to defer rounded regions before native handles exist.");
             if (!UiModernTheme.IsPrimaryAction(search) ||
                 UiModernTheme.IsPrimaryAction(reveal) ||
                 search.BackColor != UiStyle.ModernAccent ||
@@ -638,6 +643,18 @@ public static class UiLayoutSelfTest
             // An idempotent second application must preserve already-themed
             // controls, while ControlAdded styles dynamic buttons.
             UiModernTheme.Apply(host);
+            // Native handle creation must install the deferred region, and
+            // a second idempotent Apply must not repeat full-tree setup.
+            var installedBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            _ = search.Handle;
+            var appliedAfter = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            if (appliedAfter.Applied <= installedBefore.Applied ||
+                search.Region is null)
+                failures.Add("Deferred rounded region was not applied on HandleCreated.");
+            UiModernTheme.Apply(host);
+            if (UiLayoutTelemetry.ThemeCountsForUiSelfTest().Installed !=
+                appliedAfter.Installed)
+                failures.Add("Repeated theme Apply reinstalled themed controls.");
             var retry = UiStyle.CreateActionButton("Retry check");
             retry.Name = "UpdateCenterRetryCheckButton";
             host.Controls.Add(retry);
