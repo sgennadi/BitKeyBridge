@@ -182,6 +182,7 @@ if ($SelfTest) {
         $start[0].DeltaBasis -ne 'p95' -or
         $start[0].DeltaPercent -ne '-33.3%' -or
         $hebrew[0].DeltaBasis -ne 'N/A' -or
+        $hebrew[0].StableP95Ms -ne 'N/A' -or
         $hebrew[0].DeltaPercent -ne 'N/A') {
         throw 'UI comparison parsing, missing-data or threshold regression.'
     }
@@ -208,7 +209,7 @@ $rows = @(Get-SafeComparison $stable $preview $MinimumSamples)
 Write-Output 'BitKeyBridge local UI timing comparison (recognized numeric phases only).'
 Write-Output 'Negative deltas mean lower measured latency. N/A is not a zero or a pass.'
 Write-Output 'Comparisons require enough completed samples in BOTH versions; no native paint/RDP transport is measured.'
-$rows | Format-Table Phase,StableRuns,PreviewRuns,StableP95Ms,PreviewP95Ms,DeltaBasis,DeltaPercent -AutoSize | Out-String -Width 200 | Write-Output
+$rows | Format-Table Phase,StableRuns,PreviewRuns,StableMeanMs,PreviewMeanMs,StableP95Ms,PreviewP95Ms,DeltaBasis,DeltaPercent -AutoSize | Out-String -Width 240 | Write-Output
 
 if (-not [string]::IsNullOrWhiteSpace($OutputCsv)) {
     if (Test-Path -LiteralPath $OutputCsv) {
