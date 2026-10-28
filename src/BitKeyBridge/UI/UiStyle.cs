@@ -130,21 +130,13 @@ public static class UiStyle
         oldImage?.Dispose();
         button.Disposed += (_, _) => image.Dispose();
 
-        void RefreshCorners()
-        {
-            if (button.IsDisposed || button.Width < 2 || button.Height < 2)
-                return;
-            using var path = UiRecoveryGraphics.RoundRect(
-                new RectangleF(0, 0, button.Width, button.Height),
-                12f * button.DeviceDpi / BaselineDpi);
-            var old = button.Region;
-            button.Region = new Region(path);
-            old?.Dispose();
-        }
-
-        button.SizeChanged += (_, _) => RefreshCorners();
-        button.DpiChangedAfterParent += (_, _) => RefreshCorners();
-        RefreshCorners();
+        // Native Region clips the rounded edge to whole pixels, leaving
+        // jagged arcs or missing border segments at 125%-200% scaling.
+        // The shared AA chrome preserves Button text, glyphs, focus and
+        // normal mouse/keyboard behavior without a binary Region mask.
+        button.FlatAppearance.BorderSize = 0;
+        UiRecoveryGraphics.ConfigureRoundedButton(
+            button, logicalRadius: 12f, borderColor: Color.Empty);
     }
 
     public static void ConfigureRecoveryFieldCaption(Label caption)
