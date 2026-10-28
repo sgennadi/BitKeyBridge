@@ -178,10 +178,10 @@ internal static class UiRecoveryGraphics
     // by GDI+ at the window boundary; the corner then looks unfinished.
     // Keep the entire antialiased stroke within the physical client pixels.
     internal static RectangleF InsideStrokeBounds(
-        Size size, float stroke, float top = 0f)
+        Size size, float stroke, float topInset = 0f)
     {
         var inset = Math.Max(1f, stroke * 0.5f + 0.5f);
-        var topEdge = Math.Max(inset, top);
+        var topEdge = Math.Max(inset, topInset);
         return new RectangleF(inset, topEdge,
             Math.Max(0f, size.Width - 2f * inset),
             Math.Max(0f, size.Height - topEdge - inset));
