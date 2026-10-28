@@ -77,6 +77,12 @@ Assert-Source ($viewport.Contains('ClientSizeChanged += (_, _) => QueueMainViewp
 Assert-Source ($viewport.Contains('DpiChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must handle monitor DPI changes.'
 Assert-Source (-not [regex]::IsMatch($viewport, '(?m)^\s*UiModernTheme\.Refresh\(shell\)\s*;')) 'WM_SIZE must not refresh every themed control and GDI region.'
 Assert-Source ([regex]::IsMatch($viewport, 'if\s*\(geometryChanged\)\s*shell\.PerformLayout\(\)\s*;')) 'Main layout must be forced only on true geometry changes.'
+Assert-Source ($theme.Contains('if (control.IsHandleCreated)') -and
+               $theme.Contains('RecordDeferredRoundedRegion()') -and
+               $theme.Contains('RecordRoundedRegionApplied()') -and
+               $theme.Contains('marker.LastRoundedSize = Size.Empty') -and
+               $telemetry.Contains('Theme controls installed=') -and
+               $layoutSelfTest.Contains('Deferred rounded region was not applied on HandleCreated.')) 'Cold theme must defer native rounded GDI regions and test eventual handle creation.'
 Assert-Source ($theme.Contains('if (Markers.TryGetValue(root, out _))')) 'Repeat theme application must be O(1).'
 Assert-Source ($theme.Contains('root.ControlAdded += (_, args) =>') -and
                $theme.Contains('if (args.Control is { } child) Apply(child);')) 'Newly added controls must receive the theme through the null-safe, non-recursive handler.'
