@@ -455,6 +455,14 @@ internal static class UiModernTheme
             var preference = roundedCorners;
             _ = DwmSetWindowAttribute(form.Handle, 33, ref preference,
                 Marshal.SizeOf<int>());
+            // Match NI Package Creator's native Windows 11 navy caption.
+            // DWM rejects these attributes on older builds harmlessly.
+            var caption = ColorTranslator.ToWin32(UiStyle.BrandNavy);
+            var captionText = ColorTranslator.ToWin32(Color.White);
+            _ = DwmSetWindowAttribute(form.Handle, 35, ref caption,
+                Marshal.SizeOf<int>());
+            _ = DwmSetWindowAttribute(form.Handle, 36, ref captionText,
+                Marshal.SizeOf<int>());
         }
         catch (DllNotFoundException) { /* Earlier Windows version. */ }
         catch (EntryPointNotFoundException) { /* DWM API unavailable. */ }
