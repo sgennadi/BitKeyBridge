@@ -72,6 +72,7 @@ public static class UiLayoutSelfTest
         var failures =
             new List<string>();
 
+        VerifyNipkgBrandBanner(failures);
         VerifyModernAccentAndDynamicTheme(failures);
 
         VerifyStatusGlyphScaling(
@@ -609,6 +610,56 @@ public static class UiLayoutSelfTest
         }
     }
 
+    private static void VerifyNipkgBrandBanner(List<string> failures)
+    {
+        // Visual fixture uses static localized copy only: no domain, device,
+        // account, clipboard or recovery material is ever rendered or logged.
+        try
+        {
+            using var host = new Panel { Size = new Size(940, 170) };
+            using var banner = new UiNipkgBrandBanner();
+            host.Controls.Add(banner);
+            host.CreateControl();
+            banner.CreateControl();
+            host.PerformLayout();
+            banner.PerformLayout();
+
+            if (banner.Heading.Text != "BitKeyBridge" ||
+                banner.Tagline.Text != UiNipkgBrandBanner.IntroCaption ||
+                banner.Tagline.MaximumSize.Width <= 0 ||
+                banner.Tagline.MaximumSize.Width >
+                    banner.ClientSize.Width - banner.Padding.Horizontal + 2)
+                failures.Add("NI-style brand header is missing text or its DPI wrapping width.");
+
+            banner.SetCaptionDirection(true);
+            if (banner.Tagline.TextAlign != ContentAlignment.MiddleRight)
+                failures.Add("NI-style brand header lost Hebrew text alignment.");
+            banner.SetCaptionDirection(false);
+            if (banner.Tagline.TextAlign != ContentAlignment.MiddleLeft)
+                failures.Add("NI-style brand header failed to restore LTR.");
+
+            if (!SystemInformation.HighContrast &&
+                banner.Width > 200 && banner.Height > 20)
+            {
+                using var image = new Bitmap(banner.Width, banner.Height);
+                banner.DrawToBitmap(image,
+                    new Rectangle(Point.Empty, banner.Size));
+                // The gradient must contain visibly different navy/blue
+                // regions, not a solid color or a missing paint callback.
+                var left = image.GetPixel(8, image.Height / 2);
+                var right = image.GetPixel(image.Width - 8, image.Height / 2);
+                if (left.ToArgb() == right.ToArgb() ||
+                    left.ToArgb() == UiStyle.ModernCanvas.ToArgb())
+                    failures.Add("NI-style navy-to-blue banner did not paint.");
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("NI-style brand banner: " + ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
     private static void VerifyModernAccentAndDynamicTheme(List<string> failures)
     {
         if (SystemInformation.HighContrast)
@@ -641,7 +692,9 @@ public static class UiLayoutSelfTest
                 failures.Add("Theme failed to defer rounded regions before native handles exist.");
             if (!UiModernTheme.IsPrimaryAction(search) ||
                 UiModernTheme.IsPrimaryAction(reveal) ||
-                search.BackColor != UiStyle.ModernAccent ||
+                search.BackColor != UiStyle.ModernPositiveAccent ||
+                !UiModernTheme.IsPositiveAction(search) ||
+                UiModernTheme.IsPositiveAction(reveal) ||
                 search.ForeColor != Color.White ||
                 reveal.BackColor != UiStyle.ModernSurface)
             {
@@ -729,7 +782,7 @@ public static class UiLayoutSelfTest
             retry.Name = "UpdateCenterRetryCheckButton";
             host.Controls.Add(retry);
             if (retry.BackColor != UiStyle.ModernAccent ||
-                search.BackColor != UiStyle.ModernAccent)
+                search.BackColor != UiStyle.ModernPositiveAccent)
                 failures.Add("Theme failed to style dynamically added primary controls.");
         }
         catch (Exception ex)
@@ -1731,6 +1784,16 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                if (FindByName(form, "HomeNipkgBrandBanner")
+                        is not UiNipkgBrandBanner brand ||
+                    brand.Heading.Text != "BitKeyBridge" ||
+                    brand.Tagline.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, UiNipkgBrandBanner.IntroCaption) ||
+                    brand.Tagline.TextAlign != (language == "he"
+                        ? ContentAlignment.MiddleRight
+                        : ContentAlignment.MiddleLeft))
+                    failures.Add("NI-style Start banner lost EN/RU/HE caption or direction: " +
+                        language);
                 var expectedEventLog = UiStaticCaptionCatalog.TranslateOrOriginal(
                     language, "Windows Event Log");
                 var expectedLatestRelease = UiStaticCaptionCatalog.TranslateOrOriginal(
