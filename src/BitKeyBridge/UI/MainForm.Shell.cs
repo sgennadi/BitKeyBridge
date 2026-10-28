@@ -66,6 +66,7 @@ public sealed partial class MainForm
     private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
     private CancellationTokenSource? _homeSearchCancellation;
     private int _homeSearchGeneration;
+    private UiNipkgBrandBanner? _homeBrandBanner;
     private TabPage? _homeWorkspaceTab;
     private TabPage? _recoveryWorkspaceTab;
     private TabPage? _lapsWorkspaceTab;
@@ -626,6 +627,7 @@ public sealed partial class MainForm
             var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
+            _homeBrandBanner?.SetCaptionDirection(rtl);
             // The application-wide diagnostic banner lives outside
             // _mainTabs and is not part of the shell-caption observer.
             // Never clear its active report during a language change.
@@ -719,46 +721,13 @@ public sealed partial class MainForm
         tab.Controls.Add(
             root);
 
-        root.Controls.Add(
-            new Label
-            {
-                Text =
-                    "BitKeyBridge",
-                Font =
-                    UiStyle.CreatePageTitleFont(),
-                AutoSize =
-                    true,
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.ControlGap)
-            },
-            0,
-            0);
-
-        root.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Connect once, search once, then view BitLocker and LAPS side by side. " +
-                    "Search reads metadata only — secrets are still read on demand.",
-                AutoSize =
-                    true,
-                MaximumSize =
-                    new Size(
-                        1100,
-                        0),
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.SectionGap)
-            },
-            0,
-            1);
+        // Replace the two plain Start heading rows with one compact
+        // NI Creator-style gradient banner. Preserve the exact localized
+        // helpdesk description as a native Label, never bitmap text.
+        // Row span avoids changing search/recovery row indices and controls.
+        _homeBrandBanner = new UiNipkgBrandBanner();
+        root.Controls.Add(_homeBrandBanner, 0, 0);
+        root.SetRowSpan(_homeBrandBanner, 2);
 
         var connectionGroup =
             new GroupBox
