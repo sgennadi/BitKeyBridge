@@ -688,6 +688,37 @@ public static class UiLayoutSelfTest
                     bounds.Right > 160f - scale / 2f ||
                     bounds.Bottom > 46f - scale / 2f)
                     failures.Add("Rounded border stroke exceeds client bounds.");
+
+                // Render each physical scale into an isolated bitmap. Curved
+                // edges must have antialiased intermediate pixels, with no
+                // extra stroke drawn outside the target's client rectangle.
+                using var pixels = new Bitmap(160, 46);
+                using var g = Graphics.FromImage(pixels);
+                g.Clear(Color.White);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.PixelOffsetMode =
+                    System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                using var curve = UiRecoveryGraphics.RoundRect(
+                    bounds, Math.Min(14f * scale, 20f));
+                using var brush = new SolidBrush(Color.Black);
+                g.FillPath(brush, curve);
+                var blended = false;
+                for (var y = 0; y < Math.Min(24, pixels.Height); y++)
+                {
+                    for (var x = 0; x < Math.Min(24, pixels.Width); x++)
+                    {
+                        var value = pixels.GetPixel(x, y).R;
+                        if (value is > 0 and < 255)
+                        {
+                            blended = true;
+                            break;
+                        }
+                    }
+                    if (blended)
+                        break;
+                }
+                if (!blended)
+                    failures.Add("Rounded geometry has no antialiased edge pixels.");
             }
 
             UiModernTheme.Apply(host);
