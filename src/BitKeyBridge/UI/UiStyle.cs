@@ -58,7 +58,7 @@ public static class UiStyle
     public static Color ModernMuted =>
         SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(100, 106, 113);
     public static Color ModernBorder =>
-        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(224, 228, 233);
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(181, 191, 202);
     public static Color ModernHeader =>
         SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(239, 242, 247);
     public static Color ModernAlternateRow =>
@@ -79,7 +79,8 @@ public static class UiStyle
     public const int RecoveryCardFieldSpacing = 10;
 
     public static Color RecoveryCardBackground => SystemColors.Window;
-    public static Color RecoveryCardBorder => Color.FromArgb(226, 228, 231);
+    public static Color RecoveryCardBorder =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(194, 202, 212);
     public static Color RecoveryCardForeground => SystemColors.WindowText;
     public static Color RecoveryCardMutedText =>
         SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(103, 107, 113);
