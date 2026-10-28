@@ -62,7 +62,7 @@ foreach ($page in @('Start', 'BitLocker', 'LAPS', 'Devices', 'Helpdesk', 'Diagno
     $script:Phases += "$page - viewport reflow"
 }
 
-$script:Allowed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+$script:Allowed = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($phase in $script:Phases) {
     [void] $script:Allowed.Add($phase)
 }
@@ -73,7 +73,7 @@ function Convert-Numeric([string] $value) {
 }
 
 function Get-SafeMetrics([string[]] $lines) {
-    $values = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
+    $values = [System.Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     foreach ($line in $lines) {
         if ($line.Length -gt 1024) { continue }
         $name = $null
@@ -148,10 +148,10 @@ function Get-SafeComparison([string[]] $baselineLines,
             Phase = $phase
             StableRuns = $bRuns
             PreviewRuns = $pRuns
-            StableMeanMs = if ($null -ne $b -and $null -ne $b.Mean) { $b.Mean } else { $null }
-            PreviewMeanMs = if ($null -ne $p -and $null -ne $p.Mean) { $p.Mean } else { $null }
-            StableP95Ms = if ($null -ne $b -and $null -ne $b.P95) { $b.P95 } else { $null }
-            PreviewP95Ms = if ($null -ne $p -and $null -ne $p.P95) { $p.P95 } else { $null }
+            StableMeanMs = $(if ($null -ne $b -and $null -ne $b.Mean) { $b.Mean } else { $null })
+            PreviewMeanMs = $(if ($null -ne $p -and $null -ne $p.Mean) { $p.Mean } else { $null })
+            StableP95Ms = $(if ($null -ne $b -and $null -ne $b.P95) { $b.P95 } else { $null })
+            PreviewP95Ms = $(if ($null -ne $p -and $null -ne $p.P95) { $p.P95 } else { $null })
             DeltaBasis = $basis
             DeltaPercent = $delta
         }
@@ -173,13 +173,16 @@ if ($SelfTest) {
     $rows = @(Get-SafeComparison $baseline $preview 5)
     $language = @($rows | Where-Object { $_.Phase -eq 'Language changes (warm)' })
     $start = @($rows | Where-Object { $_.Phase -eq 'Start' })
+    $hebrew = @($rows | Where-Object { $_.Phase -eq 'Language EN/RU -> Hebrew' })
     if ($rows.Count -ne 3 -or $language.Count -ne 1 -or $start.Count -ne 1 -or
+        $hebrew.Count -ne 1 -or
         $language[0].DeltaBasis -ne 'mean' -or
         $language[0].DeltaPercent -ne '-20.0%' -or
         $null -ne $language[0].StableP95Ms -or
         $start[0].DeltaBasis -ne 'p95' -or
         $start[0].DeltaPercent -ne '-33.3%' -or
-        $rows[2].DeltaPercent -ne 'N/A') {
+        $hebrew[0].DeltaBasis -ne 'N/A' -or
+        $hebrew[0].DeltaPercent -ne 'N/A') {
         throw 'UI comparison parsing, missing-data or threshold regression.'
     }
     $safe = $rows | ConvertTo-Json -Depth 4 -Compress | Out-String
