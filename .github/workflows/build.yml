@@ -297,6 +297,15 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Self-test offline UI timing comparator (synthetic numeric data)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $output = & pwsh -NoProfile -File ./tests/windows/Compare-BitKeyBridgeUiPerf.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'UI LATENCY COMPARATOR SELF-TEST OK') {
+            throw 'UI timing comparator offline self-test did not pass.'
+          }
+
       - name: Validate GPO templates and localized restriction resources
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -981,9 +990,11 @@ jobs:
             }
           done
           cp tests/windows/BitKeyBridge-DomainPreflight.cmd preview-qa/
+          cp tests/windows/Compare-BitKeyBridgeUiPerf.ps1 preview-qa/
           (
             cd preview-qa
-            sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+            sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip \
+              BitKeyBridge-DomainPreflight.cmd Compare-BitKeyBridgeUiPerf.ps1 > SHA256SUMS.txt
             printf 'QA preview version: %s\nPR: #110\nHead SHA: %s\nVerified merge source SHA: %s\nUnsigned QA artifact only\n' \
               "$version" "$PR_HEAD_SHA" "$GITHUB_SHA" > BUILD-INFO.txt
             cat > README-TEST.txt <<'EOF'
@@ -1007,9 +1018,16 @@ jobs:
           at 100%, 150%, 175% and 200% Windows scaling; also test RDP.
           Verify no empty controls, clipped Hebrew/Russian labels or vanished
           Copy diagnostics action. Check the selected device remains unchanged.
-          Run the existing UI performance diagnostics (Ctrl+Shift+P) and
-          compare language p50/p95, selected viewport and HWND counts to
-          Stable v0.33.1. These metrics exclude native OS paint/RDP transport.
+          Run UI performance diagnostics (Ctrl+Shift+P) in v0.33.1 and
+          the matching v0.34 preview on the SAME hardware, session and DPI.
+          Copy the reports into stable-ui.txt and preview-ui.txt respectively.
+          From a regular PowerShell console in this QA folder, run:
+              powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Compare-BitKeyBridgeUiPerf.ps1 -BaselinePath .\stable-ui.txt -PreviewPath .\preview-ui.txt -MinimumSamples 5 -OutputCsv .\ui-comparison.csv
+          Only known numeric fields appear in the comparison CSV. The stable
+          0.33.1 report lacks language p95; the tool marks this N/A instead
+          of inventing or comparing unsupported percentiles. Negative
+          percentages mean lower latency. Do not compare different DPI or
+          local-vs-RDP sessions. Neither tool measures OS paint/RDP transport.
 
           Do not paste secret-bearing data into bug reports. Use only the
           sanitized UI-performance report, never raw keys or authentication.
