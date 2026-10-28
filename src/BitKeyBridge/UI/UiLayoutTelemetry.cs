@@ -146,6 +146,9 @@ internal static class UiLayoutTelemetry
     private static readonly Counter LanguageViewportReflow = new(recentPercentiles: true);
     private static readonly Counter LanguageViewportReady = new(recentPercentiles: true);
     private static long _languageViewportSuperseded;
+    private static long _themeControlsInstalled;
+    private static long _deferredRoundedRegions;
+    private static long _roundedRegionsApplied;
     private static long _visibleLabelBatches;
     private static long _visibleLabelWidthChanges;
     private static long _visibleLabelParentReflows;
@@ -233,6 +236,16 @@ internal static class UiLayoutTelemetry
 
     internal static (long Ready, long Superseded) LanguageViewportCountsForUiSelfTest() =>
         (LanguageViewportReady.Runs, Interlocked.Read(ref _languageViewportSuperseded));
+    internal static void RecordThemedControl() =>
+        Interlocked.Increment(ref _themeControlsInstalled);
+    internal static void RecordDeferredRoundedRegion() =>
+        Interlocked.Increment(ref _deferredRoundedRegions);
+    internal static void RecordRoundedRegionApplied() =>
+        Interlocked.Increment(ref _roundedRegionsApplied);
+    internal static (long Installed, long Deferred, long Applied) ThemeCountsForUiSelfTest() =>
+        (Interlocked.Read(ref _themeControlsInstalled),
+         Interlocked.Read(ref _deferredRoundedRegions),
+         Interlocked.Read(ref _roundedRegionsApplied));
     internal static void RecordVisibleLabelBatch(int changed, int parentReflows)
     {
         Interlocked.Increment(ref _visibleLabelBatches);
@@ -318,6 +331,7 @@ internal static class UiLayoutTelemetry
         ColdMainForm.Summarize("Initial DPI - main window") + "\n" +
         ColdOtherForms.Summarize("Initial DPI - other windows") + "\n" +
         DpiThemeInstall.Summarize("DPI phase - theme installation") + "\n" +
+        $"Theme controls installed={Interlocked.Read(ref _themeControlsInstalled)}, rounded regions deferred={Interlocked.Read(ref _deferredRoundedRegions)}, applied={Interlocked.Read(ref _roundedRegionsApplied)}\n" +
         DpiControlDefaults.Summarize("DPI phase - control defaults") + "\n" +
         DpiWorkArea.Summarize("DPI phase - work-area adjustment") + "\n" +
         DpiLayout.Summarize("DPI phase - WinForms PerformLayout") + "\n" +
