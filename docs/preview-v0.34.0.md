@@ -13,6 +13,7 @@
 
 ## Required GitHub Actions QA before moving out of draft
 
+- Verify deferred rounded-region installation on first native HandleCreated, idempotent repeated theme Apply, and correct region recreation across HWND changes. Measure cold theme-install timing and GDI operation counts on actual Windows before claiming reduced startup latency.
 - Multi-architecture Windows x64/x86/ARM64 build and strict PowerShell source regressions.
 - Native `--ui-self-test`: modal placeholder and context-menu tooltip language roundtrips EN/RU/HE, dynamic hints preserved, menu `Tag` unchanged, populated Tenant ID unchanged, all startup and existing 100–200% DPI/RTL checks preserved.
 - Native UI test must audit all registered fixed caption Controls, ToolStripItems and DataGridView/ListView headers after each EN/RU/HE switch. It must prove its stale-English detection with a synthetic registered action and recovery after another language pass. Only counts and fixed resource IDs may be asserted, never device identities, input fields or recovery secret values.
