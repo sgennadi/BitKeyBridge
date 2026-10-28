@@ -75,10 +75,13 @@ public static class UiStyle
     public static Color ModernAccentHover =>
         SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(13, 91, 207);
     public static Color ModernAccentPressed => BrandBlueDark;
-    public static Color ModernPositiveAccent => BrandGreen;
+    // NI's vivid #10AA5D remains the brand highlight; a slightly darker
+    // fill (#0A864C) is necessary for >=4.5:1 white caption contrast.
+    public static Color ModernPositiveAccent => BrandGreenDark;
     public static Color ModernPositiveAccentHover =>
-        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(13, 151, 83);
-    public static Color ModernPositiveAccentPressed => BrandGreenDark;
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(8, 115, 68);
+    public static Color ModernPositiveAccentPressed =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(7, 96, 57);
     public static Color ModernMuted =>
         SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(94, 112, 142);
     // A stronger blue-gray edge than NI's light card stroke prevents the
