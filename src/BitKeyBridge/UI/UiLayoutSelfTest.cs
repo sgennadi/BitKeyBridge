@@ -632,10 +632,12 @@ public static class UiLayoutSelfTest
                 failures.Add("NI-style brand header is missing text or its DPI wrapping width.");
 
             banner.SetCaptionDirection(true);
-            if (banner.Tagline.TextAlign != ContentAlignment.MiddleRight)
+            if (banner.Tagline.TextAlign != ContentAlignment.MiddleRight ||
+                banner.Tagline.Anchor != AnchorStyles.Right)
                 failures.Add("NI-style brand header lost Hebrew text alignment.");
             banner.SetCaptionDirection(false);
-            if (banner.Tagline.TextAlign != ContentAlignment.MiddleLeft)
+            if (banner.Tagline.TextAlign != ContentAlignment.MiddleLeft ||
+                banner.Tagline.Anchor != AnchorStyles.Left)
                 failures.Add("NI-style brand header failed to restore LTR.");
 
             if (!SystemInformation.HighContrast &&
@@ -1791,7 +1793,9 @@ public static class UiLayoutSelfTest
                         language, UiNipkgBrandBanner.IntroCaption) ||
                     brand.Tagline.TextAlign != (language == "he"
                         ? ContentAlignment.MiddleRight
-                        : ContentAlignment.MiddleLeft))
+                        : ContentAlignment.MiddleLeft) ||
+                    brand.Tagline.Anchor != (language == "he"
+                        ? AnchorStyles.Right : AnchorStyles.Left))
                     failures.Add("NI-style Start banner lost EN/RU/HE caption or direction: " +
                         language);
                 var expectedEventLog = UiStaticCaptionCatalog.TranslateOrOriginal(
