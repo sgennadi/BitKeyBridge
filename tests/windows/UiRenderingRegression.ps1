@@ -98,7 +98,8 @@ Assert-Source ($theme.Contains('UiRecoveryGraphics.ConfigureRoundedButton(') -an
                $recoveryGraphics.Contains('PixelOffsetMode.HighQuality') -and
                $statusLabel.Contains('UiRecoveryGraphics.InsideStrokeBounds(Size, stroke)') -and
                $layoutSelfTest.Contains('Antialiased button corner mask was not painted.') -and
-               $layoutSelfTest.Contains('Rounded border stroke exceeds client bounds.')) 'Rounded graphics must paint complete anti-aliased strokes without clipped native button regions.'
+               $layoutSelfTest.Contains('Rounded border stroke exceeds client bounds.') -and
+               $layoutSelfTest.Contains('Rounded geometry has no antialiased edge pixels.')) 'Rounded graphics must paint complete anti-aliased strokes without clipped native button regions.'
 Assert-Source ($theme.Contains('if (Markers.TryGetValue(root, out _))')) 'Repeat theme application must be O(1).'
 Assert-Source ($theme.Contains('root.ControlAdded += (_, args) =>') -and
                $theme.Contains('if (args.Control is { } child) Apply(child);')) 'Newly added controls must receive the theme through the null-safe, non-recursive handler.'
