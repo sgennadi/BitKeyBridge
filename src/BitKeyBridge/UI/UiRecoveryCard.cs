@@ -98,8 +98,8 @@ public sealed class UiRecoveryGlyph : Control
 public sealed class UiRecoveryBadge : Label
 {
     private UiStatusKind _kind = UiStatusKind.Neutral;
-    private Size _lastRoundedSize;
-    private int _lastRoundedDpi;
+    // Draw pill-shaped backgrounds with GDI+ rather than binary Region
+    // clipping, which loses subpixel edge coverage at 125%-200% DPI.
 
     [System.ComponentModel.DesignerSerializationVisibility(
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -119,6 +119,9 @@ public sealed class UiRecoveryBadge : Label
 
     public UiRecoveryBadge()
     {
+        SetStyle(ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer |
+                 ControlStyles.ResizeRedraw, true);
         AutoSize = true;
         AutoEllipsis = false;
         UseMnemonic = false;
@@ -127,8 +130,7 @@ public sealed class UiRecoveryBadge : Label
         Padding = new Padding(14, 6, 14, 6);
         Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.SectionGap);
         RefreshPalette();
-        SizeChanged += (_, _) => RoundCorners();
-        DpiChangedAfterParent += (_, _) => RoundCorners();
+        DpiChangedAfterParent += (_, _) => Invalidate();
     }
 
     private void RefreshPalette()
@@ -137,22 +139,36 @@ public sealed class UiRecoveryBadge : Label
         BackColor = pair.Background;
         ForeColor = pair.Foreground;
         AccessibleDescription = _kind + " recovery availability.";
-        RoundCorners();
+        Invalidate();
     }
 
-    private void RoundCorners()
+    protected override void OnPaintBackground(PaintEventArgs e)
     {
-        if (Width < 2 || Height < 2)
+        if (SystemInformation.HighContrast || Width < 3 || Height < 3)
+        {
+            base.OnPaintBackground(e);
             return;
-        if (_lastRoundedSize == Size && _lastRoundedDpi == DeviceDpi)
-            return;
-        using var path = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0, 0, Width, Height), Height / 2f);
-        var previous = Region;
-        Region = new Region(path);
-        previous?.Dispose();
-        _lastRoundedSize = Size;
-        _lastRoundedDpi = DeviceDpi;
+        }
+
+        var parent = Parent;
+        while (parent is not null && parent.BackColor.A < 255)
+            parent = parent.Parent;
+        e.Graphics.Clear(parent?.BackColor ?? UiStyle.RecoveryCardBackground);
+        var state = e.Graphics.Save();
+        try
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using var path = UiRecoveryGraphics.RoundRect(
+                new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f),
+                Height / 2f);
+            using var fill = new SolidBrush(BackColor);
+            e.Graphics.FillPath(fill, path);
+        }
+        finally
+        {
+            e.Graphics.Restore(state);
+        }
     }
 }
 
