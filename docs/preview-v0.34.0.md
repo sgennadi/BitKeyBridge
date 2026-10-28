@@ -13,6 +13,7 @@
 
 ## Required GitHub Actions QA before moving out of draft
 
+- Visually verify corner continuity and crispness on actual Windows/RDP at 100%, 125%, 150%, 175% and 200% DPI: recovery cards, primary/secondary actions, availability pills, GroupBox and nested owner-drawn tabs. Buttons and status borders must use antialiased paint rather than binary Region clipping; generic bordered panels still use the existing native Region fallback. Check dark/light parent backgrounds, focus, mouse hover/pressed, keyboard, screen reader names and High Contrast.
 - Verify deferred rounded-region installation on first native HandleCreated, idempotent repeated theme Apply, and correct region recreation across HWND changes. Measure cold theme-install timing and GDI operation counts on actual Windows before claiming reduced startup latency.
 - Multi-architecture Windows x64/x86/ARM64 build and strict PowerShell source regressions.
 - Native `--ui-self-test`: modal placeholder and context-menu tooltip language roundtrips EN/RU/HE, dynamic hints preserved, menu `Tag` unchanged, populated Tenant ID unchanged, all startup and existing 100–200% DPI/RTL checks preserved.
