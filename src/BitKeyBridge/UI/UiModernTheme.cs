@@ -128,7 +128,10 @@ internal static class UiModernTheme
                 {
                     var primary = IsPrimaryAction(button);
                     button.FlatStyle = FlatStyle.Flat;
-                    button.FlatAppearance.BorderSize = primary ? 0 : 1;
+                    // GDI+ paints an AA outline after the native Button
+                    // content. Native borders and Region clips leave broken
+                    // corner segments when scaled to fractional DPI.
+                    button.FlatAppearance.BorderSize = 0;
                     button.FlatAppearance.BorderColor = UiStyle.ModernBorder;
                     button.FlatAppearance.MouseOverBackColor = primary
                         ? UiStyle.ModernAccentHover : UiStyle.ModernHover;
@@ -140,7 +143,11 @@ internal static class UiModernTheme
                     button.ForeColor = primary
                         ? Color.White : UiStyle.ModernForeground;
                 }
-                SetupRoundedRegion(button, marker, UiStyle.ModernButtonRadius);
+                UiRecoveryGraphics.ConfigureRoundedButton(
+                    button,
+                    InsideRecoveryCard(button) ? 12f : UiStyle.ModernButtonRadius,
+                    InsideRecoveryCard(button) || IsPrimaryAction(button)
+                        ? Color.Empty : UiStyle.ModernBorder);
                 break;
 
             case ComboBox combo:
@@ -185,9 +192,10 @@ internal static class UiModernTheme
                 list.BorderStyle = BorderStyle.FixedSingle;
                 break;
 
-            case UiStatusLabel status:
-                if (status.BorderStyle != BorderStyle.None)
-                    SetupRoundedRegion(status, marker, UiStyle.ModernSmallRadius);
+            case UiStatusLabel:
+                // UiStatusLabel paints its own antialiased border. A native
+                // Region + rectangular ControlPaint border cuts away the
+                // rounded edge, especially at fractional monitor DPI.
                 break;
 
             case ProgressBar:
@@ -303,7 +311,8 @@ internal static class UiModernTheme
         marker.LastRoundedDpi = dpi;
         var scaled = logicalRadius * dpi / (float)UiStyle.BaselineDpi;
         using var path = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0, 0, control.Width, control.Height), scaled);
+            new RectangleF(0, 0, Math.Max(1, control.Width - 1),
+                Math.Max(1, control.Height - 1)), scaled);
         var old = control.Region;
         control.Region = new Region(path);
         old?.Dispose();
@@ -322,14 +331,18 @@ internal static class UiModernTheme
             return;
 
         args.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var path = UiRecoveryGraphics.RoundRect(rect,
+        args.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var stroke = Math.Max(1f, tabs.DeviceDpi / (float)UiStyle.BaselineDpi);
+        var bounds = UiRecoveryGraphics.InsideStrokeBounds(rect.Size, stroke);
+        bounds.Offset(rect.Location);
+        using var path = UiRecoveryGraphics.RoundRect(bounds,
             UiStyle.ModernTabRadius * tabs.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var fill = new SolidBrush(
             active ? UiStyle.ModernSurface : UiStyle.ModernCanvas);
         args.Graphics.FillPath(fill, path);
         if (active)
         {
-            using var border = new Pen(UiStyle.ModernBorder, 1f);
+            using var border = new Pen(UiStyle.ModernBorder, stroke);
             args.Graphics.DrawPath(border, path);
             // Fluent-style slim accent indicator helps recognition without
             // painting an entire new tab control or animating the workspace.
@@ -364,19 +377,19 @@ internal static class UiModernTheme
 
         var graphics = args.Graphics;
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
         var textHeight = TextRenderer.MeasureText(
             string.IsNullOrWhiteSpace(group.Text) ? " " : group.Text,
             group.Font).Height;
         var outlineTop = Math.Max(1, textHeight / 2f);
         graphics.Clear(group.Parent?.BackColor ?? UiStyle.ModernCanvas);
+        var stroke = Math.Max(1f, group.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var outline = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0.5f, outlineTop, group.Width - 1.5f,
-                Math.Max(2f, group.Height - outlineTop - 1.5f)),
+            UiRecoveryGraphics.InsideStrokeBounds(group.Size, stroke, outlineTop),
             UiStyle.ModernSurfaceRadius * group.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var fill = new SolidBrush(UiStyle.ModernSurface);
         graphics.FillPath(fill, outline);
-        using var border = new Pen(UiStyle.ModernBorder,
-            Math.Max(1f, group.DeviceDpi / (float)UiStyle.BaselineDpi));
+        using var border = new Pen(UiStyle.ModernBorder, stroke);
         graphics.DrawPath(border, outline);
 
         if (!string.IsNullOrEmpty(group.Text))
