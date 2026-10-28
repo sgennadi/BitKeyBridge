@@ -84,6 +84,7 @@ internal static class UiModernTheme
             case UiRecoveryCard:
             case UiRecoveryBadge:
             case UiRecoveryGlyph:
+            case UiNipkgBrandBanner:
                 // These already draw their own rounded geometry and palette.
                 return;
 
@@ -127,6 +128,7 @@ internal static class UiModernTheme
                 if (!InsideRecoveryCard(button))
                 {
                     var primary = IsPrimaryAction(button);
+                    var positive = IsPositiveAction(button);
                     button.FlatStyle = FlatStyle.Flat;
                     // GDI+ paints an AA outline after the native Button
                     // content. Native borders and Region clips leave broken
@@ -134,12 +136,18 @@ internal static class UiModernTheme
                     button.FlatAppearance.BorderSize = 0;
                     button.FlatAppearance.BorderColor = UiStyle.ModernBorder;
                     button.FlatAppearance.MouseOverBackColor = primary
-                        ? UiStyle.ModernAccentHover : UiStyle.ModernHover;
+                        ? positive ? UiStyle.ModernPositiveAccentHover
+                            : UiStyle.ModernAccentHover
+                        : UiStyle.ModernHover;
                     button.FlatAppearance.MouseDownBackColor = primary
-                        ? UiStyle.ModernAccentPressed : UiStyle.ModernPressed;
+                        ? positive ? UiStyle.ModernPositiveAccentPressed
+                            : UiStyle.ModernAccentPressed
+                        : UiStyle.ModernPressed;
                     button.UseVisualStyleBackColor = false;
                     button.BackColor = primary
-                        ? UiStyle.ModernAccent : UiStyle.ModernSurface;
+                        ? positive ? UiStyle.ModernPositiveAccent
+                            : UiStyle.ModernAccent
+                        : UiStyle.ModernSurface;
                     button.ForeColor = primary
                         ? Color.White : UiStyle.ModernForeground;
                 }
@@ -202,14 +210,15 @@ internal static class UiModernTheme
                 break;
 
             case StatusStrip statusBar:
-                statusBar.BackColor = UiStyle.ModernSurface;
+                statusBar.BackColor = UiStyle.BrandSoftBlue;
                 statusBar.ForeColor = UiStyle.ModernForeground;
                 break;
 
             case MenuStrip menu:
-                menu.BackColor = UiStyle.ModernSurface;
+                menu.BackColor = UiStyle.BrandSoftBlue;
                 menu.ForeColor = UiStyle.ModernForeground;
-                menu.RenderMode = ToolStripRenderMode.Professional;
+                menu.Renderer = new ToolStripProfessionalRenderer(
+                    new NipkgMenuColorTable());
                 break;
 
             case ToolStrip strip:
@@ -251,6 +260,12 @@ internal static class UiModernTheme
             "UpdateNowButton" or
             "UpdateCenterRetryCheckButton";
 
+    // Green is reserved for safe metadata-only Search (NI's positive
+    // action convention). Never make Reveal/Copy Key or rotation a green
+    // one-click action; authorization and confirmation remain unchanged.
+    internal static bool IsPositiveAction(Button button) =>
+        button.Name == "HomeUnifiedSearchButton";
+
     private static bool InsideRecoveryCard(Control control)
     {
         for (Control? parent = control.Parent; parent is not null; parent = parent.Parent)
@@ -259,6 +274,24 @@ internal static class UiModernTheme
                 return true;
         }
         return false;
+    }
+
+    private sealed class NipkgMenuColorTable : ProfessionalColorTable
+    {
+        public override Color MenuStripGradientBegin => UiStyle.BrandSoftBlue;
+        public override Color MenuStripGradientEnd => UiStyle.BrandSoftBlue;
+        public override Color MenuItemSelected => UiStyle.ModernHover;
+        public override Color MenuItemSelectedGradientBegin => UiStyle.ModernHover;
+        public override Color MenuItemSelectedGradientEnd => UiStyle.ModernHover;
+        public override Color MenuItemPressedGradientBegin => UiStyle.BrandSoftBlue;
+        public override Color MenuItemPressedGradientEnd => UiStyle.BrandSoftBlue;
+        public override Color MenuItemBorder => UiStyle.ModernBorder;
+        public override Color ToolStripDropDownBackground => UiStyle.ModernSurface;
+        public override Color ImageMarginGradientBegin => UiStyle.ModernSurface;
+        public override Color ImageMarginGradientMiddle => UiStyle.ModernSurface;
+        public override Color ImageMarginGradientEnd => UiStyle.ModernSurface;
+        public override Color SeparatorDark => UiStyle.ModernBorder;
+        public override Color SeparatorLight => UiStyle.ModernSurface;
     }
 
     private static void SetupRoundedRegion(
