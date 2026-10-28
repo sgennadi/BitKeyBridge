@@ -33,6 +33,7 @@ internal static class UiModernTheme
 
         var marker = new ThemeMarker();
         Markers.Add(root, marker);
+        UiLayoutTelemetry.RecordThemedControl();
         root.ControlAdded += (_, args) =>
         {
             if (args.Control is { } child) Apply(child);
@@ -258,13 +259,27 @@ internal static class UiModernTheme
         marker.LastRoundedSize = Size.Empty;
         marker.LastRoundedDpi = -1;
         control.SizeChanged += (_, _) => UpdateCorners(control, marker);
-        control.HandleCreated += (_, _) => UpdateCorners(control, marker);
-        UpdateCorners(control, marker, radius);
+        control.HandleCreated += (_, _) =>
+        {
+            // A recreated HWND needs its rounded region on the NEW handle,
+            // even when size/DPI still match the previous native window.
+            marker.LastRoundedSize = Size.Empty;
+            marker.LastRoundedDpi = -1;
+            UpdateCorners(control, marker);
+        };
+        // Do not create hundreds of Region/GDI objects for hidden tabs at
+        // startup. The HandleCreated callback installs identical geometry
+        // before a newly visible control can draw.
+        if (control.IsHandleCreated)
+            UpdateCorners(control, marker, radius);
+        else
+            UiLayoutTelemetry.RecordDeferredRoundedRegion();
     }
 
     private static void UpdateCorners(Control control, ThemeMarker marker, int? radius = null)
     {
-        if (control.IsDisposed || SystemInformation.HighContrast)
+        if (control.IsDisposed || SystemInformation.HighContrast ||
+            !control.IsHandleCreated)
             return;
 
         var logicalRadius = radius ?? (control switch
@@ -292,6 +307,7 @@ internal static class UiModernTheme
         var old = control.Region;
         control.Region = new Region(path);
         old?.Dispose();
+        UiLayoutTelemetry.RecordRoundedRegionApplied();
     }
 
     private static void DrawTab(object? sender, DrawItemEventArgs args)
