@@ -156,22 +156,22 @@ internal sealed class UiNipkgBrandBanner : Panel
 
             // Simple antialiased vector shield; no bitmap assets or secrets.
             var middle = Height / 2f;
-            var left = 22f * dpi;
+            var iconX = 22f * dpi;
             var size = 42f * dpi;
             using (var tile = UiRecoveryGraphics.RoundRect(
-                new RectangleF(left, middle - size / 2f, size, size),
+                new RectangleF(iconX, middle - size / 2f, size, size),
                 11f * dpi))
             using (var tileBrush = new SolidBrush(Color.FromArgb(65, 255, 255, 255)))
                 g.FillPath(tileBrush, tile);
             using var shield = new GraphicsPath();
             shield.AddLines(new[]
             {
-                new PointF(left + 12f * dpi, middle - 11f * dpi),
-                new PointF(left + 21f * dpi, middle - 15f * dpi),
-                new PointF(left + 30f * dpi, middle - 11f * dpi),
-                new PointF(left + 29f * dpi, middle + 3f * dpi),
-                new PointF(left + 21f * dpi, middle + 13f * dpi),
-                new PointF(left + 13f * dpi, middle + 3f * dpi)
+                new PointF(iconX + 12f * dpi, middle - 11f * dpi),
+                new PointF(iconX + 21f * dpi, middle - 15f * dpi),
+                new PointF(iconX + 30f * dpi, middle - 11f * dpi),
+                new PointF(iconX + 29f * dpi, middle + 3f * dpi),
+                new PointF(iconX + 21f * dpi, middle + 13f * dpi),
+                new PointF(iconX + 13f * dpi, middle + 3f * dpi)
             });
             shield.CloseFigure();
             using var outline = new Pen(Color.White, 2f * dpi)
