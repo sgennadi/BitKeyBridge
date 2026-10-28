@@ -11,6 +11,13 @@
 5. Main menu and native grid/list column localization must honor caller changes made after a translated static caption. Menu TextBox/ComboBox values and ToolStripItem.Tag remain untouched; replacing an item with a NEW catalogued English caption is allowed and then translated. Runtime values must never enter localization caches or diagnostics.
 6. Native WinForms HWND recreation on DPI/RTL/RDP resets posted callback generations; stale callbacks must not discard the new selected page or strand visible label widths.
 
+## NI Package Creator-inspired visual trial (Preview only)
+
+- Reuse the precise NI Creator blue/green palette centrally through `UiStyle`: navy `#0B2E5A`, blue `#0E6AE6`, green `#10AA5D`, canvas `#F4F7FD`, soft blue `#E2EFFF`, soft green `#E1F8EA`. Keep a stronger blue-gray line where thin AA strokes require more contrast.
+- Replace only the two plain Start heading rows with a compact, DPI-aware, navy→blue gradient banner, green/blue waves and vector shield. Keep the helpdesk explanation as a native WinForms label translated into EN/RU/HE, with no bitmap text or extra device/identity content.
+- Keep existing native main tabs (Hebrew RTL must not recreate them), native focus/click semantics and all security controls. Green accent belongs only to the metadata-only Start Search; recovery-key reveal/copy and privileged Graph operations must never be silently reclassified as safe actions.
+- Preview QA must verify the banner gradient and caption at 100/125/150/175/200% DPI, compact RDP, Hebrew right alignment and High Contrast. Compare initial DPI/theme timing with 0.33.1 before claiming performance gains. Stable 0.33.1 retains its existing appearance.
+
 ## Required GitHub Actions QA before moving out of draft
 
 - Visually verify corner continuity and crispness on actual Windows/RDP at 100%, 125%, 150%, 175% and 200% DPI: recovery cards, primary/secondary actions, availability pills, GroupBox and nested owner-drawn tabs. Buttons and status borders must use antialiased paint rather than binary Region clipping; generic bordered panels still use the existing native Region fallback. Check dark/light parent backgrounds, focus, mouse hover/pressed, keyboard, screen reader names and High Contrast.
