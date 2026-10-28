@@ -150,8 +150,8 @@ function Get-SafeComparison([string[]] $baselineLines,
             PreviewRuns = $pRuns
             StableMeanMs = $(if ($null -ne $b -and $null -ne $b.Mean) { $b.Mean } else { $null })
             PreviewMeanMs = $(if ($null -ne $p -and $null -ne $p.Mean) { $p.Mean } else { $null })
-            StableP95Ms = $(if ($null -ne $b -and $null -ne $b.P95) { $b.P95 } else { $null })
-            PreviewP95Ms = $(if ($null -ne $p -and $null -ne $p.P95) { $p.P95 } else { $null })
+            StableP95Ms = $(if ($null -ne $b -and $null -ne $b.P95) { $b.P95 } else { 'N/A' })
+            PreviewP95Ms = $(if ($null -ne $p -and $null -ne $p.P95) { $p.P95 } else { 'N/A' })
             DeltaBasis = $basis
             DeltaPercent = $delta
         }
@@ -178,7 +178,7 @@ if ($SelfTest) {
         $hebrew.Count -ne 1 -or
         $language[0].DeltaBasis -ne 'mean' -or
         $language[0].DeltaPercent -ne '-20.0%' -or
-        $null -ne $language[0].StableP95Ms -or
+        $language[0].StableP95Ms -ne 'N/A' -or
         $start[0].DeltaBasis -ne 'p95' -or
         $start[0].DeltaPercent -ne '-33.3%' -or
         $hebrew[0].DeltaBasis -ne 'N/A' -or
