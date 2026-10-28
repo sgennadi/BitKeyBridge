@@ -18,6 +18,7 @@ $viewport = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainF
 $theme = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiModernTheme.cs') -Raw
 $base = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DpiAwareForm.cs') -Raw
 $style = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStyle.cs') -Raw
+$nipkgBanner = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiNipkgBrandBanner.cs') -Raw
 $shell = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Shell.cs') -Raw
 $diagnostics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DiagnosticNavigation.cs') -Raw
 $helpdesk = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskDashboard.cs') -Raw
@@ -73,6 +74,24 @@ Assert-Source ($mainLocalization.Contains('PreviewFixedCaptionAuditForUiSelfTest
                $layoutSelfTest.Contains('Static caption audit found stale EN/RU/HE values:') -and
                $layoutSelfTest.Contains('Static caption audit failed to detect a stale English label.') -and
                $layoutSelfTest.Contains('Static caption audit did not recover after Hebrew repair.')) 'EN/RU/HE native UI test must audit all registered fixed captions while protecting runtime identity and secret values.'
+# Preview adopts the actual NI Package Creator palette, keeping security
+# semantics, native Button events and static multilingual labels unchanged.
+Assert-Source ($style.Contains('Color.FromArgb(11, 46, 90)') -and
+               $style.Contains('Color.FromArgb(14, 106, 230)') -and
+               $style.Contains('Color.FromArgb(16, 170, 93)') -and
+               $style.Contains('Color.FromArgb(244, 247, 253)') -and
+               $style.Contains('BrandSoftBlue') -and
+               $style.Contains('BrandSoftGreen') -and
+               $theme.Contains('IsPositiveAction(button)') -and
+               $theme.Contains('button.Name == "HomeUnifiedSearchButton"') -and
+               $theme.Contains('NipkgMenuColorTable') -and
+               $shell.Contains('root.SetRowSpan(_homeBrandBanner, 2)') -and
+               $shell.Contains('_homeBrandBanner?.SetCaptionDirection(rtl)') -and
+               $nipkgBanner.Contains('new LinearGradientBrush(') -and
+               $nipkgBanner.Contains('UiRecoveryGraphics.RoundRect(') -and
+               $nipkgBanner.Contains('Text = IntroCaption') -and
+               $layoutSelfTest.Contains('NI-style navy-to-blue banner did not paint.') -and
+               $layoutSelfTest.Contains('NI-style Start banner lost EN/RU/HE caption or direction:')) 'NI-inspired UI must retain central palette, native EN/RU/HE caption rendering, rounded gradient and safe green search.'
 Assert-Source ($project.Contains('<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>')) 'PerMonitorV2 must remain enabled.'
 Assert-Source ($viewport.Contains('Interval = 55')) 'Main viewport must batch WM_SIZE events.'
 Assert-Source ($viewport.Contains('ClientSizeChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must respond to client width changes.'
