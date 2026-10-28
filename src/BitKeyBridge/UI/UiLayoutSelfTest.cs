@@ -623,6 +623,15 @@ public static class UiLayoutSelfTest
             reveal.Name = "HomeRevealBitLockerButton";
             host.Controls.Add(search);
             host.Controls.Add(reveal);
+            // Generic bordered panels still use native Region hit-testing.
+            // Test that their deferred Region is rebuilt after HWND creation;
+            // buttons instead use antialiased owner-painted rounded chrome.
+            var borderedPanel = new Panel
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(120, 40)
+            };
+            host.Controls.Add(borderedPanel);
 
             var themeBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
             UiModernTheme.Apply(host);
@@ -646,11 +655,41 @@ public static class UiLayoutSelfTest
             // Native handle creation must install the deferred region, and
             // a second idempotent Apply must not repeat full-tree setup.
             var installedBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
-            _ = search.Handle;
+            _ = borderedPanel.Handle;
             var appliedAfter = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
             if (appliedAfter.Applied <= installedBefore.Applied ||
-                search.Region is null)
+                borderedPanel.Region is null)
                 failures.Add("Deferred rounded region was not applied on HandleCreated.");
+
+            _ = search.Handle;
+            if (search.Region is not null || reveal.Region is not null ||
+                search.FlatAppearance.BorderSize != 0)
+                failures.Add("Rounded buttons still use clipped native borders.");
+
+            // Draw the real FlatStyle.Button to a bitmap: both outer corners
+            // must show the parent surface, not the square native fill.
+            search.Size = new Size(160, 46);
+            using (var image = new Bitmap(search.Width, search.Height))
+            {
+                search.DrawToBitmap(image,
+                    new Rectangle(Point.Empty, search.Size));
+                var middle = image.GetPixel(image.Width / 2, image.Height / 2);
+                var corner = image.GetPixel(0, 0);
+                if (middle.ToArgb() == corner.ToArgb())
+                    failures.Add("Antialiased button corner mask was not painted.");
+            }
+
+            foreach (var scale in new[] { 1f, 1.25f, 1.5f, 1.75f, 2f })
+            {
+                var bounds = UiRecoveryGraphics.InsideStrokeBounds(
+                    new Size(160, 46), scale);
+                if (bounds.Left < scale / 2f ||
+                    bounds.Top < scale / 2f ||
+                    bounds.Right > 160f - scale / 2f ||
+                    bounds.Bottom > 46f - scale / 2f)
+                    failures.Add("Rounded border stroke exceeds client bounds.");
+            }
+
             UiModernTheme.Apply(host);
             if (UiLayoutTelemetry.ThemeCountsForUiSelfTest().Installed !=
                 appliedAfter.Installed)
