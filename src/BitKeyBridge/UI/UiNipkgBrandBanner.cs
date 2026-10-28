@@ -91,6 +91,11 @@ internal sealed class UiNipkgBrandBanner : Panel
             Tagline.RightToLeft = direction;
         if (Tagline.TextAlign != alignment)
             Tagline.TextAlign = alignment;
+        // AutoSize labels need table-cell anchoring as well as TextAlign:
+        // right-align Hebrew without mirroring the entire header HWND.
+        var anchor = rtl ? AnchorStyles.Right : AnchorStyles.Left;
+        if (Tagline.Anchor != anchor)
+            Tagline.Anchor = anchor;
     }
 
     private void UpdateTaglineWrapWidth()
