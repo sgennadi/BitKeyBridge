@@ -352,34 +352,57 @@ public sealed partial class MainForm
     // only applies while hidden; visible rows return to content-driven sizing.
     private void SyncStartOptionalConnectionRows(bool activeDirectory)
     {
-        static void SetOptionalRow(
+        static bool SetOptionalRow(
             TableLayoutPanel? table, Control? child, bool expanded)
         {
             if (table is null || child is null ||
                 table.IsDisposed || !ReferenceEquals(child.Parent, table))
-                return;
+                return false;
 
             var index = table.GetRow(child);
             if (index < 0 || index >= table.RowStyles.Count)
-                return;
+                return false;
 
             var style = table.RowStyles[index];
             var sizeType = expanded ? SizeType.AutoSize : SizeType.Absolute;
+            var changed = false;
             if (style.SizeType != sizeType)
+            {
                 style.SizeType = sizeType;
+                changed = true;
+            }
             if (!expanded && style.Height != 0F)
+            {
                 style.Height = 0F;
+                changed = true;
+            }
+            return changed;
         }
 
         var choiceRow = _homeConnectionSource.Parent;
-        SetOptionalRow(choiceRow?.Parent as TableLayoutPanel, choiceRow,
+        var changed = SetOptionalRow(
+            choiceRow?.Parent as TableLayoutPanel, choiceRow,
             _connectionOptionsExpanded);
-        SetOptionalRow(_homeAdConnectionLayout, _startAdIdentityPanel,
-            _connectionOptionsExpanded && activeDirectory);
-        SetOptionalRow(_homeAdConnectionLayout, _startDirectActionsPanel,
-            _connectionOptionsExpanded);
-        SetOptionalRow(_homeAdConnectionLayout, _startDirectHint,
-            _connectionOptionsExpanded);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startAdIdentityPanel, _connectionOptionsExpanded && activeDirectory);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startDirectActionsPanel, _connectionOptionsExpanded);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startDirectHint, _connectionOptionsExpanded);
+
+        if (!changed || _homeAdConnectionLayout is not { IsHandleCreated: true } adLayout)
+            return;
+
+        // TableLayoutPanel does not always propagate an AutoSize shrink
+        // through GroupBox to the scrolling Start root after hidden options
+        // lose their last visible child. Repair this chain only on an actual
+        // expanded/collapsed row-style change, never during routine status polls.
+        adLayout.PerformLayout();
+        var split = adLayout.Parent;
+        split?.PerformLayout();
+        var group = split?.Parent;
+        group?.PerformLayout();
+        group?.Parent?.PerformLayout();
     }
 
     private async Task<bool> ShowStartCloudWizardAsync(bool connectAfterSave)
