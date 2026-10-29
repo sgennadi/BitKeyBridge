@@ -51,8 +51,11 @@ public sealed partial class MainForm
             Padding = Padding.Empty
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        // Hidden options must occupy zero row height, even if WinForms
+        // previously measured a large preferred size at provisional width.
         for (var i = 0; i < 3; i++)
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(
+                i == 1 ? SizeType.Absolute : SizeType.AutoSize, 0F));
 
         // Everyday connection has one primary action. Direct source/cloud
         // maintenance stays discoverable, but does not crowd the first screen.
@@ -339,6 +342,44 @@ public sealed partial class MainForm
                 "Use Connect / Change to choose a source. No credentials are requested until Connect.",
                 UiStatusKind.Neutral);
         }
+
+        SyncStartOptionalConnectionRows(ad);
+    }
+
+    // Explicitly collapse the *table rows* of hidden connection options.
+    // A hidden AutoSize FlowLayoutPanel can retain its old preferred height,
+    // even when the surrounding GroupBox is GrowAndShrink. Absolute zero
+    // only applies while hidden; visible rows return to content-driven sizing.
+    private void SyncStartOptionalConnectionRows(bool activeDirectory)
+    {
+        static void SetOptionalRow(
+            TableLayoutPanel? table, Control? child, bool expanded)
+        {
+            if (table is null || child is null ||
+                table.IsDisposed || !ReferenceEquals(child.Parent, table))
+                return;
+
+            var index = table.GetRow(child);
+            if (index < 0 || index >= table.RowStyles.Count)
+                return;
+
+            var style = table.RowStyles[index];
+            var sizeType = expanded ? SizeType.AutoSize : SizeType.Absolute;
+            if (style.SizeType != sizeType)
+                style.SizeType = sizeType;
+            if (!expanded && style.Height != 0F)
+                style.Height = 0F;
+        }
+
+        var choiceRow = _homeConnectionSource.Parent;
+        SetOptionalRow(choiceRow?.Parent as TableLayoutPanel, choiceRow,
+            _connectionOptionsExpanded);
+        SetOptionalRow(_homeAdConnectionLayout, _startAdIdentityPanel,
+            _connectionOptionsExpanded && activeDirectory);
+        SetOptionalRow(_homeAdConnectionLayout, _startDirectActionsPanel,
+            _connectionOptionsExpanded);
+        SetOptionalRow(_homeAdConnectionLayout, _startDirectHint,
+            _connectionOptionsExpanded);
     }
 
     private async Task<bool> ShowStartCloudWizardAsync(bool connectAfterSave)
