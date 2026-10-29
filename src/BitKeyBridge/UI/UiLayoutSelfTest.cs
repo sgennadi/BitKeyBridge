@@ -2797,6 +2797,28 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        // Regression for the real 1920x1080 / 100%-DPI screenshot:
+        // status and connection rows must not hold stale expanded heights.
+        // Checking layout policy here is reliable for virtual DPI scenarios;
+        // native screen geometry is also verified below on wide viewports.
+        var connectionGroup = FindByName(main, "HomeConnectionsGroup") as GroupBox;
+        var adConnection = FindByName(main, "HomeAdConnectionLayout") as TableLayoutPanel;
+        var searchControls = FindByName(main, "HomeSearchControls") as TableLayoutPanel;
+        var selectionPanel = FindByName(main, "HomeSelectionPanel") as TableLayoutPanel;
+        var lifetimeActions = FindByName(main, "HomeSecretLifetimeActions") as FlowLayoutPanel;
+        if (connectionGroup is null || adConnection is null ||
+            searchControls is null || selectionPanel is null ||
+            lifetimeActions is null ||
+            new Control[] { connectionGroup, adConnection, searchControls,
+                selectionPanel, lifetimeActions }.Any(control =>
+                !control.AutoSize || control is GroupBox group &&
+                    group.AutoSizeMode != AutoSizeMode.GrowAndShrink ||
+                control is Panel panel &&
+                    panel.AutoSizeMode != AutoSizeMode.GrowAndShrink))
+        {
+            failures.Add($"{formName}/{scenario.Name}: Start status sections must shrink after hiding expanded controls.");
+        }
+
         var connectionLayout =
             FindByName(main, "HomeConnectionsAndRecent") as TableLayoutPanel;
         if (connectionLayout is null)
@@ -2860,6 +2882,20 @@ public static class UiLayoutSelfTest
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
             bool expectedThree = width >= (int)Math.Ceiling(
                 UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
+
+            // This failure previously survived structural three-column tests:
+            // all three cards existed but started below the visible viewport.
+            // At wide 100%-scale sizes, verify that the card row is actually
+            // on screen after a metadata-only selection.
+            if (expectedThree && effectiveScale <= 1.05 &&
+                root.ClientSize.Height >= 700 && cards.Height > 0)
+            {
+                var cardTop = cards.PointToScreen(Point.Empty).Y;
+                var viewportTop = root.PointToScreen(Point.Empty).Y;
+                var cardBottomLimit = viewportTop + root.ClientSize.Height;
+                if (cardTop >= cardBottomLimit - 60)
+                    failures.Add($"{formName}/{scenario.Name}: Start recovery cards are pushed below the visible viewport.");
+            }
 
             var hosts = new[] { bitLocker, laps, computers };
             var cells = hosts.Select(cards.GetPositionFromControl).ToArray();
