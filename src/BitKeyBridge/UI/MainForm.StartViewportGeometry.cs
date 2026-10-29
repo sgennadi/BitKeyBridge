@@ -67,11 +67,29 @@ public sealed partial class MainForm
         if (snapshot is not { } value)
             return "Start viewport (pixels only): not currently visible.";
 
+        // Expose only measured sizes of the two selection rows; never
+        // include control Text or selected-device metadata.
+        var summary = _homeSelectionPanel.Controls
+            .OfType<UiStatusLabel>().FirstOrDefault();
+        var actions = _homeSelectionPanel.Controls
+            .OfType<FlowLayoutPanel>().FirstOrDefault();
+        var selectionRows = _homeSelectionPanel.GetRowHeights();
+        var availableWidth = Math.Max(1,
+            _homeSelectionPanel.ClientSize.Width -
+            _homeSelectionPanel.Padding.Horizontal);
+        var actionsPreferred = actions?.GetPreferredSize(
+            new Size(availableWidth, 0)).Height ?? 0;
+
         return "Start viewport (pixels only): " +
             $"viewport={value.ViewportWidth}x{value.ViewportHeight}; " +
             $"connections={value.ConnectionHeight}; " +
             $"search={value.SearchHeight}; " +
             $"selection={value.SelectionHeight}; " +
+            $"selectionWidth={_homeSelectionPanel.Width}; " +
+            $"summary={summary?.Height ?? 0}; " +
+            $"actions={actions?.Height ?? 0}; " +
+            $"actionsPreferred={actionsPreferred}; " +
+            $"selectionRows={string.Join(",", selectionRows)}; " +
             $"cardsTop={value.CardsTop}; " +
             $"cardsHeight={value.CardsHeight}; " +
             $"cardsVisible={value.CardsVisibleHeight}; " +
