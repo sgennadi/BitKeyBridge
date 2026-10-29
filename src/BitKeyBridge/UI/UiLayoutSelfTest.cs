@@ -1420,6 +1420,34 @@ public static class UiLayoutSelfTest
             form.Show();
             Application.DoEvents();
 
+            // Exercise native geometry, not only the existence of controls.
+            // This report is pixels only: no device identifiers or secrets.
+            var initialStart = form.CaptureStartViewportGeometry();
+            if (initialStart is null ||
+                !form.StartViewportGeometryReport().Contains(
+                    "Start viewport (pixels only): viewport=", StringComparison.Ordinal))
+            {
+                failures.Add("Visible Start did not publish non-secret pixel geometry.");
+            }
+            else
+            {
+                form.PreviewSetConnectionOptionsExpandedForUiTest(true);
+                form.ReflowMainViewport();
+                Application.DoEvents();
+                var expanded = form.CaptureStartViewportGeometry();
+                form.PreviewSetConnectionOptionsExpandedForUiTest(false);
+                form.ReflowMainViewport();
+                Application.DoEvents();
+                var collapsed = form.CaptureStartViewportGeometry();
+                if (expanded is null || collapsed is null ||
+                    collapsed.Value.ConnectionHeight >
+                        Math.Max(initialStart.Value.ConnectionHeight,
+                            expanded.Value.ConnectionHeight) + 12)
+                {
+                    failures.Add("Collapsing Start connection options retained expanded panel height.");
+                }
+            }
+
             // Three requested viewport repairs during one UI-message turn
             // must schedule just one native callback. A second burst must
             // still execute rather than getting stranded behind a stale flag.
