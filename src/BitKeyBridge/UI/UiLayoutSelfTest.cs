@@ -1497,6 +1497,7 @@ public static class UiLayoutSelfTest
                     var selectedWideStart = form.CaptureStartViewportGeometry();
                     if (selectedWideStart is null ||
                         selectedWideStart.Value.SelectionHeight <= 0 ||
+                        selectedWideStart.Value.SelectionHeight > 150 ||
                         selectedWideStart.Value.CardsVisibleHeight <
                             Math.Min(120, selectedWideStart.Value.CardsHeight / 2))
                         failures.Add("Standard 1080p selected computer pushes recovery cards below the visible viewport. " +
