@@ -732,12 +732,14 @@ public sealed partial class MainForm
         var connectionGroup =
             new GroupBox
             {
+                Name = "HomeConnectionsGroup",
                 Text =
                     "Connections",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding =
                     new Padding(14),
                 Margin =
@@ -751,10 +753,12 @@ public sealed partial class MainForm
         var connection =
             new TableLayoutPanel
             {
+                Name = "HomeAdConnectionLayout",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount =
                     1,
                 RowCount =
@@ -1099,10 +1103,12 @@ public sealed partial class MainForm
         var search =
             new TableLayoutPanel
             {
+                Name = "HomeSearchControls",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount =
                     4,
                 RowCount =
@@ -1320,6 +1326,7 @@ public sealed partial class MainForm
             DockStyle.Top;
         _homeSelectionPanel.AutoSize =
             true;
+        _homeSelectionPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         _homeSelectionPanel.ColumnCount =
             1;
         _homeSelectionPanel.RowCount =
@@ -1368,6 +1375,7 @@ public sealed partial class MainForm
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents =
                     true,
                 FlowDirection =
