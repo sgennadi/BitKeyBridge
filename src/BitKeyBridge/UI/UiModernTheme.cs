@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -19,6 +20,31 @@ internal static class UiModernTheme
     }
 
     private static readonly ConditionalWeakTable<Control, ThemeMarker> Markers = new();
+    // Sharing one renderer and ControlAdded delegate avoids creating a new
+    // object/closure for every control in the ~700-control cold Start tree.
+    private static readonly ToolStripProfessionalRenderer SharedMenuRenderer =
+        new(new NipkgMenuColorTable());
+
+    private static void ThemeChildAdded(object? sender, ControlEventArgs args)
+    {
+        if (args.Control is { } child)
+            Apply(child);
+    }
+
+    private static UiLayoutTelemetry.ThemeInstallKind ThemeKind(Control control) =>
+        control switch
+        {
+            Form => UiLayoutTelemetry.ThemeInstallKind.Form,
+            TabControl or TabPage => UiLayoutTelemetry.ThemeInstallKind.Tabs,
+            GroupBox => UiLayoutTelemetry.ThemeInstallKind.GroupBox,
+            Button => UiLayoutTelemetry.ThemeInstallKind.Buttons,
+            ComboBox or TextBoxBase or UpDownBase or DateTimePicker =>
+                UiLayoutTelemetry.ThemeInstallKind.Inputs,
+            DataGridView or ListView => UiLayoutTelemetry.ThemeInstallKind.Grids,
+            ToolStrip => UiLayoutTelemetry.ThemeInstallKind.ToolStrips,
+            Panel => UiLayoutTelemetry.ThemeInstallKind.Panels,
+            _ => UiLayoutTelemetry.ThemeInstallKind.Other
+        };
 
     internal static void Apply(Control root)
     {
@@ -34,11 +60,12 @@ internal static class UiModernTheme
         var marker = new ThemeMarker();
         Markers.Add(root, marker);
         UiLayoutTelemetry.RecordThemedControl();
-        root.ControlAdded += (_, args) =>
-        {
-            if (args.Control is { } child) Apply(child);
-        };
+        root.ControlAdded += ThemeChildAdded;
+        // Stopwatch ticks only. Classification is by framework control type
+        // and never includes Name, Text, metadata or secret-bearing values.
+        var installStarted = Stopwatch.GetTimestamp();
         Install(root, marker);
+        UiLayoutTelemetry.RecordThemeInstall(ThemeKind(root), installStarted);
 
         foreach (Control child in root.Controls)
             Apply(child);
@@ -123,9 +150,10 @@ internal static class UiModernTheme
                 break;
 
             case Button button:
-                // Recovery-card buttons already own a distinct visual style
-                // with glyphs and measured, full-width captions.
-                if (!InsideRecoveryCard(button))
+                // Avoid multiple walks up the same Button's ancestor chain.
+                // Recovery buttons keep their existing glyph and text layout.
+                var recoveryButton = InsideRecoveryCard(button);
+                if (!recoveryButton)
                 {
                     var primary = IsPrimaryAction(button);
                     var positive = IsPositiveAction(button);
@@ -153,8 +181,8 @@ internal static class UiModernTheme
                 }
                 UiRecoveryGraphics.ConfigureRoundedButton(
                     button,
-                    InsideRecoveryCard(button) ? 12f : UiStyle.ModernButtonRadius,
-                    InsideRecoveryCard(button) || IsPrimaryAction(button)
+                    recoveryButton ? 12f : UiStyle.ModernButtonRadius,
+                    recoveryButton || IsPrimaryAction(button)
                         ? Color.Empty : UiStyle.ModernBorder);
                 break;
 
@@ -217,8 +245,7 @@ internal static class UiModernTheme
             case MenuStrip menu:
                 menu.BackColor = UiStyle.BrandSoftBlue;
                 menu.ForeColor = UiStyle.ModernForeground;
-                menu.Renderer = new ToolStripProfessionalRenderer(
-                    new NipkgMenuColorTable());
+                menu.Renderer = SharedMenuRenderer;
                 break;
 
             case ToolStrip strip:
