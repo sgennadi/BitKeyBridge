@@ -1440,9 +1440,10 @@ public static class UiLayoutSelfTest
                 Application.DoEvents();
                 var collapsed = form.CaptureStartViewportGeometry();
                 if (expanded is null || collapsed is null ||
+                    // Expanded controls must not leave the original
+                    // Connections height behind when collapsed again.
                     collapsed.Value.ConnectionHeight >
-                        Math.Max(initialStart.Value.ConnectionHeight,
-                            expanded.Value.ConnectionHeight) + 12)
+                        initialStart.Value.ConnectionHeight + 12)
                 {
                     failures.Add("Collapsing Start connection options retained expanded panel height.");
                 }
