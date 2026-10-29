@@ -1448,6 +1448,36 @@ public static class UiLayoutSelfTest
                 }
             }
 
+            // Reproduce the reported 1920x1080 / 100% desktop with an
+            // approximately 1600x900 application client area. WinForms HWNDs
+            // can measure a larger client than the CI runner's virtual display;
+            // check real control geometry before any scheduled work-area clamp.
+            // No AD/Graph session, computer identifier or secret is involved.
+            var originalClientSize = form.ClientSize;
+            try
+            {
+                form.ClientSize = new Size(1600, 900);
+                form.ReflowMainViewport();
+                form.PerformLayout();
+                var wideStart = form.CaptureStartViewportGeometry();
+                if (wideStart is null ||
+                    wideStart.Value.ViewportWidth < 1450 ||
+                    wideStart.Value.ViewportHeight < 700 ||
+                    wideStart.Value.CardColumns != 3 ||
+                    wideStart.Value.CardRows != 1 ||
+                    wideStart.Value.CardsVisibleHeight <
+                        Math.Min(150, wideStart.Value.CardsHeight / 2))
+                {
+                    failures.Add("Standard 1080p Start viewport hides BitLocker/LAPS/Computers cards beneath unused status space.");
+                }
+            }
+            finally
+            {
+                form.ClientSize = originalClientSize;
+                form.ReflowMainViewport();
+                form.PerformLayout();
+            }
+
             // Three requested viewport repairs during one UI-message turn
             // must schedule just one native callback. A second burst must
             // still execute rather than getting stranded behind a stale flag.
