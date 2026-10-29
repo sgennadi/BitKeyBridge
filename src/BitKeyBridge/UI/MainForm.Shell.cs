@@ -1371,6 +1371,7 @@ public sealed partial class MainForm
         var secretLifetime =
             new FlowLayoutPanel
             {
+                Name = "HomeSecretLifetimeActions",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
