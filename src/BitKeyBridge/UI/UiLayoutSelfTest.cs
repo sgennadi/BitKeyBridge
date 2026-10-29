@@ -746,6 +746,10 @@ public static class UiLayoutSelfTest
                 Size = new Size(120, 40)
             };
             host.Controls.Add(borderedPanel);
+            var input = new TextBox { Size = new Size(160, 30) };
+            var plainPanel = new Panel { Size = new Size(160, 46) };
+            host.Controls.Add(input);
+            host.Controls.Add(plainPanel);
 
             var themeBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
             var perTypeBefore = UiLayoutTelemetry.ThemeInstallCallsForUiSelfTest();
@@ -788,6 +792,27 @@ public static class UiLayoutSelfTest
             if (search.Region is not null || reveal.Region is not null ||
                 search.FlatAppearance.BorderSize != 0)
                 failures.Add("Rounded buttons still use clipped native borders.");
+
+            // DPI/font refresh walks the entire tree, unlike idempotent Apply.
+            // It must not opt owner-painted buttons or native inputs back into
+            // Region clipping, while registered bordered panels keep rounding.
+            _ = host.Handle;
+            _ = reveal.Handle;
+            _ = input.Handle;
+            _ = plainPanel.Handle;
+            for (var pass = 0; pass < 2; pass++)
+            {
+                search.Width += 10;
+                input.Width += 10;
+                borderedPanel.Width += 10;
+                UiModernTheme.Refresh(host);
+                if (host.Region is not null || search.Region is not null ||
+                    reveal.Region is not null || input.Region is not null ||
+                    plainPanel.Region is not null)
+                    failures.Add("Theme refresh reintroduced native clipping on unregistered controls.");
+                if (borderedPanel.Region is null)
+                    failures.Add("Theme refresh lost registered panel rounding.");
+            }
 
             // Draw the real FlatStyle.Button to a bitmap: both outer corners
             // must show the parent surface, not the square native fill.

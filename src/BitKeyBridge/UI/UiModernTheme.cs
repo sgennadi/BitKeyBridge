@@ -17,6 +17,7 @@ internal static class UiModernTheme
     {
         public Size LastRoundedSize;
         public int LastRoundedDpi;
+        public int RoundedRegionRadius;
     }
 
     private static readonly ConditionalWeakTable<Control, ThemeMarker> Markers = new();
@@ -324,6 +325,7 @@ internal static class UiModernTheme
     private static void SetupRoundedRegion(
         Control control, ThemeMarker marker, int radius)
     {
+        marker.RoundedRegionRadius = radius;
         marker.LastRoundedSize = Size.Empty;
         marker.LastRoundedDpi = -1;
         control.SizeChanged += (_, _) => UpdateCorners(control, marker);
@@ -339,26 +341,22 @@ internal static class UiModernTheme
         // startup. The HandleCreated callback installs identical geometry
         // before a newly visible control can draw.
         if (control.IsHandleCreated)
-            UpdateCorners(control, marker, radius);
+            UpdateCorners(control, marker);
         else
             UiLayoutTelemetry.RecordDeferredRoundedRegion();
     }
 
-    private static void UpdateCorners(Control control, ThemeMarker marker, int? radius = null)
+    private static void UpdateCorners(Control control, ThemeMarker marker)
     {
         if (control.IsDisposed || SystemInformation.HighContrast ||
             !control.IsHandleCreated)
             return;
 
-        var logicalRadius = radius ?? (control switch
-        {
-            Button => UiStyle.ModernButtonRadius,
-            ComboBox or TextBoxBase or UpDownBase or DateTimePicker =>
-                UiStyle.ModernInputRadius,
-            UiStatusLabel or ProgressBar => UiStyle.ModernSmallRadius,
-            DataGridView or ListView or Panel => UiStyle.ModernSurfaceRadius,
-            _ => 0
-        });
+        // Only controls explicitly registered by SetupRoundedRegion use a
+        // native clip. Refresh traverses every themed control after DPI/font
+        // changes: inferring a radius from its type reintroduced jagged clips
+        // on antialiased buttons, status labels and native input HWNDs.
+        var logicalRadius = marker.RoundedRegionRadius;
         if (logicalRadius <= 0 || control.Width < 2 || control.Height < 2)
             return;
 
