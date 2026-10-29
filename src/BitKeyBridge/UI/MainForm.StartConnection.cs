@@ -165,7 +165,7 @@ public sealed partial class MainForm
         _homeCloudConnectionStatus.Name = "HomeCloudConnectionStatus";
         _homeCloudConnectionStatus.AccessibleName =
             "Microsoft Entra / Intune connection status";
-        UiStyle.ConfigureStatusLabel(_homeCloudConnectionStatus);
+        UiStyle.ConfigureWrappingStatusLabel(_homeCloudConnectionStatus);
         _homeCloudConnectionStatus.MaximumSize = new Size(1100, 0);
         UiStyle.SetStatus(_homeCloudConnectionStatus,
             "Use Connect / Change to select AD, Microsoft 365 or both.",
