@@ -120,8 +120,12 @@ Assert-Source ($theme.Contains('UiRecoveryGraphics.ConfigureRoundedButton(') -an
                $layoutSelfTest.Contains('Rounded border stroke exceeds client bounds.') -and
                $layoutSelfTest.Contains('Rounded geometry has no antialiased edge pixels.')) 'Rounded graphics must paint complete anti-aliased strokes without clipped native button regions.'
 Assert-Source ($theme.Contains('if (Markers.TryGetValue(root, out _))')) 'Repeat theme application must be O(1).'
-Assert-Source ($theme.Contains('root.ControlAdded += (_, args) =>') -and
-               $theme.Contains('if (args.Control is { } child) Apply(child);')) 'Newly added controls must receive the theme through the null-safe, non-recursive handler.'
+Assert-Source ($theme.Contains('root.ControlAdded += ThemeChildAdded;') -and
+               $theme.Contains('private static void ThemeChildAdded(object? sender, ControlEventArgs args)') -and
+               $theme.Contains('if (args.Control is { } child)') -and
+               $theme.Contains('Apply(child);') -and
+               $theme.Contains('menu.Renderer = SharedMenuRenderer;') -and
+               $theme.Contains('var recoveryButton = InsideRecoveryCard(button);')) 'Dynamic controls must be themed via a shared handler without allocating per-control closures/renderers.'
 Assert-Source ($theme.Contains('IsPrimaryAction(button)')) 'Primary actions must receive centralized accent styling.'
 Assert-Source ($theme.Contains('TextFormatFlags.EndEllipsis') -and $theme.Contains('textFlags |= TextFormatFlags.RightToLeft')) 'Owner-drawn Hebrew tabs must use RTL text flags without clipping.'
 Assert-Source (-not [regex]::IsMatch($theme, '(?s)case DataGridView grid:.*?SetupRoundedRegion\(grid')) 'Data grids must not recreate GDI clipping regions.'
@@ -163,6 +167,10 @@ Assert-Source ($telemetry.Contains('DpiThemeInstall.Summarize("DPI phase - theme
                $telemetry.Contains('DpiControlDefaults.Summarize("DPI phase - control defaults")') -and
                $telemetry.Contains('DpiLayout.Summarize("DPI phase - WinForms PerformLayout")') -and
                $telemetry.Contains('DpiLabelWidths.Summarize("DPI phase - label widths")')) 'The DPI report must include all expensive layout-phase counters.'
+Assert-Source ($theme.Contains('UiLayoutTelemetry.RecordThemeInstall(ThemeKind(root), installStarted);') -and
+               $telemetry.Contains('ThemeInstallReport() + "\n"') -and
+               $telemetry.Contains('"Theme install - " + name') -and
+               $layoutSelfTest.Contains('NI theme per-control profiling missed installed controls.')) 'Cold theme must record numeric per-control category durations with native count reconciliation.'
 Assert-Source ($style.Contains('if (label.StatusKind == kind') -and $layoutSelfTest.Contains('Unchanged status text/kind forced a repaint')) 'Repeated unchanged status polls must not repaint.'
 Assert-Source ($viewport.Contains('_lastRepairedTabPath') -and $viewport.Contains('UiLayoutTelemetry.RecordViewport(viewportStarted)')) 'Selected-tab layout must avoid repeat repair and expose timing metrics.'
 Assert-Source ($viewport.Contains('_navigationReflowPosted') -and
