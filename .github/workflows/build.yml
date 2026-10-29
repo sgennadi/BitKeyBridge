@@ -328,6 +328,11 @@ jobs:
         shell: cmd
         run: dotnet publish src\BitKeyBridge\BitKeyBridge.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o artifacts\${{ matrix.rid }}
 
+      - name: Verify supported Windows and PerMonitorV2 in published EXE
+        shell: pwsh
+        run: |
+          ./tests/windows/EmbeddedAppManifestRegression.ps1 -Executable "artifacts/${{ matrix.rid }}/BitKeyBridge.exe"
+
       # Optional signing is only active if the runner certificate store contains
       # the trusted code-signing certificate AND its private key.
       # Set repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT only after provisioning.
