@@ -687,8 +687,15 @@ public static class UiLayoutSelfTest
             host.Controls.Add(borderedPanel);
 
             var themeBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            var perTypeBefore = UiLayoutTelemetry.ThemeInstallCallsForUiSelfTest();
             UiModernTheme.Apply(host);
             var themeAfter = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            var perTypeAfter = UiLayoutTelemetry.ThemeInstallCallsForUiSelfTest();
+            if (themeAfter.Installed - themeBefore.Installed !=
+                    perTypeAfter - perTypeBefore ||
+                !UiLayoutTelemetry.ThemeInstallReport().Contains(
+                    "Theme install - Buttons: calls=", StringComparison.Ordinal))
+                failures.Add("NI theme per-control profiling missed installed controls.");
             if (themeAfter.Installed <= themeBefore.Installed ||
                 themeAfter.Deferred <= themeBefore.Deferred)
                 failures.Add("Theme failed to defer rounded regions before native handles exist.");
