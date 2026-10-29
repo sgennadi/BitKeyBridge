@@ -1162,15 +1162,19 @@ internal static class Program
         catch (Exception ex)
         {
             // GUI failures must never terminate silently for standard users.
-            // Log only a sanitized exception type/message, never configuration
-            // values, credentials, recovery passwords, or stack traces.
+            // Include code locations only: no stack arguments, file paths,
+            // configuration values, credentials or recovery passwords.
+            var location = StartupFailureLocation(ex);
+            var error = DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
+                Environment.NewLine + location;
+            var guidance = ex is UnauthorizedAccessException or System.Security.SecurityException
+                ? "Ask an administrator to check the required read permissions. Do not grant write access."
+                : "This is an application startup error. Send this message to support; administrator rights are not a fix for an invalid UI value.";
             var message = "BitKeyBridge could not open its main window." +
                 Environment.NewLine + Environment.NewLine +
-                DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
+                error +
                 Environment.NewLine + Environment.NewLine +
-                "Try launching with your normal Windows account. " +
-                "If this is an access denied error, ask an administrator to check " +
-                "read permissions on the machine configuration; do not grant write access.";
+                guidance;
             try
             {
                 var folder = Path.Combine(
@@ -1179,8 +1183,7 @@ internal static class Program
                 Directory.CreateDirectory(folder);
                 File.AppendAllText(Path.Combine(folder, "startup-errors.log"),
                     DateTimeOffset.UtcNow.ToString("O") + " " +
-                    DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message) +
-                    Environment.NewLine);
+                    error + Environment.NewLine);
             }
             catch
             {
@@ -1192,6 +1195,23 @@ internal static class Program
             else
                 Console.Error.WriteLine(message);
             return 13;
+        }
+    }
+
+    private static string StartupFailureLocation(Exception error)
+    {
+        try
+        {
+            var methods = new StackTrace(error, fNeedFileInfo: false).GetFrames()
+                .Select(frame => frame.GetMethod())
+                .Where(method => method?.DeclaringType?.Assembly == typeof(Program).Assembly)
+                .Take(4)
+                .Select(method => method!.DeclaringType!.Name + "." + method.Name);
+            return "Code location: " + string.Join(" -> ", methods);
+        }
+        catch
+        {
+            return "Code location unavailable.";
         }
     }
 

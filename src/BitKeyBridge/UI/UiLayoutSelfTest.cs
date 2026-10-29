@@ -106,6 +106,7 @@ public static class UiLayoutSelfTest
         VerifyIntuneSetupWizardNavigation(failures);
         VerifyDeviceCodeCancellation(failures);
         VerifyDevicesCloudShortcut(failures);
+        VerifyStartupSettingsWithoutAdministrativePages(failures);
 
         VerifyDiagnosticCopyVisibility(failures);
 
@@ -1150,6 +1151,38 @@ public static class UiLayoutSelfTest
 
             NormalizeDockFillSizes(
                 child);
+        }
+    }
+
+    private static void VerifyStartupSettingsWithoutAdministrativePages(List<string> failures)
+    {
+        foreach (var admin in new[] { false, true })
+        {
+            try
+            {
+                // Exercise the real startup value loaders, which ordinary
+                // layout tests skipped. Values above NumericUpDown's default
+                // max=100 reproduce the second restricted-startup failure.
+                using var main = new MainForm(
+                    new AppConfig
+                    {
+                        AutoConnectOnStart = false,
+                        HealthEndpointEnabled = false,
+                        ServiceIdentityMode = "LocalSystem",
+                        RemoteApiPort = 8443,
+                        SecretDisplaySeconds = 300,
+                        SensitiveClipboardSeconds = 120
+                    },
+                    layoutSelfTest: true,
+                    administrationAllowedForLayoutSelfTest: admin);
+                if (!main.PreviewStartupSettingsForUiSelfTest(admin))
+                    failures.Add("Startup settings/page visibility mismatch; admin=" + admin);
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Startup settings; admin=" + admin + ": " +
+                    DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message));
+            }
         }
     }
 

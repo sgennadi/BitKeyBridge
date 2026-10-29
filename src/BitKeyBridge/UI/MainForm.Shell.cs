@@ -85,7 +85,7 @@ public sealed partial class MainForm
         get
         {
             if (_layoutSelfTest)
-                return true;
+                return _administrationAllowedForLayoutSelfTest;
             try
             {
                 return new AuthorizationService(_config)
