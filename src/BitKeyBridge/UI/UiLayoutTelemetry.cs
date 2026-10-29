@@ -85,6 +85,17 @@ internal static class UiLayoutTelemetry
                 snapshot[Rank(snapshot.Length, 0.95)] * toMs);
         }
 
+        internal string SummarizeTheme(string label)
+        {
+            var count = Interlocked.Read(ref _count);
+            var total = Interlocked.Read(ref _ticks);
+            var max = Interlocked.Read(ref _maxTicks);
+            var ms = 1000.0 / Stopwatch.Frequency;
+            return $"{label}: calls={count}, total={total * ms:F1} ms, " +
+                   $"mean={(count == 0 ? 0 : total * ms / count):F2} ms, " +
+                   $"max={max * ms:F1} ms";
+        }
+
         internal string Summarize(string label)
         {
             var count = Interlocked.Read(ref _count);
@@ -146,6 +157,27 @@ internal static class UiLayoutTelemetry
     private static readonly Counter LanguageViewportReflow = new(recentPercentiles: true);
     private static readonly Counter LanguageViewportReady = new(recentPercentiles: true);
     private static long _languageViewportSuperseded;
+    // Per-control install timings let us attribute the previously observed
+    // ~3.5-second cold theme pass to native control TYPES, not guess from the
+    // aggregate 698-control count. Fixed categories only; no control text,
+    // names, device identifiers, accounts or recovery material are retained.
+    internal enum ThemeInstallKind
+    {
+        Form, Tabs, GroupBox, Buttons, Inputs, Grids, ToolStrips, Panels, Other
+    }
+
+    private static readonly Counter[] ThemeInstallCounters =
+    [
+        new(), new(), new(), new(), new(), new(), new(), new(), new()
+    ];
+
+    private static readonly string[] ThemeInstallNames =
+    [
+        "Forms", "Tabs and tab pages", "Group boxes", "Buttons",
+        "Inputs", "Grids and lists", "Menus and toolstrips",
+        "Panels", "Other controls"
+    ];
+
     private static long _themeControlsInstalled;
     private static long _deferredRoundedRegions;
     private static long _roundedRegionsApplied;
@@ -238,6 +270,16 @@ internal static class UiLayoutTelemetry
         (LanguageViewportReady.Runs, Interlocked.Read(ref _languageViewportSuperseded));
     internal static void RecordThemedControl() =>
         Interlocked.Increment(ref _themeControlsInstalled);
+    internal static void RecordThemeInstall(ThemeInstallKind kind, long start) =>
+        ThemeInstallCounters[(int)kind].Record(start);
+
+    internal static string ThemeInstallReport() =>
+        string.Join("\n", ThemeInstallNames.Select((name, index) =>
+            ThemeInstallCounters[index].SummarizeTheme(
+                "Theme install - " + name)));
+
+    internal static long ThemeInstallCallsForUiSelfTest() =>
+        ThemeInstallCounters.Sum(counter => counter.Runs);
     internal static void RecordDeferredRoundedRegion() =>
         Interlocked.Increment(ref _deferredRoundedRegions);
     internal static void RecordRoundedRegionApplied() =>
@@ -307,6 +349,7 @@ internal static class UiLayoutTelemetry
         // All buckets are UI-direction booleans, never tenant/username/device metadata.
         var report = Report();
         foreach (var expected in new[] {
+            "Theme install - Buttons", "Theme install - Tabs and tab pages",
             "Language changes (warm)", "Language EN/RU -> Hebrew",
             "Language Hebrew -> EN/RU", "Language EN <-> RU",
             "Language to selected viewport ready",
@@ -331,6 +374,7 @@ internal static class UiLayoutTelemetry
         ColdMainForm.Summarize("Initial DPI - main window") + "\n" +
         ColdOtherForms.Summarize("Initial DPI - other windows") + "\n" +
         DpiThemeInstall.Summarize("DPI phase - theme installation") + "\n" +
+        ThemeInstallReport() + "\n" +
         $"Theme controls installed={Interlocked.Read(ref _themeControlsInstalled)}, rounded regions deferred={Interlocked.Read(ref _deferredRoundedRegions)}, applied={Interlocked.Read(ref _roundedRegionsApplied)}\n" +
         DpiControlDefaults.Summarize("DPI phase - control defaults") + "\n" +
         DpiWorkArea.Summarize("DPI phase - work-area adjustment") + "\n" +
