@@ -779,7 +779,7 @@ public sealed partial class MainForm
             "HomeConnectionStatus";
         _homeConnectionStatus.AccessibleName =
             "Start page Active Directory connection status";
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _homeConnectionStatus);
         _homeConnectionStatus.MaximumSize =
             new Size(
@@ -986,7 +986,7 @@ public sealed partial class MainForm
         _startDirectHint = directConnectionHint;
         connection.Controls.Add(directConnectionHint, 0, 5);
 
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _startSetupStatus);
         _startSetupStatus.Name =
             "StartSetupStatus";
@@ -1213,7 +1213,7 @@ public sealed partial class MainForm
             _homeSearchProgress,
             4);
 
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _homeSearchStatus);
         _homeSearchStatus.Name =
             "HomeUnifiedSearchStatus";
