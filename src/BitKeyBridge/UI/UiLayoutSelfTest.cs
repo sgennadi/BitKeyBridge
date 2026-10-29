@@ -1499,7 +1499,8 @@ public static class UiLayoutSelfTest
                         selectedWideStart.Value.SelectionHeight <= 0 ||
                         selectedWideStart.Value.CardsVisibleHeight <
                             Math.Min(120, selectedWideStart.Value.CardsHeight / 2))
-                        failures.Add("Standard 1080p selected computer pushes recovery cards below the visible viewport.");
+                        failures.Add("Standard 1080p selected computer pushes recovery cards below the visible viewport. " +
+                            form.StartViewportGeometryReport());
                     results.Rows.Clear();
                     form.ReflowMainViewport();
                 }
