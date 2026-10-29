@@ -42,6 +42,7 @@ $dialogLocalizer = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\U
 $mainLocalization = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Localization.cs') -Raw
 $headerCache = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiHeaderWidthCache.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
+$manifest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\app.manifest') -Raw
 $telemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutTelemetry.cs') -Raw
 $navigationTelemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiTabNavigationTelemetry.cs') -Raw
 $cleanup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\UpdateStagingCleanupService.cs') -Raw
@@ -92,6 +93,18 @@ Assert-Source ($style.Contains('Color.FromArgb(11, 46, 90)') -and
                $nipkgBanner.Contains('Text = IntroCaption') -and
                $layoutSelfTest.Contains('NI-style navy-to-blue banner did not paint.') -and
                $layoutSelfTest.Contains('NI-style Start banner lost EN/RU/HE caption or direction:')) 'NI-inspired UI must retain central palette, native EN/RU/HE caption rendering, rounded gradient and safe green search.'
+# Preserve the Windows compatibility manifest without disabling PCA,
+# lowering privileges or changing per-monitor DPI behavior.
+Assert-Source ($manifest.Contains('8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a') -and
+               $manifest.Contains('PerMonitorV2,PerMonitor') -and
+               $manifest.Contains('level="asInvoker"') -and
+               $manifest.Contains('uiAccess="false"')) 'App manifest must declare supported Windows 10/11, per-monitor V2 DPI and least privilege.'
+Assert-Source ($startupWizardSource.Contains('Name = "StartupConnectionIntro"') -and
+               $startupWizardSource.Contains('void FitProseToDialog()') -and
+               $startupWizardSource.Contains('root.ClientSizeChanged += (_, _) => FitProseToDialog()') -and
+               $layoutSelfTest.Contains('Connection chooser prose is clipped or exceeds its live DPI width.') -and
+               $shell.Contains('UiStyle.ConfigureWrappingStatusLabel(') -and
+               $startConnectionSource.Contains('UiStyle.ConfigureWrappingStatusLabel(_homeCloudConnectionStatus)')) 'Start page statuses and connection explanations must wrap at live DPI/RDP width.'
 Assert-Source ($project.Contains('<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>')) 'PerMonitorV2 must remain enabled.'
 Assert-Source ($viewport.Contains('Interval = 55')) 'Main viewport must batch WM_SIZE events.'
 Assert-Source ($viewport.Contains('ClientSizeChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must respond to client width changes.'
