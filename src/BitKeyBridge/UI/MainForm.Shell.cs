@@ -826,6 +826,7 @@ public sealed partial class MainForm
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents =
                     true,
                 FlowDirection =
@@ -894,6 +895,7 @@ public sealed partial class MainForm
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents =
                     true,
                 FlowDirection =
@@ -1091,6 +1093,10 @@ public sealed partial class MainForm
         _homeConnectionsRecentLayout = connectionSplit;
         _homeAdConnectionLayout = connection;
         _homeRecentQuickPanel = recentPanel;
+        // The source chooser was constructed before _homeAdConnectionLayout
+        // existed. Apply zero-height optional rows once all hosts are known.
+        SyncStartOptionalConnectionRows(
+            StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource));
         connectionGroup.Controls.Add(connectionSplit);
         root.Controls.Add(connectionGroup, 0, 2);
 
