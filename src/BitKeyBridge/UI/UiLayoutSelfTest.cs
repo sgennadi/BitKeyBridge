@@ -130,6 +130,7 @@ public static class UiLayoutSelfTest
             if (!performanceReport.Contains(expected, StringComparison.Ordinal))
                 failures.Add("Missing DPI timing phase: " + expected);
 
+        VerifyStartupWizardTextWrapping(failures);
         VerifyModalDialogLocalization(failures);
 
         VerifyStartSourcePolicies(failures);
@@ -417,6 +418,66 @@ public static class UiLayoutSelfTest
         catch (Exception ex)
         {
             failures.Add("Fixed header width cache regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private static void VerifyStartupWizardTextWrapping(List<string> failures)
+    {
+        // The chooser is purely local: no AD/Graph authentication, no
+        // credentials and no recovery values. Its prose must wrap at
+        // 100-200% DPI/RDP without extending outside the actual dialog.
+        try
+        {
+            using var wizard = new StartupConnectionWizardDialog(
+                StartConnectionPolicy.Both);
+            wizard.Show();
+            try
+            {
+                var root = wizard.Controls.Find(
+                    "StartupConnectionWizardLayout", true).FirstOrDefault()
+                    as TableLayoutPanel;
+                var caption = wizard.Controls.Find(
+                    "StartupConnectionIntro", true).FirstOrDefault()
+                    as Label;
+                var explanation = wizard.Controls.Find(
+                    "StartupConnectionExplanation", true).FirstOrDefault()
+                    as Label;
+                if (root is null || caption is null || explanation is null)
+                {
+                    failures.Add("Connection chooser wrapping controls are absent.");
+                    return;
+                }
+
+                foreach (var width in new[] { 620, 750, 950 })
+                {
+                    wizard.ClientSize = new Size(width, 525);
+                    Application.DoEvents();
+                    root.PerformLayout();
+                    var available = root.ClientSize.Width -
+                        root.Padding.Horizontal + 2;
+                    if (available < 120 ||
+                        caption.MaximumSize.Width <= 0 ||
+                        caption.MaximumSize.Width > available ||
+                        explanation.MaximumSize.Width <= 0 ||
+                        explanation.MaximumSize.Width > available ||
+                        caption.AutoEllipsis || explanation.AutoEllipsis)
+                    {
+                        failures.Add(
+                            "Connection chooser prose is clipped or exceeds its live DPI width.");
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                wizard.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Connection chooser responsive prose: " +
+                ex.GetType().Name + ": " +
                 DiagnosticRedaction.Sanitize(ex.Message));
         }
     }
