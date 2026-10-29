@@ -40,12 +40,12 @@ public sealed partial class MainForm
 
         // Coordinates are relative to the scrolling Start root, not the
         // screen. Therefore they also work after RDP resize and page scrolling.
-        var top = root.PointToClient(
+        var cardsY = root.PointToClient(
             _homeServiceCards.PointToScreen(Point.Empty)).Y;
-        var bottom = top + _homeServiceCards.Height;
+        var bottom = cardsY + _homeServiceCards.Height;
         var visible = Math.Max(0,
             Math.Min(root.ClientRectangle.Bottom, bottom) -
-            Math.Max(root.ClientRectangle.Top, top));
+            Math.Max(root.ClientRectangle.Top, cardsY));
 
         return new StartViewportGeometry(
             root.ClientSize.Width,
@@ -53,7 +53,7 @@ public sealed partial class MainForm
             connections?.Height ?? 0,
             search?.Height ?? 0,
             _homeSelectionPanel.Visible ? _homeSelectionPanel.Height : 0,
-            top,
+            cardsY,
             _homeServiceCards.Height,
             visible,
             root.VerticalScroll.Value,
