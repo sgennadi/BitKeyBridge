@@ -1397,6 +1397,10 @@ public sealed partial class MainForm
 
         UiStyle.ConfigureStatusLabel(
             _secretLifetimeStatus);
+        // FlowLayoutPanel owns the size of this action strip. The status
+        // label must report its intrinsic height instead of Dock.Fill,
+        // which can feed an old provisional row height back into AutoSize.
+        _secretLifetimeStatus.Dock = DockStyle.None;
         _secretLifetimeStatus.Name =
             "SecretLifetimeStatus";
         _secretLifetimeStatus.AccessibleName =
