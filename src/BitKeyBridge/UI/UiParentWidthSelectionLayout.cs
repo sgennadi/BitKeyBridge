@@ -10,18 +10,33 @@ internal sealed class UiParentWidthSelectionLayout : TableLayoutPanel
 {
     public override Size GetPreferredSize(Size proposedSize)
     {
-        if (Parent is { IsDisposed: false } parent &&
-            parent.ClientSize.Width > 0)
+        if (Parent is not { IsDisposed: false } parent ||
+            parent.ClientSize.Width <= 0 || Controls.Count == 0)
+            return base.GetPreferredSize(proposedSize);
+
+        var availableWidth = Math.Max(1,
+            parent.ClientSize.Width - parent.Padding.Horizontal -
+            Margin.Horizontal);
+        var rowWidth = Math.Max(1, availableWidth - Padding.Horizontal);
+
+        // TableLayoutPanel's default AutoSize path can measure its nested
+        // AutoSize FlowLayoutPanel at the original 200px designer width.
+        // That produces a false 200+px selection row on a wide Start page.
+        // Measure each visible child directly at the current viewport width
+        // so the status and action rows return to their intrinsic heights.
+        var height = Padding.Vertical;
+        for (var index = 0; index < RowCount; index++)
         {
-            var width = Math.Max(1,
-                parent.ClientSize.Width - parent.Padding.Horizontal -
-                Margin.Horizontal);
-            // Use the live parent constraint for preferred-height
-            // measurement. This is not a fixed control position or a
-            // hard-coded height, and still wraps at narrow/RDP widths.
-            proposedSize.Width = width;
+            var child = GetControlFromPosition(0, index);
+            if (child is null || !child.Visible)
+                continue;
+
+            var childWidth = Math.Max(1, rowWidth - child.Margin.Horizontal);
+            var preferred = child.GetPreferredSize(new Size(childWidth, 0));
+            height += Math.Max(child.MinimumSize.Height, preferred.Height) +
+                child.Margin.Vertical;
         }
 
-        return base.GetPreferredSize(proposedSize);
+        return new Size(availableWidth, Math.Max(1, height));
     }
 }
