@@ -1470,6 +1470,38 @@ public static class UiLayoutSelfTest
                 {
                     failures.Add("Standard 1080p Start viewport hides BitLocker/LAPS/Computers cards beneath unused status space.");
                 }
+
+                // The customer screenshot had a selected computer and two
+                // extra status rows. Measure that real selection geometry too,
+                // not only the default unselected workspace.
+                if (FindByName(form, "HomeUnifiedSearchResults") is DataGridView results)
+                {
+                    var row = results.Rows.Add(
+                        "UI-TEST-PC", "AD", "Available", DateTime.UtcNow,
+                        "Detected", DateTime.UtcNow);
+                    results.Rows[row].Tag = new HomeSearchResult
+                    {
+                        ComputerName = "UI-TEST-PC",
+                        ComputerId = Guid.Empty.ToString(),
+                        BitLockerKeyCount = 1,
+                        BitLockerStatus = "Available",
+                        LapsCandidateFound = true,
+                        LapsStatus = "Detected"
+                    };
+                    results.ClearSelection();
+                    results.Rows[row].Selected = true;
+                    results.CurrentCell = results.Rows[row].Cells[0];
+                    form.ReflowMainViewport();
+                    form.PerformLayout();
+                    var selectedWideStart = form.CaptureStartViewportGeometry();
+                    if (selectedWideStart is null ||
+                        selectedWideStart.Value.SelectionHeight <= 0 ||
+                        selectedWideStart.Value.CardsVisibleHeight <
+                            Math.Min(120, selectedWideStart.Value.CardsHeight / 2))
+                        failures.Add("Standard 1080p selected computer pushes recovery cards below the visible viewport.");
+                    results.Rows.Clear();
+                    form.ReflowMainViewport();
+                }
             }
             finally
             {
