@@ -751,7 +751,7 @@ public sealed partial class MainForm
             };
 
         var connection =
-            new TableLayoutPanel
+            new UiLiveWidthConnectionTable
             {
                 Name = "HomeAdConnectionLayout",
                 Dock =
