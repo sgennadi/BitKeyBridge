@@ -1419,10 +1419,30 @@ public static class UiLayoutSelfTest
             // handles and visibility, not just Controls.Find/Text.
             form.Show();
             Application.DoEvents();
+            // Shown queues a 55-ms deferred viewport repair. The baseline
+            // must include the same completed native layout as expand/collapse.
+            form.ReflowMainViewport();
+            form.PerformLayout();
+            Application.DoEvents();
 
             // Exercise native geometry, not only the existence of controls.
             // This report is pixels only: no device identifiers or secrets.
             var initialStart = form.CaptureStartViewportGeometry();
+            // On a stacked 1024px Start, every connection section must
+            // actually receive the wide single-column cell. A 200px
+            // provisional chooser width wraps a one-line status into a
+            // phantom 120px row and hides the recovery cards.
+            var sourceChooser = FindByName(
+                form, "HomeConnectionSourceChooser") as TableLayoutPanel;
+            var splitLayout = FindByName(
+                form, "HomeConnectionsAndRecent") as TableLayoutPanel;
+            if (initialStart is { } initialGeometry &&
+                initialGeometry.ViewportWidth > 800 &&
+                splitLayout is { ColumnCount: 1 } &&
+                (sourceChooser is null || sourceChooser.Width < 500))
+                failures.Add("Start connection chooser retained provisional 200px width after viewport reflow. " +
+                    form.StartViewportGeometryReport());
+
             if (initialStart is null ||
                 !form.StartViewportGeometryReport().Contains(
                     "Start viewport (pixels only): viewport=", StringComparison.Ordinal))
