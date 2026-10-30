@@ -80,6 +80,35 @@ public sealed partial class MainForm
         var actionsPreferred = actions?.GetPreferredSize(
             new Size(availableWidth, 0)).Height ?? 0;
 
+        // Heights only: isolate which nested AutoSize row retains an expanded
+        // size after optional connection controls become invisible.
+        static string ConnectionMetrics(Control? control)
+        {
+            if (control is null || control.IsDisposed)
+                return "-";
+            var preferred = control.GetPreferredSize(
+                new Size(Math.Max(1, control.Width), 0));
+            var rows = control is TableLayoutPanel table
+                ? "/" + string.Join(",", table.GetRowHeights()) +
+                  "/" + string.Join(",", table.RowStyles.Cast<RowStyle>()
+                      .Select(style => style.SizeType == SizeType.Absolute
+                          ? "A" + style.Height.ToString("0") : "C"))
+                : "";
+            return control.Height + "/pref" + preferred.Height +
+                "/visible" + (control.Visible ? "1" : "0") + rows;
+        }
+
+        var connectionsGroup = _homeWorkspaceTab?.Controls
+            .OfType<TableLayoutPanel>().FirstOrDefault(
+                root => root.Name == "HomeLayoutRoot")?.Controls
+            .OfType<GroupBox>().FirstOrDefault(
+                group => group.Name == "HomeConnectionsGroup");
+        var chooser = _homeConnectionsRecentLayout is null ? null
+            : _homeAdConnectionLayout?.Controls.OfType<TableLayoutPanel>()
+                .FirstOrDefault(x => x.Name == "HomeConnectionSourceChooser");
+        var extra = chooser?.Controls.OfType<FlowLayoutPanel>()
+            .FirstOrDefault(x => x.Name == "HomeConnectionExtraActions");
+
         return "Start viewport (pixels only): " +
             $"viewport={value.ViewportWidth}x{value.ViewportHeight}; " +
             $"connections={value.ConnectionHeight}; " +
@@ -94,6 +123,12 @@ public sealed partial class MainForm
             $"cardsHeight={value.CardsHeight}; " +
             $"cardsVisible={value.CardsVisibleHeight}; " +
             $"scrollY={value.ScrollOffset}; " +
-            $"grid={value.CardColumns}x{value.CardRows}.";
+            $"grid={value.CardColumns}x{value.CardRows}; " +
+            $"connectionGroup={ConnectionMetrics(connectionsGroup)}; " +
+            $"connectionSplit={ConnectionMetrics(_homeConnectionsRecentLayout)}; " +
+            $"connectionAd={ConnectionMetrics(_homeAdConnectionLayout)}; " +
+            $"connectionRecent={ConnectionMetrics(_homeRecentQuickPanel)}; " +
+            $"connectionChooser={ConnectionMetrics(chooser)}; " +
+            $"connectionExtra={ConnectionMetrics(extra)}.";
     }
 }
