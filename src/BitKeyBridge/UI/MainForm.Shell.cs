@@ -1045,7 +1045,11 @@ public sealed partial class MainForm
         var recentPanel = new TableLayoutPanel
         {
             Name = "HomeRecentQuickPanel",
-            Dock = DockStyle.Fill,
+            // In an AutoSize row, Dock.Fill feeds the expanded row height
+            // back into this panel's preferred size. After hiding optional
+            // connection controls that keeps Connections artificially tall.
+            // Dock.Top keeps full cell width but measures intrinsic height.
+            Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
