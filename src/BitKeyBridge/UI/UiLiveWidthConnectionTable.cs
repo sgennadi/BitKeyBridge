@@ -39,6 +39,12 @@ internal sealed class UiLiveWidthConnectionTable : TableLayoutPanel
         // Before native layout, do not synthesize a height from an unknown
         // width. Once visible, parent.ClientSize is authoritative.
         var availableWidth = parentWidth - Margin.Horizontal;
+        // Our outer connection table passes its computed live cell width
+        // directly to this nested chooser. During the same layout pass,
+        // Parent.ClientSize can still be the previous provisional 200px:
+        // never throw away the wider, explicit measurement proposal.
+        if (parent is UiLiveWidthConnectionTable && proposedSize.Width > 0)
+            availableWidth = Math.Max(availableWidth, proposedSize.Width);
         if (availableWidth <= 0)
             return base.GetPreferredSize(proposedSize);
 
