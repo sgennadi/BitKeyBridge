@@ -1445,7 +1445,11 @@ public static class UiLayoutSelfTest
                     collapsed.Value.ConnectionHeight >
                         initialStart.Value.ConnectionHeight + 12)
                 {
-                    failures.Add("Collapsing Start connection options retained expanded panel height.");
+                    failures.Add("Collapsing Start connection options retained expanded panel height. " +
+                        "Before=" + initialStart.Value.ConnectionHeight +
+                        "; Expanded=" + (expanded?.ConnectionHeight ?? -1) +
+                        "; Collapsed=" + (collapsed?.ConnectionHeight ?? -1) + ". " +
+                        form.StartViewportGeometryReport());
                 }
             }
 
