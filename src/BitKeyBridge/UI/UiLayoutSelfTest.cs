@@ -1394,6 +1394,98 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // Synthetic/metadata-only Start fixture. A control can be Visible=true
+    // while its entire native rectangle lies below the scroll viewport.
+    // Intersect every parent clipping rectangle, including the recovery card
+    // and the outer Start page, rather than trusting the Visible property.
+    private static void VerifyStartRecoveryButtonsOnScreen(
+        MainForm form, List<string> failures)
+    {
+        if (FindByName(form, "HomeLayoutRoot") is not Control viewport)
+        {
+            failures.Add("Start viewport is missing for the 1080p recovery action check.");
+            return;
+        }
+
+        foreach (var name in new[]
+        {
+            "HomeRevealBitLockerButton", "HomeCopyBitLockerButton",
+            "HomeRevealLapsButton", "HomeCopyLapsButton"
+        })
+        {
+            if (FindByName(form, name) is not Button button ||
+                button.IsDisposed || !button.Visible ||
+                button.ClientSize.Width < 20 || button.ClientSize.Height < 20)
+            {
+                failures.Add("1080p Start recovery action is absent: " + name);
+                continue;
+            }
+
+            var visible = button.RectangleToScreen(button.ClientRectangle);
+            var foundViewport = false;
+            for (Control? ancestor = button.Parent; ancestor is not null;
+                 ancestor = ancestor.Parent)
+            {
+                visible = Rectangle.Intersect(
+                    visible, ancestor.RectangleToScreen(ancestor.ClientRectangle));
+                if (!ReferenceEquals(ancestor, viewport))
+                    continue;
+                foundViewport = true;
+                break;
+            }
+
+            if (!foundViewport ||
+                visible.Width < button.ClientSize.Width - 4 ||
+                visible.Height < button.ClientSize.Height - 4)
+            {
+                failures.Add("1080p Start recovery action clipped: " + name +
+                    "; visible=" + visible.Width + "x" + visible.Height +
+                    "; expected=" + button.ClientSize.Width + "x" +
+                    button.ClientSize.Height + ". " +
+                    form.StartViewportGeometryReport());
+            }
+        }
+    }
+
+    // Explicitly opted-in CI screenshots are generated only from the
+    // disconnected layout-self-test fixture, which contains one synthetic
+    // UI-TEST-PC row but never retrieves recovery keys, passwords or tokens.
+    // Normal desktop --ui-self-test invocations never write screenshots.
+    private static void SaveSyntheticStartSnapshotForCi(
+        MainForm form, string phase, List<string> failures)
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                "true", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(Environment.GetEnvironmentVariable(
+                "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS"), "1",
+                StringComparison.Ordinal))
+            return;
+
+        if (FindByName(form, "HomeLayoutRoot") is not Control viewport ||
+            viewport.ClientSize.Width < 1450 ||
+            viewport.ClientSize.Height < 700)
+        {
+            failures.Add("Synthetic 1080p snapshot viewport is not ready.");
+            return;
+        }
+
+        try
+        {
+            using var bitmap = new Bitmap(
+                viewport.ClientSize.Width, viewport.ClientSize.Height);
+            viewport.DrawToBitmap(bitmap,
+                new Rectangle(Point.Empty, bitmap.Size));
+            var path = Path.Combine(AppContext.BaseDirectory,
+                "ui-start-1080p-" + phase + ".png");
+            bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Synthetic Start snapshot failed: " +
+                ex.GetType().Name);
+        }
+    }
+
     /// <summary>
     /// Regression for a visually missing copy button: the old check only
     /// looked up button names, while Hebrew WinForms AutoSize/RTL could
@@ -1485,6 +1577,7 @@ public static class UiLayoutSelfTest
                 form.ReflowMainViewport();
                 form.PerformLayout();
                 var wideStart = form.CaptureStartViewportGeometry();
+                SaveSyntheticStartSnapshotForCi(form, "empty", failures);
                 if (wideStart is null ||
                     wideStart.Value.ViewportWidth < 1450 ||
                     wideStart.Value.ViewportHeight < 700 ||
@@ -1519,6 +1612,10 @@ public static class UiLayoutSelfTest
                     form.ReflowMainViewport();
                     form.PerformLayout();
                     var selectedWideStart = form.CaptureStartViewportGeometry();
+                    // Assert the actual buttons are wholly on screen; merely
+                    // seeing the top of a card is not sufficient for helpdesk.
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    SaveSyntheticStartSnapshotForCi(form, "selected", failures);
                     if (selectedWideStart is null ||
                         selectedWideStart.Value.SelectionHeight <= 0 ||
                         selectedWideStart.Value.SelectionHeight > 150 ||
