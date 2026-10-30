@@ -39,7 +39,7 @@ public sealed partial class MainForm
 
     private Control BuildStartConnectionSourceChooser()
     {
-        var layout = new TableLayoutPanel
+        var layout = new UiLiveWidthConnectionTable
         {
             Name = "HomeConnectionSourceChooser",
             Dock = DockStyle.Top,
