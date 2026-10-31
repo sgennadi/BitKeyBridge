@@ -1690,8 +1690,21 @@ public static class UiLayoutSelfTest
             // check real control geometry before any scheduled work-area clamp.
             // No AD/Graph session, computer identifier or secret is involved.
             var originalClientSize = form.ClientSize;
+            // The real 1080p screenshot included Recent computers. Populate
+            // metadata-only synthetic rows for both visual QA screenshots,
+            // without reading the user's persisted recent-device history.
+            var snapshotRecent = FindByName(
+                form, "HomeRecentComputers") as DataGridView;
             try
             {
+                if (snapshotRecent is not null)
+                {
+                    snapshotRecent.Rows.Clear();
+                    for (var index = 1; index <= 5; index++)
+                        snapshotRecent.Rows.Add(
+                            "UI-TEST-RECENT-" + index.ToString("00"),
+                            "Search", DateTime.UtcNow);
+                }
                 form.ClientSize = new Size(1600, 900);
                 form.ReflowMainViewport();
                 form.PerformLayout();
@@ -1748,6 +1761,7 @@ public static class UiLayoutSelfTest
             }
             finally
             {
+                snapshotRecent?.Rows.Clear();
                 form.ClientSize = originalClientSize;
                 form.ReflowMainViewport();
                 form.PerformLayout();
