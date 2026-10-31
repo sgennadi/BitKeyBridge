@@ -2324,3 +2324,119 @@ jobs:
             throw "GitHub release creation failed for $tag."
           }
 
+  device360-qa-bundle:
+    # One unsigned manual QA archive; not a GitHub Release or automatic update.
+    # Restricted to the dedicated Device 360 draft PR and exact merge SHA.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/v0.35.0-unified-device-card' &&
+      github.event.pull_request.number == 114
+    needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact draft QA source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download tested x64 application
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: device360-qa
+
+      - name: Download tested x86 application
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: device360-qa
+
+      - name: Download tested ARM64 application
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: device360-qa
+
+      - name: Validate source and package three architectures
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$GITHUB_HEAD_REF" = "feature/v0.35.0-unified-device-card"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          head_sha="$(python3 - <<'PY'
+          import json
+          import os
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as stream:
+              print(json.load(stream)['pull_request']['head']['sha'])
+          PY
+          )"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'Missing exact source head SHA'
+            exit 1
+          }
+          version="$(python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('src/BitKeyBridge/BitKeyBridge.csproj').getroot()
+          versions = [v.text.strip() for v in root.findall('./PropertyGroup/Version') if v.text]
+          if len(versions) != 1:
+              raise SystemExit('Exactly one project version required')
+          print(versions[0])
+          PY
+          )"
+          [[ "$version" =~ ^0[.]34[.]0-preview[.][0-9]+$ ]] || {
+            echo 'Device 360 draft must retain the v0.34 preview base until it is stabilized.'
+            exit 1
+          }
+          for arch in win-x64 win-x86 win-arm64; do
+            archive="device360-qa/BitKeyBridge-$arch.zip"
+            test -s "$archive"
+            test "$(unzip -Z1 "$archive")" = 'BitKeyBridge.exe' || {
+              echo "Unexpected archive structure for $arch"
+              exit 1
+            }
+          done
+          cd device360-qa
+          sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
+          printf 'PR: 114\nFeature: Device 360 Source Health (v0.35 draft)\nApplication version: %s\nSource HEAD: %s\nCI merge SHA: %s\nSigning: UNSIGNED manual QA\n' "$version" "$head_sha" "$GITHUB_SHA" > BUILD-INFO.txt
+          cat > README-TEST.txt <<'EOF'
+          BITKEYBRIDGE DEVICE 360 / SOURCE HEALTH -- UNSIGNED DEVELOPMENT QA
+          ==================================================================
+          This is a v0.35 FEATURE DRAFT built from the v0.34 preview base.
+          This is NOT an organization-signed or stable release.
+          Do not install on a domain controller or a production Helpdesk PC.
+          Never deploy via GPO, Intune, scheduled updater or GitHub Releases.
+
+          Verify the matching ZIP against SHA256SUMS.txt before extraction.
+          Test only on a disposable Windows 11 workstation, as a regular user.
+          Choose just the ZIP matching the operating-system architecture.
+          Inside its extracted EXE directory, run:
+
+            BitKeyBridge.exe --version
+            BitKeyBridge.exe --self-test --no-elevation
+            BitKeyBridge.exe --ui-self-test --no-elevation
+            BitKeyBridge.exe --startup-diagnostics --no-elevation
+
+          Manually inspect Device 360 from Start and Devices, EN/RU/HE RTL,
+          source status and policy fields, Access Health navigation, compact
+          window, 100/125/150/175/200% DPI and RDP. Ensure all footer
+          buttons are visible, no secret or recovery ID appears in the card,
+          and an unrelated Start device is not copied to Devices diagnostics.
+          Metadata presence or an active Graph session is NOT permission
+          to reveal any key, token, LAPS password or recovery password.
+
+          Real domain authorization, protected audit, organization signing,
+          managed canary and rollback acceptance are mandatory before release.
+          See docs/device-360-source-health.md and PR #114.
+          EOF
+
+      - name: Upload one unsigned source-pinned QA archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED
+          path: device360-qa/
+          if-no-files-found: error
+          retention-days: 14
