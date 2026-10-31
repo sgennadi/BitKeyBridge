@@ -4884,6 +4884,20 @@ public static class UiLayoutSelfTest
             Math.Max(main.DeviceDpi / (double)UiStyle.BaselineDpi,
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size)));
 
+        foreach (var item in visible)
+        {
+            var label = item.Label;
+            if (label.Parent is not FlowLayoutPanel || !label.AutoSize ||
+                label.Dock != DockStyle.None)
+                continue;
+
+            // Check the real bounds after glyph alignment, not merely the
+            // preferred width: the old flow row kept a narrower stored size.
+            var required = label.GetPreferredSize(new Size(label.Width, 0));
+            if (label.Height < required.Height)
+                failures.Add($"{formName}/{scenario.Name}: Start inline status clips its caption after glyph alignment (height={label.Height}, required={required.Height}).");
+        }
+
         var sorted = visible.OrderBy(item =>
             item.Painted!.Value - item.Label.GlyphColumnInset).ToArray();
         for (var first = 0; first < sorted.Length;)
