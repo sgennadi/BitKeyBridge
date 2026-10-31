@@ -510,6 +510,17 @@ public static class UiLayoutSelfTest
             cloud.InIntune != true)
             failures.Add("Device 360 source-qualified cloud metadata projection is incorrect.");
 
+        var operational = Device360OperationalStatus.Capture(cloud,
+            adConnected: false, cloudSessionPresent: true,
+            rbacEnabled: true, ticketRequired: true,
+            protectedAuditRequired: true, auditBrokerConfigured: true,
+            searchPartial: true);
+        if (operational.Ad != Device360SourceEvidence.NotConnectedUnverified ||
+            operational.Entra != Device360SourceEvidence.FoundInSearch ||
+            operational.Intune != Device360SourceEvidence.FoundInSearch ||
+            operational.EffectiveRecoveryRightsChecked || !operational.SearchPartial)
+            failures.Add("Device 360 inferred recovery permissions from search metadata.");
+
         var unresolved = Device360Snapshot.FromUnified(new UnifiedDeviceInfo
         {
             ComputerName = "UI-TEST-UNVERIFIED",
@@ -585,6 +596,14 @@ public static class UiLayoutSelfTest
                     (language != "he") !=
                     (FindByName(dialog, "Device360RouteBitLocker") is Button))
                     failures.Add("Device 360 source-qualified navigation is incorrect: " +
+                        language + ".");
+
+                if (FindByName(dialog, "Device360CardAccessSection") is not UiRecoveryCard ||
+                    FindByName(dialog, "Device360AuthorizationResult") is not TextBox rights ||
+                    rights.Text != UiLanguageService.Translate(language,
+                        "Device360AccessUnchecked") ||
+                    FindByName(dialog, "Device360RouteAccessHealth") is not Button)
+                    failures.Add("Device 360 access-policy/navigation regression: " +
                         language + ".");
 
                 var texts = new List<string>();

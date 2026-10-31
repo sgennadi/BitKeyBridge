@@ -5,7 +5,8 @@ internal enum Device360Route
     None,
     BitLocker,
     Laps,
-    Devices
+    Devices,
+    AccessHealth
 }
 
 /// <summary>
@@ -19,9 +20,14 @@ internal sealed class Device360Dialog : DpiAwareForm
     internal Device360Route SelectedRoute { get; private set; }
 
     internal Device360Dialog(Device360Snapshot snapshot,
-        string? languageCode = null, bool allowNavigation = true)
+        string? languageCode = null, bool allowNavigation = true,
+        Device360OperationalStatus? operational = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        operational ??= Device360OperationalStatus.Capture(snapshot,
+            adConnected: false, cloudSessionPresent: false,
+            rbacEnabled: false, ticketRequired: false,
+            protectedAuditRequired: false, auditBrokerConfigured: false);
         var language = UiLanguageService.Normalize(languageCode);
         string Tr(string key) => UiLanguageService.Translate(language, key);
         var rtl = UiLanguageService.IsRightToLeft(language);
@@ -108,7 +114,7 @@ internal sealed class Device360Dialog : DpiAwareForm
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(0, 0, SystemInformation.VerticalScrollBarWidth, 6),
             BackColor = UiStyle.ModernCanvas
         };
@@ -132,10 +138,10 @@ internal sealed class Device360Dialog : DpiAwareForm
         for (var i = 0; i < 3; i++)
             sourceStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 3F));
         sourceStatus.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        AddSource(sourceStatus, "AD", snapshot.InAd, "Device360SourceAd",
+        AddSource(sourceStatus, "AD", operational.Ad, "Device360SourceAd",
             rtl ? 2 : 0);
-        AddSource(sourceStatus, "Entra", snapshot.InEntra, "Device360SourceEntra", 1);
-        AddSource(sourceStatus, "Intune", snapshot.InIntune, "Device360SourceIntune",
+        AddSource(sourceStatus, "Entra", operational.Entra, "Device360SourceEntra", 1);
+        AddSource(sourceStatus, "Intune", operational.Intune, "Device360SourceIntune",
             rtl ? 0 : 2);
         content.Controls.Add(sourceStatus, 0, 0);
 
@@ -210,7 +216,29 @@ internal sealed class Device360Dialog : DpiAwareForm
             Date(snapshot.LastSyncUtc));
         AddField(posture, "Device360AdLastLogon", Tr("Device360AdLastLogon"),
             Date(snapshot.AdLastLogonUtc));
-        content.Controls.Add(posture.Card, 0, 4);
+        // This section describes settings, never actual permission to
+        // retrieve a secret. The card performs no AD/Graph authorization probe.
+        var access = CreateSection("Device360CardAccessSection",
+            Tr("Device360AccessSection"));
+        AddField(access, "Device360AuthorizationResult",
+            Tr("Device360AccessEffective"), Tr("Device360AccessUnchecked"));
+        AddField(access, "Device360RbacPolicy",
+            Tr("Device360PolicyRbac"), Tr(operational.RbacEnabledByConfiguration
+                ? "Device360PolicyEnabled" : "Device360PolicyDisabled"));
+        AddField(access, "Device360TicketPolicy",
+            Tr("Device360PolicyTicket"), Tr(operational.TicketRequiredByConfiguration
+                ? "Device360PolicyRequired" : "Device360PolicyOptional"));
+        AddField(access, "Device360ProtectedAuditPolicy",
+            Tr("Device360PolicyAudit"), Tr(operational.ProtectedAuditRequiredByConfiguration
+                ? "Device360PolicyRequired" : "Device360PolicyOptional"));
+        AddField(access, "Device360AuditBrokerPolicy",
+            Tr("Device360PolicyBroker"), Tr(operational.AuditBrokerEnabledByConfiguration
+                ? "Device360PolicyEnabled" : "Device360PolicyDisabled"));
+        AddField(access, "Device360SearchCompleteness",
+            Tr("Device360HealthSection"), Tr(operational.SearchPartial
+                ? "Device360PartialWarning" : "Device360CompleteMetadata"));
+        content.Controls.Add(access.Card, 0, 4);
+        content.Controls.Add(posture.Card, 0, 5);
 
         var actions = new FlowLayoutPanel
         {
@@ -229,6 +257,10 @@ internal sealed class Device360Dialog : DpiAwareForm
         // Avoid WinForms selecting the first read-only identity field when
         // opening the modal (the field is for copying identifiers on demand).
         Shown += (_, _) => close.Focus();
+        // Navigation to the existing Access Health workspace only; the card
+        // never tests privileges or fetches secrets automatically.
+        AddRoute("Device360RouteAccessHealth", Tr("Device360OpenAccessHealth"),
+            Device360Route.AccessHealth);
 
         // Navigation is not authorization. Callers recheck original exact
         // identity and source before invoking the existing workspaces.
@@ -257,9 +289,15 @@ internal sealed class Device360Dialog : DpiAwareForm
                 System.Globalization.CultureInfo.InvariantCulture) ??
             Tr("Device360NotVerified");
 
-        void AddSource(TableLayoutPanel table, string source, bool? found,
-            string name, int column)
+        void AddSource(TableLayoutPanel table, string source,
+            Device360SourceEvidence evidence, string name, int column)
         {
+            var stateKey = evidence switch
+            {
+                Device360SourceEvidence.FoundInSearch => "Device360SourcePresent",
+                Device360SourceEvidence.SessionPresentUnverified => "Device360SourceUnverified",
+                _ => "Device360SourceDisconnected"
+            };
             var card = new UiRecoveryCard
             {
                 Name = name + "Card",
@@ -271,15 +309,13 @@ internal sealed class Device360Dialog : DpiAwareForm
             var statusLabel = new Label
             {
                 Name = name,
-                Text = source + Environment.NewLine +
-                    Tr(found == true ? "Device360Found" : "Device360NotVerified"),
+                Text = source + Environment.NewLine + Tr(stateKey),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = UiStyle.CreateEmphasisFont(10),
-                ForeColor = found == true
+                ForeColor = evidence == Device360SourceEvidence.FoundInSearch
                     ? UiStyle.ModernPositiveAccent : UiStyle.ModernMuted,
-                AccessibleName = source + ": " +
-                    Tr(found == true ? "Device360Found" : "Device360NotVerified")
+                AccessibleName = source + ": " + Tr(stateKey)
             };
             card.Controls.Add(statusLabel);
             table.Controls.Add(card, column, 0);
@@ -372,13 +408,14 @@ internal sealed class Device360Dialog : DpiAwareForm
                 Name = name,
                 Text = value,
                 ReadOnly = true,
-                Multiline = name == "Device360CardRecoveryNote",
-                WordWrap = name == "Device360CardRecoveryNote",
+                Multiline = name is "Device360CardRecoveryNote" or "Device360SearchCompleteness",
+                WordWrap = name is "Device360CardRecoveryNote" or "Device360SearchCompleteness",
                 ScrollBars = ScrollBars.None,
                 RightToLeft = RightToLeft.No,
                 Dock = DockStyle.Fill,
                 MinimumSize = new Size(0,
-                    name == "Device360CardRecoveryNote" ? 64 : 26),
+                    name is "Device360CardRecoveryNote" or "Device360SearchCompleteness"
+                        ? 76 : 26),
                 BorderStyle = BorderStyle.FixedSingle,
                 BackColor = SystemInformation.HighContrast
                     ? SystemColors.Window : UiStyle.ModernSurface,

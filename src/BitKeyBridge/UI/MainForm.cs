@@ -1957,6 +1957,8 @@ public sealed partial class MainForm : DpiAwareForm
                 UiStatusKind.Busy);
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
+            // Do not retain a previous query's partial-source status.
+            _device360LastUnifiedPartial = false;
             _deviceRecoveryIds.Items.Clear();
             _deviceCurrentKey = null;
             _deviceRecoveryKey.Clear();
@@ -2045,6 +2047,9 @@ public sealed partial class MainForm : DpiAwareForm
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
+            // Only a completed metadata search can set this status.
+            // Source errors never establish that recovery data is absent.
+            _device360LastUnifiedPartial = sourceReport?.IsPartial == true;
 
             foreach (var row in rows)
             {

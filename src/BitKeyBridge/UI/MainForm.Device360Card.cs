@@ -3,6 +3,26 @@ namespace BitKeyBridge;
 public sealed partial class MainForm
 {
     private readonly Button _homeDevice360Button = new();
+    private bool _device360LastUnifiedPartial;
+
+    private Device360OperationalStatus CaptureDevice360OperationalStatus(
+        Device360Snapshot snapshot, bool searchPartial)
+    {
+        // The current connection and config flags are NOT access grants.
+        // Never retain or log the token itself.
+        var validCloudSession = _cloudToken is not null &&
+            _cloudToken.ExpiresAt > DateTime.Now.AddMinutes(1) &&
+            string.Equals(_cloudTokenContext, BuildCloudTokenContext(),
+                StringComparison.Ordinal);
+        return Device360OperationalStatus.Capture(snapshot,
+            adConnected: _directoryConnected && !_directoryConnecting,
+            cloudSessionPresent: validCloudSession,
+            rbacEnabled: _config.RbacEnabled,
+            ticketRequired: _config.RequireRecoveryAccessReference,
+            protectedAuditRequired: _config.RequireProtectedAuditForRecovery,
+            auditBrokerConfigured: _config.AuditBrokerEnabled,
+            searchPartial: searchPartial);
+    }
 
     // A single read-only card for the EXACT selected Start object. It does
     // not execute an AD/Graph search or trigger a secret-bearing handler.
@@ -18,10 +38,17 @@ public sealed partial class MainForm
         }
 
         var snapshot = Device360Snapshot.FromHome(selected);
-        using var dialog = new Device360Dialog(snapshot, _uiLanguageCode);
+        using var dialog = new Device360Dialog(snapshot, _uiLanguageCode,
+            operational: CaptureDevice360OperationalStatus(snapshot,
+                selected.BitLockerLookupFailed || selected.LapsLookupFailed));
         if (dialog.ShowDialog(this) != DialogResult.OK ||
             dialog.SelectedRoute == Device360Route.None)
             return;
+        if (dialog.SelectedRoute == Device360Route.AccessHealth)
+        {
+            OpenHelpdeskAccessHealth();
+            return;
+        }
 
         // A dialog may outlive a query, disconnect, cancellation or results
         // refresh. Object-reference AND source identity must still match.
@@ -73,10 +100,14 @@ public sealed partial class MainForm
             return;
         }
 
-        using var dialog = new Device360Dialog(
-            Device360Snapshot.FromUnified(row), _uiLanguageCode,
-            allowNavigation: false);
-        dialog.ShowDialog(this);
+        var snapshot = Device360Snapshot.FromUnified(row);
+        using var dialog = new Device360Dialog(snapshot, _uiLanguageCode,
+            allowNavigation: false,
+            operational: CaptureDevice360OperationalStatus(snapshot,
+                _device360LastUnifiedPartial));
+        if (dialog.ShowDialog(this) == DialogResult.OK &&
+            dialog.SelectedRoute == Device360Route.AccessHealth)
+            OpenHelpdeskAccessHealth();
     }
 
     internal Device360Dialog? PreviewDevice360CardForUiSelfTest(bool cloud)
