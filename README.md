@@ -1,6 +1,6 @@
 # BitKeyBridge
 
-**v0.34.0-preview.1 (development only, NOT published):** focused WinForms EN/RU/HE placeholder/menu-tooltip roundtrip repairs and no-op DataGridView layout reduction. Source and native UI tests are under review in `feature/v0.34.0-localization-and-ui-speed`. The preview does not change release, signing, or fleet deployment permissions. See [0.34 preview acceptance](docs/preview-v0.34.0.md).
+**v0.35.0-rc.1 (combined release candidate; UNSIGNED / not published Stable):** integrates the EN/RU/HE, Hebrew RTL, anti-aliased/DPI-safe WinForms and layout-performance work from v0.34 with the new read-only **Device 360 computer card** for AD / Entra / Intune. The card reports source-qualified metadata and conservative lookup/readiness states without reading or disclosing BitLocker/LAPS secrets. Both `System.DirectoryServices.Protocols` and `System.Management` are updated to 10.0.14. It does not grant recovery rights or initiate GPO/Intune rollout. **This RC is for isolated manual QA only.** See [0.35 RC gate and test instructions](docs/release-candidate-v0.35.0-rc.1.md), [Device 360 design](docs/device-360-card-v0.35.md) and [source health](docs/device-360-source-health.md).
 
 **Latest published Stable is [v0.33.1](https://github.com/sgennadi/BitKeyBridge/releases/tag/v0.33.1)** (UNSIGNED; 2026-10-25); its immutable tested source is already merged into `main`. The 0.34 branch must never replace that Stable release before a separate exact-source release authorization.
 
