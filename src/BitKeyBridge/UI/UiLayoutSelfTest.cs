@@ -1585,14 +1585,14 @@ public static class UiLayoutSelfTest
                 failures.Add("Populated Recent history must occupy the right wide-screen column.");
 
             grid.Rows.Clear();
+            form.ClientSize = originalSize;
             form.ReflowMainViewport();
             Application.DoEvents();
             var cleared = form.CaptureStartViewportGeometry();
             if (split.ColumnCount != 1 || recent.Visible ||
                 (noHistory is { } before && cleared is { } after &&
-                 after.ConnectionHeight > before.ConnectionHeight + 12 &&
-                 originalSize.Width == form.ClientSize.Width))
-                failures.Add("Cleared Recent history retained a visible panel or empty column.");
+                 after.ConnectionHeight > before.ConnectionHeight + 12))
+                failures.Add("Cleared Recent history retained a visible panel, extra height or empty column.");
         }
         finally
         {
