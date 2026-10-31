@@ -25,7 +25,7 @@ public sealed partial class MainForm
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly UiStatusLabel _homeSelectionSummary = new();
-    private readonly TableLayoutPanel _homeSelectionPanel = new();
+    private readonly UiParentWidthSelectionLayout _homeSelectionPanel = new();
     private readonly Button _homeRevealBitLockerButton = new();
     private readonly Button _homeCopyBitLockerButton = new();
     private readonly UiStatusLabel _secretLifetimeStatus = new();
@@ -1397,6 +1397,13 @@ public sealed partial class MainForm
 
     private void LoadHelpdeskBasics()
     {
+        RestoreHelpdeskControlValues();
+        RefreshHelpdeskProfiles();
+        RefreshSetupStatus();
+    }
+
+    private void RestoreHelpdeskControlValues()
+    {
         _requireProtectedRecoveryAuditSetting.Checked =
             _config.RequireProtectedAuditForRecovery;
         _recoveryReferencePatternSetting.Text =
@@ -1404,19 +1411,16 @@ public sealed partial class MainForm
         _recoveryReferenceExampleSetting.Text =
             _config.RecoveryReferenceExample;
 
-        _secretDisplaySecondsSetting.Value =
-            Math.Clamp(
-                _config.SecretDisplaySeconds,
-                15,
-                3600);
-        _clipboardSecondsSetting.Value =
-            Math.Clamp(
-                _config.SensitiveClipboardSeconds,
-                5,
-                600);
-
-        RefreshHelpdeskProfiles();
-        RefreshSetupStatus();
+        // Bounds are configured by the admin-only settings page builder.
+        // Keep common status/profile loading available to ordinary users.
+        if (_secretDisplaySecondsSetting.Parent is not null)
+            _secretDisplaySecondsSetting.Value = Math.Clamp(
+                (decimal)_config.SecretDisplaySeconds,
+                _secretDisplaySecondsSetting.Minimum, _secretDisplaySecondsSetting.Maximum);
+        if (_clipboardSecondsSetting.Parent is not null)
+            _clipboardSecondsSetting.Value = Math.Clamp(
+                (decimal)_config.SensitiveClipboardSeconds,
+                _clipboardSecondsSetting.Minimum, _clipboardSecondsSetting.Maximum);
     }
 
     private void RefreshSetupStatus()

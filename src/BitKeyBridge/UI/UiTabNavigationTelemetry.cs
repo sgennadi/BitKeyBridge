@@ -74,6 +74,10 @@ internal static class UiTabNavigationTelemetry
         Pages.Select(_ => new Window()).ToArray();
     private static readonly Window[] ViewportReflow =
         Pages.Select(_ => new Window()).ToArray();
+    // Count skipped callback postings only, without retaining tab data.
+    private static long _coalescedReflowRequests;
+    internal static void RecordCoalescedReflow() =>
+        System.Threading.Interlocked.Increment(ref _coalescedReflowRequests);
     internal static void RecordDispatch(int pageIndex, long started)
     {
         if ((uint)pageIndex < (uint)SelectionToCallback.Length)
@@ -96,7 +100,8 @@ internal static class UiTabNavigationTelemetry
         var lines = new List<string>
         {
             "Workspace switch to layout ready (last 128 switches per page; ms).",
-            "Includes the UI dispatch and layout; excludes native painting, AD/Graph requests and RDP display latency."
+            "Includes the UI dispatch and layout; excludes native painting, AD/Graph requests and RDP display latency.",
+            $"Navigation reflow callbacks coalesced: {System.Threading.Interlocked.Read(ref _coalescedReflowRequests)}"
         };
         for (var index = 0; index < Pages.Length; index++)
         {
@@ -114,7 +119,7 @@ internal static class UiTabNavigationTelemetry
                 lines.Add(FormattableString.Invariant(
                     $"{Pages[index]} - viewport reflow: runs={layout.Count}, p50={layout.P50:F1} ms, p95={layout.P95:F1} ms, max={layout.Max:F1} ms"));
         }
-        if (lines.Count == 2)
+        if (lines.Count == 3)
             lines.Add("No completed workspace switches recorded yet.");
         return string.Join(Environment.NewLine, lines);
     }
@@ -160,7 +165,9 @@ internal static class UiTabNavigationTelemetry
             ViewportReflow.Length != Pages.Length)
             failures.Add("Navigation phase counters must cover each fixed tab.");
 
-        if (Report().Contains("device=", StringComparison.OrdinalIgnoreCase) ||
+        if (!Report().Contains("Navigation reflow callbacks coalesced:",
+                StringComparison.Ordinal) ||
+            Report().Contains("device=", StringComparison.OrdinalIgnoreCase) ||
             Pages.Distinct(StringComparer.Ordinal).Count() != Pages.Length)
             failures.Add("Workspace telemetry must use fixed, non-secret labels.");
 

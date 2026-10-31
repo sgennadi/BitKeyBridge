@@ -6,6 +6,7 @@ public sealed partial class MainForm : DpiAwareForm
 {
     private readonly AppConfig _config;
     private readonly bool _layoutSelfTest;
+    private readonly bool _administrationAllowedForLayoutSelfTest;
     private readonly ActiveDirectoryService _ad;
     private readonly AuditService _audit = new();
     private bool _userAuditFallbackWarningShown;
@@ -160,9 +161,11 @@ public sealed partial class MainForm : DpiAwareForm
 
     internal MainForm(
         AppConfig config,
-        bool layoutSelfTest)
+        bool layoutSelfTest,
+        bool administrationAllowedForLayoutSelfTest = true)
     {
         _config = config;
+        _administrationAllowedForLayoutSelfTest = administrationAllowedForLayoutSelfTest;
         _layoutSelfTest =
             layoutSelfTest;
         _uiLanguageCode = layoutSelfTest
@@ -2541,19 +2544,47 @@ public sealed partial class MainForm : DpiAwareForm
     {
         LoadUpdateSettings();
 
-        _remoteApiPort.Value =
-            Math.Clamp(
-                _config.RemoteApiPort,
-                1024,
-                65535);
-        _remoteApiManagement.Checked =
-            _config.RemoteApiAllowManagement;
-        _requireRecoveryReference.Checked =
-            _config.RequireRecoveryAccessReference;
+        RestoreOperationsControlValues();
+        if (_remoteApiPort.Parent is not null)
+            RefreshRemoteApiStatus();
+        LoadHelpdeskBasics();
+    }
+
+    private void RestoreOperationsControlValues()
+    {
+        // No admin page means no initialized numeric bounds (default max 100).
+        if (_remoteApiPort.Parent is not null)
+        {
+            _remoteApiPort.Value = Math.Clamp(
+                (decimal)_config.RemoteApiPort,
+                _remoteApiPort.Minimum, _remoteApiPort.Maximum);
+        }
+        _remoteApiManagement.Checked = _config.RemoteApiAllowManagement;
+        _requireRecoveryReference.Checked = _config.RequireRecoveryAccessReference;
         _suggestRotationAfterRecovery.Checked =
             _config.SuggestRotationAfterCloudKeyRetrieval;
-        RefreshRemoteApiStatus();
-        LoadHelpdeskBasics();
+    }
+
+    internal bool PreviewStartupSettingsForUiSelfTest(bool administrationExpected)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        var restoredService = RestoreDashboardControlValues();
+        RestoreOperationsControlValues();
+        RestoreHelpdeskControlValues();
+        return restoredService == administrationExpected &&
+            _mainTabs.TabPages.Cast<TabPage>().Any(
+                page => page.Name == "SettingsWorkspace") == administrationExpected &&
+            (administrationExpected
+                ? _serviceIdentityMode.SelectedIndex == 0 &&
+                  _remoteApiPort.Value == _config.RemoteApiPort &&
+                  _secretDisplaySecondsSetting.Value == _config.SecretDisplaySeconds &&
+                  _clipboardSecondsSetting.Value == _config.SensitiveClipboardSeconds
+                : _serviceIdentityMode.Items.Count == 0 &&
+                  _serviceIdentityMode.SelectedIndex == -1 &&
+                  _remoteApiPort.Parent is null &&
+                  _secretDisplaySecondsSetting.Parent is null &&
+                  _clipboardSecondsSetting.Parent is null);
     }
 
     private void SaveOperationsSettings()
@@ -5139,6 +5170,20 @@ public sealed partial class MainForm : DpiAwareForm
 
     private void LoadDashboardSettings()
     {
+        if (!RestoreDashboardControlValues())
+            return;
+        UpdateServiceIdentityUi();
+        RefreshServiceIdentityStatus();
+        RefreshMachineCloudStatus();
+    }
+
+    private bool RestoreDashboardControlValues()
+    {
+        // The service page is intentionally absent for restricted helpdesk
+        // users. Its ComboBox has no items until the page is constructed.
+        if (_serviceIdentityMode.Parent is null)
+            return false;
+
         // Normalize WinForms numeric control bounds before restoring settings.
         // NumericUpDown defaults to Maximum=100, and settings can exceed it.
         _serviceInterval.Minimum = 1;
@@ -5163,9 +5208,7 @@ public sealed partial class MainForm : DpiAwareForm
                     : 0;
         _serviceIdentityAccount.Text = _config.ServiceIdentityAccount;
         _serviceIdentityPassword.Clear();
-        UpdateServiceIdentityUi();
-        RefreshServiceIdentityStatus();
-        RefreshMachineCloudStatus();
+        return true;
     }
 
     private bool SaveDashboardSettings(

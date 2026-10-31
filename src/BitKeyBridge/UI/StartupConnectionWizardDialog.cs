@@ -68,6 +68,7 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
 
         var caption = new Label
         {
+            Name = "StartupConnectionIntro",
             Text = "Select a source for this session. Recovery passwords remain hidden " +
                    "until an authorized technician explicitly requests them.",
             AutoSize = true,
@@ -142,6 +143,32 @@ public sealed class StartupConnectionWizardDialog : DpiAwareForm
         root.Controls.Add(footer, 0, 6);
 
         Controls.Add(root);
+
+        // The wizard is a resizable native dialog. Fixed 710/720-pixel text
+        // maxima were wider than its actual content area on some 125%-200%
+        // DPI and RDP viewports, clipping explanation lines. Constrain only
+        // the two static prose labels to the live TableLayout client width
+        // and let AutoSize grow rows vertically; never resize the whole form.
+        var lastTextWidth = 0;
+        void FitProseToDialog()
+        {
+            if (root.IsDisposed || root.Disposing || root.ClientSize.Width <= 0)
+                return;
+            var scrollbar = root.VerticalScroll.Visible
+                ? SystemInformation.VerticalScrollBarWidth : 0;
+            var width = Math.Max(120, root.ClientSize.Width -
+                root.Padding.Horizontal - scrollbar -
+                Math.Max(caption.Margin.Horizontal, _explanation.Margin.Horizontal) - 2);
+            if (width == lastTextWidth)
+                return;
+            lastTextWidth = width;
+            caption.MaximumSize = new Size(width, 0);
+            _explanation.MaximumSize = new Size(width, 0);
+        }
+        root.ClientSizeChanged += (_, _) => FitProseToDialog();
+        Shown += (_, _) => FitProseToDialog();
+        FitProseToDialog();
+
         _connect.Click += (_, _) =>
         {
             DialogResult = DialogResult.OK;

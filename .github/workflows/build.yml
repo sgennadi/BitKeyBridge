@@ -27,7 +27,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      # GitHub's Windows 2025 / VS2026 image already ships a .NET 10
+      # SDK. Prefer its installed SDK to avoid unnecessary setup-dotnet
+      # downloads (transient 409 from dotnetorigin). If the image changes,
+      # restore the usual setup-dotnet path rather than silently downgrading.
+      - name: Detect preinstalled .NET 10 SDK
+        id: sdk_check
+        shell: pwsh
+        run: |
+          $sdks = @()
+          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            $sdks = @(dotnet --list-sdks)
+          }
+          $available = @($sdks | Where-Object {
+            $_ -match '^10\.0\.\d+\s+\['
+          }).Count -gt 0
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($available) { Write-Host 'Using preinstalled .NET 10 SDK.' }
+          else { Write-Host '.NET 10 not preinstalled; using setup-dotnet.' }
       - name: Setup .NET 10
+        if: steps.sdk_check.outputs.available != 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
@@ -45,7 +64,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # GitHub's Windows 2025 / VS2026 image already ships a .NET 10
+      # SDK. Prefer its installed SDK to avoid unnecessary setup-dotnet
+      # downloads (transient 409 from dotnetorigin). If the image changes,
+      # restore the usual setup-dotnet path rather than silently downgrading.
+      - name: Detect preinstalled .NET 10 SDK
+        id: sdk_check
+        shell: pwsh
+        run: |
+          $sdks = @()
+          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            $sdks = @(dotnet --list-sdks)
+          }
+          $available = @($sdks | Where-Object {
+            $_ -match '^10\.0\.\d+\s+\['
+          }).Count -gt 0
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($available) { Write-Host 'Using preinstalled .NET 10 SDK.' }
+          else { Write-Host '.NET 10 not preinstalled; using setup-dotnet.' }
       - name: Setup .NET 10
+        if: steps.sdk_check.outputs.available != 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
@@ -259,6 +297,15 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Self-test offline UI timing comparator (synthetic numeric data)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $output = & pwsh -NoProfile -File ./tests/windows/Compare-BitKeyBridgeUiPerf.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'UI LATENCY COMPARATOR SELF-TEST OK') {
+            throw 'UI timing comparator offline self-test did not pass.'
+          }
+
       - name: Validate GPO templates and localized restriction resources
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -280,6 +327,11 @@ jobs:
       - name: Publish self-contained single file
         shell: cmd
         run: dotnet publish src\BitKeyBridge\BitKeyBridge.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o artifacts\${{ matrix.rid }}
+
+      - name: Verify supported Windows and PerMonitorV2 in published EXE
+        shell: pwsh
+        run: |
+          ./tests/windows/EmbeddedAppManifestRegression.ps1 -Executable "artifacts/${{ matrix.rid }}/BitKeyBridge.exe"
 
       # Optional signing is only active if the runner certificate store contains
       # the trusted code-signing certificate AND its private key.
@@ -339,6 +391,9 @@ jobs:
       - name: Runtime UI layout self-test
         if: matrix.rid == 'win-x64'
         shell: pwsh
+        env:
+          # Offline synthetic data only. Never record the live user's GUI.
+          BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS: '1'
         run: |
           $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
           $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
@@ -349,6 +404,16 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
           }
+
+      - name: Upload synthetic 1080p Start UI QA snapshots
+        if: always() && matrix.rid == 'win-x64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-Start-1080p-QA-SYNTHETIC
+          path: artifacts/win-x64/ui-start-1080p-*.png
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
 
       # Basic JSON contract smoke on a CI runner. The broker integration job
       # separately launches this mode under TWO genuine non-admin accounts.
@@ -634,13 +699,18 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
+  # v0.34 Preview's integration jobs are restricted to PR #110 by both
+  # exact source branch name and pull request number. They run on ephemeral
+  # hosted Windows with synthetic data; neither publish nor sign releases.
   legacy-upgrade-regression:
     # Only run on disposable hosted Windows. Exercises the ACTUAL elevated
     # apply/rollback implementation with synthetic config and DPAPI fixtures.
     if: >-
       (github.event_name == 'pull_request' &&
        (github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
-        github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
+        github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018' ||
+         (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+          github.event.pull_request.number == 110))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
@@ -688,7 +758,9 @@ jobs:
         github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
         github.head_ref == 'feature/v0.30.4-tab-order-updater-20261017' ||
          github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
-         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018')) ||
+         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018' ||
+         (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+          github.event.pull_request.number == 110))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
@@ -737,7 +809,11 @@ jobs:
     # Never upload the signed test binaries, certificate or private key.
     if: >-
       github.event_name == 'pull_request' &&
-      (github.head_ref == 'feature/protected-audit-broker-20261014' || github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' || github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016')
+      (github.head_ref == 'feature/protected-audit-broker-20261014' ||
+       github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
+       github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
+       (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+        github.event.pull_request.number == 110))
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
@@ -861,6 +937,130 @@ jobs:
           path: test-bundle/
           if-no-files-found: error
           retention-days: 90
+
+  preview-qa-bundle:
+    # Manual EN/RU/HE and RDP QA ONLY; no signed release, release tag,
+    # deployment, updater activation, credentials or signing keys.
+    # Package only after every ephemeral integration gate is green.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
+      github.event.pull_request.number == 110
+    needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact QA source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download tested x64 preview
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x64
+          path: preview-qa
+
+      - name: Download tested x86 preview
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-x86
+          path: preview-qa
+
+      - name: Download tested ARM64 preview
+        uses: actions/download-artifact@v8
+        with:
+          name: BitKeyBridge-win-arm64
+          path: preview-qa
+
+      - name: Verify artifact structure and pin SHA-256 checksums
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$GITHUB_HEAD_REF" = "feature/v0.34.0-localization-and-ui-speed"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$PR_HEAD_SHA" != ""
+          version=$(python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('src/BitKeyBridge/BitKeyBridge.csproj').getroot()
+          versions = [node.text.strip() for node in root.findall('./PropertyGroup/Version') if node.text]
+          if len(versions) != 1:
+              raise SystemExit('Exactly one project Version node required')
+          print(versions[0])
+          PY
+          )
+          [[ "$version" =~ ^0[.]34[.]0-preview[.][0-9]+$ ]] || {
+            echo 'This QA workflow is restricted to v0.34 preview builds.'
+            exit 1
+          }
+          for rid in win-x64 win-x86 win-arm64; do
+            zip="preview-qa/BitKeyBridge-$rid.zip"
+            test -s "$zip"
+            entries="$(unzip -Z1 "$zip")"
+            test "$entries" = 'BitKeyBridge.exe' || {
+              echo "Unexpected ZIP structure: $rid"
+              exit 1
+            }
+          done
+          cp tests/windows/BitKeyBridge-DomainPreflight.cmd preview-qa/
+          cp tests/windows/Compare-BitKeyBridgeUiPerf.ps1 preview-qa/
+          (
+            cd preview-qa
+            sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip \
+              BitKeyBridge-DomainPreflight.cmd Compare-BitKeyBridgeUiPerf.ps1 > SHA256SUMS.txt
+            printf 'QA preview version: %s\nPR: #110\nHead SHA: %s\nVerified merge source SHA: %s\nUnsigned QA artifact only\n' \
+              "$version" "$PR_HEAD_SHA" "$GITHUB_SHA" > BUILD-INFO.txt
+            cat > README-TEST.txt <<'EOF'
+          BITKEYBRIDGE 0.34 — UNSIGNED DEVELOPMENT QA
+          ============================================
+          These files are NOT an organization-signed production release.
+          Never auto-deploy or install through GPO, Intune or a scheduled update.
+          Do not run on a domain controller or production helpdesk machine.
+
+          Verify SHA256SUMS.txt before extracting the archive for your CPU.
+          Use a disposable Windows test machine or isolated RDP session.
+          The EXE is a portable single-file app; do not replace a production EXE.
+
+          From a regular (non-elevated) CMD in the extracted folder:
+              BitKeyBridge.exe --version
+              BitKeyBridge.exe --self-test --no-elevation
+              BitKeyBridge.exe --ui-self-test --no-elevation
+              BitKeyBridge.exe --audit-broker-preflight --no-elevation
+
+          Open the application manually. Cycle EN > RU > HE > RU > EN
+          at 100%, 150%, 175% and 200% Windows scaling; also test RDP.
+          Verify no empty controls, clipped Hebrew/Russian labels or vanished
+          Copy diagnostics action. Check the selected device remains unchanged.
+          Run UI performance diagnostics (Ctrl+Shift+P) in v0.33.1 and
+          the matching v0.34 preview on the SAME hardware, session and DPI.
+          Copy the reports into stable-ui.txt and preview-ui.txt respectively.
+          From a regular PowerShell console in this QA folder, run:
+              powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Compare-BitKeyBridgeUiPerf.ps1 -BaselinePath .\stable-ui.txt -PreviewPath .\preview-ui.txt -MinimumSamples 5 -OutputCsv .\ui-comparison.csv
+          Only known numeric fields appear in the comparison CSV. The stable
+          0.33.1 report lacks language p95; the tool marks this N/A instead
+          of inventing or comparing unsupported percentiles. Negative
+          percentages mean lower latency. Do not compare different DPI or
+          local-vs-RDP sessions. Neither tool measures OS paint/RDP transport.
+
+          Do not paste secret-bearing data into bug reports. Use only the
+          sanitized UI-performance report, never raw keys or authentication.
+          Organization signing, managed-domain standard-user acceptance,
+          updater canary and rollback approval are separate release gates.
+          EOF
+          )
+
+      - name: Upload source-pinned unsigned manual QA bundle (Actions only)
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-v0.34-Preview-QA-UNSIGNED
+          path: preview-qa/
+          if-no-files-found: error
+          retention-days: 30
 
   codeql-stable-release:
     # Require on-SHA security scanning before publication.

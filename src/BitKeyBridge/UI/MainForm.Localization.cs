@@ -47,22 +47,28 @@ public sealed partial class MainForm
     private readonly ConditionalWeakTable<Control, object> _localizedCaptionObserved = new();
     // List-view header source literals are captured only once, before
     // translation, and are not mistaken for live AD/Graph result values.
-    private readonly Dictionary<ListView, (string English, int InitialWidth)[]> _localizedListViewHeaders =
-        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<ListView,
+        (string? English, int InitialWidth, string? LastGenerated)[]>
+        _localizedListViewHeaders = new(ReferenceEqualityComparer.Instance);
     // WinForms DataGridViewColumn is not a Control. Cache source headers by
     // object identity so language switching never translates a previously
     // translated caption again or changes any cell values.
     private readonly Dictionary<DataGridView,
-        Dictionary<DataGridViewColumn, (string English, int MinimumWidth)>>
+        Dictionary<DataGridViewColumn,
+            (string? English, int MinimumWidth, string? LastGenerated)>>
         _localizedGridHeaders = new(ReferenceEqualityComparer.Instance);
     private static readonly object LocalizedCaptionObserverMarker = new();
     // ToolStripItem is not a Control. Preserve caption source separately from
     // Tag, which is reserved for application command data.
-    private readonly Dictionary<ToolStripItem, string> _localizedMenuSources =
-        new(ReferenceEqualityComparer.Instance);
+    // Track both the known English source and our last generated caption.
+    // A runtime replacement belongs to the caller, not to the localizer.
+    private readonly Dictionary<ToolStripItem, (string English, string LastGenerated)>
+        _localizedMenuSources = new(ReferenceEqualityComparer.Instance);
     private readonly ConditionalWeakTable<ToolStripDropDownItem, object>
         _observedLocalizedMenus = new();
     private bool _localizedCaptionCacheBuilt;
+    // Per-form bounded and source-validated; never caches arbitrary row values.
+    private readonly UiHeaderWidthCache _headerWidthCache = new();
 
     private void ObserveLocalizedCaptionTree(
         Control root, bool applyImmediately = true)
@@ -119,8 +125,16 @@ public sealed partial class MainForm
                 list.Columns.Cast<ColumnHeader>().Any(x =>
                     UiStaticCaptionCatalog.Contains(x.Text)))
             {
+                // Retain only recognized static English labels, never
+                // runtime metadata stored in a native column header.
                 _localizedListViewHeaders[list] = list.Columns.Cast<ColumnHeader>()
-                    .Select(x => (x.Text, x.Width)).ToArray();
+                    .Select(x =>
+                    {
+                        var known = UiStaticCaptionCatalog.Contains(x.Text);
+                        return (English: known ? x.Text : null,
+                            InitialWidth: x.Width,
+                            LastGenerated: known ? x.Text : null);
+                    }).ToArray();
                 list.Disposed += OnLocalizedListViewDisposed;
                 if (applyImmediately)
                     ApplyLocalizedListViewHeaders(list);
@@ -129,7 +143,8 @@ public sealed partial class MainForm
             if (control is DataGridView grid)
             {
                 _localizedGridHeaders[grid] = new Dictionary<DataGridViewColumn,
-                    (string English, int MinimumWidth)>(ReferenceEqualityComparer.Instance);
+                    (string? English, int MinimumWidth, string? LastGenerated)>(
+                        ReferenceEqualityComparer.Instance);
                 grid.ColumnAdded += OnLocalizedGridColumnAdded;
                 grid.ColumnRemoved += OnLocalizedGridColumnRemoved;
                 grid.Disposed += OnLocalizedGridDisposed;
@@ -243,7 +258,7 @@ public sealed partial class MainForm
             if (!headers.ContainsKey(column) &&
                 column.HeaderText is { } caption &&
                 UiStaticCaptionCatalog.Contains(caption))
-                headers.Add(column, (caption, column.MinimumWidth));
+                headers.Add(column, (caption, column.MinimumWidth, caption));
         }
     }
 
@@ -257,30 +272,66 @@ public sealed partial class MainForm
         // MinimumWidth permits horizontal scrolling instead of cutting longer
         // Hebrew and Russian captions at 175%-200% DPI.
         var headerFont = grid.ColumnHeadersDefaultCellStyle.Font ?? grid.Font;
-        var flags = TextFormatFlags.SingleLine |
-                    TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
-        grid.SuspendLayout();
+        // A repeated switch to the same language, or a visible-page
+        // refresh with unchanged headers, must not force a grid layout.
+        // Defer SuspendLayout until an actual header or width change.
+        var suspended = false;
         try
         {
             foreach (DataGridViewColumn column in grid.Columns)
             {
                 if (!headers.TryGetValue(column, out var source))
                     continue;
+                // A header may be changed by the caller between language
+                // switches. Never overwrite runtime data, and never store it
+                // in this catalogue-only localization cache.
+                if (source.English is null ||
+                    !string.Equals(column.HeaderText, source.LastGenerated,
+                        StringComparison.Ordinal))
+                {
+                    if (UiStaticCaptionCatalog.Contains(column.HeaderText))
+                    {
+                        source = (column.HeaderText, column.MinimumWidth,
+                            column.HeaderText);
+                        headers[column] = source;
+                    }
+                    else
+                    {
+                        headers[column] = (null, source.MinimumWidth, null);
+                        continue;
+                    }
+                }
+                if (source.English is not { } english)
+                    continue;
                 var caption = UiStaticCaptionCatalog.TranslateOrOriginal(
-                    _uiLanguageCode, source.English);
-                if (!string.Equals(column.HeaderText, caption, StringComparison.Ordinal))
-                    column.HeaderText = caption;
-                var required = TextRenderer.MeasureText(
-                    caption, headerFont, new Size(4096, 1024), flags).Width +
-                    UiStyle.ScaleLogicalPixels(26, grid.DeviceDpi);
+                    _uiLanguageCode, english);
+                var captionChanged = !string.Equals(
+                    column.HeaderText, caption, StringComparison.Ordinal);
+                var required = _headerWidthCache.Measure(
+                    english, caption, headerFont, grid.DeviceDpi,
+                    UiHeaderWidthCache.HeaderKind.DataGrid);
                 var width = Math.Max(source.MinimumWidth, required);
-                if (column.MinimumWidth != width)
+                var widthChanged = column.MinimumWidth != width;
+                if (!captionChanged && !widthChanged)
+                    continue;
+                if (!suspended)
+                {
+                    grid.SuspendLayout();
+                    suspended = true;
+                }
+                if (captionChanged)
+                {
+                    column.HeaderText = caption;
+                    headers[column] = (english, source.MinimumWidth, caption);
+                }
+                if (widthChanged)
                     column.MinimumWidth = width;
             }
         }
         finally
         {
-            grid.ResumeLayout(performLayout: grid.Visible);
+            if (suspended)
+                grid.ResumeLayout(performLayout: grid.Visible);
         }
     }
 
@@ -288,23 +339,67 @@ public sealed partial class MainForm
     {
         if (list.IsDisposed || !_localizedListViewHeaders.TryGetValue(list, out var sources))
             return;
-        for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+
+        // Native ListView column changes are not parent layout changes.
+        // A warm switch with identical text/width must do no BeginUpdate,
+        // parent SuspendLayout or forced reflow. Only repaint an existing
+        // visible list if at least one header really needs updating.
+        var updating = false;
+        try
         {
-            var (english, originalWidth) = sources[i];
-            if (!UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
-                    out var translation))
-                continue;
-            var column = list.Columns[i];
-            if (!string.Equals(column.Text, translation, StringComparison.Ordinal))
-                column.Text = translation;
-            // Longer Hebrew/Russian titles must never disappear under fixed
-            // narrow 70-80px English header widths. Scrolling is preferable
-            // to truncation; the original width is restored in English.
-            var required = TextRenderer.MeasureText(translation, list.Font).Width +
-                UiStyle.ScaleLogicalPixels(18, list.DeviceDpi);
-            var width = Math.Max(originalWidth, required);
-            if (column.Width != width)
-                column.Width = width;
+            for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+            {
+                var source = sources[i];
+                var column = list.Columns[i];
+                if (source.English is null ||
+                    !string.Equals(column.Text, source.LastGenerated,
+                        StringComparison.Ordinal))
+                {
+                    if (UiStaticCaptionCatalog.Contains(column.Text))
+                    {
+                        source = (column.Text, column.Width, column.Text);
+                        sources[i] = source;
+                    }
+                    else
+                    {
+                        sources[i] = (null, source.InitialWidth, null);
+                        continue;
+                    }
+                }
+                if (source.English is not { } english ||
+                    !UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, english,
+                        out var translation))
+                    continue;
+                var textChanged = !string.Equals(
+                    column.Text, translation, StringComparison.Ordinal);
+                // Scrolling beats clipping 70-80px English column widths at
+                // 175%-200% DPI; restore at least original width in English.
+                var required = _headerWidthCache.Measure(
+                    english, translation, list.Font, list.DeviceDpi,
+                    UiHeaderWidthCache.HeaderKind.ListView);
+                var width = Math.Max(source.InitialWidth, required);
+                var widthChanged = column.Width != width;
+                if (!textChanged && !widthChanged)
+                    continue;
+
+                if (!updating && list.IsHandleCreated && list.Visible)
+                {
+                    list.BeginUpdate();
+                    updating = true;
+                }
+                if (textChanged)
+                {
+                    column.Text = translation;
+                    sources[i] = (english, source.InitialWidth, translation);
+                }
+                if (widthChanged)
+                    column.Width = width;
+            }
+        }
+        finally
+        {
+            if (updating && !list.IsDisposed)
+                list.EndUpdate();
         }
     }
 
@@ -369,28 +464,44 @@ public sealed partial class MainForm
     {
         foreach (ToolStripItem item in items)
         {
-            if (item is ToolStripSeparator)
+            // ToolStripTextBox/ComboBox are editable values, even when their
+            // current text happens to equal a known static UI caption.
+            if (item is ToolStripSeparator or ToolStripTextBox or ToolStripComboBox)
                 continue;
 
-            if (!_localizedMenuSources.TryGetValue(item, out var original))
+            if (_localizedMenuSources.TryGetValue(item, out var source))
             {
-                // Never infer a caption from Tag; it may be a command
-                // identifier, a security context, or a custom binding.
-                var source = item.Text;
-                if (!string.IsNullOrWhiteSpace(source) &&
-                    UiStaticCaptionCatalog.Contains(source))
+                if (!string.Equals(item.Text, source.LastGenerated,
+                        StringComparison.Ordinal))
                 {
-                    original = source;
-                    _localizedMenuSources.Add(item, source);
-                    item.Disposed += OnLocalizedMenuDisposed;
+                    // The caller changed this caption after localization.
+                    // A new catalogued English caption becomes the new source;
+                    // arbitrary device/account/runtime text stays untouched.
+                    if (item.Text is { } editedCaption &&
+                        UiStaticCaptionCatalog.Contains(editedCaption))
+                        _localizedMenuSources[item] = (editedCaption, editedCaption);
+                    else
+                        _localizedMenuSources.Remove(item);
                 }
             }
+            else if (!string.IsNullOrWhiteSpace(item.Text) &&
+                     UiStaticCaptionCatalog.Contains(item.Text))
+            {
+                // Never infer captions from ToolStripItem.Tag: it can contain
+                // a command or security binding. Subscribe to Dispose once.
+                _localizedMenuSources.Add(item, (item.Text, item.Text));
+                item.Disposed -= OnLocalizedMenuDisposed;
+                item.Disposed += OnLocalizedMenuDisposed;
+            }
 
-            if (original is not null &&
-                UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode, original,
-                    out var caption) &&
-                !string.Equals(item.Text, caption, StringComparison.Ordinal))
-                item.Text = caption;
+            if (_localizedMenuSources.TryGetValue(item, out source) &&
+                UiStaticCaptionCatalog.TryTranslate(_uiLanguageCode,
+                    source.English, out var caption))
+            {
+                if (!string.Equals(item.Text, caption, StringComparison.Ordinal))
+                    item.Text = caption;
+                _localizedMenuSources[item] = (source.English, caption);
+            }
 
             if (item is ToolStripDropDownItem submenu)
             {
@@ -400,11 +511,104 @@ public sealed partial class MainForm
                         LocalizedCaptionObserverMarker);
                     submenu.DropDownOpening += OnLocalizedMenuOpening;
                     if (!_localizedMenuSources.ContainsKey(submenu))
+                    {
+                        submenu.Disposed -= OnLocalizedMenuDisposed;
                         submenu.Disposed += OnLocalizedMenuDisposed;
+                    }
                 }
                 ApplyKnownMenuCaptions(submenu.DropDownItems);
             }
         }
+    }
+
+    // UI-self-test only: aggregate recognized static captions without ever
+    // logging or returning UI contents, account names, devices or secrets.
+    // Caller-owned dynamic replacement text is intentionally ignored.
+    internal (int Controls, int Menus, int Headers, int Stale)
+        PreviewFixedCaptionAuditForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Caption audit is test-only.");
+
+        static bool IsStale(string? actual, string english, string language,
+            bool shell)
+        {
+            string Localize(string code) => shell
+                ? UiLanguageService.Translate(code, english)
+                : UiStaticCaptionCatalog.TranslateOrOriginal(code, english);
+
+            if (string.Equals(actual, Localize(language),
+                    StringComparison.Ordinal))
+                return false;
+            if (string.IsNullOrWhiteSpace(actual))
+                return true;
+            // Arbitrary caller-provided content is not a stale translation.
+            // Only exact English/Russian/Hebrew versions of this fixed source
+            // are counted; contents never leave this test-only method.
+            return new[] { "en", "ru", "he" }.Any(code =>
+                string.Equals(actual, Localize(code),
+                    StringComparison.Ordinal));
+        }
+
+        var controls = 0;
+        var menus = 0;
+        var headers = 0;
+        var stale = 0;
+
+        foreach (var (control, key) in _localizedCaptionControls)
+        {
+            if (control.IsDisposed || control.Disposing)
+                continue;
+            var shell = !key.StartsWith(OriginalCaptionPrefix,
+                StringComparison.Ordinal);
+            var english = shell ? key : key[OriginalCaptionPrefix.Length..];
+            controls++;
+            if (IsStale(control.Text, english, _uiLanguageCode, shell))
+                stale++;
+        }
+
+        foreach (var (item, source) in _localizedMenuSources)
+        {
+            if (item.IsDisposed)
+                continue;
+            menus++;
+            if (IsStale(item.Text, source.English, _uiLanguageCode,
+                    shell: false))
+                stale++;
+        }
+
+        foreach (var (grid, sources) in _localizedGridHeaders)
+        {
+            if (grid.IsDisposed || grid.Disposing)
+                continue;
+            foreach (var (column, source) in sources)
+            {
+                if (source.English is not { } english ||
+                    !grid.Columns.Contains(column))
+                    continue;
+                headers++;
+                if (IsStale(column.HeaderText, english, _uiLanguageCode,
+                        shell: false))
+                    stale++;
+            }
+        }
+
+        foreach (var (list, sources) in _localizedListViewHeaders)
+        {
+            if (list.IsDisposed || list.Disposing)
+                continue;
+            for (var i = 0; i < Math.Min(list.Columns.Count, sources.Length); i++)
+            {
+                if (sources[i].English is not { } english)
+                    continue;
+                headers++;
+                if (IsStale(list.Columns[i].Text, english, _uiLanguageCode,
+                        shell: false))
+                    stale++;
+            }
+        }
+
+        return (controls, menus, headers, stale);
     }
 
     private string TranslateFixedCaption(string key) =>
@@ -461,9 +665,10 @@ public sealed partial class MainForm
                 changed.Add((control, caption, changeText, changeDirection));
         }
 
+        // Header-only ListViews redraw their own native columns on demand.
+        // Do not suspend/resume entire parent panels of unchanged/hidden
+        // lists on every RU/HE switch; only actual caption controls need it.
         var parents = changed.Select(x => x.Control.Parent)
-            .Concat(_localizedListViewHeaders.Keys
-                .Where(x => !x.IsDisposed).Select(x => x.Parent))
             .OfType<Control>().Distinct().ToArray();
         foreach (var parent in parents)
             parent.SuspendLayout();

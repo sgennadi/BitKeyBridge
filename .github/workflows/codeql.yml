@@ -30,7 +30,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # windows-latest VS2026 runners already carry SDK 10.0.402.
+      # setup-dotnet 10.0.x may try downloading 10.0.403 from a broken
+      # mirror (HTTP 409). Still fall back when the runner has no SDK 10.
+      - name: Detect preinstalled .NET 10 SDK
+        id: sdk_check
+        shell: pwsh
+        run: |
+          $sdks = @()
+          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            $sdks = @(dotnet --list-sdks)
+          }
+          $available = @($sdks | Where-Object {
+            $_ -match '^10\.0\.\d+\s+\['
+          }).Count -gt 0
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($available) { Write-Host 'Using preinstalled .NET 10 SDK for CodeQL.' }
+          else { Write-Host '.NET 10 not preinstalled; using setup-dotnet.' }
+
       - name: Setup .NET 10
+        if: steps.sdk_check.outputs.available != 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"

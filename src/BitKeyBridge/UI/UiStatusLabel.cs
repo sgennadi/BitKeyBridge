@@ -1,3 +1,5 @@
+using System.Drawing.Drawing2D;
+
 namespace BitKeyBridge;
 
 public sealed class UiStatusLabel : Label
@@ -82,6 +84,9 @@ public sealed class UiStatusLabel : Label
                 availableWidth -
                 horizontalChrome);
 
+        // Keep the default glyph-overhang padding used by OnPaint.
+        // Measuring with NoPadding but drawing with padding can wrap the
+        // final word into an unmeasured second line and clip the caption.
         var measured =
             TextRenderer.MeasureText(
                 Text ?? string.Empty,
@@ -91,8 +96,7 @@ public sealed class UiStatusLabel : Label
                     16384),
                 TextFormatFlags.Left |
                 TextFormatFlags.WordBreak |
-                TextFormatFlags.NoPrefix |
-                TextFormatFlags.NoPadding);
+                TextFormatFlags.NoPrefix);
 
         var preferredWidth =
             horizontalChrome +
@@ -120,11 +124,42 @@ public sealed class UiStatusLabel : Label
     protected override void OnPaint(
         PaintEventArgs e)
     {
-        e.Graphics.Clear(
-            BackColor);
-
-        DrawBorder(
-            e.Graphics);
+        if (BorderStyle == BorderStyle.FixedSingle &&
+            !SystemInformation.HighContrast && Width > 4 && Height > 4)
+        {
+            // Native ControlPaint draws a square border which is clipped by
+            // a 1-bit rounded Region. Render the complete rounded outline
+            // in one GDI+ pass instead, keeping its stroke inside bounds.
+            var parent = Parent;
+            while (parent is not null && parent.BackColor.A < 255)
+                parent = parent.Parent;
+            e.Graphics.Clear(parent?.BackColor ?? UiStyle.ModernCanvas);
+            var state = e.Graphics.Save();
+            try
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                var stroke = Math.Max(1f, DeviceDpi /
+                    (float)UiStyle.BaselineDpi);
+                using var path = UiRecoveryGraphics.RoundRect(
+                    UiRecoveryGraphics.InsideStrokeBounds(Size, stroke),
+                    UiStyle.ModernSmallRadius * DeviceDpi /
+                    (float)UiStyle.BaselineDpi);
+                using var fill = new SolidBrush(BackColor);
+                using var border = new Pen(UiStyle.ModernBorder, stroke);
+                e.Graphics.FillPath(fill, path);
+                e.Graphics.DrawPath(border, path);
+            }
+            finally
+            {
+                e.Graphics.Restore(state);
+            }
+        }
+        else
+        {
+            e.Graphics.Clear(BackColor);
+            DrawBorder(e.Graphics);
+        }
 
         var borderInset =
             BorderStyle ==

@@ -18,6 +18,7 @@ $viewport = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainF
 $theme = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiModernTheme.cs') -Raw
 $base = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DpiAwareForm.cs') -Raw
 $style = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStyle.cs') -Raw
+$nipkgBanner = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiNipkgBrandBanner.cs') -Raw
 $shell = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Shell.cs') -Raw
 $diagnostics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.DiagnosticNavigation.cs') -Raw
 $helpdesk = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskDashboard.cs') -Raw
@@ -33,8 +34,17 @@ $intuneSetup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\In
 $deviceCodeDialog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\DeviceCodeDialog.cs') -Raw
 $helpdeskSettingsSource = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.HelpdeskUx.cs') -Raw
 $layoutSelfTest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutSelfTest.cs') -Raw
+$recoveryGraphics = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiRecoveryCard.cs') -Raw
+$statusLabel = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStatusLabel.cs') -Raw
+$languageResources = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLanguageService.cs') -Raw
+$captionCatalog = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiStaticCaptionCatalog.cs') -Raw
+$dialogLocalizer = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiDialogLocalization.cs') -Raw
+$mainLocalization = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\MainForm.Localization.cs') -Raw
+$headerCache = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiHeaderWidthCache.cs') -Raw
 $project = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\BitKeyBridge.csproj') -Raw
+$manifest = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\app.manifest') -Raw
 $telemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiLayoutTelemetry.cs') -Raw
+$navigationTelemetry = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\UI\UiTabNavigationTelemetry.cs') -Raw
 $cleanup = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\UpdateStagingCleanupService.cs') -Raw
 $housekeeping = Get-Content -LiteralPath (Join-Path $root 'src\BitKeyBridge\Services\HousekeepingService.cs') -Raw
 
@@ -42,15 +52,93 @@ function Assert-Source([bool] $condition, [string] $reason) {
     if (-not $condition) { throw "UI repaint regression: $reason" }
 }
 
+# Always exercise the FULL fixed-caption resources, not a curated sample
+# of visible controls. Real domain/product identifiers remain untouched.
+Assert-Source ($languageResources.Contains('foreach (var (key, words) in Messages)') -and
+               $languageResources.Contains('Untranslated Russian shell resource:') -and
+               $languageResources.Contains('Untranslated Hebrew shell resource:') -and
+               $languageResources.Contains('HasLanguageScript(') -and
+               $captionCatalog.Contains('UntranslatedTechnicalCaptions') -and
+               $captionCatalog.Contains('Untranslated Russian static UI caption:') -and
+               $captionCatalog.Contains('Untranslated Hebrew static UI caption:') -and
+               $captionCatalog.Contains('Stale technical-caption exception:') -and
+               $captionCatalog.Contains('Идентификатор восстановления Entra:') -and
+               $captionCatalog.Contains('Ролевой доступ BitKeyBridge (RBAC)')) 'All fixed RU/HE captions must be validated, with only exact technical-name exemptions.'
+# Native UI audit must detect stale fixed text after every language switch,
+# including a deliberately injected stale English action, without disclosing it.
+Assert-Source ($mainLocalization.Contains('PreviewFixedCaptionAuditForUiSelfTest()') -and
+               $mainLocalization.Contains('if (!_layoutSelfTest)') -and
+               $mainLocalization.Contains('if (item.IsDisposed)') -and
+               $mainLocalization.Contains('if (grid.IsDisposed || grid.Disposing)') -and
+               $mainLocalization.Contains('if (list.IsDisposed || list.Disposing)') -and
+               $layoutSelfTest.Contains('Static caption audit did not cover controls, menus and headers.') -and
+               $layoutSelfTest.Contains('Static caption audit found stale EN/RU/HE values:') -and
+               $layoutSelfTest.Contains('Static caption audit failed to detect a stale English label.') -and
+               $layoutSelfTest.Contains('Static caption audit did not recover after Hebrew repair.')) 'EN/RU/HE native UI test must audit all registered fixed captions while protecting runtime identity and secret values.'
+# Preview adopts the actual NI Package Creator palette, keeping security
+# semantics, native Button events and static multilingual labels unchanged.
+Assert-Source ($style.Contains('Color.FromArgb(11, 46, 90)') -and
+               $style.Contains('Color.FromArgb(14, 106, 230)') -and
+               $style.Contains('Color.FromArgb(16, 170, 93)') -and
+               $style.Contains('Color.FromArgb(244, 247, 253)') -and
+               $style.Contains('BrandSoftBlue') -and
+               $style.Contains('BrandSoftGreen') -and
+               $theme.Contains('IsPositiveAction(button)') -and
+               $theme.Contains('button.Name == "HomeUnifiedSearchButton"') -and
+               $theme.Contains('NipkgMenuColorTable') -and
+               $shell.Contains('root.SetRowSpan(_homeBrandBanner, 2)') -and
+               $shell.Contains('_homeBrandBanner?.SetCaptionDirection(rtl)') -and
+               $nipkgBanner.Contains('new LinearGradientBrush(') -and
+               $nipkgBanner.Contains('UiRecoveryGraphics.RoundRect(') -and
+               $nipkgBanner.Contains('Text = IntroCaption') -and
+               $layoutSelfTest.Contains('NI-style navy-to-blue banner did not paint.') -and
+               $layoutSelfTest.Contains('NI-style Start banner lost EN/RU/HE caption or direction:')) 'NI-inspired UI must retain central palette, native EN/RU/HE caption rendering, rounded gradient and safe green search.'
+# Preserve the Windows compatibility manifest without disabling PCA,
+# lowering privileges or changing per-monitor DPI behavior.
+Assert-Source ($manifest.Contains('8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a') -and
+               $manifest.Contains('PerMonitorV2,PerMonitor') -and
+               $manifest.Contains('level="asInvoker"') -and
+               $manifest.Contains('uiAccess="false"')) 'App manifest must declare supported Windows 10/11, per-monitor V2 DPI and least privilege.'
+Assert-Source ($startupWizardSource.Contains('Name = "StartupConnectionIntro"') -and
+               $startupWizardSource.Contains('void FitProseToDialog()') -and
+               $startupWizardSource.Contains('root.ClientSizeChanged += (_, _) => FitProseToDialog()') -and
+               $layoutSelfTest.Contains('Connection chooser prose is clipped or exceeds its live DPI width.') -and
+               $shell.Contains('UiStyle.ConfigureWrappingStatusLabel(') -and
+               $startConnectionSource.Contains('UiStyle.ConfigureWrappingStatusLabel(_homeCloudConnectionStatus)')) 'Start page statuses and connection explanations must wrap at live DPI/RDP width.'
 Assert-Source ($project.Contains('<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>')) 'PerMonitorV2 must remain enabled.'
 Assert-Source ($viewport.Contains('Interval = 55')) 'Main viewport must batch WM_SIZE events.'
 Assert-Source ($viewport.Contains('ClientSizeChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must respond to client width changes.'
 Assert-Source ($viewport.Contains('DpiChanged += (_, _) => QueueMainViewportReflow()')) 'Main viewport must handle monitor DPI changes.'
 Assert-Source (-not [regex]::IsMatch($viewport, '(?m)^\s*UiModernTheme\.Refresh\(shell\)\s*;')) 'WM_SIZE must not refresh every themed control and GDI region.'
 Assert-Source ([regex]::IsMatch($viewport, 'if\s*\(geometryChanged\)\s*shell\.PerformLayout\(\)\s*;')) 'Main layout must be forced only on true geometry changes.'
+Assert-Source ($theme.Contains('if (control.IsHandleCreated)') -and
+               $theme.Contains('RecordDeferredRoundedRegion()') -and
+               $theme.Contains('RecordRoundedRegionApplied()') -and
+               $theme.Contains('marker.LastRoundedSize = Size.Empty') -and
+               $telemetry.Contains('Theme controls installed=') -and
+               $layoutSelfTest.Contains('Deferred rounded region was not applied on HandleCreated.')) 'Cold theme must defer native rounded GDI regions and test eventual handle creation.'
+# Binary Control.Region masks truncate anti-aliased button edges and cut
+# away status borders; corner radius must be drawn with GDI+ in client bounds.
+Assert-Source ($theme.Contains('UiRecoveryGraphics.ConfigureRoundedButton(') -and
+               $theme.Contains('button.FlatAppearance.BorderSize = 0;') -and
+               -not $theme.Contains('SetupRoundedRegion(button,') -and
+               -not $theme.Contains('SetupRoundedRegion(status,') -and
+               $style.Contains('UiRecoveryGraphics.ConfigureRoundedButton(') -and
+               -not $style.Contains('button.Region = new Region(path)') -and
+               $recoveryGraphics.Contains('new GraphicsPath(FillMode.Alternate)') -and
+               $recoveryGraphics.Contains('InsideStrokeBounds(') -and
+               $recoveryGraphics.Contains('PixelOffsetMode.HighQuality') -and
+               $statusLabel.Contains('UiRecoveryGraphics.InsideStrokeBounds(Size, stroke)') -and
+               $layoutSelfTest.Contains('Antialiased button corner mask was not painted.') -and
+               $layoutSelfTest.Contains('Rounded border stroke exceeds client bounds.') -and
+               $layoutSelfTest.Contains('Rounded geometry has no antialiased edge pixels.')) 'Rounded graphics must paint complete anti-aliased strokes without clipped native button regions.'
 Assert-Source ($theme.Contains('if (Markers.TryGetValue(root, out _))')) 'Repeat theme application must be O(1).'
-Assert-Source ($theme.Contains('root.ControlAdded += (_, args) =>') -and
-               $theme.Contains('if (args.Control is { } child) Apply(child);')) 'Newly added controls must receive the theme through the null-safe, non-recursive handler.'
+Assert-Source ($theme.Contains('root.ControlAdded += ThemeChildAdded;') -and
+               $theme.Contains('private static void ThemeChildAdded(object? sender, ControlEventArgs args)') -and
+               $theme.Contains('if (args.Control is { } child)') -and
+               $theme.Contains('Apply(child);') -and
+               $theme.Contains('menu.Renderer = SharedMenuRenderer;') -and
+               $theme.Contains('var recoveryButton = InsideRecoveryCard(button);')) 'Dynamic controls must be themed via a shared handler without allocating per-control closures/renderers.'
 Assert-Source ($theme.Contains('IsPrimaryAction(button)')) 'Primary actions must receive centralized accent styling.'
 Assert-Source ($theme.Contains('TextFormatFlags.EndEllipsis') -and $theme.Contains('textFlags |= TextFormatFlags.RightToLeft')) 'Owner-drawn Hebrew tabs must use RTL text flags without clipping.'
 Assert-Source (-not [regex]::IsMatch($theme, '(?s)case DataGridView grid:.*?SetupRoundedRegion\(grid')) 'Data grids must not recreate GDI clipping regions.'
@@ -71,6 +159,14 @@ Assert-Source ($diagnostics.Contains('DiagnosticToolsWorkspace') -and $diagnosti
 Assert-Source ($shell.Contains('_mainTabs.ResumeLayout(performLayout: initialApply || _layoutSelfTest)')) 'Warm language changes must defer redundant TabControl-wide layout until selected-viewport reflow.'
 Assert-Source ($shell.Contains('QueueNavigationViewportReflow();')) 'Warm language changes must schedule selected viewport repair after translation.'
 Assert-Source ($base.Contains('RefreshResponsiveLabelWidths();')) 'Wrapping labels must be measured after the form layout.'
+Assert-Source ($base.Contains('_pendingVisibleLabelWidths') -and
+               $base.Contains('DrainPendingVisibleLabelWidths') -and
+               $base.Contains('_visibleLabelWidthRefreshPosted') -and
+               $base.Contains('if (RefreshResponsiveLabelWidth(label))') -and
+               $base.Contains('RecordVisibleLabelBatch(changed, reflowed)')) 'Visible label activation must coalesce posted callbacks and reflow each parent only when widths changed.'
+Assert-Source ($layoutSelfTest.Contains('VerifyVisibleLabelReflowCoalescing(failures)') -and
+               $layoutSelfTest.Contains('Two visible labels scheduled more than one layout callback.') -and
+               $telemetry.Contains('Visible-label width batches: batches=')) 'Native WinForms test must verify visibility bursts and non-secret batched-layout counters.'
 Assert-Source ($base.Contains('Widths are computed in RefreshResponsiveLabelWidths()')) 'Cold DPI registration must not measure the same wrapping label twice.'
 Assert-Source ($base.Contains('_responsiveLayoutInitialized') -and
                $base.Contains('UiLayoutTelemetry.RecordResponsiveForm(started)') -and
@@ -84,8 +180,23 @@ Assert-Source ($telemetry.Contains('DpiThemeInstall.Summarize("DPI phase - theme
                $telemetry.Contains('DpiControlDefaults.Summarize("DPI phase - control defaults")') -and
                $telemetry.Contains('DpiLayout.Summarize("DPI phase - WinForms PerformLayout")') -and
                $telemetry.Contains('DpiLabelWidths.Summarize("DPI phase - label widths")')) 'The DPI report must include all expensive layout-phase counters.'
+Assert-Source ($theme.Contains('UiLayoutTelemetry.RecordThemeInstall(ThemeKind(root), installStarted);') -and
+               $telemetry.Contains('ThemeInstallReport() + "\n"') -and
+               $telemetry.Contains('"Theme install - " + name') -and
+               $layoutSelfTest.Contains('NI theme per-control profiling missed installed controls.')) 'Cold theme must record numeric per-control category durations with native count reconciliation.'
 Assert-Source ($style.Contains('if (label.StatusKind == kind') -and $layoutSelfTest.Contains('Unchanged status text/kind forced a repaint')) 'Repeated unchanged status polls must not repaint.'
 Assert-Source ($viewport.Contains('_lastRepairedTabPath') -and $viewport.Contains('UiLayoutTelemetry.RecordViewport(viewportStarted)')) 'Selected-tab layout must avoid repeat repair and expose timing metrics.'
+Assert-Source ($viewport.Contains('_navigationReflowPosted') -and
+               $viewport.Contains('_navigationReflowLatestIndex') -and
+               $viewport.Contains('UiTabNavigationTelemetry.RecordCoalescedReflow()') -and
+               $viewport.Contains('_navigationReflowPostCount++') -and
+               $layoutSelfTest.Contains('Rapid tab navigation posted redundant WinForms callbacks.') -and
+               $layoutSelfTest.Contains('Navigation coalescing lost the latest viewport repair.') -and
+               $layoutSelfTest.Contains('Main/nested tab burst lost final selection or timing.') -and
+               $layoutSelfTest.Contains('Rapid real-tab navigation lost page state or recreated tabs.') -and
+               $viewport.Contains('_navigationReflowLastDispatchedIndex = selectedIndex') -and
+               $viewport.Contains('_navigationReflowLatestIndex != selectedIndex') -and
+               $navigationTelemetry.Contains('Navigation reflow callbacks coalesced:')) 'Rapid navigation must coalesce UI callbacks, preserve final selected tab and report only aggregate metrics.'
 Assert-Source ($viewport.Contains('UiTabNavigationTelemetry.RecordDispatch') -and
                $viewport.Contains('UiTabNavigationTelemetry.RecordLayout') -and
                $shell.Contains('RecordMainTabHandleCreated') -and
@@ -96,6 +207,80 @@ Assert-Source ($viewport.Contains('UiTabNavigationTelemetry.RecordDispatch') -an
 Assert-Source ($diagnostics.Contains('RunUiPerformanceDiagnosticsButton') -and $diagnostics.Contains('UiTabNavigationTelemetry.Report()') -and $telemetry.Contains('Interlocked.Increment')) 'Diagnostics must expose bounded navigation and non-secret repaint timings.'
 Assert-Source ($shell.Contains('ApplyLocalizedShellCaptions(rtl)') -and $shell.Contains('RightToLeftLayout = false')) 'Hebrew selection must not re-create all native MainForm controls.'
 Assert-Source ($layoutSelfTest.Contains('Language switch left an empty or stale caption')) 'Native UI tests must reject blank/stale captions after Hebrew-Russian-English switches.'
+Assert-Source ($dialogLocalizer.Contains('TranslatePreservedHint(') -and
+               $dialogLocalizer.Contains('OriginalPlaceholder') -and
+               $dialogLocalizer.Contains('LastLocalizedPlaceholder') -and
+               $dialogLocalizer.Contains('OriginalToolTip') -and
+               $dialogLocalizer.Contains('LastLocalizedToolTip')) 'Modal localization must round-trip known placeholder and menu tooltip text across EN/RU/HE.'
+Assert-Source ($layoutSelfTest.Contains('RU/HE/EN modal hint roundtrip or live data regression') -and
+               $layoutSelfTest.Contains('Modal localizer rewrote externally updated hints.') -and
+               $layoutSelfTest.Contains('Modal localizer did not adopt new known English hints.')) 'Runtime localization test must preserve user text and dynamically replaced hints.'
+Assert-Source ($mainLocalization.Contains('if (!captionChanged && !widthChanged)') -and
+               $mainLocalization.Contains('if (suspended)') -and
+               $mainLocalization.Contains('grid.ResumeLayout(performLayout: grid.Visible)')) 'Localized DataGridView must skip no-op layout while remeasuring real text or DPI changes.'
+Assert-Source ($mainLocalization.Contains('private readonly UiHeaderWidthCache _headerWidthCache = new();') -and
+               $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.DataGrid') -and
+               $mainLocalization.Contains('UiHeaderWidthCache.HeaderKind.ListView')) 'MainForm header localization must reuse fixed-caption measurements for both WinForms grid and list headers.'
+Assert-Source ($mainLocalization.Contains('if (!textChanged && !widthChanged)') -and
+               $mainLocalization.Contains('list.BeginUpdate();') -and
+               $mainLocalization.Contains('if (updating && !list.IsDisposed)') -and
+               -not $mainLocalization.Contains('.Concat(_localizedListViewHeaders.Keys')) 'No-op and hidden ListView headers must not force native repaints or parent layout passes.'
+Assert-Source ($layoutSelfTest.Contains('Export scope ListView headers were not localized:')) 'Native RU/HE/EN tests must continue verifying ListView caption translations.'
+Assert-Source ($headerCache.Contains('UiStaticCaptionCatalog.Contains(sourceEnglish)') -and
+               $headerCache.Contains('UiStaticCaptionCatalog.TranslateOrOriginal("ru", sourceEnglish)') -and
+               $headerCache.Contains('UiStaticCaptionCatalog.TranslateOrOriginal("he", sourceEnglish)') -and
+               $headerCache.Contains('DefaultMaxMeasurements = 512') -and
+               $headerCache.Contains('if (_widths.Count >= _capacity)') -and
+               $headerCache.Contains('font.GdiCharSet') -and
+               $headerCache.Contains('font.GdiVerticalFont')) 'Fixed header cache must reject arbitrary values, bound retention, and differentiate font/DPI contexts.'
+Assert-Source ($layoutSelfTest.Contains('VerifyFixedHeaderWidthCaching(failures)') -and
+               $layoutSelfTest.Contains('Fixed header width cache accepted arbitrary live metadata.') -and
+               $layoutSelfTest.Contains('Fixed header width cache accepted an untrusted caption value.') -and
+               $layoutSelfTest.Contains('Fixed header cache did not evict the oldest measurement.')) 'Native WinForms tests must verify cache identity, rejection, eviction, and DPI/font separation.'
+# Protect caller-owned data after an initial known UI caption was translated.
+# Native regression exercises real menu items and ListView/DataGridView headers.
+Assert-Source ($mainLocalization.Contains('LastGenerated') -and
+               $mainLocalization.Contains('ToolStripSeparator or ToolStripTextBox or ToolStripComboBox') -and
+               $mainLocalization.Contains('headers[column] = (null, source.MinimumWidth, null)') -and
+               $mainLocalization.Contains('sources[i] = (null, source.InitialWidth, null)') -and
+               $layoutSelfTest.Contains('Language switch rewrote runtime menu caption or editable value:') -and
+               $layoutSelfTest.Contains('Main grid/list localization overwrote live header data:') -and
+               $layoutSelfTest.Contains('Main grid/list failed to adopt replacement English captions:')) 'Runtime ToolStrip and native columns must not relocalize caller-owned values or cache sensitive metadata.'
+# Direction-aware p50/p95 timings expose slow native Hebrew mirroring
+# without retaining any text, device identifiers, tenant IDs or keys.
+Assert-Source ($telemetry.Contains('RecentCapacity = 128') -and
+               $telemetry.Contains('Array.Sort(snapshot)') -and
+               $telemetry.Contains('RecentPercentiles()') -and
+               $telemetry.Contains('Language EN/RU -> Hebrew') -and
+               $telemetry.Contains('Language Hebrew -> EN/RU') -and
+               $telemetry.Contains('Language EN <-> RU') -and
+               $telemetry.Contains('WarmLanguageSwitch = new(recentPercentiles: true)') -and
+               $telemetry.Contains('RunOfflineTests()') -and
+               $shell.Contains('_lastAppliedShellRtl = rtl;') -and
+               $shell.Contains('started, initialApply, previousRtl, rtl') -and
+               $layoutSelfTest.Contains('"p50=", "p95=", "recent="')) 'UI latency report must distinguish Hebrew direction and retain bounded non-secret p50/p95 tests.'
+# One language change has two phases: synchronous captions and a posted
+# selected-viewport reflow. Do not report only the first and call UI "ready".
+Assert-Source ($shell.Contains('QueueLanguageViewportReflow(started);') -and
+               $viewport.Contains('private void QueueLanguageViewportReflow(long languageStarted)') -and
+               $viewport.Contains('_languageViewportStarted = languageStarted') -and
+               $viewport.Contains('UiLayoutTelemetry.RecordLanguageViewportDispatch(languageQueued)') -and
+               $viewport.Contains('UiLayoutTelemetry.RecordLanguageViewportReflow(viewportStarted)') -and
+               $viewport.Contains('UiLayoutTelemetry.RecordLanguageViewportReady(languageStarted)') -and
+               $viewport.Contains('generation != _navigationReflowHandleGeneration') -and
+               $telemetry.Contains('Language to selected viewport ready') -and
+               $telemetry.Contains('Language viewport measurements superseded:') -and
+               $layoutSelfTest.Contains('Rapid language changes stranded the deferred viewport timer.') -and
+               $layoutSelfTest.Contains('HWND recreation stranded the latest language viewport measurement.')) 'Full language-switch diagnostics must wait for latest native selected-viewport reflow and survive HWND recreation.'
+Assert-Source ($viewport.Contains('if (_mainViewportReflowRunning)') -and
+               $viewport.Contains('if (_languageViewportStarted > 0 && IsHandleCreated') -and
+               $viewport.Contains('QueueMainViewportReflow();') -and
+               $viewport.Contains('internal void PreviewHoldMainViewportReflowForUiSelfTest(bool busy)') -and
+               $layoutSelfTest.Contains('Busy native layout falsely completed language viewport timing.') -and
+               $layoutSelfTest.Contains('Busy native layout retry stranded language viewport timing.')) 'Overlapping WinForms layout may not prematurely complete language timing and must retry with the latest selected geometry.'
+Assert-Source ($telemetry.Contains('Fixed-header width cache: hits=') -and
+               $telemetry.Contains('RecordHeaderWidthCacheHit()') -and
+               $telemetry.Contains('RecordHeaderWidthCacheMiss()')) 'Header-cache diagnostics must aggregate only hit/miss counts without retaining any live captions.'
 Assert-Source ($cleanup.Contains('LastModifiedTreeUtcOrRejectReparse') -and $cleanup.Contains('UpdateRollbackHoldService.IsActiveForVersion') -and $housekeeping.Contains('UpdateStagingCleanupService.Run(')) 'Daily housekeeping must safely prune only old updater staging folders, preserving rollback and reparse-point protections.'
 Assert-Source ($layoutSelfTest.Contains('VerifyNestedWorkspaceViewport(main, formName, scenario, failures)')) 'WinForms runtime must test real nested sizes after tab switches.'
 Assert-Source ($layoutSelfTest.Contains('content.Size = new Size(') -and $layoutSelfTest.Contains('main.ReflowMainViewport()')) 'Runtime must reproduce a stale 200x100-style content viewport.'

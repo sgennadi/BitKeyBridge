@@ -13,8 +13,77 @@ public sealed partial class MainForm
     private string _homeResultsLayoutKey = string.Empty;
     private string _homeConnectionsRecentLayoutKey = string.Empty;
     private bool _homeConnectionsRecentReflowRunning;
+    private int _lastRecentComputerLayoutCount = -1;
     private string _lastRepairedTabPath = string.Empty;
-    private int _navigationReflowSequence;
+    // Multiple tab and nested-tab events in one UI-message burst share one
+    // BeginInvoke. Keep only the most recently requested page and start time.
+    private bool _navigationReflowPosted;
+    private int _navigationReflowHandleGeneration;
+    private bool _mainViewportHandleRecreated;
+    private int _navigationReflowLatestIndex;
+    private long _navigationReflowLatestStarted;
+    // Latest user-requested language change (timings only, no language or
+    // identity strings). Superseded changes are not mistaken for completed.
+    private long _languageViewportStarted;
+    private long _languageViewportQueued;
+    private int _navigationReflowPostCount;
+    private int _navigationReflowDispatchCount;
+    private int _navigationReflowCoalescedCount;
+    private int _navigationReflowLastDispatchedIndex = -1;
+
+    internal (int Posted, int Dispatched, int Coalesced, bool Pending,
+              int RequestedIndex, int LastDispatchedIndex, bool HasPendingTiming)
+        PreviewNavigationReflowStateForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Navigation counters are test-only.");
+        return (_navigationReflowPostCount, _navigationReflowDispatchCount,
+            _navigationReflowCoalescedCount, _navigationReflowPosted,
+            _navigationReflowLatestIndex, _navigationReflowLastDispatchedIndex,
+            _navigationReflowLatestStarted > 0);
+    }
+
+    internal void PreviewQueueNavigationReflowForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Navigation burst is test-only.");
+        QueueNavigationViewportReflow();
+    }
+
+    internal void PreviewRecreateNativeHandleForUiSelfTest()
+    {
+        if (!_layoutSelfTest || !IsHandleCreated || IsDisposed || Disposing)
+            throw new InvalidOperationException("HWND recreation is test-only.");
+        RecreateHandle();
+    }
+
+    internal bool PreviewLanguageViewportPendingForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Language timing state is test-only.");
+        return _languageViewportStarted > 0;
+    }
+
+    internal void PreviewHoldMainViewportReflowForUiSelfTest(bool busy)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Viewport busy fixture is test-only.");
+        _mainViewportReflowRunning = busy;
+    }
+
+    // Called after the synchronous captions pass. Measure the user-requested
+    // change through the eventual selected-tab reflow, not just ApplyLanguage.
+    private void QueueLanguageViewportReflow(long languageStarted)
+    {
+        if (languageStarted <= 0 || !IsHandleCreated || IsDisposed || Disposing)
+            return;
+
+        if (_languageViewportStarted > 0)
+            UiLayoutTelemetry.RecordLanguageViewportSuperseded();
+        _languageViewportStarted = languageStarted;
+        _languageViewportQueued = System.Diagnostics.Stopwatch.GetTimestamp();
+        QueueNavigationViewportReflow();
+    }
 
     private void InitializeMainViewport()
     {
@@ -31,6 +100,35 @@ public sealed partial class MainForm
         FontChanged += (_, _) => QueueMainViewportReflow();
         Shown += (_, _) => QueueMainViewportReflow();
         FormClosed += (_, _) => _mainViewportIdleTimer.Dispose();
+        HandleDestroyed += (_, _) =>
+        {
+            // A queued callback belongs to the old native HWND, and may
+            // never execute after RTL/DPI/RDP handle recreation. Its late
+            // arrival must not clear or reflow a newly queued selected page.
+            unchecked { _navigationReflowHandleGeneration++; }
+            _navigationReflowPosted = false;
+            _navigationReflowLatestStarted = 0;
+            // Retain the last language stopwatch across RecreateHandle; the
+            // replacement HWND will get its own callback below. A stale
+            // callback's generation check must never record it as complete.
+            _mainViewportHandleRecreated = !IsDisposed && !Disposing;
+            if (!_mainViewportHandleRecreated)
+            {
+                _languageViewportStarted = 0;
+                _languageViewportQueued = 0;
+            }
+            if (_mainViewportHandleRecreated)
+                _mainViewportIdleTimer.Stop();
+        };
+        HandleCreated += (_, _) =>
+        {
+            if (!_mainViewportHandleRecreated || IsDisposed || Disposing)
+                return;
+            _mainViewportHandleRecreated = false;
+            // The new native window must repair its current selected page,
+            // even if no fresh SelectedIndexChanged event arrives.
+            QueueNavigationViewportReflow();
+        };
     }
 
     private void QueueMainViewportReflow()
@@ -46,45 +144,82 @@ public sealed partial class MainForm
     }
 
 
-    // Actual tab navigation is discrete, unlike high-frequency WM_SIZE bursts.
-    // Post exactly one pass after WinForms activates the selected page. Rapid
-    // navigation cancels stale posted callbacks rather than laying out tabs
-    // that are already hidden. This does not make LDAP/Graph calls.
+    // Tab navigation is discrete, unlike high-frequency WM_SIZE bursts.
+    // A rapid burst previously posted N BeginInvoke callbacks, N-1 of which
+    // checked their obsolete sequence and exited. Retain only one actual UI
+    // callback; it always uses the MOST RECENT selected tab and start time.
+    // No window, LDAP/Graph request or device state is reconstructed.
     private void QueueNavigationViewportReflow(long navigationStarted = 0)
     {
         if (!IsHandleCreated || IsDisposed || Disposing)
             return;
 
         _mainViewportIdleTimer.Stop();
-        var sequence = ++_navigationReflowSequence;
         var selectedIndex = _mainTabs.SelectedIndex;
+        // A nested-tab callback has no top-level navigation stopwatch.
+        // Preserve the latest top-level switch timing when nested events
+        // belong to that same still-pending selected main page. Do NOT
+        // preserve it across separate queued operations or main-page changes.
+        if (!_navigationReflowPosted ||
+            _navigationReflowLatestIndex != selectedIndex ||
+            navigationStarted > 0)
+            _navigationReflowLatestStarted = navigationStarted;
+        _navigationReflowLatestIndex = selectedIndex;
+        if (_navigationReflowPosted)
+        {
+            _navigationReflowCoalescedCount++;
+            UiTabNavigationTelemetry.RecordCoalescedReflow();
+            return;
+        }
+
+        _navigationReflowPosted = true;
         try
         {
+            var generation = _navigationReflowHandleGeneration;
             BeginInvoke((Action)(() =>
             {
+                if (generation != _navigationReflowHandleGeneration)
+                    return;
+                _navigationReflowPosted = false;
                 if (IsDisposed || Disposing || !_mainTabs.IsHandleCreated ||
-                    sequence != _navigationReflowSequence ||
-                    _mainTabs.SelectedIndex != selectedIndex)
+                    _mainTabs.SelectedIndex != _navigationReflowLatestIndex)
                     return;
 
-                if (navigationStarted > 0)
+                _navigationReflowDispatchCount++;
+                var selectedIndex = _navigationReflowLatestIndex;
+                var started = _navigationReflowLatestStarted;
+                var languageStarted = _languageViewportStarted;
+                var languageQueued = _languageViewportQueued;
+                if (started > 0)
                     UiTabNavigationTelemetry.RecordDispatch(
-                        selectedIndex, navigationStarted);
+                        selectedIndex, started);
+                if (languageStarted > 0 && languageQueued > 0)
+                    UiLayoutTelemetry.RecordLanguageViewportDispatch(languageQueued);
                 var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                // ReflowMainViewport() may skip an overlapping native layout.
+                // Only the successful geometry pass itself may mark language
+                // timing ready; a skipped callback leaves it for a later pass.
                 ReflowMainViewport();
-                if (navigationStarted > 0)
+                _navigationReflowLastDispatchedIndex = selectedIndex;
+                if (started > 0)
                 {
                     UiTabNavigationTelemetry.RecordLayout(
                         selectedIndex, viewportStarted);
-                    UiTabNavigationTelemetry.Record(
-                        selectedIndex, navigationStarted);
+                    UiTabNavigationTelemetry.Record(selectedIndex, started);
                 }
             }));
+            _navigationReflowPostCount++;
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or
+                                   ObjectDisposedException)
         {
-            // The handle can disappear between IsHandleCreated and BeginInvoke
-            // during shutdown or RDP teardown. A new Shown/resize will reflow.
+            _navigationReflowPosted = false;
+            // The message was never posted: an unrecorded stopwatch must
+            // not be attached to a later unrelated tab change.
+            _languageViewportStarted = 0;
+            _languageViewportQueued = 0;
+            // A destroyed HWND cannot process the callback; a later Shown
+            // or resize does the ordinary native viewport repair instead.
             System.Diagnostics.Debug.WriteLine(
                 "Navigation reflow was not scheduled: " + ex.GetType().Name);
         }
@@ -93,6 +228,43 @@ public sealed partial class MainForm
     private double EffectiveHomeDpiScale() =>
         Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
             Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+
+    // Recent metadata is optional. With no entries it must not reserve the
+    // right 38% of Connections or a permanent 154px-high empty grid. A short
+    // list gets its intrinsic rows; a longer one scrolls inside the 154px cap.
+    // This is UI-only: no AD/Graph lookup or recovery secret is requested.
+    private void MeasureHomeRecentQuickPanel()
+    {
+        var recent = _homeRecentQuickPanel;
+        if (recent is null || recent.IsDisposed ||
+            recent.RowStyles.Count < 2 || _homeRecentResults.IsDisposed)
+            return;
+
+        var count = _homeRecentResults.Rows.Count;
+        if (_lastRecentComputerLayoutCount != count)
+        {
+            recent.Visible = count > 0;
+            _lastRecentComputerLayoutCount = count;
+        }
+
+        var scale = (float)EffectiveHomeDpiScale();
+        var maximum = (int)Math.Ceiling(UiStyle.HomeRecentQuickListHeight * scale);
+        var minimum = (int)Math.Ceiling(64F * scale);
+        var preferred = count == 0 ? 0 :
+            (_homeRecentResults.ColumnHeadersVisible
+                ? _homeRecentResults.ColumnHeadersHeight : 0) +
+            _homeRecentResults.Rows.Cast<DataGridViewRow>()
+                .Take(15).Sum(row => row.Height) +
+            (int)Math.Ceiling(6F * scale);
+        var gridHeight = count == 0 ? 0 :
+            Math.Min(maximum, Math.Max(minimum, preferred));
+
+        var listRow = recent.RowStyles[1];
+        if (listRow.SizeType != SizeType.Absolute)
+            listRow.SizeType = SizeType.Absolute;
+        if (Math.Abs(listRow.Height - gridHeight) > 0.5F)
+            listRow.Height = gridHeight;
+    }
 
     private void ReflowConnectionsRecent()
     {
@@ -104,11 +276,15 @@ public sealed partial class MainForm
             layout.Parent is null)
             return;
 
+        MeasureHomeRecentQuickPanel();
+        var hasRecent = _homeRecentResults.Rows.Count > 0;
         var width = Math.Max(0,
             layout.Parent.ClientSize.Width - layout.Parent.Padding.Horizontal);
-        bool horizontal = width >= (int)Math.Ceiling(
-            UiStyle.HomeConnectionRecentPairMinimumWidth * EffectiveHomeDpiScale());
-        var key = horizontal ? "ConnectionsRecentWide" : "ConnectionsRecentStacked";
+        var horizontal = hasRecent &&
+            width >= (int)Math.Ceiling(
+                UiStyle.HomeConnectionRecentPairMinimumWidth * EffectiveHomeDpiScale());
+        var key = !hasRecent ? "ConnectionsOnly" :
+            horizontal ? "ConnectionsRecentWide" : "ConnectionsRecentStacked";
         if (_homeConnectionsRecentLayoutKey == key)
             return;
 
@@ -119,6 +295,8 @@ public sealed partial class MainForm
             layout.Controls.Clear();
             layout.ColumnStyles.Clear();
             layout.RowStyles.Clear();
+            connection.Margin = new Padding(
+                0, 0, horizontal ? UiStyle.SectionGap : 0, 0);
             if (horizontal)
             {
                 layout.ColumnCount = 2;
@@ -135,7 +313,10 @@ public sealed partial class MainForm
                 layout.RowCount = 2;
                 layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                 layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                // Keep the hidden Recent panel attached for restoration and
+                // localization, but never allocate a phantom AutoSize row.
+                layout.RowStyles.Add(new RowStyle(
+                    hasRecent ? SizeType.AutoSize : SizeType.Absolute, 0F));
                 layout.Controls.Add(connection, 0, 0);
                 layout.Controls.Add(recent, 0, 1);
             }
@@ -333,7 +514,18 @@ public sealed partial class MainForm
 
     internal void ReflowMainViewport()
     {
-        if (_mainViewportReflowRunning || IsDisposed || ClientSize.Width <= 0)
+        if (_mainViewportReflowRunning)
+        {
+            // A language switch needs a completed geometry pass. If an
+            // overlapping native layout skipped this attempt, retry once
+            // the 55-ms idle debounce is available rather than silently
+            // leaving its measurement pending forever.
+            if (_languageViewportStarted > 0 && IsHandleCreated &&
+                !IsDisposed && !Disposing)
+                QueueMainViewportReflow();
+            return;
+        }
+        if (IsDisposed || Disposing || ClientSize.Width <= 0)
             return;
 
         var viewportStarted = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -396,6 +588,19 @@ public sealed partial class MainForm
             // UiModernTheme.Refresh(shell) rebuilt every rounded HWND region and
             // invalidated all tab controls on each window resize. It belongs
             // only in the shared theme/DPI refresh path, NOT in WM_SIZE.
+
+            // A callback can be dispatched while native WinForms layout is
+            // busy; it must not claim a completed repaint if the method above
+            // returned early. Consuming the stopwatch only here also covers
+            // a real WM_SIZE/timer pass that beats the queued callback.
+            if (_languageViewportStarted > 0 && _languageViewportQueued > 0)
+            {
+                var languageStarted = _languageViewportStarted;
+                UiLayoutTelemetry.RecordLanguageViewportReflow(viewportStarted);
+                UiLayoutTelemetry.RecordLanguageViewportReady(languageStarted);
+                _languageViewportStarted = 0;
+                _languageViewportQueued = 0;
+            }
         }
         finally
         {

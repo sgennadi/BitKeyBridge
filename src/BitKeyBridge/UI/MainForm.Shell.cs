@@ -14,6 +14,9 @@ public sealed partial class MainForm
     private readonly List<ToolStripMenuItem> _languageChoices = [];
     private string _uiLanguageCode = "en";
     private bool _shellLanguageApplied;
+    // Prior *applied* direction survives updates to the selected language
+    // value and remains separate from user preferences and Win32 handle data.
+    private bool _lastAppliedShellRtl;
     private readonly UiDiagnosticPanel _appDiagnostics = new();
     private readonly ComboBox _recoverySource = new();
     private readonly Button _connectAdButton = new();
@@ -63,6 +66,7 @@ public sealed partial class MainForm
     private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
     private CancellationTokenSource? _homeSearchCancellation;
     private int _homeSearchGeneration;
+    private UiNipkgBrandBanner? _homeBrandBanner;
     private TabPage? _homeWorkspaceTab;
     private TabPage? _recoveryWorkspaceTab;
     private TabPage? _lapsWorkspaceTab;
@@ -81,7 +85,7 @@ public sealed partial class MainForm
         get
         {
             if (_layoutSelfTest)
-                return true;
+                return _administrationAllowedForLayoutSelfTest;
             try
             {
                 return new AuthorizationService(_config)
@@ -486,12 +490,13 @@ public sealed partial class MainForm
         var next = UiLanguageService.Normalize(code);
         if (string.Equals(next, _uiLanguageCode, StringComparison.Ordinal))
             return;
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
             UiLanguageService.SavePreferred(next);
             _uiLanguageCode = next;
             ApplyShellLanguage();
-            QueueNavigationViewportReflow();
+            QueueLanguageViewportReflow(started);
         }
         catch (Exception ex)
         {
@@ -505,6 +510,7 @@ public sealed partial class MainForm
     {
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var initialApply = !_shellLanguageApplied;
+        var previousRtl = _lastAppliedShellRtl;
         var rtl = UiLanguageService.IsRightToLeft(_uiLanguageCode);
         var direction = rtl ? RightToLeft.Yes : RightToLeft.No;
         // Mirroring the entire Form HWND can recreate native child controls
@@ -554,7 +560,10 @@ public sealed partial class MainForm
                 _adServer, _adDomain, _adUsername,
                 _cloudTenant, _cloudClient, _cloudThumbprint
             })
-                literal.RightToLeft = RightToLeft.No;
+            {
+                if (literal.RightToLeft != RightToLeft.No)
+                    literal.RightToLeft = RightToLeft.No;
+            }
 
             var keys = new[]
             {
@@ -594,18 +603,31 @@ public sealed partial class MainForm
                     _languageTopMenu.Text = caption;
             }
             foreach (var choice in _languageChoices)
-                choice.Checked = string.Equals(choice.Tag as string,
+            {
+                var selected = string.Equals(choice.Tag as string,
                     _uiLanguageCode, StringComparison.Ordinal);
+                if (choice.Checked != selected)
+                    choice.Checked = selected;
+            }
 
-            _homeSearchButton.Text =
-                UiLanguageService.Translate(_uiLanguageCode, "Search");
-            _homeSearchCancelButton.Text =
-                UiLanguageService.Translate(_uiLanguageCode, "Cancel");
-            _globalConnectionStatus.ToolTipText =
-                UiLanguageService.Translate(_uiLanguageCode, "ConnectionSettings");
+            // Avoid redundant native Text/Checked/property invalidation,
+            // including common EN -> RU switches that do not mirror tabs.
+            var searchCaption = UiLanguageService.Translate(_uiLanguageCode, "Search");
+            if (!string.Equals(_homeSearchButton.Text, searchCaption, StringComparison.Ordinal))
+                _homeSearchButton.Text = searchCaption;
+            var cancelCaption = UiLanguageService.Translate(_uiLanguageCode, "Cancel");
+            if (!string.Equals(_homeSearchCancelButton.Text, cancelCaption,
+                    StringComparison.Ordinal))
+                _homeSearchCancelButton.Text = cancelCaption;
+            var connectionTooltip = UiLanguageService.Translate(
+                _uiLanguageCode, "ConnectionSettings");
+            if (!string.Equals(_globalConnectionStatus.ToolTipText,
+                    connectionTooltip, StringComparison.Ordinal))
+                _globalConnectionStatus.ToolTipText = connectionTooltip;
             var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
+            _homeBrandBanner?.SetCaptionDirection(rtl);
             // The application-wide diagnostic banner lives outside
             // _mainTabs and is not part of the shell-caption observer.
             // Never clear its active report during a language change.
@@ -634,7 +656,9 @@ public sealed partial class MainForm
                 _appDiagnostics.BringToFront();
             UiLayoutTelemetry.RecordLanguageResume(resumeStarted);
             _shellLanguageApplied = true;
-            UiLayoutTelemetry.RecordLanguageSwitch(started, initialApply);
+            _lastAppliedShellRtl = rtl;
+            UiLayoutTelemetry.RecordLanguageSwitch(
+                started, initialApply, previousRtl, rtl);
         }
     }
 
@@ -642,8 +666,15 @@ public sealed partial class MainForm
     {
         if (!_layoutSelfTest)
             throw new InvalidOperationException("Language preview is restricted to UI tests.");
-        _uiLanguageCode = UiLanguageService.Normalize(code);
+        var next = UiLanguageService.Normalize(code);
+        var changed = !string.Equals(next, _uiLanguageCode, StringComparison.Ordinal);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        _uiLanguageCode = next;
         ApplyShellLanguage();
+        // Test the same deferred path as a user click without changing the
+        // saved preference or scheduling work for hidden/offline fixtures.
+        if (changed && Visible && IsHandleCreated)
+            QueueLanguageViewportReflow(started);
     }
 
     private TabPage BuildHomeWorkspaceTab()
@@ -690,56 +721,25 @@ public sealed partial class MainForm
         tab.Controls.Add(
             root);
 
-        root.Controls.Add(
-            new Label
-            {
-                Text =
-                    "BitKeyBridge",
-                Font =
-                    UiStyle.CreatePageTitleFont(),
-                AutoSize =
-                    true,
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.ControlGap)
-            },
-            0,
-            0);
-
-        root.Controls.Add(
-            new Label
-            {
-                Text =
-                    "Connect once, search once, then view BitLocker and LAPS side by side. " +
-                    "Search reads metadata only — secrets are still read on demand.",
-                AutoSize =
-                    true,
-                MaximumSize =
-                    new Size(
-                        1100,
-                        0),
-                Margin =
-                    new Padding(
-                        0,
-                        0,
-                        0,
-                        UiStyle.SectionGap)
-            },
-            0,
-            1);
+        // Replace the two plain Start heading rows with one compact
+        // NI Creator-style gradient banner. Preserve the exact localized
+        // helpdesk description as a native Label, never bitmap text.
+        // Row span avoids changing search/recovery row indices and controls.
+        _homeBrandBanner = new UiNipkgBrandBanner();
+        root.Controls.Add(_homeBrandBanner, 0, 0);
+        root.SetRowSpan(_homeBrandBanner, 2);
 
         var connectionGroup =
             new GroupBox
             {
+                Name = "HomeConnectionsGroup",
                 Text =
                     "Connections",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding =
                     new Padding(14),
                 Margin =
@@ -751,12 +751,14 @@ public sealed partial class MainForm
             };
 
         var connection =
-            new TableLayoutPanel
+            new UiLiveWidthConnectionTable
             {
+                Name = "HomeAdConnectionLayout",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount =
                     1,
                 RowCount =
@@ -781,7 +783,7 @@ public sealed partial class MainForm
             "HomeConnectionStatus";
         _homeConnectionStatus.AccessibleName =
             "Start page Active Directory connection status";
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _homeConnectionStatus);
         _homeConnectionStatus.MaximumSize =
             new Size(
@@ -824,6 +826,7 @@ public sealed partial class MainForm
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents =
                     true,
                 FlowDirection =
@@ -892,6 +895,7 @@ public sealed partial class MainForm
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents =
                     true,
                 FlowDirection =
@@ -988,7 +992,7 @@ public sealed partial class MainForm
         _startDirectHint = directConnectionHint;
         connection.Controls.Add(directConnectionHint, 0, 5);
 
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _startSetupStatus);
         _startSetupStatus.Name =
             "StartSetupStatus";
@@ -1041,9 +1045,16 @@ public sealed partial class MainForm
         var recentPanel = new TableLayoutPanel
         {
             Name = "HomeRecentQuickPanel",
-            Dock = DockStyle.Fill,
+            // In an AutoSize row, Dock.Fill feeds the expanded row height
+            // back into this panel's preferred size. After hiding optional
+            // connection controls that keeps Connections artificially tall.
+            // Dock.Top keeps full cell width but measures intrinsic height.
+            Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            // No saved recent computers yet: keep Connections compact.
+            // LoadRecentComputers reveals this panel only for real entries.
+            Visible = false,
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(UiStyle.ControlGap, 0, 0, 0)
@@ -1066,7 +1077,9 @@ public sealed partial class MainForm
         _homeRecentResults.Name = "HomeRecentComputers";
         _homeRecentResults.AccessibleName = "Recent computers without stored secrets";
         _homeRecentResults.Dock = DockStyle.Fill;
-        _homeRecentResults.MinimumSize = new Size(0, 100);
+        // Let a one-record history shrink below 100px; the capped absolute
+        // table row provides the required grid height at every DPI.
+        _homeRecentResults.MinimumSize = Size.Empty;
         UiStyle.ConfigureDataGridView(_homeRecentResults);
         _homeRecentResults.Columns.AddRange([
             UiStyle.CreateSortableTextColumn("Computer", "Computer", 170),
@@ -1089,6 +1102,10 @@ public sealed partial class MainForm
         _homeConnectionsRecentLayout = connectionSplit;
         _homeAdConnectionLayout = connection;
         _homeRecentQuickPanel = recentPanel;
+        // The source chooser was constructed before _homeAdConnectionLayout
+        // existed. Apply zero-height optional rows once all hosts are known.
+        SyncStartOptionalConnectionRows(
+            StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource));
         connectionGroup.Controls.Add(connectionSplit);
         root.Controls.Add(connectionGroup, 0, 2);
 
@@ -1101,10 +1118,12 @@ public sealed partial class MainForm
         var search =
             new TableLayoutPanel
             {
+                Name = "HomeSearchControls",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount =
                     4,
                 RowCount =
@@ -1215,7 +1234,7 @@ public sealed partial class MainForm
             _homeSearchProgress,
             4);
 
-        UiStyle.ConfigureStatusLabel(
+        UiStyle.ConfigureWrappingStatusLabel(
             _homeSearchStatus);
         _homeSearchStatus.Name =
             "HomeUnifiedSearchStatus";
@@ -1322,6 +1341,7 @@ public sealed partial class MainForm
             DockStyle.Top;
         _homeSelectionPanel.AutoSize =
             true;
+        _homeSelectionPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         _homeSelectionPanel.ColumnCount =
             1;
         _homeSelectionPanel.RowCount =
@@ -1366,10 +1386,12 @@ public sealed partial class MainForm
         var secretLifetime =
             new FlowLayoutPanel
             {
+                Name = "HomeSecretLifetimeActions",
                 Dock =
                     DockStyle.Top,
                 AutoSize =
                     true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents =
                     true,
                 FlowDirection =
@@ -1384,6 +1406,10 @@ public sealed partial class MainForm
 
         UiStyle.ConfigureStatusLabel(
             _secretLifetimeStatus);
+        // FlowLayoutPanel owns the size of this action strip. The status
+        // label must report its intrinsic height instead of Dock.Fill,
+        // which can feed an old provisional row height back into AutoSize.
+        _secretLifetimeStatus.Dock = DockStyle.None;
         _secretLifetimeStatus.Name =
             "SecretLifetimeStatus";
         _secretLifetimeStatus.AccessibleName =

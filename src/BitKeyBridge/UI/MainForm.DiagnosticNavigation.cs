@@ -12,7 +12,8 @@ public sealed partial class MainForm
         // aggregates only (no names, keys, account IDs or Graph/AD content).
         ShowAppMessage("UI performance (current session)",
             UiLayoutTelemetry.Report() + Environment.NewLine +
-            Environment.NewLine + UiTabNavigationTelemetry.Report());
+            Environment.NewLine + UiTabNavigationTelemetry.Report() +
+            Environment.NewLine + Environment.NewLine + StartViewportGeometryReport());
         if (copyImmediately)
             _appDiagnostics.CopyCurrentDiagnostics();
     }

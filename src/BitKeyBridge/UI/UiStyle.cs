@@ -45,28 +45,55 @@ public static class UiStyle
     public const int ModernTabHorizontalPadding = 17;
     public const int ModernTabVerticalPadding = 7;
 
+    // The NI Package Creator blue/green language, adapted for readable
+    // BitLocker/LAPS helpdesk screens. Keep color tokens centralized so
+    // Hebrew/Russian text, High Contrast and recovery actions share styling.
+    public static Color BrandNavy =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(11, 46, 90);
+    public static Color BrandBlue =>
+        SystemInformation.HighContrast ? SystemColors.HotTrack : Color.FromArgb(14, 106, 230);
+    public static Color BrandBlueDark =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(12, 70, 180);
+    public static Color BrandGreen =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(16, 170, 93);
+    public static Color BrandGreenDark =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(10, 134, 76);
+    public static Color BrandSoftBlue =>
+        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(226, 239, 255);
+    public static Color BrandSoftGreen =>
+        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(225, 248, 234);
+    public static Color BrandStroke =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(211, 225, 243);
+
     public static Color ModernCanvas =>
-        SystemInformation.HighContrast ? SystemColors.Control : Color.FromArgb(247, 248, 251);
-    public static Color ModernSurface => SystemColors.Window;
-    public static Color ModernForeground => SystemColors.WindowText;
-    public static Color ModernAccent =>
-        SystemInformation.HighContrast ? SystemColors.HotTrack : Color.FromArgb(27, 91, 164);
+        SystemInformation.HighContrast ? SystemColors.Control : Color.FromArgb(244, 247, 253);
+    public static Color ModernSurface =>
+        SystemInformation.HighContrast ? SystemColors.Window : Color.White;
+    public static Color ModernForeground =>
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(20, 39, 68);
+    public static Color ModernAccent => BrandBlue;
     public static Color ModernAccentHover =>
-        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(21, 78, 145);
-    public static Color ModernAccentPressed =>
-        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(18, 64, 122);
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(13, 91, 207);
+    public static Color ModernAccentPressed => BrandBlueDark;
+    // NI's vivid #10AA5D remains the brand highlight; a slightly darker
+    // fill (#0A864C) is necessary for >=4.5:1 white caption contrast.
+    public static Color ModernPositiveAccent => BrandGreenDark;
+    public static Color ModernPositiveAccentHover =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(8, 115, 68);
+    public static Color ModernPositiveAccentPressed =>
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(7, 96, 57);
     public static Color ModernMuted =>
-        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(100, 106, 113);
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(94, 112, 142);
+    // A stronger blue-gray edge than NI's light card stroke prevents the
+    // one-pixel AA outline from disappearing on light Windows monitors.
     public static Color ModernBorder =>
-        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(224, 228, 233);
-    public static Color ModernHeader =>
-        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(239, 242, 247);
+        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(193, 210, 232);
+    public static Color ModernHeader => BrandSoftBlue;
     public static Color ModernAlternateRow =>
-        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(251, 252, 254);
-    public static Color ModernHover =>
-        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(232, 238, 247);
+        SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(250, 252, 255);
+    public static Color ModernHover => BrandSoftBlue;
     public static Color ModernPressed =>
-        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(218, 229, 242);
+        SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(200, 222, 250);
 
     // Shared Windows 11-inspired helpdesk card design at 96 DPI.
     public const int RecoveryCardCornerRadius = 20;
@@ -79,12 +106,10 @@ public static class UiStyle
     public const int RecoveryCardFieldSpacing = 10;
 
     public static Color RecoveryCardBackground => SystemColors.Window;
-    public static Color RecoveryCardBorder => Color.FromArgb(226, 228, 231);
-    public static Color RecoveryCardForeground => SystemColors.WindowText;
-    public static Color RecoveryCardMutedText =>
-        SystemInformation.HighContrast ? SystemColors.WindowText : Color.FromArgb(103, 107, 113);
-    public static Color RecoveryActionBackground =>
-        SystemInformation.HighContrast ? SystemColors.Control : Color.FromArgb(241, 243, 245);
+    public static Color RecoveryCardBorder => ModernBorder;
+    public static Color RecoveryCardForeground => ModernForeground;
+    public static Color RecoveryCardMutedText => ModernMuted;
+    public static Color RecoveryActionBackground => BrandSoftBlue;
 
     public static (Color Background, Color Foreground) ResolveRecoveryBadgeColors(
         UiStatusKind kind)
@@ -93,11 +118,11 @@ public static class UiStyle
             return (SystemColors.Window, SystemColors.WindowText);
         return kind switch
         {
-            UiStatusKind.Success => (Color.FromArgb(220, 247, 234), Color.FromArgb(21, 127, 61)),
+            UiStatusKind.Success => (BrandSoftGreen, BrandGreenDark),
             UiStatusKind.Warning => (Color.FromArgb(255, 243, 216), Color.FromArgb(152, 88, 14)),
             UiStatusKind.Error => (Color.FromArgb(255, 225, 226), Color.FromArgb(167, 43, 43)),
-            UiStatusKind.Busy => (Color.FromArgb(228, 238, 253), Color.FromArgb(43, 87, 170)),
-            _ => (Color.FromArgb(237, 238, 240), SystemColors.ControlText)
+            UiStatusKind.Busy => (BrandSoftBlue, BrandBlueDark),
+            _ => (BrandSoftBlue, BrandNavy)
         };
     }
 
@@ -112,9 +137,9 @@ public static class UiStyle
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
         button.FlatAppearance.MouseOverBackColor =
-            SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(229, 232, 236);
+            SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(209, 230, 255);
         button.FlatAppearance.MouseDownBackColor =
-            SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(218, 223, 228);
+            SystemInformation.HighContrast ? SystemColors.Highlight : Color.FromArgb(185, 213, 247);
         button.BackColor = RecoveryActionBackground;
         button.ForeColor = RecoveryCardForeground;
         button.UseVisualStyleBackColor = false;
@@ -130,21 +155,13 @@ public static class UiStyle
         oldImage?.Dispose();
         button.Disposed += (_, _) => image.Dispose();
 
-        void RefreshCorners()
-        {
-            if (button.IsDisposed || button.Width < 2 || button.Height < 2)
-                return;
-            using var path = UiRecoveryGraphics.RoundRect(
-                new RectangleF(0, 0, button.Width, button.Height),
-                12f * button.DeviceDpi / BaselineDpi);
-            var old = button.Region;
-            button.Region = new Region(path);
-            old?.Dispose();
-        }
-
-        button.SizeChanged += (_, _) => RefreshCorners();
-        button.DpiChangedAfterParent += (_, _) => RefreshCorners();
-        RefreshCorners();
+        // Native Region clips the rounded edge to whole pixels, leaving
+        // jagged arcs or missing border segments at 125%-200% scaling.
+        // The shared AA chrome preserves Button text, glyphs, focus and
+        // normal mouse/keyboard behavior without a binary Region mask.
+        button.FlatAppearance.BorderSize = 0;
+        UiRecoveryGraphics.ConfigureRoundedButton(
+            button, logicalRadius: 12f, borderColor: Color.Empty);
     }
 
     public static void ConfigureRecoveryFieldCaption(Label caption)
@@ -403,26 +420,13 @@ public static class UiStyle
 
         return kind switch
         {
-            UiStatusKind.Busy =>
-                (
-                    Color.LemonChiffon,
-                    Color.DarkGoldenrod),
-            UiStatusKind.Success =>
-                (
-                    Color.Honeydew,
-                    Color.DarkGreen),
+            UiStatusKind.Busy => (BrandSoftBlue, BrandBlueDark),
+            UiStatusKind.Success => (BrandSoftGreen, BrandGreenDark),
             UiStatusKind.Warning =>
-                (
-                    Color.LemonChiffon,
-                    Color.DarkOrange),
+                (Color.FromArgb(255, 243, 216), Color.FromArgb(152, 88, 14)),
             UiStatusKind.Error =>
-                (
-                    Color.MistyRose,
-                    Color.DarkRed),
-            _ =>
-                (
-                    SystemColors.Window,
-                    SystemColors.ControlText)
+                (Color.FromArgb(255, 225, 226), Color.FromArgb(167, 43, 43)),
+            _ => (BrandSoftBlue, BrandNavy)
         };
     }
 
