@@ -97,6 +97,13 @@ public sealed partial class MainForm
                     rowWidth - flow.Padding.Horizontal -
                     label.Margin.Horizontal);
 
+                // The label may have been restricted by DPI measurement
+                // when this flow was only its old provisional width.
+                // Restore its design maximum against the LIVE selection
+                // cell before measuring the full caption. This does not
+                // scan the rest of the form or touch status/secret text.
+                RefreshResponsiveLabelWidth(label);
+
                 // Preserve the complete unwrapped caption whenever it fits.
                 // The flow already wraps neighbouring action buttons when
                 // a narrow/DPI-scaled viewport cannot fit them on one row.
