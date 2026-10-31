@@ -78,11 +78,19 @@ public sealed class UiStatusLabel : Label
                 MaximumSize.Width);
         }
 
+        // GDI TextRenderer.MeasureText can report a preferred width a
+        // couple of pixels smaller than the exact DrawText line width,
+        // especially with a wrapped status inside an AutoSize flow.
+        // Reserve a DPI-scaled paint-overhang allowance *both* when choosing
+        // wrap height and when returning preferred width. Without this,
+        // "retained." wraps into a hidden second line at 96 DPI.
+        var textPaintAllowance = ScaleLogical(6);
         var availableTextWidth =
             Math.Max(
                 1,
                 availableWidth -
-                horizontalChrome);
+                horizontalChrome -
+                textPaintAllowance);
 
         // Keep the default glyph-overhang padding used by OnPaint.
         // Measuring with NoPadding but drawing with padding can wrap the
@@ -100,7 +108,8 @@ public sealed class UiStatusLabel : Label
 
         var preferredWidth =
             horizontalChrome +
-            measured.Width;
+            measured.Width +
+            textPaintAllowance;
 
         preferredWidth = Math.Min(
             preferredWidth,
