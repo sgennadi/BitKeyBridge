@@ -3428,8 +3428,17 @@ public static class UiLayoutSelfTest
             Math.Max(status.Image?.Height ?? 0, wrappedHeight);
         var shouldFitOneLine = requiredOneLine <= available;
 
+        // At the exact painted width, GDI's constrained MeasureText can
+        // report a height up to two logical pixels above the visible glyph
+        // line (default overhang padding). The latest native PNG confirms
+        // the complete one-line caption. Allow only that DPI-scaled rounding
+        // difference; an actual hidden wrapped line still adds ~font height
+        // and must fail the assertion.
+        var heightRoundingTolerance = Math.Max(2,
+            (int)Math.Ceiling(2d * status.DeviceDpi /
+                UiStyle.BaselineDpi));
         if (status.ClientSize.Width <= 0 ||
-            status.ClientSize.Height + 1 < requiredHeight ||
+            status.ClientSize.Height + heightRoundingTolerance < requiredHeight ||
             (shouldFitOneLine &&
              status.ClientSize.Width + 2 < requiredOneLine))
         {
