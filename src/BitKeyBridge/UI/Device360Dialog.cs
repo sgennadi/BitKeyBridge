@@ -141,13 +141,62 @@ internal sealed class Device360Dialog : DpiAwareForm
         };
         for (var i = 0; i < 3; i++)
             sourceStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 3F));
-        sourceStatus.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        AddSource(sourceStatus, "AD", operational.Ad, "Device360SourceAd",
-            rtl ? 2 : 0);
-        AddSource(sourceStatus, "Entra", operational.Entra, "Device360SourceEntra", 1);
-        AddSource(sourceStatus, "Intune", operational.Intune, "Device360SourceIntune",
-            rtl ? 0 : 2);
+        // Status text can wrap to several lines in RU/HE and at 150-200% DPI.
+        // A hard-coded 92px row silently cut off the longer source states.
+        sourceStatus.RowStyles.Add(new RowStyle(SizeType.Absolute,
+            UiStyle.ScaleLogicalPixels(92, DeviceDpi)));
+        var sourceLabels = new[]
+        {
+            AddSource(sourceStatus, "AD", operational.Ad, "Device360SourceAd",
+                rtl ? 2 : 0),
+            AddSource(sourceStatus, "Entra", operational.Entra,
+                "Device360SourceEntra", 1),
+            AddSource(sourceStatus, "Intune", operational.Intune,
+                "Device360SourceIntune", rtl ? 0 : 2)
+        };
         content.Controls.Add(sourceStatus, 0, 0);
+
+        var fittingSourceTiles = false;
+        void FitSourceTileText()
+        {
+            if (fittingSourceTiles || IsDisposed || Disposing ||
+                sourceStatus.IsDisposed || sourceStatus.ClientSize.Width < 90)
+                return;
+
+            // Use the allocated width of each physical tile, not the
+            // unconstrained text preferred width (which can enlarge the
+            // scroll canvas and hide the third source).
+            var tileWidth = sourceStatus.ClientSize.Width / 3;
+            var textWidth = Math.Max(1, tileWidth -
+                UiStyle.ScaleLogicalPixels(28 + UiStyle.ControlGap, DeviceDpi));
+            var requiredTextHeight = 0;
+            foreach (var label in sourceLabels)
+            {
+                var measured = TextRenderer.MeasureText(label.Text, label.Font,
+                    new Size(textWidth, 10000),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                requiredTextHeight = Math.Max(requiredTextHeight, measured.Height);
+            }
+
+            var requiredRowHeight = Math.Max(
+                UiStyle.ScaleLogicalPixels(92, DeviceDpi),
+                requiredTextHeight + UiStyle.ScaleLogicalPixels(20, DeviceDpi));
+            if (Math.Abs(sourceStatus.RowStyles[0].Height - requiredRowHeight) < 1)
+                return;
+            fittingSourceTiles = true;
+            try
+            {
+                sourceStatus.RowStyles[0].Height = requiredRowHeight;
+                sourceStatus.PerformLayout();
+            }
+            finally
+            {
+                fittingSourceTiles = false;
+            }
+        }
+        sourceStatus.SizeChanged += (_, _) => FitSourceTileText();
+        Shown += (_, _) => FitSourceTileText();
+        DpiChanged += (_, _) => FitSourceTileText();
 
         if (!snapshot.IdentityVerified || snapshot.IdentityAmbiguous)
         {
@@ -327,7 +376,7 @@ internal sealed class Device360Dialog : DpiAwareForm
                 System.Globalization.CultureInfo.InvariantCulture) ??
             Tr("Device360NotVerified");
 
-        void AddSource(TableLayoutPanel table, string source,
+        Label AddSource(TableLayoutPanel table, string source,
             Device360SourceEvidence evidence, string name, int column)
         {
             var stateKey = evidence switch
@@ -358,6 +407,7 @@ internal sealed class Device360Dialog : DpiAwareForm
             };
             card.Controls.Add(statusLabel);
             table.Controls.Add(card, column, 0);
+            return statusLabel;
         }
 
         void AddFooterAction(Button button)
