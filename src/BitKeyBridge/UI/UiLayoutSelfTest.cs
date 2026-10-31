@@ -1531,6 +1531,78 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // No disk history or directory session: the UI test uses synthetic rows
+    // to verify 0 -> 1 -> 15 -> 0 recent devices and stacked/wide transitions.
+    private static void VerifyAdaptiveRecentHistory(
+        MainForm form, List<string> failures)
+    {
+        if (FindByName(form, "HomeRecentComputers") is not DataGridView grid ||
+            FindByName(form, "HomeRecentQuickPanel") is not TableLayoutPanel recent ||
+            FindByName(form, "HomeConnectionsAndRecent") is not TableLayoutPanel split)
+        {
+            failures.Add("Adaptive Recent history fixture is missing from Start.");
+            return;
+        }
+
+        var originalSize = form.ClientSize;
+        try
+        {
+            grid.Rows.Clear();
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var noHistory = form.CaptureStartViewportGeometry();
+            if (recent.Visible || split.ColumnCount != 1 ||
+                split.RowStyles.Count != 2 ||
+                split.RowStyles[1].SizeType != SizeType.Absolute ||
+                split.RowStyles[1].Height != 0F)
+                failures.Add("Empty Recent history still reserves a connection column or row.");
+
+            grid.Rows.Add("UI-TEST-RECENT-01", "Search", DateTime.UtcNow);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var shortHeight = recent.RowStyles[1].Height;
+            var scale = Math.Max(form.DeviceDpi / (double)UiStyle.BaselineDpi,
+                form.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+            var maxHeight = UiStyle.HomeRecentQuickListHeight * scale;
+            if (!recent.Visible || split.ColumnCount != 1 ||
+                shortHeight < 45 * scale || shortHeight >= maxHeight - 4)
+                failures.Add("One Recent computer did not produce a compact, stacked list.");
+
+            for (var index = 2; index <= 15; index++)
+                grid.Rows.Add("UI-TEST-RECENT-" + index.ToString("00"),
+                    "Search", DateTime.UtcNow);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var longHeight = recent.RowStyles[1].Height;
+            if (longHeight <= shortHeight ||
+                longHeight > maxHeight + 2)
+                failures.Add("Recent history did not expand and cap its grid height.");
+
+            form.ClientSize = new Size(1600, 900);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            if (split.ColumnCount != 2 || !recent.Visible)
+                failures.Add("Populated Recent history must occupy the right wide-screen column.");
+
+            grid.Rows.Clear();
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var cleared = form.CaptureStartViewportGeometry();
+            if (split.ColumnCount != 1 || recent.Visible ||
+                (noHistory is { } before && cleared is { } after &&
+                 after.ConnectionHeight > before.ConnectionHeight + 12 &&
+                 originalSize.Width == form.ClientSize.Width))
+                failures.Add("Cleared Recent history retained a visible panel or empty column.");
+        }
+        finally
+        {
+            grid.Rows.Clear();
+            form.ClientSize = originalSize;
+            form.ReflowMainViewport();
+            Application.DoEvents();
+        }
+    }
+
     /// <summary>
     /// Regression for a visually missing copy button: the old check only
     /// looked up button names, while Hebrew WinForms AutoSize/RTL could
@@ -1609,6 +1681,8 @@ public static class UiLayoutSelfTest
                         form.StartViewportGeometryReport());
                 }
             }
+
+            VerifyAdaptiveRecentHistory(form, failures);
 
             // Reproduce the reported 1920x1080 / 100% desktop with an
             // approximately 1600x900 application client area. WinForms HWNDs
