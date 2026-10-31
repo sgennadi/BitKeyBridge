@@ -105,10 +105,13 @@ public class DpiAwareForm : Form
     {
         base.OnLoad(e);
 
-        // Reuse the per-user EN/RU/HE preference for every modal dialog.
-        // Perform this once before DPI/layout measurement. The main shell
-        // and explicit-language recovery workflow have their own localizer.
-        if (this is not MainForm && this is not RecoveryWorkflowDialog)
+        // Reuse per-user EN/RU/HE for ordinary modal dialogs. Explicitly
+        // localized RecoveryWorkflow/Device360 windows supply their language
+        // from the current MainForm instead; applying the saved (possibly EN)
+        // preference here silently resets their Hebrew RightToLeftLayout.
+        if (this is not MainForm &&
+            this is not RecoveryWorkflowDialog &&
+            this is not Device360Dialog)
             UiDialogLocalization.Apply(this);
 
         // A scrollbar is preferable to clipped controls on high DPI, large-text
