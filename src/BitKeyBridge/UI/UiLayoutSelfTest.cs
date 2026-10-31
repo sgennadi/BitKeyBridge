@@ -3092,14 +3092,23 @@ public static class UiLayoutSelfTest
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
             var actualWidth = connectionLayout.Parent?.ClientSize.Width ?? 0;
             actualWidth -= connectionLayout.Parent?.Padding.Horizontal ?? 0;
-            var pair = actualWidth >= (int)Math.Ceiling(
-                UiStyle.HomeConnectionRecentPairMinimumWidth * scale);
-            if (pair && connectionLayout.ColumnCount != 2 ||
-                !pair && connectionLayout.ColumnCount != 1)
+            var hasRecentEntries = recent.Rows.Count > 0;
+            var pair = hasRecentEntries &&
+                actualWidth >= (int)Math.Ceiling(
+                    UiStyle.HomeConnectionRecentPairMinimumWidth * scale);
+            if (connectionLayout.ColumnCount != (pair ? 2 : 1) ||
+                connectionLayout.RowCount != (pair ? 1 : 2))
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: Recent computers must use unused Connections space on wide screens and stack on narrow/high-DPI screens.");
+                    $"{formName}/{scenario.Name}: Recent computers must be absent from empty space, appear beside Connections on wide screens, and stack on narrow/high-DPI screens.");
             }
+            if (!hasRecentEntries &&
+                (quickRecent.Visible ||
+                 connectionLayout.RowStyles.Count < 2 ||
+                 connectionLayout.RowStyles[1].SizeType != SizeType.Absolute ||
+                 connectionLayout.RowStyles[1].Height != 0F))
+                failures.Add(
+                    $"{formName}/{scenario.Name}: an empty Recent history must consume zero Start rows.");
         }
 
         if (root.RowCount != 6 ||
