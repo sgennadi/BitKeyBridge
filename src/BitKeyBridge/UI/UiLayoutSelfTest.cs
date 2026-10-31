@@ -1458,6 +1458,79 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // The generic language regression constructs hidden controls and cannot
+    // prove that their translated captions fit the native Start viewport.
+    // Run the real 1600x900 selected-device fixture in each UI language;
+    // no AD/Graph calls, personal history, clipboard or secrets are used.
+    private static void VerifyNativeLocalizedSelectedStart(
+        MainForm form, DataGridView results, List<string> failures)
+    {
+        var selected = results.CurrentRow?.Tag;
+        if (selected is null)
+        {
+            failures.Add("Localized native Start lost its synthetic selection.");
+            return;
+        }
+
+        try
+        {
+            foreach (var language in new[] { "ru", "he", "ru", "en" })
+            {
+                form.PreviewShellLanguageForLayoutTest(language);
+                Application.DoEvents();
+                form.ReflowMainViewport();
+                form.PerformLayout();
+                Application.DoEvents();
+
+                var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
+                if (tabs is null || tabs.SelectedIndex != 0 ||
+                    tabs.TabPages[0].Text !=
+                        UiLanguageService.Translate(language, "Start") ||
+                    tabs.RightToLeftLayout != (language == "he"))
+                {
+                    failures.Add("Native Start language/RTL navigation mismatch: " +
+                        language + ".");
+                }
+
+                // Test object identity, not device data or recovery material.
+                if (!ReferenceEquals(results.CurrentRow?.Tag, selected) ||
+                    results.SelectedRows.Count != 1)
+                {
+                    failures.Add("Native Start language change lost selection: " +
+                        language + ".");
+                }
+
+                // The catalog auditor examines only registered fixed captions,
+                // including menus and column headers, never live identity data.
+                var captions = form.PreviewFixedCaptionAuditForUiSelfTest();
+                if (captions.Stale != 0)
+                {
+                    failures.Add("Native Start has stale fixed translations: " +
+                        language + " (count=" + captions.Stale + ").");
+                }
+
+                if (language is "ru" or "he")
+                {
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    VerifySelectedHomeStatusBounds(form, "NativeLocalizedStart1080p",
+                        new Scenario(language + "-Selected1600x900",
+                            new Size(1600, 900), 1F), failures);
+                    SaveSyntheticStartSnapshotForCi(
+                        form, "selected-" + language, failures);
+                }
+            }
+        }
+        finally
+        {
+            // Never leave the test shell in another language; the ordinary
+            // navigation and HWND recreation tests expect English here.
+            form.PreviewShellLanguageForLayoutTest("en");
+            Application.DoEvents();
+            form.ReflowMainViewport();
+            form.PerformLayout();
+        }
+    }
+
     // Explicitly opted-in CI screenshots are generated only from the
     // disconnected layout-self-test fixture, which contains one synthetic
     // UI-TEST-PC row but never retrieves recovery keys, passwords or tokens.
@@ -1762,6 +1835,11 @@ public static class UiLayoutSelfTest
                             Math.Min(120, selectedWideStart.Value.CardsHeight / 2))
                         failures.Add("Standard 1080p selected computer pushes recovery cards below the visible viewport. " +
                             form.StartViewportGeometryReport());
+                    // Exercise the ACTUAL shown selected-device Start window
+                    // through Russian and Hebrew before restoring English.
+                    // Keep the selected metadata object unchanged and capture
+                    // separate synthetic PNGs for each language.
+                    VerifyNativeLocalizedSelectedStart(form, results, failures);
                     results.Rows.Clear();
                     form.ReflowMainViewport();
                 }
