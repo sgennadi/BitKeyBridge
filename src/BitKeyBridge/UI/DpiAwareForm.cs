@@ -409,7 +409,7 @@ public class DpiAwareForm : Form
         }
     }
 
-    private bool RefreshResponsiveLabelWidth(
+    protected bool RefreshResponsiveLabelWidth(
         Label label)
     {
         if (!_labelMaximumSizes.TryGetValue(
