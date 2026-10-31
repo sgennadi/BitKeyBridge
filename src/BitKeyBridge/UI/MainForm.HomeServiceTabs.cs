@@ -204,45 +204,59 @@ public sealed partial class MainForm
         statusArea.Controls.Add(status);
         layout.Controls.Add(statusArea, 0, 1);
 
-        var detailLabel = new Label { Text = detailCaption };
-        UiStyle.ConfigureRecoveryFieldCaption(detailLabel);
-        layout.Controls.Add(detailLabel, 0, 2);
-
-        UiStyle.ConfigureRecoveryFieldValue(detailValue);
-        detailValue.Text = "Not loaded";
-        layout.Controls.Add(detailValue, 0, 3);
-
-        var secretLabel = new Label { Text = secretCaption };
-        UiStyle.ConfigureRecoveryFieldCaption(secretLabel);
-        layout.Controls.Add(secretLabel, 0, 4);
-
-        var masked = new Label { Text = "••••••••••••", AccessibleName = secretCaption + " hidden" };
-        UiStyle.ConfigureRecoveryFieldValue(masked);
-        masked.Font = UiStyle.CreateEmphasisFont(15F);
-        masked.Margin = new Padding(0, 0, 0, UiStyle.SectionGap);
-        layout.Controls.Add(masked, 0, 5);
-
+        // An otherwise valid 1080p Start layout can reveal only the first
+        // 240px of a 325px recovery pane. Put the primary actions directly
+        // after the title/status, before the scrollable detail/history area.
+        // Use one compact row with equal flexible columns rather than two
+        // stacked 46px buttons. Their original authorization and click
+        // handlers are preserved; no recovery data is fetched by layout.
         var buttonStack = new TableLayoutPanel
         {
             Name = title + "RecoveryActions",
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 1,
-            RowCount = actions.Length,
-            Margin = Padding.Empty
+            ColumnCount = actions.Length,
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
         };
-        buttonStack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        buttonStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         for (var i = 0; i < actions.Length; i++)
         {
-            buttonStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            buttonStack.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100F / actions.Length));
             var (button, buttonGlyph, caption) = actions[i];
             button.Text = caption;
-            UiStyle.ConfigureRecoveryActionButton(button, buttonGlyph, i == actions.Length - 1);
+            UiStyle.ConfigureRecoveryActionButton(
+                button, buttonGlyph, i == actions.Length - 1);
+            button.Margin = new Padding(
+                0, 0, i == actions.Length - 1 ? 0 : UiStyle.ControlGap, 0);
             button.Dock = DockStyle.Fill;
-            buttonStack.Controls.Add(button, 0, i);
+            buttonStack.Controls.Add(button, i, 0);
         }
-        layout.Controls.Add(buttonStack, 0, 6);
+        layout.Controls.Add(buttonStack, 0, 2);
+
+        var detailLabel = new Label { Text = detailCaption };
+        UiStyle.ConfigureRecoveryFieldCaption(detailLabel);
+        layout.Controls.Add(detailLabel, 0, 3);
+
+        UiStyle.ConfigureRecoveryFieldValue(detailValue);
+        detailValue.Text = "Not loaded";
+        layout.Controls.Add(detailValue, 0, 4);
+
+        var secretLabel = new Label { Text = secretCaption };
+        UiStyle.ConfigureRecoveryFieldCaption(secretLabel);
+        layout.Controls.Add(secretLabel, 0, 5);
+
+        var masked = new Label
+        {
+            Text = "••••••••••••",
+            AccessibleName = secretCaption + " hidden"
+        };
+        UiStyle.ConfigureRecoveryFieldValue(masked);
+        masked.Font = UiStyle.CreateEmphasisFont(15F);
+        masked.Margin = new Padding(0, 0, 0, UiStyle.SectionGap);
+        layout.Controls.Add(masked, 0, 6);
 
         if (bottom is not null)
             layout.Controls.Add(bottom, 0, 7);
