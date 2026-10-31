@@ -84,6 +84,9 @@ public sealed class UiStatusLabel : Label
                 availableWidth -
                 horizontalChrome);
 
+        // Keep the default glyph-overhang padding used by OnPaint.
+        // Measuring with NoPadding but drawing with padding can wrap the
+        // final word into an unmeasured second line and clip the caption.
         var measured =
             TextRenderer.MeasureText(
                 Text ?? string.Empty,
@@ -93,8 +96,7 @@ public sealed class UiStatusLabel : Label
                     16384),
                 TextFormatFlags.Left |
                 TextFormatFlags.WordBreak |
-                TextFormatFlags.NoPrefix |
-                TextFormatFlags.NoPadding);
+                TextFormatFlags.NoPrefix);
 
         var preferredWidth =
             horizontalChrome +
