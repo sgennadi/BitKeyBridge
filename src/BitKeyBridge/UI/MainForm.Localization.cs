@@ -646,6 +646,37 @@ public sealed partial class MainForm
             control.RightToLeft = direction;
     }
 
+    // Translate only recognized, fixed, non-secret status placeholders.
+    // A live status with a device, identity or recovery value is never touched.
+    // Compare all three known variants so HE -> RU -> EN restores correctly.
+    private void ApplyHomeStaticStatusCaptions()
+    {
+        foreach (var (status, english) in new (UiStatusLabel Status, string English)[]
+        {
+            (_startSetupStatus, "Setup status is loading..."),
+            (_homeSearchStatus,
+                "Enter at least two characters. Live search starts after a short pause; Enter searches immediately."),
+            (_homeSelectionSummary,
+                "Select a result to see the helpdesk actions and source summary."),
+            (_secretLifetimeStatus, "No recovery secret is currently retained.")
+        })
+        {
+            if (status.IsDisposed || status.Disposing)
+                continue;
+            var current = status.Text;
+            if (!UiLanguageService.SupportedLanguages.Any(locale =>
+                string.Equals(current,
+                    UiStaticCaptionCatalog.TranslateOrOriginal(locale.Code, english),
+                    StringComparison.Ordinal)))
+                continue;
+
+            var caption = UiStaticCaptionCatalog.TranslateOrOriginal(
+                _uiLanguageCode, english);
+            if (!string.Equals(current, caption, StringComparison.Ordinal))
+                status.Text = caption;
+        }
+    }
+
     private void ApplyLocalizedShellCaptions(bool rtl)
     {
         if (!_localizedCaptionCacheBuilt)

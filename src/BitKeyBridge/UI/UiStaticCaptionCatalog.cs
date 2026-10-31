@@ -180,6 +180,12 @@ internal static class UiStaticCaptionCatalog
             ["Recovery Key ID"] = ["ID ключа восстановления", "מזהה מפתח שחזור"],
             ["Recovery password"] = ["Пароль восстановления", "סיסמת שחזור"],
             ["Password"] = ["Пароль", "סיסמה"],
+            // Only fixed, metadata-only notices; dynamic AD/Graph status
+            // text and recovery values are deliberately excluded.
+            ["No recovery secret is currently retained."] = ["Сейчас секреты восстановления не сохранены.", "לא נשמר כרגע סוד שחזור."],
+            ["Setup status is loading..."] = ["Загрузка состояния настройки...", "מצב ההגדרה נטען..."],
+            ["Enter at least two characters. Live search starts after a short pause; Enter searches immediately."] = ["Введите не менее двух символов. Поиск начинается после короткой паузы; Enter запускает его сразу.", "הזינו לפחות שני תווים. חיפוש בזמן אמת מתחיל לאחר השהיה קצרה; Enter מפעיל חיפוש מיד."],
+            ["Select a result to see the helpdesk actions and source summary."] = ["Выберите результат, чтобы увидеть действия поддержки и сведения об источнике.", "בחרו תוצאה להצגת פעולות התמיכה ופרטי המקור."],
             ["Clear secrets now"] = ["Очистить секреты", "ניקוי סודות כעת"],
             ["Back to Start"] = ["Назад на главную", "חזרה למסך ההתחלה"],
             ["Search BitLocker"] = ["Поиск BitLocker", "חיפוש BitLocker"],

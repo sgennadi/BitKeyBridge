@@ -1511,6 +1511,13 @@ public static class UiLayoutSelfTest
 
                 if (language is "ru" or "he")
                 {
+                    if (FindByName(form, "SecretLifetimeStatus") is not
+                            UiStatusLabel lifetime ||
+                        lifetime.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "No recovery secret is currently retained."))
+                        failures.Add("Native Start lifetime notice was not localized: " +
+                            language + ".");
+
                     var lapsReveal = FindByName(form,
                         "HomeRevealLapsButton") as Button;
                     var lapsCopy = FindByName(form,
@@ -1539,6 +1546,29 @@ public static class UiLayoutSelfTest
                             new Size(1600, 900), 1F), failures);
                     SaveSyntheticStartSnapshotForCi(
                         form, "selected-" + language, failures);
+                }
+            }
+
+            // Synthetic-only negative test: a runtime message must survive
+            // a language round-trip unchanged. Never sample actual data.
+            if (FindByName(form, "HomeUnifiedSearchStatus") is UiStatusLabel live)
+            {
+                var before = live.Text;
+                const string synthetic = "UI-TEST-DYNAMIC-STATUS";
+                try
+                {
+                    live.Text = synthetic;
+                    foreach (var language in new[] { "he", "ru", "en" })
+                    {
+                        form.PreviewShellLanguageForLayoutTest(language);
+                        if (live.Text != synthetic)
+                            failures.Add("Runtime Start status changed on language switch: " +
+                                language + ".");
+                    }
+                }
+                finally
+                {
+                    live.Text = before;
                 }
             }
         }

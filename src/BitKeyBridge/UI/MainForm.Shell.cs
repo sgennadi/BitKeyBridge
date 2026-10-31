@@ -627,6 +627,7 @@ public sealed partial class MainForm
             var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
+            ApplyHomeStaticStatusCaptions();
             ApplyHomePaneDragCaptions();
             _homeBrandBanner?.SetCaptionDirection(rtl);
             // The application-wide diagnostic banner lives outside
