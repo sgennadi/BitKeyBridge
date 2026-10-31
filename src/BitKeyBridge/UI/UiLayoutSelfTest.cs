@@ -1489,6 +1489,40 @@ public static class UiLayoutSelfTest
             var path = Path.Combine(AppContext.BaseDirectory,
                 "ui-start-1080p-" + phase + ".png");
             bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+            // CI's native DrawToBitmap exposed opaque black outside the
+            // rounded card path. Test the top-left corner (outside the 20px
+            // radius) of both synthetic cards. A normal light-theme parent
+            // must paint an opaque surface here, never black GDI remnants.
+            if (!SystemInformation.HighContrast)
+            {
+                foreach (var cardName in new[]
+                {
+                    "HomeBitLockerCard", "HomeLapsCard"
+                })
+                {
+                    if (FindByName(form, cardName) is not UiRecoveryCard card)
+                    {
+                        failures.Add("Synthetic recovery card missing: " + cardName);
+                        continue;
+                    }
+                    var origin = viewport.PointToClient(
+                        card.PointToScreen(Point.Empty));
+                    var point = new Point(origin.X + 2, origin.Y + 2);
+                    if (point.X < 0 || point.X >= bitmap.Width ||
+                        point.Y < 0 || point.Y >= bitmap.Height)
+                    {
+                        failures.Add("Synthetic recovery corner is outside viewport: " +
+                            cardName);
+                        continue;
+                    }
+                    var pixel = bitmap.GetPixel(point.X, point.Y);
+                    if (pixel.R < 40 && pixel.G < 40 && pixel.B < 40)
+                        failures.Add("Synthetic recovery card has a black rounded corner: " +
+                            cardName + "; RGB=" + pixel.R + "," + pixel.G +
+                            "," + pixel.B + ".");
+                }
+            }
         }
         catch (Exception ex)
         {
