@@ -627,6 +627,23 @@ public static class UiLayoutSelfTest
                     var buttons = footer.Controls.OfType<Button>().ToArray();
                     if (buttons.Length < 2 || buttons.Length > 4)
                         failures.Add("Device 360 footer button count is invalid: " + language + ".");
+                    // An odd number of routes must not leave the last row
+                    // half-empty. Preserve two equal columns for four actions.
+                    var lastFooterButton = buttons
+                        .OrderBy(button => footer.GetRow(button))
+                        .ThenBy(button => footer.GetColumn(button))
+                        .LastOrDefault(button => footer.GetRow(button) ==
+                            (buttons.Length - 1) / 2);
+                    if (buttons.Length % 2 != 0 &&
+                        (lastFooterButton is null ||
+                         footer.GetColumn(lastFooterButton) != 0 ||
+                         footer.GetColumnSpan(lastFooterButton) != 2))
+                        failures.Add("Device 360 last action did not span the row: " +
+                            language + ".");
+                    if (buttons.Length % 2 == 0 &&
+                        buttons.Any(button => footer.GetColumnSpan(button) != 1))
+                        failures.Add("Device 360 even footer actions overlap columns: " +
+                            language + ".");
                     var expectedCloseColumn = language == "he" ? 1 : 0;
                     if (footer.RightToLeft != RightToLeft.No ||
                         FindByName(dialog, "Device360CardClose") is not Button closeAction ||
