@@ -1743,6 +1743,13 @@ public static class UiLayoutSelfTest
                     results.CurrentCell = results.Rows[row].Cells[0];
                     form.ReflowMainViewport();
                     form.PerformLayout();
+                    // Run the caption bounds assertion on the exact native
+                    // 1600x900 fixture that produces the screenshot. The
+                    // generic compact/DPI matrix alone missed this clipping.
+                    VerifySelectedHomeStatusBounds(
+                        form, "NativeStart1080p",
+                        new Scenario("Selected1600x900", new Size(1600, 900), 1F),
+                        failures);
                     var selectedWideStart = form.CaptureStartViewportGeometry();
                     // Assert the actual buttons are wholly on screen; merely
                     // seeing the top of a card is not sufficient for helpdesk.
