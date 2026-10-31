@@ -716,9 +716,8 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
-  # Explicitly allow only PR #110 (v0.34) and PR #114 (Device 360
-  # draft) into ephemeral synthetic integration tests. Never run on a
-  # persistent runner, publish a release, or sign production artifacts.
+  # Only exact PR #110, #114 and integrated v0.35 RC PR #115 may run
+  # ephemeral integration tests. Never sign or deploy production binaries.
   legacy-upgrade-regression:
     # Only run on disposable hosted Windows. Exercises the ACTUAL elevated
     # apply/rollback implementation with synthetic config and DPAPI fixtures.
@@ -729,7 +728,9 @@ jobs:
          (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
           github.event.pull_request.number == 110) ||
          (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
-          github.event.pull_request.number == 114))) ||
+          github.event.pull_request.number == 114) ||
+         (github.head_ref == 'release/v0.35.0-rc.1' &&
+          github.event.pull_request.number == 115))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
@@ -781,7 +782,9 @@ jobs:
          (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
           github.event.pull_request.number == 110) ||
          (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
-          github.event.pull_request.number == 114))) ||
+          github.event.pull_request.number == 114) ||
+         (github.head_ref == 'release/v0.35.0-rc.1' &&
+          github.event.pull_request.number == 115))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
@@ -836,7 +839,9 @@ jobs:
        (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
         github.event.pull_request.number == 110) ||
        (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
-        github.event.pull_request.number == 114))
+        github.event.pull_request.number == 114) ||
+       (github.head_ref == 'release/v0.35.0-rc.1' &&
+        github.event.pull_request.number == 115))
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
@@ -1120,11 +1125,14 @@ jobs:
 
   device360-qa-bundle:
     # One unsigned manual QA archive; not a GitHub Release or automatic update.
-    # Restricted to the dedicated Device 360 draft PR and exact merge SHA.
+    # Exact PR #114 feature draft or PR #115 unified 0.35 RC only.
+    # Build and all ephemeral integration gates must pass first.
     if: >-
       github.event_name == 'pull_request' &&
-      github.head_ref == 'feature/v0.35.0-unified-device-card' &&
-      github.event.pull_request.number == 114
+      ((github.head_ref == 'feature/v0.35.0-unified-device-card' &&
+        github.event.pull_request.number == 114) ||
+       (github.head_ref == 'release/v0.35.0-rc.1' &&
+        github.event.pull_request.number == 115))
     needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -1159,7 +1167,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = "pull_request"
-          test "$GITHUB_HEAD_REF" = "feature/v0.35.0-unified-device-card"
+          case "${{ github.event.pull_request.number }}:$GITHUB_HEAD_REF" in
+            "114:feature/v0.35.0-unified-device-card"|"115:release/v0.35.0-rc.1") ;;
+            *) echo "Unknown or unapproved QA PR/branch" >&2; exit 1 ;;
+          esac
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           head_sha="$(python3 - <<'PY'
           import json
@@ -1181,10 +1192,17 @@ jobs:
           print(versions[0])
           PY
           )"
-          [[ "$version" =~ ^0[.]34[.]0-preview[.][0-9]+$ ]] || {
-            echo 'Device 360 draft must retain the v0.34 preview base until it is stabilized.'
-            exit 1
-          }
+          if [[ "$GITHUB_HEAD_REF" == "release/v0.35.0-rc.1" ]]; then
+            [[ "$version" == "0.35.0-rc.1" ]] || {
+              echo 'Integrated RC must have exact version 0.35.0-rc.1.'
+              exit 1
+            }
+          else
+            [[ "$version" =~ ^0[.]34[.]0-preview[.][0-9]+$ ]] || {
+              echo 'Device 360 draft must retain the v0.34 preview base.'
+              exit 1
+            }
+          fi
           for arch in win-x64 win-x86 win-arm64; do
             archive="device360-qa/BitKeyBridge-$arch.zip"
             test -s "$archive"
@@ -1195,11 +1213,11 @@ jobs:
           done
           cd device360-qa
           sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
-          printf 'PR: 114\nFeature: Device 360 Source Health (v0.35 draft)\nApplication version: %s\nSource HEAD: %s\nCI merge SHA: %s\nSigning: UNSIGNED manual QA\n' "$version" "$head_sha" "$GITHUB_SHA" > BUILD-INFO.txt
+          printf 'PR: %s\nBranch: %s\nFeature: Device 360 / BitKeyBridge 0.35 candidate\nApplication version: %s\nSource HEAD: %s\nCI merge SHA: %s\nSigning: UNSIGNED manual QA\n' "${{ github.event.pull_request.number }}" "$GITHUB_HEAD_REF" "$version" "$head_sha" "$GITHUB_SHA" > BUILD-INFO.txt
           cat > README-TEST.txt <<'EOF'
-          BITKEYBRIDGE DEVICE 360 / SOURCE HEALTH -- UNSIGNED DEVELOPMENT QA
+          BITKEYBRIDGE DEVICE 360 / UNIFIED 0.35 -- UNSIGNED DEVELOPMENT QA
           ==================================================================
-          This is a v0.35 FEATURE DRAFT built from the v0.34 preview base.
+          This archive contains the Device 360 draft or unified 0.35 RC.
           This is NOT an organization-signed or stable release.
           Do not install on a domain controller or a production Helpdesk PC.
           Never deploy via GPO, Intune, scheduled updater or GitHub Releases.
@@ -1224,13 +1242,14 @@ jobs:
 
           Real domain authorization, protected audit, organization signing,
           managed canary and rollback acceptance are mandatory before release.
-          See docs/device-360-source-health.md and PR #114.
+          See docs/device-360-source-health.md, the RC acceptance checklist,
+          and PR #114 / #115.
           EOF
 
       - name: Upload one unsigned source-pinned QA archive
         uses: actions/upload-artifact@v7
         with:
-          name: BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED
+          name: ${{ github.event.pull_request.number == 115 && 'BitKeyBridge-v0.35.0-rc.1-QA-UNSIGNED' || 'BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED' }}
           path: device360-qa/
           if-no-files-found: error
           retention-days: 14
