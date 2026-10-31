@@ -1052,6 +1052,9 @@ public sealed partial class MainForm
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            // No saved recent computers yet: keep Connections compact.
+            // LoadRecentComputers reveals this panel only for real entries.
+            Visible = false,
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(UiStyle.ControlGap, 0, 0, 0)
