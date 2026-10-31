@@ -614,8 +614,10 @@ jobs:
           $installedDir = Join-Path $env:ProgramFiles 'BitKeyBridge'
           $installedExe = Join-Path $installedDir 'BitKeyBridge.exe'
           $sourceExe = Join-Path (Get-Location) 'artifacts\win-x64\BitKeyBridge.exe'
-          if (Test-Path -LiteralPath $installedExe) {
-            throw 'An existing Program Files installation cannot be replaced during CI.'
+          # Never touch a pre-existing installation folder. This smoke test
+          # runs only on ephemeral hosted Windows; it owns the folder it creates.
+          if (Test-Path -LiteralPath $installedDir) {
+            throw 'An existing Program Files directory cannot be replaced during CI.'
           }
           $taskName = 'BitKeyBridge-AutoUpdate'
           & schtasks.exe /Query /TN $taskName *> $null
@@ -623,8 +625,10 @@ jobs:
             throw 'An existing updater task cannot be replaced during CI.'
           }
           $created = $false
+          $createdDirectory = $false
           try {
-            New-Item -ItemType Directory -Path $installedDir -Force | Out-Null
+            New-Item -ItemType Directory -Path $installedDir -ErrorAction Stop | Out-Null
+            $createdDirectory = $true
             Copy-Item -LiteralPath $sourceExe -Destination $installedExe -Force
             $hour = (Get-Date).AddHours(12).Hour
             $output = & $installedExe --update-task-install --update-task-hour $hour --no-elevation 2>&1 | Out-String
@@ -665,8 +669,19 @@ jobs:
                 & schtasks.exe /Delete /F /TN $taskName
               }
             }
-            Remove-Item -LiteralPath $installedExe -Force -ErrorAction SilentlyContinue
-            Remove-Item -LiteralPath $installedDir -Force -ErrorAction SilentlyContinue
+            if ($createdDirectory) {
+              # PowerShell 7 Remove-Item intermittently threw NullReference
+              # when deleting a newly emptied Program Files directory on a
+              # hosted runner, masking an otherwise successful SYSTEM smoke.
+              # Delete only our exact file and only an EMPTY owned directory;
+              # an unexpected file or access failure must still fail the job.
+              if ([System.IO.File]::Exists($installedExe)) {
+                [System.IO.File]::Delete($installedExe)
+              }
+              if ([System.IO.Directory]::Exists($installedDir)) {
+                [System.IO.Directory]::Delete($installedDir, $false)
+              }
+            }
           }
 
       - name: Guard release workflow ordering and branch safety
