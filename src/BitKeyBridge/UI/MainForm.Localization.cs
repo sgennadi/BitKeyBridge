@@ -658,7 +658,17 @@ public sealed partial class MainForm
                 "Enter at least two characters. Live search starts after a short pause; Enter searches immediately."),
             (_homeSelectionSummary,
                 "Select a result to see the helpdesk actions and source summary."),
-            (_secretLifetimeStatus, "No recovery secret is currently retained.")
+            (_secretLifetimeStatus, "No recovery secret is currently retained."),
+            (_homeCloudConnectionStatus,
+                "Use Connect / Change to select AD, Microsoft 365 or both."),
+            (_homeCloudConnectionStatus,
+                "Use Connect / Change to choose a source. No credentials are requested until Connect."),
+            (_homeCloudConnectionStatus,
+                "Connected to Microsoft Entra / Intune using delegated Graph permissions."),
+            (_homeCloudConnectionStatus,
+                "Cloud is configured. Use Connect / Change for delegated MFA sign-in."),
+            (_homeCloudConnectionStatus,
+                "Cloud app not configured. Connect / Change opens guided setup.")
         })
         {
             if (status.IsDisposed || status.Disposing)

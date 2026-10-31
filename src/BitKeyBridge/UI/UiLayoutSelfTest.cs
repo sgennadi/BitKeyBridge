@@ -1518,6 +1518,18 @@ public static class UiLayoutSelfTest
                         failures.Add("Native Start lifetime notice was not localized: " +
                             language + ".");
 
+                    // The disconnected Choose-source notice is a known
+                    // fixed caption, never a live authentication result.
+                    if (FindByName(form, "HomeConnectionSource") is ComboBox source &&
+                        source.SelectedIndex == 0 &&
+                        (FindByName(form, "HomeCloudConnectionStatus") is not
+                            UiStatusLabel chooser ||
+                         chooser.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                             language,
+                             "Use Connect / Change to choose a source. No credentials are requested until Connect.")))
+                        failures.Add("Native Start source instruction was not localized: " +
+                            language + ".");
+
                     var lapsReveal = FindByName(form,
                         "HomeRevealLapsButton") as Button;
                     var lapsCopy = FindByName(form,

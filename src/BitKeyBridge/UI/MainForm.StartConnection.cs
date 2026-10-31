@@ -171,7 +171,8 @@ public sealed partial class MainForm
         UiStyle.ConfigureWrappingStatusLabel(_homeCloudConnectionStatus);
         _homeCloudConnectionStatus.MaximumSize = new Size(1100, 0);
         UiStyle.SetStatus(_homeCloudConnectionStatus,
-            "Use Connect / Change to select AD, Microsoft 365 or both.",
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguageCode,
+                "Use Connect / Change to select AD, Microsoft 365 or both."),
             UiStatusKind.Neutral);
         layout.Controls.Add(_homeCloudConnectionStatus, 0, 2);
 
@@ -327,19 +328,22 @@ public sealed partial class MainForm
 
         if (cloud)
         {
+            var cloudMessage = HasCloudSearchSession()
+                ? "Connected to Microsoft Entra / Intune using delegated Graph permissions."
+                : StartCloudAppConfigured()
+                    ? "Cloud is configured. Use Connect / Change for delegated MFA sign-in."
+                    : "Cloud app not configured. Connect / Change opens guided setup.";
             UiStyle.SetStatus(_homeCloudConnectionStatus,
-                HasCloudSearchSession()
-                    ? "Connected to Microsoft Entra / Intune using delegated Graph permissions."
-                    : StartCloudAppConfigured()
-                        ? "Cloud is configured. Use Connect / Change for delegated MFA sign-in."
-                        : "Cloud app not configured. Connect / Change opens guided setup.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, cloudMessage),
                 HasCloudSearchSession() ? UiStatusKind.Success :
                 StartCloudAppConfigured() ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
         else if (SelectedStartSource == StartConnectionPolicy.Choose)
         {
             UiStyle.SetStatus(_homeCloudConnectionStatus,
-                "Use Connect / Change to choose a source. No credentials are requested until Connect.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguageCode,
+                    "Use Connect / Change to choose a source. No credentials are requested until Connect."),
                 UiStatusKind.Neutral);
         }
 
