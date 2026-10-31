@@ -391,6 +391,9 @@ jobs:
       - name: Runtime UI layout self-test
         if: matrix.rid == 'win-x64'
         shell: pwsh
+        env:
+          # Offline synthetic data only. Never record the live user's GUI.
+          BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS: '1'
         run: |
           $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
           $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
@@ -401,6 +404,16 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "Runtime UI layout self-test failed with exit code $($process.ExitCode)."
           }
+
+      - name: Upload synthetic 1080p Start UI QA snapshots
+        if: always() && matrix.rid == 'win-x64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: BitKeyBridge-Start-1080p-QA-SYNTHETIC
+          path: artifacts/win-x64/ui-start-1080p-*.png
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
 
       # Basic JSON contract smoke on a CI runner. The broker integration job
       # separately launches this mode under TWO genuine non-admin accounts.
