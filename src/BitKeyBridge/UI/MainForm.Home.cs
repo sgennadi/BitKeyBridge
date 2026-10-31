@@ -917,6 +917,13 @@ public sealed partial class MainForm
                 DiagnosticRedaction.Sanitize(
                     ex.Message));
         }
+        finally
+        {
+            // The entire list is rebuilt here, including after a failed or
+            // corrupt local history read. Keep the Start layout consistent
+            // when zero, one or several metadata-only rows are available.
+            ReflowConnectionsRecent();
+        }
     }
 
     private void RecordRecentComputer(
