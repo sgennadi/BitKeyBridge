@@ -317,6 +317,7 @@ internal sealed class Device360Dialog : DpiAwareForm
         actions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         actions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var nextActionSlot = 0;
+        Button? lastFooterAction = null;
         var close = UiStyle.CreateActionButton(Tr("Device360Close"), DialogResult.Cancel);
         close.Name = "Device360CardClose";
         AddFooterAction(close);
@@ -345,6 +346,14 @@ internal sealed class Device360Dialog : DpiAwareForm
                 AddRoute("Device360RouteDevices",
                     Tr("Device360OpenDevices"), Device360Route.Devices);
             }
+        }
+        // With three actions, the final button otherwise occupies half of
+        // the second row (especially conspicuous for Hebrew cloud devices).
+        // Span the available row without moving the RTL Close button.
+        if (nextActionSlot % 2 != 0 && lastFooterAction is not null)
+        {
+            actions.SetColumn(lastFooterAction, 0);
+            actions.SetColumnSpan(lastFooterAction, 2);
         }
         root.Controls.Add(actions, 0, 2);
         // Recalculate when fonts/DPI/window width change, but NEVER allow
@@ -419,6 +428,7 @@ internal sealed class Device360Dialog : DpiAwareForm
             button.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
             button.Margin = new Padding(4);
             actions.Controls.Add(button, column, row);
+            lastFooterAction = button;
             nextActionSlot++;
         }
 
