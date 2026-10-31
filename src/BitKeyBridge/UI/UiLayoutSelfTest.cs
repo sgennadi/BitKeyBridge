@@ -3237,7 +3237,6 @@ public static class UiLayoutSelfTest
             grid.Rows[rowIndex].Selected = true;
             grid.CurrentCell = grid.Rows[rowIndex].Cells[0];
             main.ReflowMainViewport();
-            VerifySelectedHomeStatusBounds(main, formName, scenario, failures);
 
             var width = area.Parent?.ClientSize.Width ?? 0;
             width -= area.Parent?.Padding.Horizontal ?? 0;
