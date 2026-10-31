@@ -606,6 +606,36 @@ public static class UiLayoutSelfTest
                         "; Intune=" + (intuneSource is Label) +
                         "; Close=" + (close is Button) + ".");
 
+                // This regression checks the actual native client viewport,
+                // not only GetPreferredSize or successful UI event dispatch.
+                // The previous footer was cut off in all three CI PNGs.
+                if (FindByName(dialog, "Device360CardActions") is not TableLayoutPanel footer)
+                {
+                    failures.Add("Device 360 footer grid is missing: " + language + ".");
+                }
+                else
+                {
+                    var buttons = footer.Controls.OfType<Button>().ToArray();
+                    if (buttons.Length < 2 || buttons.Length > 4)
+                        failures.Add("Device 360 footer button count is invalid: " + language + ".");
+                    foreach (var button in buttons)
+                    {
+                        var visibleBounds = dialog.RectangleToClient(
+                            button.RectangleToScreen(button.ClientRectangle));
+                        var area = dialog.ClientRectangle;
+                        if (visibleBounds.Width <= 0 || visibleBounds.Height <= 0 ||
+                            visibleBounds.Left < area.Left ||
+                            visibleBounds.Top < area.Top ||
+                            visibleBounds.Right > area.Right ||
+                            visibleBounds.Bottom > area.Bottom)
+                        {
+                            failures.Add("Device 360 action clipped (" + language +
+                                ", " + button.Name + "): bounds=" +
+                                visibleBounds + ", client=" + area + ".");
+                        }
+                    }
+                }
+
                 if (language == "he" &&
                     FindByName(dialog, "Device360SourceStates") is TableLayoutPanel sourceTable &&
                     ((sourceTable.GetColumn(
@@ -655,6 +685,24 @@ public static class UiLayoutSelfTest
                     bitmap.Save(Path.Combine(AppContext.BaseDirectory,
                         "ui-device-360-" + language + ".png"),
                         System.Drawing.Imaging.ImageFormat.Png);
+
+                    // Also render the new policy/source-completeness section,
+                    // which is deliberately below the identity and recovery
+                    // information in the scrollable device overview.
+                    if (FindByName(dialog, "Device360CardScroll") is Panel scroller)
+                    {
+                        scroller.AutoScrollPosition = new Point(0,
+                            Math.Max(0, scroller.DisplayRectangle.Height -
+                                scroller.ClientSize.Height));
+                        Application.DoEvents();
+                        using var policyBitmap = new Bitmap(dialog.ClientSize.Width,
+                            dialog.ClientSize.Height);
+                        dialog.DrawToBitmap(policyBitmap,
+                            new Rectangle(Point.Empty, policyBitmap.Size));
+                        policyBitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                            "ui-device-360-" + language + "-policy.png"),
+                            System.Drawing.Imaging.ImageFormat.Png);
+                    }
                 }
                 dialog.Close();
             }

@@ -240,19 +240,30 @@ internal sealed class Device360Dialog : DpiAwareForm
         content.Controls.Add(access.Card, 0, 4);
         content.Controls.Add(posture.Card, 0, 5);
 
-        var actions = new FlowLayoutPanel
+        // A horizontally AutoSize FlowLayoutPanel could measure its footer
+        // before it had the real available width. On the actual Windows CI
+        // screenshot this pushed every action below the client rectangle.
+        // A fixed two-column grid has a predictable maximum of two rows,
+        // so the root AutoSize row reserves the real action height at all DPI.
+        var actions = new TableLayoutPanel
         {
             Name = "Device360CardActions",
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             AutoSize = true,
-            WrapContents = true,
-            FlowDirection = rtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            RowCount = 2,
             Padding = new Padding(0, UiStyle.ControlGap, 0, 0),
             Margin = Padding.Empty
         };
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        actions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        actions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var nextActionSlot = 0;
         var close = UiStyle.CreateActionButton(Tr("Device360Close"), DialogResult.Cancel);
         close.Name = "Device360CardClose";
-        actions.Controls.Add(close);
+        AddFooterAction(close);
         CancelButton = close;
         // Avoid WinForms selecting the first read-only identity field when
         // opening the modal (the field is for copying identifiers on demand).
@@ -322,6 +333,17 @@ internal sealed class Device360Dialog : DpiAwareForm
             table.Controls.Add(card, column, 0);
         }
 
+        void AddFooterAction(Button button)
+        {
+            var column = rtl ? 1 - (nextActionSlot % 2) :
+                nextActionSlot % 2;
+            var row = nextActionSlot / 2;
+            button.Dock = DockStyle.Fill;
+            button.Margin = new Padding(4);
+            actions.Controls.Add(button, column, row);
+            nextActionSlot++;
+        }
+
         void AddRoute(string name, string label, Device360Route route)
         {
             var button = UiStyle.CreateActionButton(label);
@@ -334,7 +356,7 @@ internal sealed class Device360Dialog : DpiAwareForm
                 DialogResult = DialogResult.OK;
                 Close();
             };
-            actions.Controls.Add(button);
+            AddFooterAction(button);
         }
 
         (UiRecoveryCard Card, TableLayoutPanel Fields) CreateSection(
