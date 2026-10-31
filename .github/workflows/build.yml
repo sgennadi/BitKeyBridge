@@ -716,9 +716,9 @@ jobs:
           path: artifacts/BitKeyBridge-${{ matrix.rid }}.zip
           if-no-files-found: error
 
-  # v0.34 Preview's integration jobs are restricted to PR #110 by both
-  # exact source branch name and pull request number. They run on ephemeral
-  # hosted Windows with synthetic data; neither publish nor sign releases.
+  # Explicitly allow only PR #110 (v0.34) and PR #114 (Device 360
+  # draft) into ephemeral synthetic integration tests. Never run on a
+  # persistent runner, publish a release, or sign production artifacts.
   legacy-upgrade-regression:
     # Only run on disposable hosted Windows. Exercises the ACTUAL elevated
     # apply/rollback implementation with synthetic config and DPAPI fixtures.
@@ -727,7 +727,9 @@ jobs:
        (github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
         github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018' ||
          (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
-          github.event.pull_request.number == 110))) ||
+          github.event.pull_request.number == 110) ||
+         (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
+          github.event.pull_request.number == 114))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
@@ -777,7 +779,9 @@ jobs:
          github.head_ref == 'feature/v0.30.4-reliability-20261017' ||
          github.head_ref == 'hotfix/v0.30.5-zip-compat-20261018' ||
          (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
-          github.event.pull_request.number == 110))) ||
+          github.event.pull_request.number == 110) ||
+         (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
+          github.event.pull_request.number == 114))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
@@ -830,7 +834,9 @@ jobs:
        github.head_ref == 'integration/v0.30.2-audit-broker-updater-20261016' ||
        github.head_ref == 'feature/v0.30.3-helpdesk-ux-20261016' ||
        (github.head_ref == 'feature/v0.34.0-localization-and-ui-speed' &&
-        github.event.pull_request.number == 110))
+        github.event.pull_request.number == 110) ||
+       (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
+        github.event.pull_request.number == 114))
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
