@@ -458,6 +458,27 @@ public class DpiAwareForm : Form
         if (parent is null)
             return 0;
 
+        // A horizontal AutoSize flow can shrink to the width of an older
+        // status caption before its TableLayoutPanel cell is measured.
+        // If we subsequently cap the caption's MaximumSize to that stale
+        // flow width, the missing final word can never be laid out again.
+        // The containing cell supplies the real wrapping limit; other
+        // controls in the flow may wrap onto the next line as intended.
+        if (control is UiStatusLabel &&
+            parent is FlowLayoutPanel
+            {
+                AutoSize: true,
+                Dock: DockStyle.Top,
+                WrapContents: true
+            } flow &&
+            flow.Parent is { IsDisposed: false, ClientSize.Width: > 0 } cell)
+        {
+            return Math.Max(1,
+                cell.ClientSize.Width - cell.Padding.Horizontal -
+                flow.Margin.Horizontal - flow.Padding.Horizontal -
+                control.Margin.Horizontal);
+        }
+
         var available =
             parent.ClientSize.Width -
             control.Margin.Horizontal;
