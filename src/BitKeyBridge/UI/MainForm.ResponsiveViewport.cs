@@ -13,6 +13,7 @@ public sealed partial class MainForm
     private string _homeResultsLayoutKey = string.Empty;
     private string _homeConnectionsRecentLayoutKey = string.Empty;
     private bool _homeConnectionsRecentReflowRunning;
+    private int _lastRecentComputerLayoutCount = -1;
     private string _lastRepairedTabPath = string.Empty;
     // Multiple tab and nested-tab events in one UI-message burst share one
     // BeginInvoke. Keep only the most recently requested page and start time.
@@ -228,6 +229,43 @@ public sealed partial class MainForm
         Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
             Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
 
+    // Recent metadata is optional. With no entries it must not reserve the
+    // right 38% of Connections or a permanent 154px-high empty grid. A short
+    // list gets its intrinsic rows; a longer one scrolls inside the 154px cap.
+    // This is UI-only: no AD/Graph lookup or recovery secret is requested.
+    private void MeasureHomeRecentQuickPanel()
+    {
+        var recent = _homeRecentQuickPanel;
+        if (recent is null || recent.IsDisposed ||
+            recent.RowStyles.Count < 2 || _homeRecentResults.IsDisposed)
+            return;
+
+        var count = _homeRecentResults.Rows.Count;
+        if (_lastRecentComputerLayoutCount != count)
+        {
+            recent.Visible = count > 0;
+            _lastRecentComputerLayoutCount = count;
+        }
+
+        var scale = (float)EffectiveHomeDpiScale();
+        var maximum = (int)Math.Ceiling(UiStyle.HomeRecentQuickListHeight * scale);
+        var minimum = (int)Math.Ceiling(64F * scale);
+        var preferred = count == 0 ? 0 :
+            (_homeRecentResults.ColumnHeadersVisible
+                ? _homeRecentResults.ColumnHeadersHeight : 0) +
+            _homeRecentResults.Rows.Cast<DataGridViewRow>()
+                .Take(15).Sum(row => row.Height) +
+            (int)Math.Ceiling(6F * scale);
+        var gridHeight = count == 0 ? 0 :
+            Math.Min(maximum, Math.Max(minimum, preferred));
+
+        var listRow = recent.RowStyles[1];
+        if (listRow.SizeType != SizeType.Absolute)
+            listRow.SizeType = SizeType.Absolute;
+        if (Math.Abs(listRow.Height - gridHeight) > 0.5F)
+            listRow.Height = gridHeight;
+    }
+
     private void ReflowConnectionsRecent()
     {
         var layout = _homeConnectionsRecentLayout;
@@ -238,11 +276,15 @@ public sealed partial class MainForm
             layout.Parent is null)
             return;
 
+        MeasureHomeRecentQuickPanel();
+        var hasRecent = _homeRecentResults.Rows.Count > 0;
         var width = Math.Max(0,
             layout.Parent.ClientSize.Width - layout.Parent.Padding.Horizontal);
-        bool horizontal = width >= (int)Math.Ceiling(
-            UiStyle.HomeConnectionRecentPairMinimumWidth * EffectiveHomeDpiScale());
-        var key = horizontal ? "ConnectionsRecentWide" : "ConnectionsRecentStacked";
+        var horizontal = hasRecent &&
+            width >= (int)Math.Ceiling(
+                UiStyle.HomeConnectionRecentPairMinimumWidth * EffectiveHomeDpiScale());
+        var key = !hasRecent ? "ConnectionsOnly" :
+            horizontal ? "ConnectionsRecentWide" : "ConnectionsRecentStacked";
         if (_homeConnectionsRecentLayoutKey == key)
             return;
 
@@ -253,6 +295,8 @@ public sealed partial class MainForm
             layout.Controls.Clear();
             layout.ColumnStyles.Clear();
             layout.RowStyles.Clear();
+            connection.Margin = new Padding(
+                0, 0, horizontal ? UiStyle.SectionGap : 0, 0);
             if (horizontal)
             {
                 layout.ColumnCount = 2;
@@ -269,7 +313,10 @@ public sealed partial class MainForm
                 layout.RowCount = 2;
                 layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                 layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                // Keep the hidden Recent panel attached for restoration and
+                // localization, but never allocate a phantom AutoSize row.
+                layout.RowStyles.Add(new RowStyle(
+                    hasRecent ? SizeType.AutoSize : SizeType.Absolute, 0F));
                 layout.Controls.Add(connection, 0, 0);
                 layout.Controls.Add(recent, 0, 1);
             }
