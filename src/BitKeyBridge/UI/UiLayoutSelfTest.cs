@@ -549,15 +549,36 @@ public static class UiLayoutSelfTest
                 Application.DoEvents();
                 dialog.PerformLayout();
 
+                var sections = FindByName(dialog, "Device360CardSections");
+                var recovery = FindByName(dialog, "Device360CardRecoverySection");
+                var adSource = FindByName(dialog, "Device360SourceAd");
+                var entraSource = FindByName(dialog, "Device360SourceEntra");
+                var intuneSource = FindByName(dialog, "Device360SourceIntune");
+                var close = FindByName(dialog, "Device360CardClose");
                 if (dialog.RightToLeftLayout != (language == "he") ||
-                    FindByName(dialog, "Device360CardSections") is not TableLayoutPanel ||
-                    FindByName(dialog, "Device360CardRecoverySection") is not UiRecoveryCard ||
-                    FindByName(dialog, "Device360SourceAd") is not Label ||
-                    FindByName(dialog, "Device360SourceEntra") is not Label ||
-                    FindByName(dialog, "Device360SourceIntune") is not Label ||
-                    FindByName(dialog, "Device360CardClose") is not Button)
-                    failures.Add("Device 360 missing basic RTL, source or recovery controls: " +
-                        language + ".");
+                    sections is not TableLayoutPanel ||
+                    recovery is not UiRecoveryCard ||
+                    adSource is not Label ||
+                    entraSource is not Label ||
+                    intuneSource is not Label ||
+                    close is not Button)
+                    failures.Add("Device 360 RTL/control regression (" + language +
+                        "): FormRTL=" + dialog.RightToLeft +
+                        "; Mirrored=" + dialog.RightToLeftLayout +
+                        "; Sections=" + (sections is TableLayoutPanel) +
+                        "; Recovery=" + (recovery is UiRecoveryCard) +
+                        "; AD=" + (adSource is Label) +
+                        "; Entra=" + (entraSource is Label) +
+                        "; Intune=" + (intuneSource is Label) +
+                        "; Close=" + (close is Button) + ".");
+
+                if (language == "he" &&
+                    FindByName(dialog, "Device360SourceStates") is TableLayoutPanel sourceTable &&
+                    ((sourceTable.GetColumn(
+                        FindByName(dialog, "Device360SourceAdCard")!) != 2) ||
+                     (sourceTable.GetColumn(
+                        FindByName(dialog, "Device360SourceIntuneCard")!) != 0)))
+                    failures.Add("Device 360 source tiles are not mirrored in Hebrew.");
 
                 if ((language == "he") !=
                     (FindByName(dialog, "Device360RouteDevices") is Button) ||

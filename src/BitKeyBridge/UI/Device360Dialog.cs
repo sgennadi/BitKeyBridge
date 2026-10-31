@@ -57,6 +57,7 @@ internal sealed class Device360Dialog : DpiAwareForm
             Dock = DockStyle.Top,
             ColumnCount = 1,
             RowCount = 2,
+            RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
             Margin = new Padding(0, 0, 0, UiStyle.SectionGap)
         };
         heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -69,7 +70,10 @@ internal sealed class Device360Dialog : DpiAwareForm
             AutoSize = true,
             Dock = DockStyle.Top,
             Font = UiStyle.CreatePageTitleFont(),
-            ForeColor = UiStyle.ModernForeground
+            ForeColor = UiStyle.ModernForeground,
+            RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
+            TextAlign = rtl ? ContentAlignment.MiddleRight :
+                ContentAlignment.MiddleLeft
         };
         var computer = new Label
         {
@@ -77,7 +81,8 @@ internal sealed class Device360Dialog : DpiAwareForm
             Text = snapshot.Computer,
             AccessibleName = Tr("Device360CardComputer"),
             RightToLeft = RightToLeft.No,
-            TextAlign = ContentAlignment.MiddleLeft,
+            TextAlign = rtl ? ContentAlignment.MiddleRight :
+                ContentAlignment.MiddleLeft,
             Dock = DockStyle.Top,
             AutoSize = true,
             Font = UiStyle.CreateEmphasisFont(13),
@@ -119,14 +124,19 @@ internal sealed class Device360Dialog : DpiAwareForm
             AutoSize = true,
             ColumnCount = 3,
             RowCount = 1,
+            // Explicit physical source positions are assigned below; do not
+            // double-mirror the TableLayoutPanel under Hebrew WinForms RTL.
+            RightToLeft = RightToLeft.No,
             Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
         };
         for (var i = 0; i < 3; i++)
             sourceStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 3F));
         sourceStatus.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        AddSource(sourceStatus, "AD", snapshot.InAd, "Device360SourceAd", 0);
+        AddSource(sourceStatus, "AD", snapshot.InAd, "Device360SourceAd",
+            rtl ? 2 : 0);
         AddSource(sourceStatus, "Entra", snapshot.InEntra, "Device360SourceEntra", 1);
-        AddSource(sourceStatus, "Intune", snapshot.InIntune, "Device360SourceIntune", 2);
+        AddSource(sourceStatus, "Intune", snapshot.InIntune, "Device360SourceIntune",
+            rtl ? 0 : 2);
         content.Controls.Add(sourceStatus, 0, 0);
 
         if (!snapshot.IdentityVerified || snapshot.IdentityAmbiguous)
@@ -216,6 +226,9 @@ internal sealed class Device360Dialog : DpiAwareForm
         close.Name = "Device360CardClose";
         actions.Controls.Add(close);
         CancelButton = close;
+        // Avoid WinForms selecting the first read-only identity field when
+        // opening the modal (the field is for copying identifiers on demand).
+        Shown += (_, _) => close.Focus();
 
         // Navigation is not authorization. Callers recheck original exact
         // identity and source before invoking the existing workspaces.
@@ -306,11 +319,16 @@ internal sealed class Device360Dialog : DpiAwareForm
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 2,
                 RowCount = 1,
+                // Invert the physical field columns explicitly for Hebrew.
+                // The identifier values themselves remain LTR and selectable.
+                RightToLeft = RightToLeft.No,
                 BackColor = SystemInformation.HighContrast
                     ? SystemColors.Window : UiStyle.RecoveryCardBackground
             };
-            area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-            area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66));
+            area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,
+                rtl ? 66 : 34));
+            area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,
+                rtl ? 34 : 66));
             area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var label = new Label
             {
@@ -318,6 +336,9 @@ internal sealed class Device360Dialog : DpiAwareForm
                 Font = UiStyle.CreateSectionTitleFont(),
                 Dock = DockStyle.Top,
                 AutoSize = true,
+                RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
+                TextAlign = rtl ? ContentAlignment.MiddleRight :
+                    ContentAlignment.MiddleLeft,
                 ForeColor = UiStyle.ModernForeground,
                 Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
             };
@@ -338,9 +359,12 @@ internal sealed class Device360Dialog : DpiAwareForm
                 Text = title,
                 AutoSize = true,
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = UiStyle.ModernMuted,
-                Margin = new Padding(0, 5, 10, 5)
+                RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
+                TextAlign = rtl ? ContentAlignment.MiddleRight :
+                    ContentAlignment.MiddleLeft,
+                ForeColor = UiStyle.ModernForeground,
+                Margin = rtl ? new Padding(10, 5, 0, 5) :
+                    new Padding(0, 5, 10, 5)
             };
             UiStyle.ConfigureWrappingLabel(key);
             var field = new TextBox
@@ -348,9 +372,13 @@ internal sealed class Device360Dialog : DpiAwareForm
                 Name = name,
                 Text = value,
                 ReadOnly = true,
+                Multiline = name == "Device360CardRecoveryNote",
+                WordWrap = name == "Device360CardRecoveryNote",
+                ScrollBars = ScrollBars.None,
                 RightToLeft = RightToLeft.No,
                 Dock = DockStyle.Fill,
-                MinimumSize = new Size(0, 26),
+                MinimumSize = new Size(0,
+                    name == "Device360CardRecoveryNote" ? 64 : 26),
                 BorderStyle = BorderStyle.FixedSingle,
                 BackColor = SystemInformation.HighContrast
                     ? SystemColors.Window : UiStyle.ModernSurface,
@@ -358,8 +386,8 @@ internal sealed class Device360Dialog : DpiAwareForm
                 AccessibleName = title,
                 Margin = new Padding(0, 3, 0, 3)
             };
-            area.Controls.Add(key, 0, row);
-            area.Controls.Add(field, 1, row);
+            area.Controls.Add(key, rtl ? 1 : 0, row);
+            area.Controls.Add(field, rtl ? 0 : 1, row);
         }
     }
 }

@@ -126,15 +126,16 @@ internal sealed class Device360Snapshot
         if (string.IsNullOrWhiteSpace(raw))
             return string.Empty;
         var candidate = raw.Trim();
-        if (!candidate.StartsWith("AD:", StringComparison.OrdinalIgnoreCase) &&
-            !candidate.StartsWith("ENTRA:DEVICE:",
-                StringComparison.OrdinalIgnoreCase) &&
-            !candidate.StartsWith("INTUNE:MANAGED:",
-                StringComparison.OrdinalIgnoreCase) &&
-            !candidate.StartsWith("INTUNE:DEVICE:",
-                StringComparison.OrdinalIgnoreCase))
-            return string.Empty;
-        if (candidate.Contains(":KEY:", StringComparison.OrdinalIgnoreCase) ||
+        var validPrefixes = new[]
+        {
+            "AD:GUID:", "AD:DN:", "ENTRA:DEVICE:",
+            "INTUNE:MANAGED:", "INTUNE:DEVICE:"
+        };
+        var prefix = validPrefixes.FirstOrDefault(item =>
+            candidate.StartsWith(item, StringComparison.OrdinalIgnoreCase));
+        if (prefix is null || candidate.Length <= prefix.Length ||
+            string.IsNullOrWhiteSpace(candidate[prefix.Length..]) ||
+            candidate.Contains(":KEY:", StringComparison.OrdinalIgnoreCase) ||
             candidate.Contains(":UNRESOLVED:",
                 StringComparison.OrdinalIgnoreCase))
             return string.Empty;
