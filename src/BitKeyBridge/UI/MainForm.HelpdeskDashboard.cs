@@ -497,12 +497,23 @@ public sealed partial class MainForm
         }
     }
 
-    private void OpenHelpdeskAccessHealth()
+    private void OpenHelpdeskAccessHealth(bool useStartSelection = true)
     {
+        // When invoked from the Devices source-qualified card, do not reuse
+        // an unrelated Start computer from a previous search. No diagnostic
+        // is run until the operator confirms a specific AD device.
+        if (!useStartSelection && !_accessHealthComputer.IsDisposed)
+        {
+            _accessHealthComputer.Clear();
+            UiStyle.SetStatus(_accessHealthStatus,
+                "Confirm the exact AD computer before running Access Health. " +
+                "No permissions have been tested.",
+                UiStatusKind.Neutral);
+        }
         // Reuse the exact Start AD selection without copying any recovery
         // key, LAPS password, ticket or cloud token into the diagnostic UI.
         // Never carry an ambiguous/cloud hostname into the AD query.
-        if (!_layoutSelfTest && _accessHealthRun.Enabled &&
+        if (useStartSelection && !_layoutSelfTest && _accessHealthRun.Enabled &&
             !_accessHealthComputer.IsDisposed)
         {
             var selected = GetSelectedHomeSearchResult();

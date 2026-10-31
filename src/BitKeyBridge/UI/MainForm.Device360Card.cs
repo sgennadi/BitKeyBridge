@@ -44,12 +44,6 @@ public sealed partial class MainForm
         if (dialog.ShowDialog(this) != DialogResult.OK ||
             dialog.SelectedRoute == Device360Route.None)
             return;
-        if (dialog.SelectedRoute == Device360Route.AccessHealth)
-        {
-            OpenHelpdeskAccessHealth();
-            return;
-        }
-
         // A dialog may outlive a query, disconnect, cancellation or results
         // refresh. Object-reference AND source identity must still match.
         // Even then, navigation alone never grants RecoveryRead.
@@ -62,6 +56,14 @@ public sealed partial class MainForm
             UiStyle.SetStatus(_homeSearchStatus,
                 "Selected device changed. Re-select the exact record.",
                 UiStatusKind.Warning);
+            return;
+        }
+
+        if (dialog.SelectedRoute == Device360Route.AccessHealth)
+        {
+            // Start identity was revalidated above; navigation is harmless
+            // but must never silently target another selected computer.
+            OpenHelpdeskAccessHealth();
             return;
         }
 
@@ -107,7 +109,17 @@ public sealed partial class MainForm
                 _device360LastUnifiedPartial));
         if (dialog.ShowDialog(this) == DialogResult.OK &&
             dialog.SelectedRoute == Device360Route.AccessHealth)
-            OpenHelpdeskAccessHealth();
+        {
+            if (_unifiedResults.SelectedItems.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.SelectedItems[0].Tag, row))
+            {
+                UiStyle.SetStatus(_unifiedStatus,
+                    "Selected device changed. Re-select the exact record.",
+                    UiStatusKind.Warning);
+                return;
+            }
+            OpenHelpdeskAccessHealth(useStartSelection: false);
+        }
     }
 
     internal Device360Dialog? PreviewDevice360CardForUiSelfTest(bool cloud)
