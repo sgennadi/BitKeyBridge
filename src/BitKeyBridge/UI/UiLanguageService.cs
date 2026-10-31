@@ -26,6 +26,8 @@ internal static class UiLanguageService
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["Start"] = ["Start", "Главная", "התחלה"],
+            ["HomePaneDragInstruction"] = ["drag to rearrange", "перетащите для перестановки", "גררו לשינוי הסדר"],
+            ["HomePaneComputers"] = ["Computers", "Компьютеры", "מחשבים"],
             ["BitLocker"] = ["BitLocker", "BitLocker", "BitLocker"],
             ["LAPS"] = ["LAPS", "LAPS", "LAPS"],
             ["Devices"] = ["Devices", "Устройства", "מכשירים"],

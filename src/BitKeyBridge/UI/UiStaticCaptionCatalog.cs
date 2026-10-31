@@ -174,6 +174,12 @@ internal static class UiStaticCaptionCatalog
             ["Copy Key"] = ["Копировать ключ", "העתקת מפתח"],
             ["Copy BitLocker Key"] = ["Копировать ключ BitLocker", "העתקת מפתח BitLocker"],
             ["Reveal BitLocker Key"] = ["Показать ключ BitLocker", "הצגת מפתח BitLocker"],
+            // Start recovery cards: translate only fixed captions, never key data.
+            ["Reveal Password"] = ["Показать пароль", "הצגת סיסמה"],
+            ["Copy Password"] = ["Копировать пароль", "העתקת סיסמה"],
+            ["Recovery Key ID"] = ["ID ключа восстановления", "מזהה מפתח שחזור"],
+            ["Recovery password"] = ["Пароль восстановления", "סיסמת שחזור"],
+            ["Password"] = ["Пароль", "סיסמה"],
             ["Clear secrets now"] = ["Очистить секреты", "ניקוי סודות כעת"],
             ["Back to Start"] = ["Назад на главную", "חזרה למסך ההתחלה"],
             ["Search BitLocker"] = ["Поиск BitLocker", "חיפוש BitLocker"],

@@ -1511,6 +1511,28 @@ public static class UiLayoutSelfTest
 
                 if (language is "ru" or "he")
                 {
+                    var lapsReveal = FindByName(form,
+                        "HomeRevealLapsButton") as Button;
+                    var lapsCopy = FindByName(form,
+                        "HomeCopyLapsButton") as Button;
+                    if (lapsReveal?.Text !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Reveal Password") ||
+                        lapsCopy?.Text !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Copy Password"))
+                        failures.Add("Start LAPS action captions remain untranslated: " +
+                            language + ".");
+
+                    var paneHandle = FindByName(form,
+                        "HomeLapsPaneHostDragHandle") as Label;
+                    if (paneHandle is null || !paneHandle.Text.Contains(
+                            UiLanguageService.Translate(
+                                language, "HomePaneDragInstruction"),
+                            StringComparison.Ordinal))
+                        failures.Add("Start drag-handle instruction remains untranslated: " +
+                            language + ".");
+
                     VerifyStartRecoveryButtonsOnScreen(form, failures);
                     VerifySelectedHomeStatusBounds(form, "NativeLocalizedStart1080p",
                         new Scenario(language + "-Selected1600x900",
