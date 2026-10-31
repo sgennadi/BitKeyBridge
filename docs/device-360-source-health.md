@@ -19,9 +19,16 @@ AD, Entra and Intune each show one of three conservative states:
 Graph token presence alone is insufficient: the token must be unexpired
 and match the active cloud authentication context. No implicit refresh is made.
 
-A partial search marks the card **Search incomplete**, without treating
-missing data as missing recovery backups. There is no per-source 429,
-403, denied or timeout indicator until structured search results expose one.
+The existing structured `UnifiedDeviceSearchReport` supplies independent
+AD/Entra/Intune success flags. A failed source is shown as **Source query
+failed; unverified**, even when another source knows the device ID. Only
+the three error flags are retained with the current results: no error strings,
+tokens or prior-result collections are cached. A source failure also marks
+the card **Search incomplete** and does not prove a missing recovery backup.
+
+There is still no claim that the failure was specifically 403/429/timeout:
+the current report does not provide a typed per-source failure category.
+Do not parse exception-message text to guess permissions or add retries here.
 
 ## Access and audit
 

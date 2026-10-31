@@ -521,6 +521,29 @@ public static class UiLayoutSelfTest
             operational.EffectiveRecoveryRightsChecked || !operational.SearchPartial)
             failures.Add("Device 360 inferred recovery permissions from search metadata.");
 
+        // The structured per-source report can fail even when another
+        // source supplied the matching Entra device ID. Fail closed:
+        // never turn that linked identifier into a green source tile.
+        var cloudFailure = Device360OperationalStatus.Capture(cloud,
+            adConnected: false, cloudSessionPresent: true,
+            rbacEnabled: false, ticketRequired: false,
+            protectedAuditRequired: true, auditBrokerConfigured: true,
+            entraLookupFailed: true);
+        if (cloudFailure.Entra != Device360SourceEvidence.LookupFailed ||
+            cloudFailure.Intune != Device360SourceEvidence.FoundInSearch ||
+            !cloudFailure.SearchPartial ||
+            cloudFailure.EffectiveRecoveryRightsChecked)
+            failures.Add("Device 360 failed to preserve structured Entra source errors.");
+
+        var unverifiedSession = Device360OperationalStatus.Capture(
+            new Device360Snapshot(), adConnected: true,
+            cloudSessionPresent: true, rbacEnabled: true,
+            ticketRequired: true, protectedAuditRequired: true,
+            auditBrokerConfigured: true);
+        if (unverifiedSession.Ad != Device360SourceEvidence.SessionPresentUnverified ||
+            unverifiedSession.Intune != Device360SourceEvidence.SessionPresentUnverified)
+            failures.Add("Device 360 confused active sessions with verified device records.");
+
         var unresolved = Device360Snapshot.FromUnified(new UnifiedDeviceInfo
         {
             ComputerName = "UI-TEST-UNVERIFIED",

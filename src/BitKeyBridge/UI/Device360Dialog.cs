@@ -295,6 +295,7 @@ internal sealed class Device360Dialog : DpiAwareForm
             var stateKey = evidence switch
             {
                 Device360SourceEvidence.FoundInSearch => "Device360SourcePresent",
+                Device360SourceEvidence.LookupFailed => "Device360SourceLookupFailed",
                 Device360SourceEvidence.SessionPresentUnverified => "Device360SourceUnverified",
                 _ => "Device360SourceDisconnected"
             };

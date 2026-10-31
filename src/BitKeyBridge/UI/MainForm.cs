@@ -1959,6 +1959,7 @@ public sealed partial class MainForm : DpiAwareForm
             _unifiedDetails.Clear();
             // Do not retain a previous query's partial-source status.
             _device360LastUnifiedPartial = false;
+            _device360UnifiedLookupFailed = default;
             _deviceRecoveryIds.Items.Clear();
             _deviceCurrentKey = null;
             _deviceRecoveryKey.Clear();
@@ -2050,6 +2051,10 @@ public sealed partial class MainForm : DpiAwareForm
             // Only a completed metadata search can set this status.
             // Source errors never establish that recovery data is absent.
             _device360LastUnifiedPartial = sourceReport?.IsPartial == true;
+            _device360UnifiedLookupFailed = (
+                Ad: sourceReport is { AdAttempted: true, AdSucceeded: false },
+                Entra: sourceReport is { EntraSucceeded: false },
+                Intune: sourceReport is { IntuneSucceeded: false });
 
             foreach (var row in rows)
             {

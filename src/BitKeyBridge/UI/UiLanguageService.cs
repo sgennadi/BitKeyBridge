@@ -34,6 +34,7 @@ internal static class UiLanguageService
             ["Device360HealthSection"] = ["Sources from current search", "Источники текущего поиска", "מקורות מהחיפוש הנוכחי"],
             ["Device360AccessSection"] = ["Access readiness / policy", "Доступ и политика безопасности", "מוכנות גישה ומדיניות"],
             ["Device360SourcePresent"] = ["Record found", "Запись найдена", "נמצאה רשומה"],
+            ["Device360SourceLookupFailed"] = ["Source query failed; unverified", "Ошибка запроса; не проверено", "שאילתת המקור נכשלה; לא אומת"],
             ["Device360SourceUnverified"] = ["Session present; unverified", "Сеанс есть; не проверено", "קיים חיבור; לא אומת"],
             ["Device360SourceDisconnected"] = ["Not connected; unverified", "Нет подключения; не проверено", "אין חיבור; לא אומת"],
             ["Device360AccessEffective"] = ["Effective recovery rights", "Права на восстановление", "הרשאות שחזור בפועל"],

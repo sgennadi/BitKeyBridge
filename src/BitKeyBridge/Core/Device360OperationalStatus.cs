@@ -7,6 +7,7 @@ namespace BitKeyBridge;
 internal enum Device360SourceEvidence
 {
     FoundInSearch,
+    LookupFailed,
     SessionPresentUnverified,
     NotConnectedUnverified
 }
@@ -33,23 +34,31 @@ internal sealed class Device360OperationalStatus
         Device360Snapshot record,
         bool adConnected, bool cloudSessionPresent,
         bool rbacEnabled, bool ticketRequired, bool protectedAuditRequired,
-        bool auditBrokerConfigured, bool searchPartial = false)
+        bool auditBrokerConfigured, bool searchPartial = false,
+        bool adLookupFailed = false, bool entraLookupFailed = false,
+        bool intuneLookupFailed = false)
     {
         ArgumentNullException.ThrowIfNull(record);
         return new Device360OperationalStatus
         {
-            Ad = Resolve(record.InAd, adConnected),
-            Entra = Resolve(record.InEntra, cloudSessionPresent),
-            Intune = Resolve(record.InIntune, cloudSessionPresent),
+            Ad = Resolve(record.InAd, adConnected, adLookupFailed),
+            Entra = Resolve(record.InEntra, cloudSessionPresent, entraLookupFailed),
+            Intune = Resolve(record.InIntune, cloudSessionPresent, intuneLookupFailed),
             RbacEnabledByConfiguration = rbacEnabled,
             TicketRequiredByConfiguration = ticketRequired,
             ProtectedAuditRequiredByConfiguration = protectedAuditRequired,
             AuditBrokerEnabledByConfiguration = auditBrokerConfigured,
-            SearchPartial = searchPartial
+            SearchPartial = searchPartial || adLookupFailed ||
+                entraLookupFailed || intuneLookupFailed
         };
     }
 
-    private static Device360SourceEvidence Resolve(bool? found, bool sessionPresent) =>
+    private static Device360SourceEvidence Resolve(
+        bool? found, bool sessionPresent, bool lookupFailed) =>
+        // A source-specific failure takes precedence even if a related
+        // object's ID came from another source (for example an Entra ID
+        // included in Intune metadata). Never call that source verified.
+        lookupFailed ? Device360SourceEvidence.LookupFailed :
         found == true ? Device360SourceEvidence.FoundInSearch :
         sessionPresent ? Device360SourceEvidence.SessionPresentUnverified :
             Device360SourceEvidence.NotConnectedUnverified;

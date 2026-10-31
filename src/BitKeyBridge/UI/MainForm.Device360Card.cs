@@ -4,9 +4,13 @@ public sealed partial class MainForm
 {
     private readonly Button _homeDevice360Button = new();
     private bool _device360LastUnifiedPartial;
+    // Only three safe per-source error booleans are carried from the
+    // completed Unified Search; never cache its rows or error messages.
+    private (bool Ad, bool Entra, bool Intune) _device360UnifiedLookupFailed;
 
     private Device360OperationalStatus CaptureDevice360OperationalStatus(
-        Device360Snapshot snapshot, bool searchPartial)
+        Device360Snapshot snapshot, bool searchPartial,
+        bool useUnifiedSourceFailures = false)
     {
         // The current connection and config flags are NOT access grants.
         // Never retain or log the token itself.
@@ -21,7 +25,13 @@ public sealed partial class MainForm
             ticketRequired: _config.RequireRecoveryAccessReference,
             protectedAuditRequired: _config.RequireProtectedAuditForRecovery,
             auditBrokerConfigured: _config.AuditBrokerEnabled,
-            searchPartial: searchPartial);
+            searchPartial: searchPartial,
+            adLookupFailed: useUnifiedSourceFailures &&
+                _device360UnifiedLookupFailed.Ad,
+            entraLookupFailed: useUnifiedSourceFailures &&
+                _device360UnifiedLookupFailed.Entra,
+            intuneLookupFailed: useUnifiedSourceFailures &&
+                _device360UnifiedLookupFailed.Intune);
     }
 
     // A single read-only card for the EXACT selected Start object. It does
@@ -106,7 +116,8 @@ public sealed partial class MainForm
         using var dialog = new Device360Dialog(snapshot, _uiLanguageCode,
             allowNavigation: false,
             operational: CaptureDevice360OperationalStatus(snapshot,
-                _device360LastUnifiedPartial));
+                _device360LastUnifiedPartial,
+                useUnifiedSourceFailures: true));
         if (dialog.ShowDialog(this) == DialogResult.OK &&
             dialog.SelectedRoute == Device360Route.AccessHealth)
         {
