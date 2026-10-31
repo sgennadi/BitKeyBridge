@@ -76,6 +76,21 @@ public sealed partial class MainForm
         {
             if (!labels.Any(entry => ReferenceEquals(entry.Label, label)))
                 label.GlyphColumnInset = 0;
+
+            // FlowLayoutPanel retains an AutoSize Label's specified bounds
+            // when only our custom glyph inset changes. Reconcile the actual
+            // size after alignment so the inset cannot steal caption space.
+            if (label.Visible && label.AutoSize &&
+                label.Dock == DockStyle.None &&
+                label.Parent is FlowLayoutPanel flow)
+            {
+                var available = Math.Max(1,
+                    flow.ClientSize.Width - flow.Padding.Horizontal -
+                    label.Margin.Horizontal);
+                var preferred = label.GetPreferredSize(new Size(available, 0));
+                if (label.Size != preferred)
+                    label.Size = preferred;
+            }
         }
     }
 
