@@ -1,3 +1,18 @@
+## 0.35.0-rc.1
+
+**Release candidate only (31 October 2026); unsigned and not deployed.** This single integration candidate includes the complete 0.34 localization/layout branch and the 0.35 Device 360 branch, reconciled with the NuGet 10.0.14 maintenance updates. It does not replace published Stable v0.33.1.
+
+- Add a read-only Device 360 computer card on Start and Devices with source-qualified AD / Entra ID / Intune identities, OS/hardware/compliance metadata, BitLocker backup *counts* and LAPS *presence* without secret values or recovery IDs.
+- Show conservative source health (found, usable session but unverified, disconnected/unverified, structured lookup failure), incomplete-search indication and RBAC/ticket/protected-audit/Audit Broker *configuration* separately from effective rights, which are explicitly **not checked by this card**.
+- Keep all existing per-source authorization, JIT/ticket/audit, reveal/copy, Intune rotation, and source revalidation in their original handlers. No automatic LDAP/Graph searches, privilege grants, credentials, secrets, approvals or key rotation are added.
+- Finish EN/RU/HE native WinForms localization, Hebrew right-to-left source ordering with LTR identifiers, rounded NI-inspired blue/green controls, coalesced tab/layout and language measurements, PerMonitorV2/RDP safeguards.
+- Fit source-state tiles to measured localized text at compact/high-DPI sizes and allocate a visible, responsive two-column action footer. An odd trailing action spans both columns. Add native synthetic screenshots and source/geometry regressions.
+- Update `System.DirectoryServices.Protocols` and `System.Management` to 10.0.14, retaining the existing .NET 10 WinForms runtime and x64/x86/ARM64 single-file targets.
+
+**Release gates still required:** exact final RC HEAD x64/x86/ARM64 native UI, LAPS, protected audit, CodeQL, ephemeral test-signature and legacy upgrade/rollback CI; review exact-source EN/RU/HE screenshots at compact and regular sizes; real managed-domain Windows 11 standard/delegated/denied AD+Graph acceptance, RDP and 100/125/150/175/200% DPI/High Contrast; organizational Authenticode signing and approved signed-only canary rollback where deployment is contemplated.
+
+No Stable tag, automatic GPO/Intune assignment, unsigned auto-update opt-in or production deployment is authorized by this RC branch. Its artifacts are for isolated manual QA and must be identified by exact SHA and hashes. See `docs/release-candidate-v0.35.0-rc.1.md`.
+
 ## 0.34.0-preview.1
 
 **Development preview only; NOT a published release.** Latest verified Stable is v0.33.1. No production rollout, unsigned auto-update permission, or administrative Graph operation is authorized by this branch.
