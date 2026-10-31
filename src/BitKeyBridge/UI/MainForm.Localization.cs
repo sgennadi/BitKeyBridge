@@ -89,7 +89,17 @@ public sealed partial class MainForm
             control.ControlRemoved += OnLocalizedCaptionControlRemoved;
 
             string? key = null;
-            if (!string.IsNullOrEmpty(control.Name) &&
+            if (control is TabPage topLevelPage &&
+                ReferenceEquals(topLevelPage.Parent, _mainTabs))
+            {
+                // Main workspace tabs use dedicated navigation resource keys
+                // in ApplyShellLanguage(). The generic static-caption catalog
+                // also defines "Start" for a *command* ("Запуск"), whereas
+                // the Start workspace is "Главная". Registering the tab here
+                // overwrote its correct Russian title after each switch.
+                // Nested TabPages are still localized by this observer.
+            }
+            else if (!string.IsNullOrEmpty(control.Name) &&
                 LocalizedCaptions.TryGetValue(control.Name, out var namedKey))
                 key = namedKey;
             else if (control is Button or CheckBox or RadioButton or
