@@ -33,7 +33,17 @@ public sealed class UiRecoveryCard : Panel
 
     protected override void OnPaintBackground(PaintEventArgs e)
     {
-        e.Graphics.Clear(Parent?.BackColor ?? SystemColors.Control);
+        // Transparent intermediate TableLayoutPanels cannot be used as a
+        // GDI+ clear color. Their alpha-zero background turns into opaque
+        // black wedges in native DrawToBitmap and can leave rounded corners
+        // visibly unfinished on some WinForms painting paths. Paint the
+        // nearest opaque ancestor surface before the antialiased card path.
+        Control? backdrop = Parent;
+        while (backdrop is not null && backdrop.BackColor.A < 255)
+            backdrop = backdrop.Parent;
+        e.Graphics.Clear(backdrop?.BackColor ??
+            (SystemInformation.HighContrast
+                ? SystemColors.Control : UiStyle.ModernCanvas));
         if (Width <= 1 || Height <= 1)
             return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
