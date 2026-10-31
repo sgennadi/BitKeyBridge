@@ -3230,6 +3230,7 @@ public static class UiLayoutSelfTest
             grid.Rows[rowIndex].Selected = true;
             grid.CurrentCell = grid.Rows[rowIndex].Cells[0];
             main.ReflowMainViewport();
+            VerifySelectedHomeStatusBounds(main, formName, scenario, failures);
 
             var width = area.Parent?.ClientSize.Width ?? 0;
             width -= area.Parent?.Padding.Horizontal ?? 0;
@@ -3366,6 +3367,42 @@ public static class UiLayoutSelfTest
         {
             grid.Rows.Clear();
             main.ReflowMainViewport();
+        }
+    }
+
+    private static void VerifySelectedHomeStatusBounds(
+        MainForm main, string formName, Scenario scenario,
+        List<string> failures)
+    {
+        // This specifically tests the metadata-only selected-device view.
+        // The previous test checked only the label's HEIGHT after wrapping;
+        // a narrow AutoSize flow could still hide "retained." on the same
+        // one-line caption while all other layout assertions passed.
+        if (FindByName(main, "SecretLifetimeStatus") is not UiStatusLabel status ||
+            status.Parent is not FlowLayoutPanel flow ||
+            flow.Parent is not Control parent ||
+            !status.Visible || parent.ClientSize.Width <= 0)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Selected Start lifetime status is not visible.");
+            return;
+        }
+
+        var rowWidth = Math.Max(flow.ClientSize.Width,
+            parent.ClientSize.Width - parent.Padding.Horizontal -
+            flow.Margin.Horizontal);
+        var available = Math.Max(1, rowWidth - flow.Padding.Horizontal -
+            status.Margin.Horizontal);
+        var intrinsic = status.GetPreferredSize(Size.Empty);
+        var wrapped = status.GetPreferredSize(new Size(status.Width, 0));
+
+        if (status.Width <= 0 || status.Height < wrapped.Height ||
+            (intrinsic.Width <= available && status.Width + 1 < intrinsic.Width))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Selected Start lifetime caption is clipped " +
+                $"(label={status.Width}x{status.Height}, intrinsic={intrinsic.Width}x{intrinsic.Height}, " +
+                $"wrappedHeight={wrapped.Height}, availableWidth={available}).");
         }
     }
 
