@@ -577,7 +577,16 @@ public static class UiLayoutSelfTest
                 ("he", cloud)
             })
             {
-                using var dialog = new Device360Dialog(snapshot, language);
+                // Exercise source-specific failures and usable-but-unverified
+                // sessions rather than only the shortest disconnected labels.
+                var tileStatus = Device360OperationalStatus.Capture(snapshot,
+                    adConnected: true, cloudSessionPresent: true,
+                    rbacEnabled: true, ticketRequired: true,
+                    protectedAuditRequired: true, auditBrokerConfigured: true,
+                    intuneLookupFailed: language == "ru",
+                    entraLookupFailed: language == "he");
+                using var dialog = new Device360Dialog(snapshot, language,
+                    operational: tileStatus);
                 dialog.Show();
                 dialog.ClientSize = new Size(980, 700);
                 Application.DoEvents();
@@ -645,6 +654,79 @@ public static class UiLayoutSelfTest
                         }
                     }
                 }
+
+                // The 980x700 screenshot alone did not catch truncated
+                // localized source statuses or missing footer borders at the
+                // window's documented minimum size. Resize the *real shown*
+                // WinForms form; do not assert only preferred dimensions.
+                foreach (var compactSize in new[]
+                {
+                    new Size(720, 540),
+                    new Size(610, 440)
+                })
+                {
+                    dialog.ClientSize = compactSize;
+                    Application.DoEvents();
+                    dialog.PerformLayout();
+                    Application.DoEvents();
+
+                    foreach (var tile in new[] { adSource, entraSource, intuneSource })
+                    {
+                        if (tile is not Label tileLabel)
+                            continue;
+                        var measured = TextRenderer.MeasureText(
+                            tileLabel.Text, tileLabel.Font,
+                            new Size(Math.Max(1, tileLabel.ClientSize.Width), 10000),
+                            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                        if (measured.Height > tileLabel.ClientSize.Height + 2)
+                            failures.Add("Device 360 localized source text clipped (" +
+                                language + ", " + compactSize.Width + "px, " +
+                                tileLabel.Name + "): measured=" + measured.Height +
+                                ", available=" + tileLabel.ClientSize.Height + ".");
+                    }
+
+                    if (FindByName(dialog, "Device360CardActions") is TableLayoutPanel compactFooter)
+                    {
+                        var safeBottom = dialog.ClientRectangle.Bottom -
+                            UiStyle.ScaleLogicalPixels(12, dialog.DeviceDpi);
+                        foreach (var button in compactFooter.Controls.OfType<Button>())
+                        {
+                            var bounds = dialog.RectangleToClient(
+                                button.RectangleToScreen(button.ClientRectangle));
+                            if (bounds.Width <= 0 || bounds.Height <= 0 ||
+                                bounds.Left < 0 || bounds.Top < 0 ||
+                                bounds.Right > dialog.ClientRectangle.Right ||
+                                bounds.Bottom > safeBottom)
+                                failures.Add("Device 360 compact footer clipped (" +
+                                    language + ", " + compactSize.Width + "px, " +
+                                    button.Name + "): " + bounds + ".");
+                        }
+                    }
+                    else
+                    {
+                        failures.Add("Device 360 compact footer missing (" +
+                            language + ", " + compactSize.Width + "px).");
+                    }
+
+                    if (compactSize.Width == 610 &&
+                        string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                            "true", StringComparison.OrdinalIgnoreCase) &&
+                        Environment.GetEnvironmentVariable(
+                            "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS") == "1")
+                    {
+                        using var compactBitmap = new Bitmap(dialog.ClientSize.Width,
+                            dialog.ClientSize.Height);
+                        dialog.DrawToBitmap(compactBitmap,
+                            new Rectangle(Point.Empty, compactBitmap.Size));
+                        compactBitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                            "ui-device-360-" + language + "-compact.png"),
+                            System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+                // Preserve the established full-size top/policy screenshots.
+                dialog.ClientSize = new Size(980, 700);
+                Application.DoEvents();
+                dialog.PerformLayout();
 
                 if (language == "he" &&
                     FindByName(dialog, "Device360SourceStates") is TableLayoutPanel sourceTable &&
