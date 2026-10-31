@@ -3399,16 +3399,45 @@ public static class UiLayoutSelfTest
             flow.Margin.Horizontal);
         var available = Math.Max(1, rowWidth - flow.Padding.Horizontal -
             status.Margin.Horizontal);
-        var intrinsic = status.GetPreferredSize(Size.Empty);
-        var wrapped = status.GetPreferredSize(new Size(status.Width, 0));
 
-        if (status.Width <= 0 || status.Height < wrapped.Height ||
-            (intrinsic.Width <= available && status.Width + 1 < intrinsic.Width))
+        // Never calculate the expected text bounds with the status label's
+        // own GetPreferredSize(): an already-clamped MaximumSize can make a
+        // truncated caption appear geometrically correct to that method.
+        // Measure the full caption independently with the same TextRenderer
+        // flags that UiStatusLabel uses when painting.
+        const TextFormatFlags flags = TextFormatFlags.Left |
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;
+        var glyphGap = status.Image is null ? 0 :
+            (int)Math.Ceiling(UiStyle.ControlGap *
+                status.DeviceDpi / (double)UiStyle.BaselineDpi);
+        var chromeWidth = status.Padding.Horizontal +
+            (status.BorderStyle == BorderStyle.None ? 0 : 2) +
+            status.GlyphColumnInset +
+            (status.Image?.Width ?? 0) + glyphGap;
+        var chromeHeight = status.Padding.Vertical +
+            (status.BorderStyle == BorderStyle.None ? 0 : 2);
+        var text = status.Text ?? string.Empty;
+        var textFullWidth = TextRenderer.MeasureText(
+            text, status.Font, new Size(8192, 16384), flags).Width;
+        var requiredOneLine = chromeWidth + textFullWidth;
+        var wrappedHeight = TextRenderer.MeasureText(
+            text, status.Font, new Size(
+                Math.Max(1, status.ClientSize.Width - chromeWidth), 16384),
+            flags).Height;
+        var requiredHeight = chromeHeight +
+            Math.Max(status.Image?.Height ?? 0, wrappedHeight);
+        var shouldFitOneLine = requiredOneLine <= available;
+
+        if (status.ClientSize.Width <= 0 ||
+            status.ClientSize.Height + 1 < requiredHeight ||
+            (shouldFitOneLine &&
+             status.ClientSize.Width + 2 < requiredOneLine))
         {
             failures.Add(
                 $"{formName}/{scenario.Name}: Selected Start lifetime caption is clipped " +
-                $"(label={status.Width}x{status.Height}, intrinsic={intrinsic.Width}x{intrinsic.Height}, " +
-                $"wrappedHeight={wrapped.Height}, availableWidth={available}).");
+                $"(label={status.ClientSize.Width}x{status.ClientSize.Height}, " +
+                $"fullWidth={requiredOneLine}, neededHeight={requiredHeight}, " +
+                $"availableWidth={available}, maxWidth={status.MaximumSize.Width}).");
         }
     }
 
