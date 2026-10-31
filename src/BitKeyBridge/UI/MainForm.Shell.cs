@@ -1077,7 +1077,9 @@ public sealed partial class MainForm
         _homeRecentResults.Name = "HomeRecentComputers";
         _homeRecentResults.AccessibleName = "Recent computers without stored secrets";
         _homeRecentResults.Dock = DockStyle.Fill;
-        _homeRecentResults.MinimumSize = new Size(0, 100);
+        // Let a one-record history shrink below 100px; the capped absolute
+        // table row provides the required grid height at every DPI.
+        _homeRecentResults.MinimumSize = Size.Empty;
         UiStyle.ConfigureDataGridView(_homeRecentResults);
         _homeRecentResults.Columns.AddRange([
             UiStyle.CreateSortableTextColumn("Computer", "Computer", 170),
