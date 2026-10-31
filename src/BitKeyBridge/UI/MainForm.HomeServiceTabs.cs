@@ -231,7 +231,11 @@ public sealed partial class MainForm
                 button, buttonGlyph, i == actions.Length - 1);
             button.Margin = new Padding(
                 0, 0, i == actions.Length - 1 ? 0 : UiStyle.ControlGap, 0);
-            button.Dock = DockStyle.Fill;
+            // Dock.Fill fed TableLayoutPanel's provisional 100px height back
+            // into a one-row AutoSize layout, producing giant clipped buttons
+            // in the selected-device 1080p viewport. Dock.Top retains the
+            // equal column width but lets the button report intrinsic height.
+            button.Dock = DockStyle.Top;
             buttonStack.Controls.Add(button, i, 0);
         }
         layout.Controls.Add(buttonStack, 0, 2);
