@@ -1421,6 +1421,17 @@ public static class UiLayoutSelfTest
                 continue;
             }
 
+            // Also catch a fully visible but oversized action: an
+            // AutoSize+Dock.Fill feedback loop previously inflated the
+            // nominal 46px recovery button to 100px at 96 DPI.
+            var maxHeight = (int)Math.Ceiling(72d *
+                Math.Max(UiStyle.BaselineDpi, button.DeviceDpi) /
+                UiStyle.BaselineDpi);
+            if (button.ClientSize.Height > maxHeight)
+                failures.Add("1080p Start recovery action inflated vertically: " +
+                    name + "; height=" + button.ClientSize.Height +
+                    "; limit=" + maxHeight + ".");
+
             var visible = button.RectangleToScreen(button.ClientRectangle);
             var foundViewport = false;
             for (Control? ancestor = button.Parent; ancestor is not null;
