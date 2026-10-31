@@ -53,7 +53,11 @@ internal sealed class Device360Dialog : DpiAwareForm
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        // Reserve footer height BEFORE the percent-height scroll row is
+        // allocated. AutoSize footer height was recalculated too late and
+        // left the second action row without its bottom border.
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute,
+            UiStyle.ScaleLogicalPixels(112, DeviceDpi)));
         Controls.Add(root);
 
         var heading = new TableLayoutPanel
@@ -253,6 +257,9 @@ internal sealed class Device360Dialog : DpiAwareForm
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 2,
             RowCount = 2,
+            // Columns are mirrored explicitly by AddFooterAction. Avoid
+            // a second inherited WinForms RTL reversal of the grid.
+            RightToLeft = RightToLeft.No,
             Padding = new Padding(0, UiStyle.ControlGap, 0, 0),
             Margin = Padding.Empty
         };
@@ -291,6 +298,26 @@ internal sealed class Device360Dialog : DpiAwareForm
             }
         }
         root.Controls.Add(actions, 0, 2);
+        // Recalculate when fonts/DPI/window width change, but NEVER allow
+        // the bottom action row to consume unreserved scroll space.
+        void ReserveFooterSpace()
+        {
+            if (IsDisposed || Disposing || root.IsDisposed || actions.IsDisposed)
+                return;
+            var footerPreferred = actions.GetPreferredSize(new Size(
+                Math.Max(1, root.ClientSize.Width - root.Padding.Horizontal), 0));
+            var reserved = Math.Max(
+                UiStyle.ScaleLogicalPixels(112, DeviceDpi),
+                footerPreferred.Height + UiStyle.ScaleLogicalPixels(12, DeviceDpi));
+            if (Math.Abs(root.RowStyles[2].Height - reserved) > 1)
+            {
+                root.RowStyles[2].Height = reserved;
+                root.PerformLayout();
+            }
+        }
+        Shown += (_, _) => ReserveFooterSpace();
+        ClientSizeChanged += (_, _) => ReserveFooterSpace();
+        DpiChanged += (_, _) => ReserveFooterSpace();
 
         string Value(string? text) =>
             string.IsNullOrWhiteSpace(text) ? Tr("Device360NotVerified") : text;
@@ -339,6 +366,7 @@ internal sealed class Device360Dialog : DpiAwareForm
                 nextActionSlot % 2;
             var row = nextActionSlot / 2;
             button.Dock = DockStyle.Fill;
+            button.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
             button.Margin = new Padding(4);
             actions.Controls.Add(button, column, row);
             nextActionSlot++;

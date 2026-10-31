@@ -618,16 +618,26 @@ public static class UiLayoutSelfTest
                     var buttons = footer.Controls.OfType<Button>().ToArray();
                     if (buttons.Length < 2 || buttons.Length > 4)
                         failures.Add("Device 360 footer button count is invalid: " + language + ".");
+                    var expectedCloseColumn = language == "he" ? 1 : 0;
+                    if (footer.RightToLeft != RightToLeft.No ||
+                        FindByName(dialog, "Device360CardClose") is not Button closeAction ||
+                        footer.GetColumn(closeAction) != expectedCloseColumn)
+                        failures.Add("Device 360 footer was mirrored twice: " + language + ".");
                     foreach (var button in buttons)
                     {
                         var visibleBounds = dialog.RectangleToClient(
                             button.RectangleToScreen(button.ClientRectangle));
                         var area = dialog.ClientRectangle;
+                        // Bottom-border clearance is required: a previous
+                        // version passed ClientRectangle geometry yet painted
+                        // buttons touching the PNG's last pixel.
+                        var bottomSafetyInset = UiStyle.ScaleLogicalPixels(12,
+                            dialog.DeviceDpi);
                         if (visibleBounds.Width <= 0 || visibleBounds.Height <= 0 ||
                             visibleBounds.Left < area.Left ||
                             visibleBounds.Top < area.Top ||
                             visibleBounds.Right > area.Right ||
-                            visibleBounds.Bottom > area.Bottom)
+                            visibleBounds.Bottom > area.Bottom - bottomSafetyInset)
                         {
                             failures.Add("Device 360 action clipped (" + language +
                                 ", " + button.Name + "): bounds=" +
