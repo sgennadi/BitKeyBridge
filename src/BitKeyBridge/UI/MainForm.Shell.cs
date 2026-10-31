@@ -1444,6 +1444,16 @@ public sealed partial class MainForm
         UiStyle.ConfigureActionButton(_homeRecoveryStepsButton);
         _homeRecoveryStepsButton.Click += (_, _) => ShowRecoveryWorkflowSteps();
         secretLifetime.Controls.Add(_homeRecoveryStepsButton);
+
+        _homeDevice360Button.Name = "HomeDevice360Button";
+        _homeDevice360Button.Text = "Computer card";
+        _homeDevice360Button.AccessibleName =
+            "Open the selected computer metadata card, without revealing secrets";
+        _homeDevice360Button.Enabled = false;
+        UiStyle.ConfigureActionButton(_homeDevice360Button);
+        _homeDevice360Button.Click += (_, _) => ShowHomeDevice360Card();
+        secretLifetime.Controls.Add(_homeDevice360Button);
+
         _homeSelectionPanel.Controls.Add(
             secretLifetime,
             0,
@@ -2752,6 +2762,11 @@ public sealed partial class MainForm
             "Copy Device 360 Summary");
         copySummary.Name = "CopyDevice360Summary";
         actions.Controls.Add(copySummary);
+        var openCard = UiStyle.CreateActionButton("Computer card");
+        openCard.Name = "OpenDevice360CardButton";
+        openCard.AccessibleName =
+            "Open the selected device metadata card without retrieving secrets";
+        actions.Controls.Add(openCard);
         root.Controls.Add(actions, 0, 7);
 
         _unifiedSearch.Click +=
@@ -2771,6 +2786,7 @@ public sealed partial class MainForm
                 ShowUnifiedDeviceDetails();
                 PopulateDeviceRecoveryIds();
             };
+        _unifiedResults.ItemActivate += (_, _) => ShowUnifiedDevice360Card();
 
         _deviceRecoveryIds.SelectedIndexChanged +=
             (_, _) =>
@@ -2793,6 +2809,7 @@ public sealed partial class MainForm
             async (_, _) => await RotateSelectedUnifiedDeviceAsync();
         copySummary.Click +=
             (_, _) => CopyUnifiedDeviceSummary();
+        openCard.Click += (_, _) => ShowUnifiedDevice360Card();
 
         return page;
     }

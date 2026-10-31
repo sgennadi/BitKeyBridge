@@ -17,6 +17,8 @@ public sealed partial class MainForm
             ["HomeDisconnectAdButton"] = "MainDisconnectAd",
             ["HomeConnectionToolsButton"] = "MainConnectionTools",
             ["HomeRecoverySteps"] = "MainRecoverySteps",
+            ["HomeDevice360Button"] = "Device360Open",
+            ["OpenDevice360CardButton"] = "Device360Open",
             ["HomeBitLockerDiagnosticLink"] = "MainViewCommands",
             ["HomeLoadLapsHistoryButton"] = "MainLoadHistory",
             ["RecoveryBackToStart"] = "MainBackToStart",

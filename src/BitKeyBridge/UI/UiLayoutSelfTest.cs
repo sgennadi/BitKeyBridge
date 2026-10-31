@@ -133,6 +133,7 @@ public static class UiLayoutSelfTest
 
         VerifyStartupWizardTextWrapping(failures);
         VerifyModalDialogLocalization(failures);
+        VerifyDevice360CardIsolation(failures);
 
         VerifyStartSourcePolicies(failures);
 
@@ -478,6 +479,140 @@ public static class UiLayoutSelfTest
         catch (Exception ex)
         {
             failures.Add("Connection chooser responsive prose: " +
+                ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private static void VerifyDevice360CardIsolation(List<string> failures)
+    {
+        // Native WinForms test with ONLY synthetic metadata. No login, LDAP,
+        // Graph, recovery-key lookup, LAPS secret, audit write or clipboard.
+        const string syntheticRecoveryId = "UI-DO-NOT-DISPLAY-RECOVERY-ID";
+        var cloudRecord = new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-TEST-INTUNE-001",
+            IdentityKey = "INTUNE:MANAGED:ui-example-001",
+            IdentityStatus = "Intune object",
+            FoundInEntra = true,
+            FoundInIntune = true,
+            EntraDeviceId = "0f29ed68-8f58-478e-bb0f-89bc64aa1a2b",
+            ManagedDeviceId = "ui-example-001",
+            OperatingSystem = "Windows",
+            OsVersion = "11",
+            ComplianceState = "compliant",
+            IsEncrypted = true,
+            RecoveryIds = [syntheticRecoveryId]
+        };
+        var cloud = Device360Snapshot.FromUnified(cloudRecord);
+        if (!cloud.IdentityVerified || cloud.BitLockerMetadataCount != 1 ||
+            cloud.InAd != null || cloud.InEntra != true ||
+            cloud.InIntune != true)
+            failures.Add("Device 360 source-qualified cloud metadata projection is incorrect.");
+
+        var unresolved = Device360Snapshot.FromUnified(new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-TEST-UNVERIFIED",
+            IdentityKey = "ENTRA:KEY:" + syntheticRecoveryId,
+            RecoveryIds = [syntheticRecoveryId]
+        });
+        if (unresolved.IdentityVerified ||
+            unresolved.QualifiedIdentity.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal))
+            failures.Add("Device 360 accepted a recovery ID as a device identity.");
+
+        var ad = Device360Snapshot.FromHome(new HomeSearchResult
+        {
+            ComputerName = "UI-TEST-AD-001",
+            AdComputerDistinguishedName =
+                "CN=UI-TEST-AD-001,OU=Test,DC=example,DC=com",
+            BitLockerKeyCount = 1,
+            LapsCandidateFound = true,
+            LapsStatus = "Detected"
+        });
+        if (!ad.IdentityVerified || ad.InAd != true ||
+            !ad.LapsMetadataDetected || ad.BitLockerMetadataCount != 1)
+            failures.Add("Device 360 AD/LAPS metadata projection is incorrect.");
+
+        try
+        {
+            foreach (var (language, snapshot) in new[]
+            {
+                ("en", ad),
+                ("ru", ad),
+                ("he", cloud)
+            })
+            {
+                using var dialog = new Device360Dialog(snapshot, language);
+                dialog.Show();
+                dialog.ClientSize = new Size(980, 700);
+                Application.DoEvents();
+                dialog.PerformLayout();
+
+                if (dialog.RightToLeftLayout != (language == "he") ||
+                    FindByName(dialog, "Device360CardSections") is not TableLayoutPanel ||
+                    FindByName(dialog, "Device360CardRecoverySection") is not UiRecoveryCard ||
+                    FindByName(dialog, "Device360SourceAd") is not Label ||
+                    FindByName(dialog, "Device360SourceEntra") is not Label ||
+                    FindByName(dialog, "Device360SourceIntune") is not Label ||
+                    FindByName(dialog, "Device360CardClose") is not Button)
+                    failures.Add("Device 360 missing basic RTL, source or recovery controls: " +
+                        language + ".");
+
+                if ((language == "he") !=
+                    (FindByName(dialog, "Device360RouteDevices") is Button) ||
+                    (language != "he") !=
+                    (FindByName(dialog, "Device360RouteBitLocker") is Button))
+                    failures.Add("Device 360 source-qualified navigation is incorrect: " +
+                        language + ".");
+
+                var texts = new List<string>();
+                void Collect(Control control)
+                {
+                    texts.Add(control.Text ?? string.Empty);
+                    foreach (Control child in control.Controls)
+                        Collect(child);
+                }
+                Collect(dialog);
+                if (texts.Any(value => value.Contains(syntheticRecoveryId,
+                        StringComparison.Ordinal)) ||
+                    texts.Any(value => value.Contains("Recovery IDs:",
+                        StringComparison.Ordinal)))
+                    failures.Add("Device 360 leaked a recovery identifier: " + language + ".");
+
+                if (string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                        "true", StringComparison.OrdinalIgnoreCase) &&
+                    Environment.GetEnvironmentVariable(
+                        "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS") == "1")
+                {
+                    using var bitmap = new Bitmap(dialog.ClientSize.Width,
+                        dialog.ClientSize.Height);
+                    dialog.DrawToBitmap(bitmap,
+                        new Rectangle(Point.Empty, bitmap.Size));
+                    bitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                        "ui-device-360-" + language + ".png"),
+                        System.Drawing.Imaging.ImageFormat.Png);
+                }
+                dialog.Close();
+            }
+
+            using var blocked = new Device360Dialog(
+                Device360Snapshot.FromHome(new HomeSearchResult
+                {
+                    ComputerName = "UI-TEST-COLLISION",
+                    IdentityAmbiguous = true,
+                    AdComputerDistinguishedName =
+                        "CN=UI-TEST-COLLISION,DC=example,DC=com"
+                }), "en");
+            blocked.CreateControl();
+            if (FindByName(blocked, "Device360RouteBitLocker") is not null ||
+                FindByName(blocked, "Device360RouteLaps") is not null ||
+                FindByName(blocked, "Device360RouteDevices") is not null)
+                failures.Add("Ambiguous Device 360 identity has a recovery shortcut.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Device 360 metadata UI regression: " +
                 ex.GetType().Name + ": " +
                 DiagnosticRedaction.Sanitize(ex.Message));
         }
