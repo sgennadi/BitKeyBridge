@@ -2039,6 +2039,18 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        // Reproduce the reported connected Start viewport: a persistent
+        // non-secret audit notice above the tabs must have a short footprint,
+        // leaving room for recovery cards without hiding Copy/Dismiss.
+        var diagnostic = FindByName(form, "ApplicationDiagnostics") as
+            UiDiagnosticPanel;
+        var originalDiagnosticActive = diagnostic?.HasActiveDiagnostics ?? false;
+        if (diagnostic is null)
+            failures.Add("Compact Start is missing global diagnostics panel.");
+        else if (!originalDiagnosticActive)
+            diagnostic.ShowMessage("Portable audit journal in use",
+                "Synthetic audit display: no device identities or secrets.");
+
         try
         {
             foreach (var size in new[]
@@ -2061,6 +2073,13 @@ public static class UiLayoutSelfTest
                     var scale = Math.Max(form.DeviceDpi /
                         (double)UiStyle.BaselineDpi,
                         form.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+                    if (diagnostic is { HasActiveDiagnostics: true } &&
+                        (diagnostic.Height > 72 * scale ||
+                         !diagnostic.AreActionsWithinVisibleBounds()))
+                        failures.Add("Compact Start audit notice reserves too much " +
+                            "height or clips Copy/Dismiss: " +
+                            size.Width + "x" + size.Height + "/" + language +
+                            "; diagnosticHeight=" + diagnostic.Height + ".");
                     if (geometry is null ||
                         geometry.Value.CardColumns != 3 ||
                         geometry.Value.CardRows != 1 ||
@@ -2119,6 +2138,8 @@ public static class UiLayoutSelfTest
         }
         finally
         {
+            if (!originalDiagnosticActive)
+                diagnostic?.Clear();
             form.PreviewShellLanguageForLayoutTest("en");
             form.ClientSize = originalSize;
             Application.DoEvents();
