@@ -2247,6 +2247,15 @@ public static class UiLayoutSelfTest
                         if (!ReferenceEquals(results.CurrentRow?.Tag, selected))
                             failures.Add("UI zoom changed selected computer.");
 
+                        // Save the real native 1366px / 125%-font intermediate
+                        // two-column layout for visual review in Windows CI.
+                        // Only synthetic names and masked metadata are present.
+                        if (size.Width == 1366 && densityMode == "Auto" &&
+                            zoom == 125)
+                            SaveSyntheticStartSnapshotForCi(form,
+                                "compact-selected-1366-zoom125-" + language,
+                                failures);
+
                         // Test the adaptive card BREAKPOINT using the actual
                         // native pixel width after font zoom, not a model of
                         // the window or only the default 100% setting.
