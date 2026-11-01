@@ -45,10 +45,12 @@ internal static class UiDisplayPreferencePolicy
         var zoom = NormalizeScale(zoomPercent) / 100d;
         var nativeDpi = Math.Max(1d, deviceDpi /
             (double)UiStyle.BaselineDpi);
-        // Test/accessibility fonts can be enlarged independently of DPI.
+        // Form.Font remains the native OS-DPI baseline. User zoom applies
+        // to text-bearing children only, so never divide by zoom here:
+        // that would silently cancel the 90% setting at 96 DPI.
         var externalFontRatio = standardFontSize <= 0f
             ? 1d
-            : Math.Max(1d, formFontSize / standardFontSize / zoom);
+            : Math.Max(1d, formFontSize / standardFontSize);
         return Math.Max(nativeDpi, externalFontRatio) * zoom;
     }
 
