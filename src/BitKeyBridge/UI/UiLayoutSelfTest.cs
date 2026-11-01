@@ -2213,6 +2213,76 @@ public static class UiLayoutSelfTest
                                 language + "/" + densityMode + "/" + zoom);
                         if (!ReferenceEquals(results.CurrentRow?.Tag, selected))
                             failures.Add("UI zoom changed selected computer.");
+
+                        // Test the adaptive card BREAKPOINT using the actual
+                        // native pixel width after font zoom, not a model of
+                        // the window or only the default 100% setting.
+                        if (FindByName(form, "HomeServiceCards") is
+                                TableLayoutPanel adaptiveCards &&
+                            adaptiveCards.Parent is Control cardArea)
+                        {
+                            var width = Math.Max(0,
+                                cardArea.ClientSize.Width -
+                                cardArea.Padding.Horizontal);
+                            var effectiveScale =
+                                UiDisplayPreferencePolicy.EffectiveScale(
+                                    form.DeviceDpi, form.Font.Size,
+                                    UiStyle.BodyFont.Size, zoom);
+                            var expectedColumns = width >= (int)Math.Ceiling(
+                                UiStyle.HomeThreePaneMinimumWidth * effectiveScale)
+                                ? 3 : width >= (int)Math.Ceiling(
+                                    UiStyle.HomeRecoveryCardsPairMinimumWidth *
+                                    effectiveScale) ? 2 : 1;
+                            var expectedRows = expectedColumns == 3 ? 1 :
+                                expectedColumns == 2 ? 2 : 3;
+                            if (adaptiveCards.ColumnCount != expectedColumns ||
+                                adaptiveCards.RowCount != expectedRows)
+                                failures.Add("Start DPI/zoom adaptive grid mismatch: " +
+                                    size.Width + "x" + size.Height + "/" +
+                                    language + "/" + densityMode + "/" + zoom +
+                                    "; columns=" + adaptiveCards.ColumnCount +
+                                    "/" + expectedColumns + "; rows=" +
+                                    adaptiveCards.RowCount + "/" + expectedRows);
+
+                            if (expectedColumns == 2)
+                            {
+                                var lastPane = adaptiveCards.Controls
+                                    .Cast<Control>()
+                                    .FirstOrDefault(pane =>
+                                        adaptiveCards.GetRow(pane) == 1);
+                                if (lastPane is null ||
+                                    adaptiveCards.GetColumn(lastPane) != 0 ||
+                                    adaptiveCards.GetColumnSpan(lastPane) != 2)
+                                    failures.Add("Start DPI/zoom third pane has lost " +
+                                        "its two-column span: " + size.Width +
+                                        "x" + size.Height + "/" + language +
+                                        "/" + densityMode + "/" + zoom);
+                            }
+
+                            if (expectedRows > 1 &&
+                                FindByName(form, "HomeLayoutRoot") is
+                                    TableLayoutPanel startScroller)
+                            {
+                                var heights = startScroller.GetRowHeights();
+                                var required = heights.Take(5).Sum() +
+                                    adaptiveCards.MinimumSize.Height +
+                                    startScroller.Padding.Vertical;
+                                if (required > startScroller.ClientSize.Height &&
+                                    startScroller.AutoScrollMinSize.Height < required)
+                                    failures.Add("Start DPI/zoom lost scroll " +
+                                        "reachability for stacked cards: " +
+                                        size.Width + "x" + size.Height + "/" +
+                                        language + "/" + densityMode + "/" + zoom +
+                                        "; scrollExtent=" +
+                                        startScroller.AutoScrollMinSize.Height +
+                                        "; required=" + required);
+                            }
+                        }
+                        else
+                        {
+                            failures.Add("Start adaptive card viewport is missing " +
+                                "after DPI/font zoom.");
+                        }
                     }
                     form.PreviewSetUiDisplayPreferencesForUiSelfTest("Auto", 100);
                     form.ReflowMainViewport();
@@ -4079,6 +4149,8 @@ public static class UiLayoutSelfTest
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
             bool expectedThree = width >= (int)Math.Ceiling(
                 UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
+            bool expectedTwo = !expectedThree && width >= (int)Math.Ceiling(
+                UiStyle.HomeRecoveryCardsPairMinimumWidth * effectiveScale);
 
             // This failure previously survived structural three-column tests:
             // all three cards existed but started below the visible viewport.
@@ -4152,6 +4224,26 @@ public static class UiLayoutSelfTest
                 main.ExchangeHomePanesForUiSelfTest("Laps", "Computers");
                 main.ReflowMainViewport();
             }
+            else if (expectedTwo)
+            {
+                var bottomHost = hosts.FirstOrDefault(
+                    host => cards.GetPositionFromControl(host).Row == 1);
+                if (cards.ColumnCount != 2 || cards.RowCount != 2 ||
+                    cards.RowStyles.Count != 2 ||
+                    cards.RowStyles.Cast<RowStyle>().Any(
+                        row => row.SizeType != SizeType.Absolute) ||
+                    cells.Count(position => position.Row == 0) != 2 ||
+                    cells.Count(position => position.Row == 1) != 1 ||
+                    cells.Where(position => position.Row == 0)
+                        .Select(position => position.Column).Distinct().Count() != 2 ||
+                    bottomHost is null ||
+                    cards.GetColumn(bottomHost) != 0 ||
+                    cards.GetColumnSpan(bottomHost) != 2)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: intermediate-width Start must retain two side-by-side panes and a full-width third pane.");
+                }
+            }
             else
             {
                 if (cards.ColumnCount != 1 || cards.RowCount != 3 ||
@@ -4187,8 +4279,12 @@ public static class UiLayoutSelfTest
             var resetLayoutCorrect = expectedThree
                 ? resetCells.Select(x => x.Column).SequenceEqual([0, 1, 2]) &&
                   resetCells.All(x => x.Row == 0)
-                : resetCells.Select(x => x.Row).SequenceEqual([0, 1, 2]) &&
-                  resetCells.All(x => x.Column == 0);
+                : expectedTwo
+                    ? resetCells.Select(x => x.Column).SequenceEqual([0, 1, 0]) &&
+                      resetCells.Select(x => x.Row).SequenceEqual([0, 0, 1]) &&
+                      cards.GetColumnSpan(computers) == 2
+                    : resetCells.Select(x => x.Row).SequenceEqual([0, 1, 2]) &&
+                      resetCells.All(x => x.Column == 0);
             if (!resetLayoutCorrect)
             {
                 failures.Add(
