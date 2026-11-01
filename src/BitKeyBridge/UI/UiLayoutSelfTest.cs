@@ -2600,12 +2600,13 @@ public static class UiLayoutSelfTest
                     form.PerformLayout();
                     Application.DoEvents();
 
-                    if (FindByName(form, "ApplicationDiagnostics") is not
-                        UiDiagnosticPanel banner ||
-                        !banner.AreActionsWithinVisibleBounds())
+                    var diagnosticPanel = FindByName(
+                        form, "ApplicationDiagnostics") as UiDiagnosticPanel;
+                    if (diagnosticPanel is null ||
+                        !diagnosticPanel.AreActionsWithinVisibleBounds())
                         failures.Add("Copy Diagnostics is clipped or not visible: " +
                             language + ", font scale " + (i == 0 ? "100" : "200") +
-                            "%. " + (banner?.ActionBoundsReport() ?? "No panel"));
+                            "%. " + (diagnosticPanel?.ActionBoundsReport() ?? "No panel"));
 
                     if (FindByName(form, "GlobalStatusBar") is not StatusStrip status ||
                         status.Items.Find("GlobalCopyDiagnostics", false)
