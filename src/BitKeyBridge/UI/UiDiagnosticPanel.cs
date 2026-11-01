@@ -25,8 +25,10 @@ public sealed class UiDiagnosticPanel : Panel
                 UiStyle.ControlGap;
             Padding = new Padding(gap);
             Margin = new Padding(0, compact ? 0 : gap, 0, gap);
-            _summary.Margin = new Padding(0, gap, 0, 0);
-            _copyStatus.Margin = new Padding(0, gap, 0, 0);
+            _summary.Margin = new Padding(0, 0, gap, 0);
+            _copyStatus.Margin = new Padding(
+                0, compact ? 0 : Math.Max(2, gap / 2), gap, 0);
+            UpdateSummaryWrapWidth();
         }
         finally
         {
@@ -45,6 +47,7 @@ public sealed class UiDiagnosticPanel : Panel
             _language, "Copy diagnostics");
         _dismiss.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
             _language, "Dismiss");
+        UpdateSummaryWrapWidth();
         if (_copyStatus.Text.Length > 0 &&
             new[] { "en", "ru", "he" }.Any(language =>
                 _copyStatus.Text == UiStaticCaptionCatalog.TranslateOrOriginal(
@@ -118,12 +121,14 @@ public sealed class UiDiagnosticPanel : Panel
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             RightToLeft = RightToLeft.No,
-            ColumnCount = 1,
-            RowCount = 3,
-            Margin = new Padding(0)
+            // A simple notice should not reserve a tall empty band above
+            // Start. Keep the summary and Copy/Dismiss on the same line.
+            ColumnCount = 2,
+            RowCount = 2,
+            Margin = Padding.Empty
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -139,7 +144,7 @@ public sealed class UiDiagnosticPanel : Panel
             RightToLeft = RightToLeft.No,
             WrapContents = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0)
+            Margin = new Padding(UiStyle.ControlGap, 0, 0, 0)
         };
         _copy.Name = "CopyDiagnosticsButton";
         _copy.AccessibleName = "Copy redacted diagnostics to clipboard";
@@ -148,26 +153,47 @@ public sealed class UiDiagnosticPanel : Panel
         _dismiss.RightToLeft = RightToLeft.No;
         actions.Controls.Add(_copy);
         actions.Controls.Add(_dismiss);
-        root.Controls.Add(actions, 0, 0);
+        root.Controls.Add(actions, 1, 0);
+        root.SetRowSpan(actions, 2);
 
         _summary.AutoSize = true;
         _summary.Dock = DockStyle.Top;
         _summary.MaximumSize = new Size(980, 0);
         _summary.Font = UiStyle.CreateEmphasisFont();
         _summary.AccessibleName = "Diagnostic reason";
-        _summary.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
-        root.Controls.Add(_summary, 0, 1);
+        _summary.Margin = new Padding(0, 0, UiStyle.ControlGap, 0);
+        root.Controls.Add(_summary, 0, 0);
 
         _copyStatus.AutoSize = true;
         _copyStatus.Dock = DockStyle.Top;
         _copyStatus.AccessibleName = "Diagnostic copy status";
-        _copyStatus.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
-        root.Controls.Add(_copyStatus, 0, 2);
+        _copyStatus.Margin = new Padding(
+            0, Math.Max(2, UiStyle.ControlGap / 2), UiStyle.ControlGap, 0);
+        root.Controls.Add(_copyStatus, 0, 1);
 
         Controls.Add(root);
+        SizeChanged += (_, _) => UpdateSummaryWrapWidth();
 
         _copy.Click += (_, _) => CopyDiagnostics();
         _dismiss.Click += (_, _) => Clear();
+    }
+
+    private void UpdateSummaryWrapWidth()
+    {
+        if (IsDisposed || ClientSize.Width < 160)
+            return;
+
+        // AutoSize summaries must wrap BEFORE they push Copy/Dismiss
+        // out of the visible two-column viewport at 200% DPI.
+        var actionWidth = _copy.Parent?.GetPreferredSize(Size.Empty).Width ??
+            (2 * UiStyle.MinimumButtonWidth);
+        var remaining = ClientSize.Width - Padding.Horizontal -
+            actionWidth - UiStyle.ControlGap - 8;
+        var maximum = Math.Max(110, Math.Min(980, remaining));
+        if (_summary.MaximumSize.Width != maximum)
+            _summary.MaximumSize = new Size(maximum, 0);
+        if (_copyStatus.MaximumSize.Width != maximum)
+            _copyStatus.MaximumSize = new Size(maximum, 0);
     }
 
     public void ShowError(
@@ -199,6 +225,7 @@ public sealed class UiDiagnosticPanel : Panel
         _summary.Text = DiagnosticRedaction.Sanitize(summary);
         _diagnostics = DiagnosticRedaction.Sanitize(string.Join(Environment.NewLine, lines));
         _copyStatus.Text = string.Empty;
+        UpdateSummaryWrapWidth();
         Visible = true;
         BringToFront();
     }
@@ -210,6 +237,7 @@ public sealed class UiDiagnosticPanel : Panel
         _summary.Text = DiagnosticRedaction.Sanitize(summary);
         _diagnostics = DiagnosticRedaction.Sanitize(diagnostics);
         _copyStatus.Text = string.Empty;
+        UpdateSummaryWrapWidth();
         Visible = true;
         BringToFront();
     }
