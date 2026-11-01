@@ -16,6 +16,33 @@ internal sealed class UiNipkgBrandBanner : Panel
 
     internal Label Heading { get; }
     internal Label Tagline { get; }
+    private bool _compactHeight;
+
+    // Keep the brand title and its accessible description at short heights.
+    // The decorative tagline, not any status or recovery control, yields
+    // vertical room to the three operational panes.
+    internal void SetCompactHeight(bool compact)
+    {
+        if (_compactHeight == compact)
+            return;
+        _compactHeight = compact;
+        SuspendLayout();
+        try
+        {
+            Tagline.Visible = !compact;
+            Padding = compact
+                ? new Padding(72, 8, 16, 8)
+                : new Padding(80, 12, 20, 14);
+            Margin = new Padding(0, 0, 0,
+                compact ? UiStyle.ControlGap / 2 : UiStyle.SectionGap);
+            AccessibleDescription = compact ? IntroCaption : string.Empty;
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
+        Invalidate();
+    }
 
     internal UiNipkgBrandBanner()
     {
