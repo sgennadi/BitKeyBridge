@@ -669,9 +669,11 @@ public sealed partial class MainForm
                 {
                     var heights = startRoot.GetRowHeights();
                     var topHeight = heights.Take(5).Sum();
+                    var minimumCardHeight = (int)Math.Ceiling(
+                        _startMinimumCardHeight * EffectiveHomeDpiScale());
+                    var stackedRows = _homeServiceCards.RowCount == 3 ? 3 : 1;
                     var required = topHeight +
-                        (int)Math.Ceiling(_startMinimumCardHeight *
-                            EffectiveHomeDpiScale()) +
+                        minimumCardHeight * stackedRows +
                         startRoot.Padding.Vertical;
                     var minScroll = required > startRoot.ClientSize.Height
                         ? new Size(0, required + UiStyle.ControlGap)
