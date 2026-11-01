@@ -46,16 +46,23 @@ internal sealed class UiFontZoomService : IDisposable
             if (!_baseItems.ContainsKey(item))
                 _baseItems[item] = item.Font;
 
-        // Descendants first: inherited font changes on parents otherwise
-        // contaminate the original sizes of nested labels, grids and tabs.
+        // Never assign Form.Font: WinForms can re-run native AutoScale on the
+        // top-level Form and silently shrink ClientSize on a DPI/zoom round
+        // trip (1600x720 became 945x507). Layout containers stay at their
+        // OS-managed DPI font; only text-bearing children get user zoom.
+        // Descendants first prevents inherited changes on GroupBox/TabControl
+        // from contaminating stored baselines.
         for (var index = controls.Count - 1; index >= 0; index--)
         {
             var control = controls[index];
             if (control.IsDisposed)
                 continue;
-            var next = Scaled(_baseFonts[control], percent);
-            if (!ReferenceEquals(control.Font, next))
-                control.Font = next;
+            if (IsTextControl(control))
+            {
+                var next = Scaled(_baseFonts[control], percent);
+                if (!ReferenceEquals(control.Font, next))
+                    control.Font = next;
+            }
 
             if (control is DataGridView grid &&
                 _gridBase.TryGetValue(grid, out var baseline))
@@ -78,6 +85,12 @@ internal sealed class UiFontZoomService : IDisposable
         }
         _lastPercent = percent;
     }
+
+    private static bool IsTextControl(Control control) =>
+        control is Label or ButtonBase or TextBoxBase or
+            ComboBox or ListControl or GroupBox or TabControl or
+            DataGridView or ListView or TreeView or NumericUpDown or
+            DateTimePicker or MonthCalendar or PropertyGrid;
 
     private Font OriginalForNewControl(Control control)
     {
