@@ -100,6 +100,9 @@ public sealed partial class MainForm
         ClientSizeChanged += (_, _) => QueueMainViewportReflow();
         DpiChanged += (_, _) => QueueMainViewportReflow();
         FontChanged += (_, _) => QueueMainViewportReflow();
+        // When a routine search result changes into a warning/error, restore
+        // its row even if a compact selected-device view had hidden it.
+        _homeSearchStatus.TextChanged += (_, _) => QueueMainViewportReflow();
         Shown += (_, _) => QueueMainViewportReflow();
         FormClosed += (_, _) => _mainViewportIdleTimer.Dispose();
         HandleDestroyed += (_, _) =>
@@ -254,6 +257,19 @@ public sealed partial class MainForm
         // *available Start client height* determines compactness.
         var tier = UiDisplayPreferencePolicy.ResolveStartTier(
             _uiDensity, logicalHeight);
+
+        // The selected-device summary already confirms a successful search
+        // and the card header identifies the machine. On a short display,
+        // don't spend a full 35-50px row repeating routine instructions or
+        // a successful-search notification. Never suppress active progress,
+        // partial-result warnings or failures. Status changes request reflow.
+        var hideRoutineStatus = tier != 0 &&
+            GetSelectedHomeSearchResult() is not null &&
+            _homeSearchStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success;
+        if (_homeSearchStatus.Visible == hideRoutineStatus)
+            _homeSearchStatus.Visible = !hideRoutineStatus;
+
         if (tier == _startHeightDensity)
             return;
 
