@@ -1808,14 +1808,22 @@ public static class UiLayoutSelfTest
                 break;
             }
 
+            var viewportBounds = viewport.RectangleToScreen(
+                viewport.ClientRectangle);
+            var bottomClearance = UiStyle.ScaleLogicalPixels(8,
+                button.DeviceDpi);
             if (!foundViewport ||
                 visible.Width < button.ClientSize.Width - 4 ||
-                visible.Height < button.ClientSize.Height - 4)
+                visible.Height < button.ClientSize.Height - 4 ||
+                button.RectangleToScreen(button.ClientRectangle).Bottom >
+                    viewportBounds.Bottom - bottomClearance)
             {
-                failures.Add("1080p Start recovery action clipped: " + name +
+                failures.Add("1080p Start recovery action clipped or touching " +
+                    "the bottom viewport border: " + name +
                     "; visible=" + visible.Width + "x" + visible.Height +
                     "; expected=" + button.ClientSize.Width + "x" +
-                    button.ClientSize.Height + ". " +
+                    button.ClientSize.Height + "; bottomClearance=" +
+                    bottomClearance + ". " +
                     form.StartViewportGeometryReport());
             }
         }
@@ -2133,6 +2141,31 @@ public static class UiLayoutSelfTest
                         failures.Add("Compact Start hid recovery panes: " +
                             size.Width + "x" + size.Height + "/" + language +
                             ". " + report);
+
+                    // A successful/neutral search notice duplicates the
+                    // selected-device summary and may consume the last 40px
+                    // needed for complete recovery buttons. Warnings and
+                    // failures must instantly take their row back.
+                    if (FindByName(form, "HomeUnifiedSearchStatus") is
+                            UiStatusLabel searchStatus)
+                    {
+                        var previousText = searchStatus.Text;
+                        var previousKind = searchStatus.StatusKind;
+                        if (searchStatus.Visible)
+                            failures.Add("Compact selected Start retained redundant " +
+                                "search-status height: " + language + "/" +
+                                size.Width + "x" + size.Height);
+                        UiStyle.SetStatus(searchStatus, "Synthetic warning: test-only",
+                            UiStatusKind.Warning);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (!searchStatus.Visible)
+                            failures.Add("Compact Start hid a real search warning: " +
+                                language + "/" + size.Width + "x" + size.Height);
+                        UiStyle.SetStatus(searchStatus, previousText, previousKind);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                    }
 
                     // The Start viewport is smaller than ClientSize because
                     // the native menu/tabs/status strips also take vertical
