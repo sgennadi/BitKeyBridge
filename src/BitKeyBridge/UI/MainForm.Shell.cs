@@ -1093,6 +1093,7 @@ public sealed partial class MainForm
         recentPanel.Controls.Add(_homeRecentResults, 0, 1);
         var recentExplanation = new Label
         {
+            Name = "HomeRecentExplanation",
             Text = "Stores only device names and last action. No recovery passwords.",
             AutoSize = true,
             Dock = DockStyle.Top,
