@@ -6,6 +6,53 @@ namespace BitKeyBridge;
 /// </summary>
 public sealed partial class MainForm
 {
+    private const string PortableAuditFallbackExplanation =
+        "The machine-protected audit journal is unavailable to your account. " +
+        "Access events were saved under your user profile during this session. " +
+        "This fallback is not tamper-proof: use a managed service or enable " +
+        "'Require protected audit' for centrally enforced enterprise audit policy.";
+
+    // A footer warning remains available even after the detail panel is
+    // dismissed. Never confuse this UI acknowledgment with authorization to
+    // read recovery secrets or proof that protected storage is operational.
+    private void RefreshPortableAuditFallbackCaption()
+    {
+        if (_globalPortableAuditStatus.IsDisposed)
+            return;
+
+        var caption = UiLanguageService.Normalize(_uiLanguageCode) switch
+        {
+            "ru" => "Аудит: локальный",
+            "he" => "ביקורת: מקומית",
+            _ => "Audit: portable"
+        };
+        _globalPortableAuditStatus.Text = caption;
+        _globalPortableAuditStatus.ToolTipText =
+            PortableAuditFallbackExplanation;
+        _globalPortableAuditStatus.AccessibleDescription =
+            PortableAuditFallbackExplanation;
+        _globalPortableAuditStatus.Visible = _userAuditFallbackWarningShown;
+    }
+
+    private void ShowPortableAuditFallbackDetails()
+    {
+        if (!_userAuditFallbackWarningShown)
+            return;
+
+        ShowAppMessage("Portable audit journal in use",
+            PortableAuditFallbackExplanation);
+    }
+
+    // Synthetic UI-only hook. No disk write, RBAC, AD, Graph or audit policy
+    // changes; regression tests must not simulate a real authorization.
+    internal void PreviewPortableAuditFallbackForUiSelfTest(bool active)
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        _userAuditFallbackWarningShown = active;
+        RefreshPortableAuditFallbackCaption();
+    }
+
     private AuditEntry? WriteRecoveryAudit(
         string action,
         RecoveryAccessContext context,
@@ -164,13 +211,13 @@ public sealed partial class MainForm
 
             if (_audit.LastWriteUsedUserFallback && !_userAuditFallbackWarningShown)
             {
+                // Do not insert a global AutoSize diagnostic banner every
+                // time this session writes a fallback audit event. On short
+                // RDP/HiDPI windows that banner steals the recovery viewport.
+                // Keep a persistent, accessible footer warning instead;
+                // clicking it reveals the full security explanation.
                 _userAuditFallbackWarningShown = true;
-                ShowAppMessage(
-                    "Portable audit journal in use",
-                    "The machine-protected audit journal is unavailable to your account. " +
-                    "Access events are being saved under your user profile. This fallback is " +
-                    "not tamper-proof: use a managed service or enable 'Require protected audit' " +
-                    "for centrally enforced enterprise audit policy.");
+                RefreshPortableAuditFallbackCaption();
             }
 
             return true;
