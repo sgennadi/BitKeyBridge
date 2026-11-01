@@ -2032,6 +2032,43 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // Opt-in screenshot of the ENTIRE synthetic shell, not only HomeLayoutRoot:
+    // this proves the footer warning is visible and there is no global banner
+    // above the tab bar. Never inspect or capture a connected workstation.
+    private static void SaveSyntheticAuditFooterSnapshotForCi(
+        MainForm form, List<string> failures)
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                "true", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(Environment.GetEnvironmentVariable(
+                "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS"), "1",
+                StringComparison.Ordinal))
+            return;
+
+        if (FindByName(form, "MainLayoutRoot") is not Control shell ||
+            shell.ClientSize.Width < 1450 || shell.ClientSize.Height < 650)
+        {
+            failures.Add("Portable audit shell snapshot was not ready.");
+            return;
+        }
+
+        try
+        {
+            using var bitmap = new Bitmap(
+                shell.ClientSize.Width, shell.ClientSize.Height);
+            shell.DrawToBitmap(bitmap,
+                new Rectangle(Point.Empty, bitmap.Size));
+            var path = Path.Combine(AppContext.BaseDirectory,
+                "ui-start-1080p-portable-audit-footer.png");
+            bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Portable audit shell snapshot failed: " +
+                ex.GetType().Name);
+        }
+    }
+
     // Regression for the reported real 1600x720 screenshot with five recent
     // records and a selected computer. The old 1600x900-only native fixture
     // passed even while the visible short window clipped the recovery panes.
@@ -2047,17 +2084,17 @@ public static class UiLayoutSelfTest
             return;
         }
 
-        // Reproduce the reported connected Start viewport: a persistent
-        // non-secret audit notice above the tabs must have a short footprint,
-        // leaving room for recovery cards without hiding Copy/Dismiss.
+        // Reproduce a generic diagnostic notice, distinct from the portable
+        // audit fallback (which now lives in the persistent footer). Genuine
+        // errors still need a compact inline detail panel with Copy/Dismiss.
         var diagnostic = FindByName(form, "ApplicationDiagnostics") as
             UiDiagnosticPanel;
         var originalDiagnosticActive = diagnostic?.HasActiveDiagnostics ?? false;
         if (diagnostic is null)
             failures.Add("Compact Start is missing global diagnostics panel.");
         else if (!originalDiagnosticActive)
-            diagnostic.ShowMessage("Portable audit journal in use",
-                "Synthetic audit display: no device identities or secrets.");
+            diagnostic.ShowMessage("Synthetic diagnostic notice",
+                "UI-only diagnostics: no device identities or secrets.");
 
         try
         {
@@ -2281,6 +2318,7 @@ public static class UiLayoutSelfTest
                     VerifyStartRecoveryButtonsOnScreen(form, failures);
                     if (size.Width == 1600 && language == "en")
                     {
+                        SaveSyntheticAuditFooterSnapshotForCi(form, failures);
                         footer.PerformClick();
                         form.PerformLayout();
                         Application.DoEvents();
