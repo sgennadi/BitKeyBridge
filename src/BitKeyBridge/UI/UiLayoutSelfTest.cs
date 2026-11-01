@@ -2079,7 +2079,8 @@ public static class UiLayoutSelfTest
                         failures.Add("Compact Start audit notice reserves too much " +
                             "height or clips Copy/Dismiss: " +
                             size.Width + "x" + size.Height + "/" + language +
-                            "; diagnosticHeight=" + diagnostic.Height + ".");
+                            "; diagnosticHeight=" + diagnostic.Height +
+                            "; " + diagnostic.ActionBoundsReport());
                     if (geometry is null ||
                         geometry.Value.CardColumns != 3 ||
                         geometry.Value.CardRows != 1 ||
@@ -2603,7 +2604,8 @@ public static class UiLayoutSelfTest
                         UiDiagnosticPanel banner ||
                         !banner.AreActionsWithinVisibleBounds())
                         failures.Add("Copy Diagnostics is clipped or not visible: " +
-                            language + ", font scale " + (i == 0 ? "100" : "200") + "%.");
+                            language + ", font scale " + (i == 0 ? "100" : "200") +
+                            "%. " + (banner?.ActionBoundsReport() ?? "No panel"));
 
                     if (FindByName(form, "GlobalStatusBar") is not StatusStrip status ||
                         status.Items.Find("GlobalCopyDiagnostics", false)
