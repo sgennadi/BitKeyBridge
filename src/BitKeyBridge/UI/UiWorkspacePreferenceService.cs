@@ -217,11 +217,17 @@ internal static class UiWorkspacePreferenceService
             {
                 var expected = dpi / 96d * zoom / 100d;
                 var actual = UiDisplayPreferencePolicy.EffectiveScale(
-                    dpi, 9f * zoom / 100f, 9f, zoom);
+                    dpi, 9f, 9f, zoom);
                 if (Math.Abs(expected - actual) > 0.0001d)
                     errors.Add("OS DPI/user zoom scaling regression at " +
                         dpi + " DPI / " + zoom + "%.");
             }
+            // OS accessibility font scaling is distinct from user zoom.
+            var accessible = UiDisplayPreferencePolicy.EffectiveScale(
+                96, 10.8f, 9f, 110);
+            if (Math.Abs(accessible - 1.32d) > 0.0001d)
+                errors.Add("User zoom double-counted or ignored OS accessibility font.");
+
             if (UiDisplayPreferencePolicy.ResolveStartTier("Auto", 680) != 2 ||
                 UiDisplayPreferencePolicy.ResolveStartTier("Auto", 750) != 1 ||
                 UiDisplayPreferencePolicy.ResolveStartTier("Auto", 900) != 0 ||
