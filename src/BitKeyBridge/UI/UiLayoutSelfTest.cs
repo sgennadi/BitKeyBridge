@@ -2162,6 +2162,31 @@ public static class UiLayoutSelfTest
                         if (!searchStatus.Visible)
                             failures.Add("Compact Start hid a real search warning: " +
                                 language + "/" + size.Width + "x" + size.Height);
+
+                        // Successful privileged actions must remain visible:
+                        // "key/password copied" is not a disposable search hint.
+                        UiStyle.SetStatus(searchStatus,
+                            "Recovery key copied. Clipboard clears in 30 seconds.",
+                            UiStatusKind.Success);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (!searchStatus.Visible)
+                            failures.Add("Compact Start hid the recovery-key " +
+                                "clipboard confirmation: " + language + "/" +
+                                size.Width + "x" + size.Height);
+
+                        // Routine successful metadata searches may collapse
+                        // only while the matching selected-device summary lives.
+                        UiStyle.SetStatus(searchStatus,
+                            "One computer found. BitLocker and LAPS actions are below.",
+                            UiStatusKind.Success);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (searchStatus.Visible)
+                            failures.Add("Compact Start retained a redundant " +
+                                "successful-search row: " + language + "/" +
+                                size.Width + "x" + size.Height);
+
                         UiStyle.SetStatus(searchStatus, previousText, previousKind);
                         form.ReflowMainViewport();
                         Application.DoEvents();
