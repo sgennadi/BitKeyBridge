@@ -158,7 +158,10 @@ public sealed class UiDiagnosticPanel : Panel
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             MinimumSize = new Size(0, UiStyle.MinimumButtonHeight),
             RightToLeft = RightToLeft.No,
-            WrapContents = true,
+            // The AutoSize column must reserve BOTH action widths. With
+            // WrapContents=true its unconstrained preferred width can be
+            // measured as one button and wrap Dismiss below the parent.
+            WrapContents = false,
             FlowDirection = FlowDirection.LeftToRight,
             Margin = new Padding(UiStyle.ControlGap, 0, 0, 0)
         };
