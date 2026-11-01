@@ -6,6 +6,7 @@ public sealed class UiDiagnosticPanel : Panel
     private readonly Label _copyStatus = new();
     private readonly Button _copy = UiStyle.CreateActionButton("Copy diagnostics");
     private readonly Button _dismiss = UiStyle.CreateActionButton("Dismiss");
+    private readonly TableLayoutPanel _actions = new();
     private string _diagnostics = string.Empty;
     private string _language = "en";
     private bool _compactHeight;
@@ -150,28 +151,32 @@ public sealed class UiDiagnosticPanel : Panel
 
         // Buttons FIRST. Even if summary text expands or an inherited
         // WinForms AutoSize pass clips a later row, copy stays at the top.
-        var actions = new FlowLayoutPanel
-        {
-            Name = "DiagnosticPanelActions",
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MinimumSize = new Size(0, UiStyle.MinimumButtonHeight),
-            RightToLeft = RightToLeft.No,
-            // The AutoSize column must reserve BOTH action widths. With
-            // WrapContents=true its unconstrained preferred width can be
-            // measured as one button and wrap Dismiss below the parent.
-            WrapContents = false,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(UiStyle.ControlGap, 0, 0, 0)
-        };
+        // FlowLayoutPanel measured only the widest single button (175px)
+        // and silently wrapped Dismiss onto a second row (76px), even
+        // when WrapContents=false. Its parent remained 48px, clipping
+        // Dismiss behind the tabs. A two-column table cannot reflow the
+        // second action vertically under constrained measurements.
+        var actions = _actions;
+        actions.Name = "DiagnosticPanelActions";
+        actions.Dock = DockStyle.Top;
+        actions.AutoSize = true;
+        actions.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        actions.RightToLeft = RightToLeft.No;
+        actions.ColumnCount = 2;
+        actions.RowCount = 1;
+        actions.Margin = new Padding(UiStyle.ControlGap, 0, 0, 0);
+        actions.Padding = Padding.Empty;
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        actions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         _copy.Name = "CopyDiagnosticsButton";
         _copy.AccessibleName = "Copy redacted diagnostics to clipboard";
         _copy.RightToLeft = RightToLeft.No;
         _dismiss.Name = "DismissDiagnosticsButton";
         _dismiss.RightToLeft = RightToLeft.No;
-        actions.Controls.Add(_copy);
-        actions.Controls.Add(_dismiss);
+        actions.Controls.Add(_copy, 0, 0);
+        actions.Controls.Add(_dismiss, 1, 0);
+        UpdateSummaryWrapWidth();
         root.Controls.Add(actions, 1, 0);
         root.SetRowSpan(actions, 2);
 
@@ -192,6 +197,8 @@ public sealed class UiDiagnosticPanel : Panel
 
         Controls.Add(root);
         SizeChanged += (_, _) => UpdateSummaryWrapWidth();
+        _copy.FontChanged += (_, _) => UpdateSummaryWrapWidth();
+        _dismiss.FontChanged += (_, _) => UpdateSummaryWrapWidth();
 
         _copy.Click += (_, _) => CopyDiagnostics();
         _dismiss.Click += (_, _) => Clear();
@@ -199,15 +206,26 @@ public sealed class UiDiagnosticPanel : Panel
 
     private void UpdateSummaryWrapWidth()
     {
-        if (IsDisposed || ClientSize.Width < 160)
+        if (IsDisposed)
+            return;
+
+        // Reserve both buttons' measured (possibly localized) widths.
+        // TableLayoutPanel must not choose just one button's width on
+        // an unconstrained AutoSize pass, including at 200% DPI.
+        var actionWidth = _copy.GetPreferredSize(Size.Empty).Width +
+            _dismiss.GetPreferredSize(Size.Empty).Width +
+            _copy.Margin.Horizontal + _dismiss.Margin.Horizontal;
+        var minimum = new Size(Math.Max(actionWidth, 2 * UiStyle.MinimumButtonWidth),
+            UiStyle.MinimumButtonHeight);
+        if (_actions.MinimumSize != minimum)
+            _actions.MinimumSize = minimum;
+        if (ClientSize.Width < 160)
             return;
 
         // AutoSize summaries must wrap BEFORE they push Copy/Dismiss
         // out of the visible two-column viewport at 200% DPI.
-        var actionWidth = _copy.Parent?.GetPreferredSize(Size.Empty).Width ??
-            (2 * UiStyle.MinimumButtonWidth);
         var remaining = ClientSize.Width - Padding.Horizontal -
-            actionWidth - UiStyle.ControlGap - 8;
+            minimum.Width - UiStyle.ControlGap - 8;
         var maximum = Math.Max(110, Math.Min(980, remaining));
         if (_summary.MaximumSize.Width != maximum)
             _summary.MaximumSize = new Size(maximum, 0);
