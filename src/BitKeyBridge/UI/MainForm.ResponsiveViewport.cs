@@ -424,9 +424,10 @@ public sealed partial class MainForm
     }
 
     /// <summary>
-    /// Three equal-size draggable panes. The main form owns the height,
-    /// not a data grid with a percentage row that hides recovery actions.
-    /// At high DPI or small RDP widths the panes stack at equal heights.
+    /// Three draggable panes, adapting from three columns to two columns
+    /// (with the last pane spanning the bottom row) and finally one column.
+    /// This avoids the previous jump straight to a three-row stack on RDP
+    /// and HiDPI viewports, without shrinking readable fonts or hiding actions.
     /// </summary>
     private void ReflowHomeResultsArea()
     {
@@ -443,10 +444,13 @@ public sealed partial class MainForm
             UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
         var scaledHeight = (int)Math.Ceiling(
             _startMinimumCardHeight * effectiveScale);
-        bool threeColumns = width >= scaledWidth;
+        var threeColumns = width >= scaledWidth;
+        var twoColumns = !threeColumns && width >= (int)Math.Ceiling(
+            UiStyle.HomeRecoveryCardsPairMinimumWidth * effectiveScale);
         UpdateHomePaneDragUi(threeColumns);
 
-        var desiredKey = (threeColumns ? "3cols:" : "3rows:") +
+        var desiredKey = (threeColumns ? "3cols:" :
+            twoColumns ? "2cols:" : "3rows:") +
             string.Join(",", _homePaneOrder) + ":" + DeviceDpi +
             ":min" + scaledHeight;
         if (_homeResultsLayoutKey == desiredKey)
@@ -475,6 +479,10 @@ public sealed partial class MainForm
             else
             {
                 var selectedComputer = GetSelectedHomeSearchResult();
+                // A previous two-column layout may have a two-cell span.
+                // Clear that span before reattaching the preserved pane hosts.
+                foreach (Control pane in _homeServiceCards.Controls)
+                    _homeServiceCards.SetColumnSpan(pane, 1);
                 _homeServiceCards.Controls.Clear();
                 _homeServiceCards.ColumnStyles.Clear();
                 _homeServiceCards.RowStyles.Clear();
@@ -493,6 +501,28 @@ public sealed partial class MainForm
                     for (var i = 0; i < 3; i++)
                         _homeServiceCards.Controls.Add(
                             HomePaneHost(_homePaneOrder[i]), i, 0);
+                }
+                else if (twoColumns)
+                {
+                    // Keep two recovery panes side by side at intermediate
+                    // widths; let the third pane span the next row rather
+                    // than spending three full screen-heights on the stack.
+                    _homeServiceCards.ColumnCount = 2;
+                    _homeServiceCards.RowCount = 2;
+                    for (var i = 0; i < 2; i++)
+                        _homeServiceCards.ColumnStyles.Add(
+                            new ColumnStyle(SizeType.Percent, 50F));
+                    for (var i = 0; i < 2; i++)
+                        _homeServiceCards.RowStyles.Add(
+                            new RowStyle(SizeType.Absolute, scaledHeight));
+                    _homeServiceCards.MinimumSize =
+                        new Size(0, scaledHeight * 2);
+                    for (var i = 0; i < 3; i++)
+                        _homeServiceCards.Controls.Add(
+                            HomePaneHost(_homePaneOrder[i]),
+                            i == 2 ? 0 : i, i == 2 ? 1 : 0);
+                    _homeServiceCards.SetColumnSpan(
+                        HomePaneHost(_homePaneOrder[2]), 2);
                 }
                 else
                 {
@@ -689,7 +719,8 @@ public sealed partial class MainForm
                     var topHeight = heights.Take(5).Sum();
                     var minimumCardHeight = (int)Math.Ceiling(
                         _startMinimumCardHeight * EffectiveHomeDpiScale());
-                    var stackedRows = _homeServiceCards.RowCount == 3 ? 3 : 1;
+                    var stackedRows = Math.Clamp(
+                        _homeServiceCards.RowCount, 1, 3);
                     var required = topHeight +
                         minimumCardHeight * stackedRows +
                         startRoot.Padding.Vertical;
