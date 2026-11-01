@@ -2128,6 +2128,11 @@ public static class UiLayoutSelfTest
                         failures.Add("Compact Start resized away the selected computer: " +
                             size.Width + "x" + size.Height + "/" + language);
 
+                    // Preserve exact native HWND/client geometry while changing
+                    // font zoom. The earlier whole-form Font setter silently
+                    // rescaled the 1600x720 fixture to 945x507.
+                    var nativeFormFontPoints = form.Font.SizeInPoints;
+                    var nativeGridFontPoints = results.Font.SizeInPoints;
                     // Explicit density/zoom regression uses the same live WinForms
                     // tree, selected metadata and three-language fixture.
                     foreach (var densityMode in new[]
@@ -2139,6 +2144,14 @@ public static class UiLayoutSelfTest
                         form.ReflowMainViewport();
                         Application.DoEvents();
                         var display = form.PreviewUiDisplayStateForUiSelfTest();
+                        if (form.ClientSize != size)
+                            failures.Add("UI zoom changed native window size: " +
+                                size.Width + "x" + size.Height +
+                                ", actual=" + form.ClientSize + "/" +
+                                language + "/" + densityMode + "/" + zoom);
+                        if (Math.Abs(form.Font.SizeInPoints -
+                                     nativeFormFontPoints) > 0.01f)
+                            failures.Add("UI zoom changed native Form DPI font.");
                         if (display.Density != densityMode ||
                             display.Scale != zoom ||
                             display.StartTier !=
@@ -2158,6 +2171,13 @@ public static class UiLayoutSelfTest
                     }
                     form.PreviewSetUiDisplayPreferencesForUiSelfTest("Auto", 100);
                     form.ReflowMainViewport();
+                    Application.DoEvents();
+                    if (form.ClientSize != size ||
+                        Math.Abs(results.Font.SizeInPoints -
+                            nativeGridFontPoints) > 0.01f)
+                        failures.Add("Start zoom roundtrip failed to restore native " +
+                            "window bounds/grid font at " +
+                            size.Width + "x" + size.Height + "/" + language);
 
                     // The four sensitive actions must remain reachable. Their
                     // existence alone is not enough; check native clipping.
