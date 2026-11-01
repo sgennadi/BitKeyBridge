@@ -91,6 +91,22 @@ public sealed class UiDiagnosticPanel : Panel
         }
     }
 
+    // Geometry-only evidence for the native self-test. Never reads Text,
+    // report contents, user names or credentials.
+    internal string ActionBoundsReport()
+    {
+        var actions = _copy.Parent;
+        var root = actions?.Parent;
+        static string Bounds(Control? c) =>
+            c is null ? "-" :
+            c.Name + "=" + c.Bounds.ToString() +
+            "/client=" + c.ClientSize.ToString() +
+            "/visible=" + c.Visible;
+        return Bounds(this) + "; " + Bounds(root) + "; " +
+            Bounds(actions) + "; " + Bounds(_copy) + "; " +
+            Bounds(_dismiss) + "; " + Bounds(_summary) + ".";
+    }
+
     public UiDiagnosticPanel()
     {
         Name = "DiagnosticPanel";
