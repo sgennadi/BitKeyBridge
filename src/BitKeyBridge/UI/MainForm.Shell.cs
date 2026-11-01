@@ -1,3 +1,5 @@
+using System.Drawing;
+
 namespace BitKeyBridge;
 
 public sealed partial class MainForm
