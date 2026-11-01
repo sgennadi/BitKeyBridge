@@ -250,7 +250,9 @@ public sealed partial class MainForm
 
         var scale = EffectiveHomeDpiScale();
         var logicalHeight = root.ClientSize.Height / scale;
-        var tier = logicalHeight < 760 ? 2 : logicalHeight < 980 ? 1 : 0;
+        // Typical 1080p windows retain full-size branding. Only the
+        // *available Start client height* determines compactness.
+        var tier = logicalHeight < 700 ? 2 : logicalHeight < 800 ? 1 : 0;
         if (tier == _startHeightDensity)
             return;
 
