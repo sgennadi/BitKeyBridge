@@ -2263,8 +2263,8 @@ public static class UiLayoutSelfTest
                         footer.Bounds.Width <= 0 ||
                         footer.Bounds.Right > status.ClientSize.Width + 2 ||
                         footer.Text != expected ||
-                        !footer.AccessibleDescription.Contains(
-                            "not tamper-proof", StringComparison.Ordinal))
+                        footer.AccessibleDescription?.Contains(
+                            "not tamper-proof", StringComparison.Ordinal) != true)
                         failures.Add("Portable audit footer is hidden, clipped or " +
                             "untranslated: " + size.Width + "x" + size.Height +
                             "/" + language + "; bounds=" + footer.Bounds +
