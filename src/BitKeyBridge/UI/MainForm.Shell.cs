@@ -61,6 +61,10 @@ public sealed partial class MainForm
     private readonly RadioButton _homeUseOtherAccount = new();
     private readonly ToolStripStatusLabel _globalConnectionStatus = new();
     private readonly ToolStripStatusLabel _globalAdAccountStatus = new();
+    // Persistent, accessible warning when audit falls back to the user profile.
+    // An inline diagnostic banner on short windows previously reserved ~70px
+    // above Start; the footer remains visible without hiding security state.
+    private readonly ToolStripStatusLabel _globalPortableAuditStatus = new();
     private readonly ToolStripStatusLabel _globalVersionStatus = new();
     private readonly ToolStripStatusLabel _globalCopyDiagnostics = new();
     private System.Windows.Forms.Timer? _homeSearchDebounceTimer;
@@ -324,6 +328,20 @@ public sealed partial class MainForm
         _globalAdAccountStatus.ToolTipText =
             "No validated Active Directory account is connected.";
 
+        _globalPortableAuditStatus.Name = "GlobalPortableAuditStatus";
+        _globalPortableAuditStatus.AccessibleName =
+            "Portable audit warning; click to read details";
+        _globalPortableAuditStatus.IsLink = true;
+        _globalPortableAuditStatus.Visible = false;
+        _globalPortableAuditStatus.Text = "Audit: portable";
+        _globalPortableAuditStatus.ForeColor = SystemInformation.HighContrast
+            ? SystemColors.HotTrack
+            : Color.FromArgb(152, 88, 14);
+        _globalPortableAuditStatus.Margin = new Padding(
+            UiStyle.ControlGap, 0, UiStyle.ControlGap, 0);
+        _globalPortableAuditStatus.Click += (_, _) =>
+            ShowPortableAuditFallbackDetails();
+
         _globalVersionStatus.Name =
             "GlobalVersionStatus";
         _globalVersionStatus.Text =
@@ -344,6 +362,7 @@ public sealed partial class MainForm
             ShowUiPerformanceReport(copyImmediately: true);
 
         status.Items.Add(_globalConnectionStatus);
+        status.Items.Add(_globalPortableAuditStatus);
         status.Items.Add(_globalAdAccountStatus);
         // The bottom bar is outside the main TabControl and diagnostics
         // AutoSize row; this copy link remains accessible even if a native
@@ -636,6 +655,7 @@ public sealed partial class MainForm
             // _mainTabs and is not part of the shell-caption observer.
             // Never clear its active report during a language change.
             _appDiagnostics.ApplyLanguage(_uiLanguageCode);
+            RefreshPortableAuditFallbackCaption();
             var copyCaption = UiStaticCaptionCatalog.TranslateOrOriginal(
                 _uiLanguageCode, "Copy diagnostics");
             if (!string.Equals(_globalCopyDiagnostics.Text, copyCaption,
