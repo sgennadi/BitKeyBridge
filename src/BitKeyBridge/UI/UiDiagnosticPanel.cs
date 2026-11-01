@@ -8,6 +8,31 @@ public sealed class UiDiagnosticPanel : Panel
     private readonly Button _dismiss = UiStyle.CreateActionButton("Dismiss");
     private string _diagnostics = string.Empty;
     private string _language = "en";
+    private bool _compactHeight;
+
+    // The diagnostics strip must consume its *content* height, never fill a
+    // phantom AutoSize row above Start. Short windows keep both buttons and
+    // the complete summary; the full sanitized report stays copyable.
+    internal void SetCompactHeight(bool compact)
+    {
+        if (_compactHeight == compact)
+            return;
+        _compactHeight = compact;
+        SuspendLayout();
+        try
+        {
+            var gap = compact ? Math.Max(3, UiStyle.ControlGap / 2) :
+                UiStyle.ControlGap;
+            Padding = new Padding(gap);
+            Margin = new Padding(0, compact ? 0 : gap, 0, gap);
+            _summary.Margin = new Padding(0, gap, 0, 0);
+            _copyStatus.Margin = new Padding(0, gap, 0, 0);
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
+    }
 
     // The source text can be lost visually when native tab handles are
     // rebuilt. Keep the sanitized report independent of visibility/painting.
@@ -67,10 +92,11 @@ public sealed class UiDiagnosticPanel : Panel
     {
         Name = "DiagnosticPanel";
         AccessibleName = "Diagnostics";
-        // This lives in an AutoSize row of MainLayoutRoot. Dock.Fill makes
-        // its bounds fill that row on every DPI/RTL change instead of keeping
-        // a narrow preferred-size rectangle whose copy controls are clipped.
-        Dock = DockStyle.Fill;
+        // Dock.Top fills the AutoSize cell's width WITHOUT feeding an
+        // artificially expanded cell height back into its preferred height.
+        // Dock.Fill previously left a tall empty diagnostic band on short
+        // desktop/RDP windows, hiding the recovery cards.
+        Dock = DockStyle.Top;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         MinimumSize = new Size(0, UiStyle.MinimumButtonHeight +
