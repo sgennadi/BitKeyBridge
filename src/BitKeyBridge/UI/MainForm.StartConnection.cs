@@ -383,8 +383,28 @@ public sealed partial class MainForm
             return changed;
         }
 
+        // At a laptop/RDP height, show the AD identity and DC in the
+        // persistent bottom status bar instead of repeating them in two
+        // full-height rows above the BitLocker/LAPS recovery buttons.
+        // Do NOT collapse a warning/error: operators must see failures.
+        // The original status labels remain populated for accessibility
+        // and resume their normal layout at larger window heights.
+        var hideRedundantAdDetails = activeDirectory &&
+            _startHeightDensity == 2 &&
+            _homeConnectionStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success &&
+            _homeAdAccountStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success;
+        var showAdDetails = activeDirectory && !hideRedundantAdDetails;
+        _homeConnectionStatus.Visible = showAdDetails;
+        _homeAdAccountStatus.Visible = showAdDetails;
+
         var choiceRow = _homeConnectionSource.Parent;
-        var changed = SetOptionalRow(
+        var changed = SetOptionalRow(_homeAdConnectionLayout,
+            _homeConnectionStatus, showAdDetails);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _homeAdAccountStatus, showAdDetails);
+        changed |= SetOptionalRow(
             choiceRow?.Parent as TableLayoutPanel, choiceRow,
             _connectionOptionsExpanded);
         changed |= SetOptionalRow(_homeAdConnectionLayout,
