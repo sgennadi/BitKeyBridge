@@ -217,6 +217,7 @@ public sealed partial class MainForm : DpiAwareForm
             BuildMainShell());
 
         InitializeMainViewport();
+        FormClosed += (_, _) => DisposeUiFontZoom();
         if (layoutSelfTest)
             return;
 

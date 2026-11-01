@@ -26,6 +26,16 @@ Use a disposable, managed Windows 11 computer; do not run the unsigned RC on a d
 
 Test a **real organizational Authenticode signing identity** and signed-only canary rollout/rollback (including recovery from interruption) before any managed deployment or trusted update. The CI's ephemeral positive signing check does **not** satisfy this gate. Do not silently allow unsigned automatic updates.
 
+## Per-user appearance preferences
+
+The View menu adds UI Density (Auto/Compact/Comfortable) and UI Scale
+(90/100/110/125%). Defaults are Auto/100%, saved in the existing
+per-user ui-workspace.json without affecting machine policy, RBAC, Graph,
+audit or protected secrets. Reset visual layout restores Auto/100%.
+OS PerMonitorV2 scaling remains enabled and independent. Native CI
+and manual Windows 11 validation at 100/125/150/200% Windows DPI
+are mandatory before Stable promotion.
+
 ## Operator QA
 
 Extract only the package matching the test computer architecture and verify `SHA256SUMS.txt` and `BUILD-INFO.txt` first. Run under a standard user from a disposable folder:

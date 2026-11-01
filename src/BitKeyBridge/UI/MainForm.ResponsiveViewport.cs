@@ -228,8 +228,8 @@ public sealed partial class MainForm
     }
 
     private double EffectiveHomeDpiScale() =>
-        Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
-            Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+        UiDisplayPreferencePolicy.EffectiveScale(
+            DeviceDpi, Font.Size, UiStyle.BodyFont.Size, _uiScalePercent);
 
     // Short RDP sessions and 1366x768/1600x900 laptop screens have much
     // less usable vertical space than an empty 1080p CI screenshot suggests.
@@ -252,7 +252,8 @@ public sealed partial class MainForm
         var logicalHeight = root.ClientSize.Height / scale;
         // Typical 1080p windows retain full-size branding. Only the
         // *available Start client height* determines compactness.
-        var tier = logicalHeight < 700 ? 2 : logicalHeight < 800 ? 1 : 0;
+        var tier = UiDisplayPreferencePolicy.ResolveStartTier(
+            _uiDensity, logicalHeight);
         if (tier == _startHeightDensity)
             return;
 

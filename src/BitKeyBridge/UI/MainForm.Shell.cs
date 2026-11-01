@@ -482,6 +482,7 @@ public sealed partial class MainForm
             _languageChoices.Add(option);
         }
         menu.Items.Add(languages);
+        menu.Items.Add(BuildUiDisplayMenu());
         return menu;
     }
 
@@ -610,6 +611,7 @@ public sealed partial class MainForm
                     choice.Checked = selected;
             }
 
+            RefreshUiDisplayMenuLanguage();
             // Avoid redundant native Text/Checked/property invalidation,
             // including common EN -> RU switches that do not mirror tabs.
             var searchCaption = UiLanguageService.Translate(_uiLanguageCode, "Search");

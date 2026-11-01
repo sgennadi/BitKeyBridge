@@ -2128,6 +2128,37 @@ public static class UiLayoutSelfTest
                         failures.Add("Compact Start resized away the selected computer: " +
                             size.Width + "x" + size.Height + "/" + language);
 
+                    // Explicit density/zoom regression uses the same live WinForms
+                    // tree, selected metadata and three-language fixture.
+                    foreach (var density in new[]
+                             { "Auto", "Compact", "Comfortable" })
+                    foreach (var zoom in new[] { 90, 100, 110, 125 })
+                    {
+                        form.PreviewSetUiDisplayPreferencesForUiSelfTest(
+                            density, zoom);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        var display = form.PreviewUiDisplayStateForUiSelfTest();
+                        if (display.Density != density ||
+                            display.Scale != zoom ||
+                            display.StartTier !=
+                                UiDisplayPreferencePolicy.ResolveStartTier(
+                                    density, form.CaptureStartViewportGeometry()
+                                        is { } snapshot
+                                        ? snapshot.ViewportHeight /
+                                          UiDisplayPreferencePolicy.EffectiveScale(
+                                              form.DeviceDpi, form.Font.Size,
+                                              UiStyle.BodyFont.Size, zoom)
+                                        : 0))
+                            failures.Add("Start visual preference mismatch: " +
+                                size.Width + "x" + size.Height + "/" +
+                                language + "/" + density + "/" + zoom);
+                        if (!ReferenceEquals(results.CurrentRow?.Tag, selected))
+                            failures.Add("UI zoom changed selected computer.");
+                    }
+                    form.PreviewSetUiDisplayPreferencesForUiSelfTest("Auto", 100);
+                    form.ReflowMainViewport();
+
                     // The four sensitive actions must remain reachable. Their
                     // existence alone is not enough; check native clipping.
                     VerifyStartRecoveryButtonsOnScreen(form, failures);
