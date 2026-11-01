@@ -263,10 +263,23 @@ public sealed partial class MainForm
         // don't spend a full 35-50px row repeating routine instructions or
         // a successful-search notification. Never suppress active progress,
         // partial-result warnings or failures. Status changes request reflow.
+        var statusText = _homeSearchStatus.Text ?? string.Empty;
+        // Success is also used for clipboard/key confirmations and LAPS
+        // history. Hide ONLY a search-results success summary, never an
+        // actual recovery-operation result or a cloud connection change.
+        var routineSearchSuccess =
+            statusText.StartsWith("One computer found.", StringComparison.Ordinal) ||
+            (statusText.StartsWith("Found ", StringComparison.Ordinal) &&
+             statusText.Contains(" computers. Select one to view its recovery cards.",
+                 StringComparison.Ordinal)) ||
+            (statusText.StartsWith("Cloud: ", StringComparison.Ordinal) &&
+             statusText.Contains(" record(s). Select an exact row for Device 360.",
+                 StringComparison.Ordinal));
         var hideRoutineStatus = tier != 0 &&
             GetSelectedHomeSearchResult() is not null &&
-            _homeSearchStatus.StatusKind is
-                UiStatusKind.Neutral or UiStatusKind.Success;
+            (_homeSearchStatus.StatusKind == UiStatusKind.Neutral ||
+             _homeSearchStatus.StatusKind == UiStatusKind.Success &&
+             routineSearchSuccess);
         if (_homeSearchStatus.Visible == hideRoutineStatus)
             _homeSearchStatus.Visible = !hideRoutineStatus;
 
