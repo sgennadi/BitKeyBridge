@@ -2130,20 +2130,20 @@ public static class UiLayoutSelfTest
 
                     // Explicit density/zoom regression uses the same live WinForms
                     // tree, selected metadata and three-language fixture.
-                    foreach (var density in new[]
+                    foreach (var densityMode in new[]
                              { "Auto", "Compact", "Comfortable" })
                     foreach (var zoom in new[] { 90, 100, 110, 125 })
                     {
                         form.PreviewSetUiDisplayPreferencesForUiSelfTest(
-                            density, zoom);
+                            densityMode, zoom);
                         form.ReflowMainViewport();
                         Application.DoEvents();
                         var display = form.PreviewUiDisplayStateForUiSelfTest();
-                        if (display.Density != density ||
+                        if (display.Density != densityMode ||
                             display.Scale != zoom ||
                             display.StartTier !=
                                 UiDisplayPreferencePolicy.ResolveStartTier(
-                                    density, form.CaptureStartViewportGeometry()
+                                    densityMode, form.CaptureStartViewportGeometry()
                                         is { } snapshot
                                         ? snapshot.ViewportHeight /
                                           UiDisplayPreferencePolicy.EffectiveScale(
@@ -2152,7 +2152,7 @@ public static class UiLayoutSelfTest
                                         : 0))
                             failures.Add("Start visual preference mismatch: " +
                                 size.Width + "x" + size.Height + "/" +
-                                language + "/" + density + "/" + zoom);
+                                language + "/" + densityMode + "/" + zoom);
                         if (!ReferenceEquals(results.CurrentRow?.Tag, selected))
                             failures.Add("UI zoom changed selected computer.");
                     }
