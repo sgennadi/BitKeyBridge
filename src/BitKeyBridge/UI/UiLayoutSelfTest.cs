@@ -2209,6 +2209,115 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // Verify the real fallback warning's geometry without calling AuditService
+    // or requesting a recovery secret. The notice should live in the footer,
+    // not reserve another AutoSize row above Start. Clicking reveals details
+    // on demand; dismissing the details must never dismiss the warning.
+    private static void VerifyPortableAuditFooterNative(
+        MainForm form, List<string> failures)
+    {
+        if (FindByName(form, "ApplicationDiagnostics") is not
+                UiDiagnosticPanel diagnostics ||
+            FindByName(form, "MainLayoutRoot") is not
+                TableLayoutPanel shell ||
+            FindByName(form, "GlobalStatusBar") is not
+                StatusStrip status ||
+            status.Items.Find("GlobalPortableAuditStatus", false)
+                .FirstOrDefault() is not ToolStripStatusLabel footer)
+        {
+            failures.Add("Portable audit footer UI fixture is incomplete.");
+            return;
+        }
+
+        var originalSize = form.ClientSize;
+        var hadDiagnostics = diagnostics.HasActiveDiagnostics;
+        if (hadDiagnostics)
+        {
+            failures.Add("Portable audit footer fixture started with an active " +
+                "global diagnostic banner.");
+            return;
+        }
+
+        try
+        {
+            form.PreviewPortableAuditFallbackForUiSelfTest(true);
+            foreach (var size in new[]
+                     { new Size(1600, 720), new Size(1366, 768) })
+            {
+                form.ClientSize = size;
+                foreach (var language in new[] { "en", "ru", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    form.ReflowMainViewport();
+                    form.PerformLayout();
+                    Application.DoEvents();
+
+                    var expected = language switch
+                    {
+                        "ru" => "Аудит: локальный",
+                        "he" => "ביקורת: מקומית",
+                        _ => "Audit: portable"
+                    };
+                    if (!footer.Available ||
+                        footer.Placement != ToolStripItemPlacement.Main ||
+                        footer.Bounds.Width <= 0 ||
+                        footer.Bounds.Right > status.ClientSize.Width + 2 ||
+                        footer.Text != expected ||
+                        !footer.AccessibleDescription.Contains(
+                            "not tamper-proof", StringComparison.Ordinal))
+                        failures.Add("Portable audit footer is hidden, clipped or " +
+                            "untranslated: " + size.Width + "x" + size.Height +
+                            "/" + language + "; bounds=" + footer.Bounds +
+                            "; placement=" + footer.Placement + ".");
+
+                    if (diagnostics.HasActiveDiagnostics ||
+                        diagnostics.Visible ||
+                        shell.GetRowHeights()[1] > 4)
+                        failures.Add("Portable audit warning reserved the old " +
+                            "global diagnostic banner height: " + size.Width +
+                            "x" + size.Height + "/" + language +
+                            "; rowHeight=" + shell.GetRowHeights()[1] + ".");
+
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    if (size.Width == 1600 && language == "en")
+                    {
+                        footer.PerformClick();
+                        form.PerformLayout();
+                        Application.DoEvents();
+                        if (!diagnostics.HasActiveDiagnostics ||
+                            !diagnostics.AreActionsWithinVisibleBounds())
+                            failures.Add("Portable audit footer cannot open the " +
+                                "full accessible warning details.");
+                        diagnostics.Clear();
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (!footer.Available ||
+                            diagnostics.HasActiveDiagnostics)
+                            failures.Add("Dismissing portable audit details " +
+                                "also dismissed the persistent footer warning.");
+                    }
+                }
+            }
+            form.PreviewPortableAuditFallbackForUiSelfTest(false);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            if (footer.Available)
+                failures.Add("Portable audit footer remained after clearing " +
+                    "the UI-only fallback fixture.");
+        }
+        finally
+        {
+            form.PreviewPortableAuditFallbackForUiSelfTest(false);
+            if (!hadDiagnostics)
+                diagnostics.Clear();
+            form.PreviewShellLanguageForLayoutTest("en");
+            form.ClientSize = originalSize;
+            form.ReflowMainViewport();
+            form.PerformLayout();
+            Application.DoEvents();
+        }
+    }
+
     // No disk history or directory session: the UI test uses synthetic rows
     // to verify 0 -> 1 -> 15 -> 0 recent devices and stacked/wide transitions.
     private static void VerifyAdaptiveRecentHistory(
@@ -2446,6 +2555,7 @@ public static class UiLayoutSelfTest
                     // separate synthetic PNGs for each language.
                     VerifyNativeLocalizedSelectedStart(form, results, failures);
                     VerifyCompactNativeSelectedStart(form, results, failures);
+                    VerifyPortableAuditFooterNative(form, failures);
                     results.Rows.Clear();
                     form.ReflowMainViewport();
                 }
