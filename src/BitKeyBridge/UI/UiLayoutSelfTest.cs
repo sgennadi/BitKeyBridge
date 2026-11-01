@@ -72,6 +72,14 @@ public static class UiLayoutSelfTest
         var failures =
             new List<string>();
 
+        // Runtime check: a native Explorer icon is insufficient if WinForms
+        // modal windows still use the default framework title-bar icon.
+        using (var brandIconForm = new DpiAwareForm())
+        {
+            if (!brandIconForm.HasBrandIconForUiSelfTest)
+                failures.Add("BitKeyBridge branded icon is not assigned to WinForms dialogs.");
+        }
+
         VerifyNipkgBrandBanner(failures);
         VerifyModernAccentAndDynamicTheme(failures);
 

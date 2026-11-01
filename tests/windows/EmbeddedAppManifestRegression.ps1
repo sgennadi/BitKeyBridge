@@ -37,6 +37,60 @@ public static class BitKeyBridgeManifestProbe
     private static extern uint SizeofResource(IntPtr module, IntPtr info);
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool FreeLibrary(IntPtr module);
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate bool ResourceNameCallback(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
+    [DllImport("kernel32.dll", EntryPoint = "EnumResourceNamesW", SetLastError = true)]
+    private static extern bool EnumResourceNames(
+        IntPtr module, IntPtr type, ResourceNameCallback callback, IntPtr param);
+
+    // Inspect published apphost resource data without executing the EXE.
+    // RT_GROUP_ICON=14 references RT_ICON=3 resource frames.
+    public static int[] ReadIconSizes(string path)
+    {
+        IntPtr module = LoadLibraryEx(path, IntPtr.Zero, 0x2);
+        if (module == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot inspect icon resources.");
+        try
+        {
+            IntPtr first = IntPtr.Zero;
+            ResourceNameCallback callback = (h, type, name, param) =>
+            {
+                first = name;
+                return false;
+            };
+            EnumResourceNames(module, new IntPtr(14), callback, IntPtr.Zero);
+            GC.KeepAlive(callback);
+            if (first == IntPtr.Zero)
+                throw new InvalidOperationException("Published EXE has no RT_GROUP_ICON resource.");
+            IntPtr info = FindResource(module, first, new IntPtr(14));
+            if (info == IntPtr.Zero)
+                throw new InvalidOperationException("Published EXE has no valid icon group.");
+            uint length = SizeofResource(module, info);
+            IntPtr resource = LoadResource(module, info);
+            IntPtr ptr = LockResource(resource);
+            if (length < 20 || length > 4096 || ptr == IntPtr.Zero)
+                throw new InvalidOperationException("Published EXE icon group size is invalid.");
+            byte[] data = new byte[(int)length];
+            Marshal.Copy(ptr, data, 0, data.Length);
+            int count = BitConverter.ToUInt16(data, 4);
+            if (count < 1 || count > 32 || 6 + count * 14 > data.Length)
+                throw new InvalidOperationException("Published EXE icon frames are invalid.");
+            var sizes = new int[count];
+            for (int index = 0; index < count; index++)
+            {
+                int offset = 6 + index * 14;
+                int width = data[offset] == 0 ? 256 : data[offset];
+                int height = data[offset + 1] == 0 ? 256 : data[offset + 1];
+                int imageId = BitConverter.ToUInt16(data, offset + 12);
+                if (width != height || FindResource(
+                        module, new IntPtr(imageId), new IntPtr(3)) == IntPtr.Zero)
+                    throw new InvalidOperationException("Published EXE icon frame is missing.");
+                sizes[index] = width;
+            }
+            return sizes;
+        }
+        finally { FreeLibrary(module); }
+    }
 
     public static byte[] Read(string path)
     {
@@ -102,4 +156,11 @@ if ($null -eq $requested -or
     throw 'Published manifest changed the least-privilege execution policy.'
 }
 
-Write-Output 'Embedded Windows 10/11, PerMonitorV2, asInvoker manifest: PASS.'
+$iconSizes = [BitKeyBridgeManifestProbe]::ReadIconSizes($fullPath)
+foreach ($size in @(16, 24, 32, 48, 64, 128, 256)) {
+    if ($iconSizes -notcontains $size) {
+        throw "Published EXE is missing the branded $size-pixel shell icon."
+    }
+}
+
+Write-Output 'Embedded Windows manifest and branded 16-256px PE icon: PASS.'

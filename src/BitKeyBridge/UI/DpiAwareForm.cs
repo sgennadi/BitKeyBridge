@@ -16,6 +16,9 @@ public class DpiAwareForm : Form
     private int _visibleLabelHandleGeneration;
     private bool _responsiveHandleRecreated;
     private int _visibleLabelWidthBatchCount;
+    private bool _brandedIconAssigned;
+
+    internal bool HasBrandIconForUiSelfTest => _brandedIconAssigned;
 
     internal int VisibleLabelWidthBatchCountForUiSelfTest =>
         _visibleLabelWidthBatchCount;
@@ -43,6 +46,29 @@ public class DpiAwareForm : Form
                 UiStyle.BaselineDpi);
         Font =
             UiStyle.BodyFont;
+
+        // The PE icon alone changes Explorer but not every WinForms dialog.
+        // Assign each window its own clone from the managed .ico resource so
+        // the title bar, taskbar and Device 360 share the same blue shield.
+        // No external files, elevation, security policy or directory access.
+        try
+        {
+            using var iconStream = typeof(DpiAwareForm).Assembly
+                .GetManifestResourceStream("BitKeyBridge.BrandIcon");
+            if (iconStream is not null)
+            {
+                using var resourceIcon = new System.Drawing.Icon(iconStream);
+                Icon = (System.Drawing.Icon)resourceIcon.Clone();
+                _brandedIconAssigned = true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or
+                                   InvalidOperationException or
+                                   System.ComponentModel.Win32Exception)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Application icon unavailable: " + ex.GetType().Name);
+        }
 
         _responsiveLabelTimer.Tick += (_, _) =>
         {
