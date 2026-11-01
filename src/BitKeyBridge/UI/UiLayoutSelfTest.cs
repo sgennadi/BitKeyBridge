@@ -2069,24 +2069,38 @@ public static class UiLayoutSelfTest
                             size.Width + "x" + size.Height + "/" + language +
                             ". " + report);
 
+                    // The Start viewport is smaller than ClientSize because
+                    // the native menu/tabs/status strips also take vertical
+                    // pixels. Evaluate the density for that *actual* viewport
+                    // and allow the two compact tiers their distinct caps.
+                    var logicalHeight = (geometry?.ViewportHeight ?? 0) / scale;
+                    var density = logicalHeight < 700 ? 2 :
+                        logicalHeight < 800 ? 1 : 0;
+                    var maxRecent = density == 2 ? 74 :
+                        density == 1 ? 96 : UiStyle.HomeRecentQuickListHeight + 2;
+                    var maxCard = density == 2 ? 215 :
+                        density == 1 ? 255 : UiStyle.HomeThreePaneMinimumHeight + 5;
+
                     if (FindByName(form, "HomeNipkgBrandBanner") is not
                             UiNipkgBrandBanner banner ||
-                        banner.Tagline.Visible ||
-                        banner.AccessibleDescription != UiNipkgBrandBanner.IntroCaption)
-                        failures.Add("Compact Start did not collapse decorative banner: " +
+                        banner.Tagline.Visible == (density != 0) ||
+                        (density != 0 &&
+                         banner.AccessibleDescription !=
+                             UiNipkgBrandBanner.IntroCaption))
+                        failures.Add("Start height density did not adapt its banner: " +
                             size.Width + "x" + size.Height + "/" + language);
 
                     if (FindByName(form, "HomeRecentQuickPanel") is not
                             TableLayoutPanel recent ||
                         recent.RowStyles.Count < 2 ||
-                        recent.RowStyles[1].Height > 74 * scale)
-                        failures.Add("Compact Start recent-computer list retained tall row: " +
+                        recent.RowStyles[1].Height > maxRecent * scale)
+                        failures.Add("Start recent-computer list retained tall row: " +
                             size.Width + "x" + size.Height + "/" + language);
 
                     if (FindByName(form, "HomeServiceCards") is not
                             TableLayoutPanel cards ||
-                        cards.MinimumSize.Height > 215 * scale)
-                        failures.Add("Compact Start card minimum height not adapted: " +
+                        cards.MinimumSize.Height > maxCard * scale)
+                        failures.Add("Start card minimum height not adapted: " +
                             size.Width + "x" + size.Height + "/" + language);
 
                     if (!ReferenceEquals(results.CurrentRow?.Tag, selected) ||
