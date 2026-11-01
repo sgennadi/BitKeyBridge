@@ -399,11 +399,27 @@ public sealed partial class MainForm
         _homeConnectionStatus.Visible = showAdDetails;
         _homeAdAccountStatus.Visible = showAdDetails;
 
+        // The static setup summary duplicates status already available in
+        // the footer and Connection tools. On tight windows it may consume
+        // the last 35-40 pixels needed to reach the recovery buttons.
+        // Keep warning/error states fully visible. The summary's full
+        // non-secret text remains accessible from the connection action.
+        var collapseRoutineSetup = _startHeightDensity == 2 &&
+            !_connectionOptionsExpanded &&
+            _startSetupStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success;
+        _startSetupStatus.Visible = !collapseRoutineSetup;
+        if (_homeReconnectWizardButton is { IsDisposed: false })
+            _homeReconnectWizardButton.AccessibleDescription =
+                _startSetupStatus.Text;
+
         var choiceRow = _homeConnectionSource.Parent;
         var changed = SetOptionalRow(_homeAdConnectionLayout,
             _homeConnectionStatus, showAdDetails);
         changed |= SetOptionalRow(_homeAdConnectionLayout,
             _homeAdAccountStatus, showAdDetails);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startSetupStatus, !collapseRoutineSetup);
         changed |= SetOptionalRow(
             choiceRow?.Parent as TableLayoutPanel, choiceRow,
             _connectionOptionsExpanded);
