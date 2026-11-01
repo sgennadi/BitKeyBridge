@@ -298,6 +298,12 @@ public sealed partial class MainForm
         {
             root.ResumeLayout(true);
         }
+
+        // The density change must also invalidate the AutoSize rows that
+        // hold duplicate AD status labels. Simply setting Visible=false
+        // leaves a retained preferred height in the connection GroupBox.
+        SyncStartOptionalConnectionRows(
+            StartConnectionPolicy.NeedsActiveDirectory(SelectedStartSource));
     }
 
     // Recent metadata is optional. With no entries it must not reserve the
