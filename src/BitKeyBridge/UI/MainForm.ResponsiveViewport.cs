@@ -12,6 +12,8 @@ public sealed partial class MainForm
     private bool _homeResultsReflowRunning;
     private string _homeResultsLayoutKey = string.Empty;
     private string _homeConnectionsRecentLayoutKey = string.Empty;
+    private int _startHeightDensity = -1;
+    private int _startMinimumCardHeight = UiStyle.HomeThreePaneMinimumHeight;
     private bool _homeConnectionsRecentReflowRunning;
     private int _lastRecentComputerLayoutCount = -1;
     private string _lastRepairedTabPath = string.Empty;
@@ -229,6 +231,73 @@ public sealed partial class MainForm
         Math.Max(DeviceDpi / (double)UiStyle.BaselineDpi,
             Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
 
+    // Short RDP sessions and 1366x768/1600x900 laptop screens have much
+    // less usable vertical space than an empty 1080p CI screenshot suggests.
+    // Compact only decorative/redundant content; never hide connection,
+    // search, selected-device, audit, or recovery buttons and never shrink
+    // their font. Breakpoints are LOGICAL pixels, not monitor pixels.
+    private void ReflowStartVerticalDensity()
+    {
+        if (_homeWorkspaceTab is null || _homeBrandBanner is null ||
+            _homeServiceCards.IsDisposed)
+            return;
+
+        var root = _homeWorkspaceTab.Controls
+            .OfType<TableLayoutPanel>()
+            .FirstOrDefault(x => x.Name == "HomeLayoutRoot");
+        if (root is null || root.IsDisposed || root.ClientSize.Height < 150)
+            return;
+
+        var scale = EffectiveHomeDpiScale();
+        var logicalHeight = root.ClientSize.Height / scale;
+        var tier = logicalHeight < 760 ? 2 : logicalHeight < 980 ? 1 : 0;
+        if (tier == _startHeightDensity)
+            return;
+
+        _startHeightDensity = tier;
+        var compact = tier != 0;
+        var tight = tier == 2;
+        _startMinimumCardHeight = tier switch
+        {
+            2 => 210,
+            1 => 250,
+            _ => UiStyle.HomeThreePaneMinimumHeight
+        };
+        root.SuspendLayout();
+        try
+        {
+            var pagePadding = tight ? 8 : compact ? 11 : UiStyle.PagePadding;
+            var padding = new Padding(pagePadding);
+            if (root.Padding != padding)
+                root.Padding = padding;
+            _homeBrandBanner.SetCompactHeight(compact);
+            _appDiagnostics.SetCompactHeight(compact);
+
+            var group = root.Controls.OfType<GroupBox>()
+                .FirstOrDefault(x => x.Name == "HomeConnectionsGroup");
+            if (group is not null)
+            {
+                group.Padding = new Padding(tight ? 7 : compact ? 9 : 14);
+                group.Margin = new Padding(0, 0, 0,
+                    compact ? UiStyle.ControlGap / 2 : UiStyle.SectionGap);
+            }
+            _homeSelectionPanel.Margin = new Padding(
+                0, compact ? 2 : UiStyle.ControlGap, 0, 0);
+            var recentHint = _homeRecentQuickPanel?.Controls
+                .OfType<Label>()
+                .FirstOrDefault(x => x.Name == "HomeRecentExplanation");
+            if (recentHint is not null)
+                recentHint.Visible = !compact;
+            // The short-height recent list remains readable and scrollable.
+            // It must never consume the height needed for recovery actions.
+            _lastRecentComputerLayoutCount = -1;
+        }
+        finally
+        {
+            root.ResumeLayout(true);
+        }
+    }
+
     // Recent metadata is optional. With no entries it must not reserve the
     // right 38% of Connections or a permanent 154px-high empty grid. A short
     // list gets its intrinsic rows; a longer one scrolls inside the 154px cap.
@@ -248,8 +317,15 @@ public sealed partial class MainForm
         }
 
         var scale = (float)EffectiveHomeDpiScale();
-        var maximum = (int)Math.Ceiling(UiStyle.HomeRecentQuickListHeight * scale);
-        var minimum = (int)Math.Ceiling(64F * scale);
+        var logicalMaximum = _startHeightDensity switch
+        {
+            2 => 72,
+            1 => 94,
+            _ => UiStyle.HomeRecentQuickListHeight
+        };
+        var maximum = (int)Math.Ceiling(logicalMaximum * scale);
+        var minimum = (int)Math.Ceiling(
+            (_startHeightDensity == 0 ? 64F : 52F) * scale);
         var preferred = count == 0 ? 0 :
             (_homeRecentResults.ColumnHeadersVisible
                 ? _homeRecentResults.ColumnHeadersHeight : 0) +
@@ -348,12 +424,13 @@ public sealed partial class MainForm
         var scaledWidth = (int)Math.Ceiling(
             UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
         var scaledHeight = (int)Math.Ceiling(
-            UiStyle.HomeThreePaneMinimumHeight * effectiveScale);
+            _startMinimumCardHeight * effectiveScale);
         bool threeColumns = width >= scaledWidth;
         UpdateHomePaneDragUi(threeColumns);
 
         var desiredKey = (threeColumns ? "3cols:" : "3rows:") +
-            string.Join(",", _homePaneOrder) + ":" + DeviceDpi;
+            string.Join(",", _homePaneOrder) + ":" + DeviceDpi +
+            ":min" + scaledHeight;
         if (_homeResultsLayoutKey == desiredKey)
             return;
 
@@ -579,8 +656,29 @@ public sealed partial class MainForm
             // immediate reflow using the current RDP/window dimensions.
             if (ReferenceEquals(_mainTabs.SelectedTab, _homeWorkspaceTab))
             {
+                ReflowStartVerticalDensity();
                 ReflowConnectionsRecent();
                 ReflowHomeResultsArea();
+                // If all rows cannot fit (e.g. 200% scaling on a 768px RDP
+                // desktop), expose actual vertical scrolling rather than
+                // cutting off the lower panes with a clipped percent row.
+                var startRoot = _homeWorkspaceTab?.Controls
+                    .OfType<TableLayoutPanel>()
+                    .FirstOrDefault(x => x.Name == "HomeLayoutRoot");
+                if (startRoot is not null && startRoot.RowStyles.Count >= 6)
+                {
+                    var heights = startRoot.GetRowHeights();
+                    var topHeight = heights.Take(5).Sum();
+                    var required = topHeight +
+                        (int)Math.Ceiling(_startMinimumCardHeight *
+                            EffectiveHomeDpiScale()) +
+                        startRoot.Padding.Vertical;
+                    var minScroll = required > startRoot.ClientSize.Height
+                        ? new Size(0, required + UiStyle.ControlGap)
+                        : Size.Empty;
+                    if (startRoot.AutoScrollMinSize != minScroll)
+                        startRoot.AutoScrollMinSize = minScroll;
+                }
                 AlignHomeStatusGlyphs();
             }
 
