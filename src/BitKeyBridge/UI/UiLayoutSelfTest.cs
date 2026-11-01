@@ -1964,11 +1964,12 @@ public static class UiLayoutSelfTest
                 StringComparison.Ordinal))
             return;
 
+        var compact = phase.StartsWith("compact-", StringComparison.Ordinal);
         if (FindByName(form, "HomeLayoutRoot") is not Control viewport ||
-            viewport.ClientSize.Width < 1450 ||
-            viewport.ClientSize.Height < 700)
+            viewport.ClientSize.Width < (compact ? 1200 : 1450) ||
+            viewport.ClientSize.Height < (compact ? 500 : 700))
         {
-            failures.Add("Synthetic 1080p snapshot viewport is not ready.");
+            failures.Add("Synthetic Start snapshot viewport is not ready: " + phase);
             return;
         }
 
@@ -2020,6 +2021,96 @@ public static class UiLayoutSelfTest
         {
             failures.Add("Synthetic Start snapshot failed: " +
                 ex.GetType().Name);
+        }
+    }
+
+    // Regression for the reported real 1600x720 screenshot with five recent
+    // records and a selected computer. The old 1600x900-only native fixture
+    // passed even while the visible short window clipped the recovery panes.
+    // This test never loads live AD, Intune, prior history or recovery secrets.
+    private static void VerifyCompactNativeSelectedStart(
+        MainForm form, DataGridView results, List<string> failures)
+    {
+        var originalSize = form.ClientSize;
+        var selected = results.CurrentRow?.Tag;
+        if (selected is null)
+        {
+            failures.Add("Compact native Start is missing synthetic selection.");
+            return;
+        }
+
+        try
+        {
+            foreach (var size in new[]
+            {
+                new Size(1600, 720),
+                new Size(1366, 768)
+            })
+            {
+                form.ClientSize = size;
+                foreach (var language in new[] { "en", "ru", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    Application.DoEvents();
+                    form.ReflowMainViewport();
+                    form.PerformLayout();
+                    Application.DoEvents();
+
+                    var geometry = form.CaptureStartViewportGeometry();
+                    var report = form.StartViewportGeometryReport();
+                    var scale = Math.Max(form.DeviceDpi /
+                        (double)UiStyle.BaselineDpi,
+                        form.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+                    if (geometry is null ||
+                        geometry.Value.CardColumns != 3 ||
+                        geometry.Value.CardRows != 1 ||
+                        geometry.Value.CardsVisibleHeight < 125 * scale)
+                        failures.Add("Compact Start hid recovery panes: " +
+                            size.Width + "x" + size.Height + "/" + language +
+                            ". " + report);
+
+                    if (FindByName(form, "HomeNipkgBrandBanner") is not
+                            UiNipkgBrandBanner banner ||
+                        banner.Tagline.Visible ||
+                        banner.AccessibleDescription != UiNipkgBrandBanner.IntroCaption)
+                        failures.Add("Compact Start did not collapse decorative banner: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    if (FindByName(form, "HomeRecentQuickPanel") is not
+                            TableLayoutPanel recent ||
+                        recent.RowStyles.Count < 2 ||
+                        recent.RowStyles[1].Height > 74 * scale)
+                        failures.Add("Compact Start recent-computer list retained tall row: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    if (FindByName(form, "HomeServiceCards") is not
+                            TableLayoutPanel cards ||
+                        cards.MinimumSize.Height > 215 * scale)
+                        failures.Add("Compact Start card minimum height not adapted: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    if (!ReferenceEquals(results.CurrentRow?.Tag, selected) ||
+                        results.SelectedRows.Count != 1)
+                        failures.Add("Compact Start resized away the selected computer: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    // The four sensitive actions must remain reachable. Their
+                    // existence alone is not enough; check native clipping.
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    if (size.Width == 1600)
+                        SaveSyntheticStartSnapshotForCi(
+                            form, "compact-selected-" + language, failures);
+                }
+            }
+        }
+        finally
+        {
+            form.PreviewShellLanguageForLayoutTest("en");
+            form.ClientSize = originalSize;
+            Application.DoEvents();
+            form.ReflowMainViewport();
+            form.PerformLayout();
+            Application.DoEvents();
         }
     }
 
@@ -2259,6 +2350,7 @@ public static class UiLayoutSelfTest
                     // Keep the selected metadata object unchanged and capture
                     // separate synthetic PNGs for each language.
                     VerifyNativeLocalizedSelectedStart(form, results, failures);
+                    VerifyCompactNativeSelectedStart(form, results, failures);
                     results.Rows.Clear();
                     form.ReflowMainViewport();
                 }
