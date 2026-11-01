@@ -273,7 +273,15 @@ public sealed partial class MainForm
             if (root.Padding != padding)
                 root.Padding = padding;
             _homeBrandBanner.SetCompactHeight(compact);
+            _homeBrandBanner.Margin = new Padding(0, 0, 0,
+                tight ? 0 : compact ? UiStyle.ControlGap / 2 : UiStyle.SectionGap);
             _appDiagnostics.SetCompactHeight(compact);
+
+            var searchRow = root.Controls.OfType<TableLayoutPanel>()
+                .FirstOrDefault(x => x.Name == "HomeSearchControls");
+            if (searchRow is not null)
+                searchRow.Margin = new Padding(
+                    0, 0, 0, tight ? 0 : UiStyle.ControlGap);
 
             var group = root.Controls.OfType<GroupBox>()
                 .FirstOrDefault(x => x.Name == "HomeConnectionsGroup");
@@ -281,10 +289,11 @@ public sealed partial class MainForm
             {
                 group.Padding = new Padding(tight ? 7 : compact ? 9 : 14);
                 group.Margin = new Padding(0, 0, 0,
-                    compact ? UiStyle.ControlGap / 2 : UiStyle.SectionGap);
+                    tight ? 0 : compact ? UiStyle.ControlGap / 2 :
+                    UiStyle.SectionGap);
             }
             _homeSelectionPanel.Margin = new Padding(
-                0, compact ? 2 : UiStyle.ControlGap, 0, 0);
+                0, tight ? 0 : compact ? 2 : UiStyle.ControlGap, 0, 0);
             var recentHint = _homeRecentQuickPanel?.Controls
                 .OfType<Label>()
                 .FirstOrDefault(x => x.Name == "HomeRecentExplanation");
