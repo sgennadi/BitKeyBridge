@@ -29,7 +29,9 @@ internal sealed partial class Device360Dialog
             Dock = DockStyle.Fill,
             RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
             RightToLeftLayout = rtl,
-            Multiline = false
+            // Two native tab rows are preferable to hiding the last
+            // RU/HE tab behind horizontal arrows at 610px and high DPI.
+            Multiline = true
         };
         viewport.Controls.Remove(overviewSections);
         viewport.AutoScroll = false;
