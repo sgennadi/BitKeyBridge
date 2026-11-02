@@ -15,7 +15,7 @@ internal enum Device360Route
 /// secrets, approves access, or rotates an Intune key. Navigation is returned
 /// to the caller for revalidation against the ORIGINAL selected result.
 /// </summary>
-internal sealed class Device360Dialog : DpiAwareForm
+internal sealed partial class Device360Dialog : DpiAwareForm
 {
     internal Device360Route SelectedRoute { get; private set; }
 
@@ -376,6 +376,11 @@ internal sealed class Device360Dialog : DpiAwareForm
         Shown += (_, _) => ReserveFooterSpace();
         ClientSizeChanged += (_, _) => ReserveFooterSpace();
         DpiChanged += (_, _) => ReserveFooterSpace();
+
+        // Move the EXISTING localized section controls into five compact
+        // pages; keep the proven fixed-size footer and its navigation rules.
+        InitializeDevice360V2(scroll, content, identity.Card, recovery.Card,
+            posture.Card, access.Card, snapshot, operational, language);
 
         string Value(string? text) =>
             string.IsNullOrWhiteSpace(text) ? Tr("Device360NotVerified") : text;
