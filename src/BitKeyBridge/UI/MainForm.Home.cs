@@ -294,31 +294,18 @@ public sealed partial class MainForm
                 return;
             }
 
-            var names =
-                recoveryRows
-                    .Select(
-                        row =>
-                            row.ComputerName)
-                    .Concat(
-                        lapsRows.Select(
-                            row =>
-                                row.ComputerName))
-                    .Where(
-                        name =>
-                            !string.IsNullOrWhiteSpace(
-                                name))
-                    .Distinct(
-                        StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(
-                        name =>
-                            name,
-                        StringComparer.OrdinalIgnoreCase)
-                    .Take(100)
-                    .ToList();
-
+            // Include AD inventory-only computers (no positive BitLocker or
+            // LAPS metadata) so their exact AD identity and OS are available
+            // in Start -> Device 360. Recovery records keep display priority.
+            var names = HomeAdInventorySelection.BuildNames(
+                recoveryRows, lapsRows, inventoryRows);
             var ambiguousNames = names
                 .Where(name => HelpdeskStatus.HasIdentityCollision(
-                    recoveryRows, lapsRows, name))
+                    recoveryRows, lapsRows, name) ||
+                    HomeAdInventorySelection.IsAmbiguous(
+                        HomeAdInventorySelection.MatchingAdCandidates(
+                            inventoryRows, name),
+                        recoveryRows, lapsRows, name))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             _updatingHomeSearchResults = true;
 
@@ -362,6 +349,9 @@ public sealed partial class MainForm
                                 row.KeyDateUtc)
                         .FirstOrDefault();
 
+                var inventoryCandidates =
+                    HomeAdInventorySelection.MatchingAdCandidates(
+                        inventoryRows, computer);
                 var exactComputerDn = bitLocker
                     .Select(item => item.ComputerDistinguishedName)
                     .Append(laps?.ComputerDistinguishedName ?? string.Empty)
@@ -370,8 +360,17 @@ public sealed partial class MainForm
                 var exactComputerGuid = Guid.TryParse(
                     laps?.ComputerId, out var parsedGuid)
                     ? parsedGuid.ToString("D") : string.Empty;
-                var matchingInventory = inventoryRows
-                    .Where(row => row.FoundInAd &&
+
+                // An inventory-only row originates from one authoritative
+                // AD object: carry THAT row's DN, never join a recovery or
+                // LAPS row to it merely because the computer names agree.
+                if (bitLocker.Count == 0 && laps is null &&
+                    inventoryCandidates.Count == 1 &&
+                    !ambiguousNames.Contains(computer))
+                    exactComputerDn = inventoryCandidates[0].AdDistinguishedName;
+
+                var matchingInventory = inventoryCandidates
+                    .Where(row =>
                         ((!string.IsNullOrWhiteSpace(exactComputerDn) &&
                           string.Equals(row.AdDistinguishedName, exactComputerDn,
                               StringComparison.OrdinalIgnoreCase)) ||

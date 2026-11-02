@@ -673,6 +673,86 @@ public static class UiLayoutSelfTest
             Device360HardwareService.ErrorCategory(WmiFailure(0x8000FFFF)) != "Unavailable")
             failures.Add("Device 360 WMI diagnostics confused access, timeout, RPC and provider failures.");
 
+        // Inventory-only AD objects must still be visible on Start even
+        // without positive BitLocker/LAPS metadata. The exact LDAP DN is
+        // the identity; hostname-only matches cannot attach hardware.
+        var inventoryOnly = new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-AD-INVENTORY-ONLY",
+            IdentityKey = "AD:GUID:00000000-0000-0000-0000-000000000099",
+            IdentityStatus = "AD object",
+            FoundInAd = true,
+            AdObjectGuid = "00000000-0000-0000-0000-000000000099",
+            AdDistinguishedName =
+                "CN=UI-AD-INVENTORY-ONLY,DC=example,DC=com",
+            AdDnsHostName = "ui-ad-inventory-only.example.com",
+            OperatingSystem = "Windows 11 Pro"
+        };
+        var inventoryOnlyNames = HomeAdInventorySelection.BuildNames(
+            [], [], [inventoryOnly]);
+        var inventoryOnlyCandidates = HomeAdInventorySelection.MatchingAdCandidates(
+            [inventoryOnly], inventoryOnly.ComputerName);
+        if (inventoryOnlyNames.Count != 1 ||
+            inventoryOnlyNames[0] != inventoryOnly.ComputerName ||
+            inventoryOnlyCandidates.Count != 1 ||
+            HomeAdInventorySelection.IsAmbiguous(inventoryOnlyCandidates,
+                [], [], inventoryOnly.ComputerName))
+            failures.Add("Start dropped an inventory-only AD computer.");
+        var inventoryOnlyCard = Device360Snapshot.FromHome(new HomeSearchResult
+        {
+            ComputerName = inventoryOnly.ComputerName,
+            AdComputerDistinguishedName = inventoryOnly.AdDistinguishedName,
+            InventoryMetadata = inventoryOnly
+        });
+        if (!inventoryOnlyCard.IdentityVerified ||
+            inventoryOnlyCard.OperatingSystem != "Windows 11 Pro" ||
+            inventoryOnlyCard.AdDnsHostName != inventoryOnly.AdDnsHostName ||
+            !inventoryOnlyCard.BitLockerMetadataIncomplete ||
+            inventoryOnlyCard.LapsMetadataDetected ||
+            !Device360HardwareService.CanQuery(inventoryOnlyCard))
+            failures.Add("Inventory-only Device 360 lost AD OS/DNS or implied a secret backup.");
+
+        var collision = new UnifiedDeviceInfo
+        {
+            ComputerName = inventoryOnly.ComputerName,
+            IdentityKey = "AD:GUID:00000000-0000-0000-0000-000000000098",
+            IdentityStatus = "AD object",
+            FoundInAd = true,
+            AdObjectGuid = "00000000-0000-0000-0000-000000000098",
+            AdDistinguishedName =
+                "CN=UI-AD-INVENTORY-ONLY,OU=Other,DC=example,DC=com"
+        };
+        if (!HomeAdInventorySelection.IsAmbiguous(
+                HomeAdInventorySelection.MatchingAdCandidates(
+                    [inventoryOnly, collision], inventoryOnly.ComputerName),
+                [], [], inventoryOnly.ComputerName) ||
+            !HomeAdInventorySelection.IsAmbiguous(
+                inventoryOnlyCandidates,
+                [new RecoverySearchResult
+                {
+                    ComputerName = inventoryOnly.ComputerName,
+                    ComputerDistinguishedName = collision.AdDistinguishedName
+                }], [], inventoryOnly.ComputerName))
+            failures.Add("Start inventory failed closed on duplicate/mismatched AD DNs.");
+
+        var fullInventory = Enumerable.Range(0, 110).Select(i =>
+            new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-INVENTORY-" + i.ToString("D3"),
+                FoundInAd = true,
+                AdDistinguishedName = "CN=UI-INVENTORY-" + i.ToString("D3") +
+                    ",DC=example,DC=com"
+            }).ToArray();
+        var prioritized = HomeAdInventorySelection.BuildNames(
+            [new RecoverySearchResult
+            {
+                ComputerName = "UI-ZZ-RECOVERY",
+                RecoveryId = "UI-TEST-RECOVERY-KEY-NAME-ONLY"
+            }], [], fullInventory);
+        if (prioritized.Count != 100 ||
+            !prioritized.Contains("UI-ZZ-RECOVERY"))
+            failures.Add("Broad AD inventory displaced an exact recovery result.");
+
         var wrongAdInventory = Device360Snapshot.FromHome(new HomeSearchResult
         {
             ComputerName = adInventory.ComputerName,
