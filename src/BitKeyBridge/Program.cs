@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -7,6 +8,35 @@ namespace BitKeyBridge;
 
 internal static class Program
 {
+    // Stable taskbar/Start grouping identity for the portable EXE, even
+    // when its download folder/version changes between RC releases.
+    // Windows Explorer must not fall back to a stale pinned shortcut icon.
+    private const string DesktopAppUserModelId = "BitKeyBridge.Helpdesk.Desktop";
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(
+        [MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+    private static void SetPortableDesktopIdentity()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        try
+        {
+            var hr = SetCurrentProcessExplicitAppUserModelID(
+                DesktopAppUserModelId);
+            if (hr != 0)
+                Debug.WriteLine("Taskbar application identity returned HRESULT 0x" +
+                    hr.ToString("X8"));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or
+                                   EntryPointNotFoundException)
+        {
+            Debug.WriteLine("Shell taskbar identity unavailable: " +
+                ex.GetType().Name);
+        }
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -1155,6 +1185,7 @@ internal static class Program
 
         try
         {
+            SetPortableDesktopIdentity();
             ApplicationConfiguration.Initialize();
             Application.Run(new MainForm(config));
             return 0;
