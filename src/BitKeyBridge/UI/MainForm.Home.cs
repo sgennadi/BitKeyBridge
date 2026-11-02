@@ -167,10 +167,22 @@ public sealed partial class MainForm
                         query, cancellation.Token),
                     cancellation.Token);
 
-            await Task.WhenAll(recoveryTask, lapsTask);
+            // Fetch non-secret AD OS/last-logon inventory in parallel,
+            // not when opening Device 360. An inventory failure must not
+            // prevent normal BitLocker/LAPS metadata or cause a credential
+            // prompt. Join below ONLY by exact object DN or GUID.
+            var inventoryTask =
+                MetadataSourceIsolation.ExecuteAsync<UnifiedDeviceInfo>(
+                    () => new UnifiedDeviceService(_config)
+                        .SearchAdOnlyAsync(query, maximumItems: 100,
+                            ct: cancellation.Token),
+                    cancellation.Token);
+
+            await Task.WhenAll(recoveryTask, lapsTask, inventoryTask);
 
             var recoveryOutcome = await recoveryTask;
             var lapsOutcome = await lapsTask;
+            var inventoryRows = (await inventoryTask).Rows;
             var recoveryRows = recoveryOutcome.Rows;
             var lapsRows = lapsOutcome.Rows;
             string? recoveryFailure = recoveryOutcome.Error;
@@ -355,6 +367,21 @@ public sealed partial class MainForm
                     .Append(laps?.ComputerDistinguishedName ?? string.Empty)
                     .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
                     ?? string.Empty;
+                var exactComputerGuid = Guid.TryParse(
+                    laps?.ComputerId, out var parsedGuid)
+                    ? parsedGuid.ToString("D") : string.Empty;
+                var matchingInventory = inventoryRows
+                    .Where(row => row.FoundInAd &&
+                        ((!string.IsNullOrWhiteSpace(exactComputerDn) &&
+                          string.Equals(row.AdDistinguishedName, exactComputerDn,
+                              StringComparison.OrdinalIgnoreCase)) ||
+                         (!string.IsNullOrWhiteSpace(exactComputerGuid) &&
+                          string.Equals(row.AdObjectGuid, exactComputerGuid,
+                              StringComparison.OrdinalIgnoreCase))))
+                    .Take(2).ToList();
+                var exactInventory = matchingInventory.Count == 1 &&
+                    !ambiguousNames.Contains(computer)
+                    ? matchingInventory[0] : null;
 
                 var result =
                     new HomeSearchResult
@@ -367,6 +394,7 @@ public sealed partial class MainForm
                         AdComputerDistinguishedName = exactComputerDn,
                         SourceIdentity = string.IsNullOrWhiteSpace(exactComputerDn)
                             ? string.Empty : "AD:DN:" + exactComputerDn,
+                        InventoryMetadata = exactInventory,
                         BitLockerKeyCount =
                             bitLocker.Count,
                         BitLockerLookupFailed =
