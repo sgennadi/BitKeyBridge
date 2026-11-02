@@ -1975,11 +1975,12 @@ public sealed partial class MainForm : DpiAwareForm
                 !string.IsNullOrWhiteSpace(
                     _cloudConfig.ClientId);
 
-            var cloudReady =
-                cloudConfigured &&
-                await EnsureCloudTokenAsync(
-                    ct:
-                        cancellation.Token);
+            // Searching Devices must NEVER open Device Code / MFA on its
+            // own. Reuse the memory-only Graph session established on Start
+            // while it is valid for the same tenant/client/scopes. Expired
+            // or unconfigured sessions stay AD-only until the user clicks
+            // the explicit Connect Microsoft 365 action.
+            var cloudReady = cloudConfigured && HasCloudSearchSession();
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -2015,7 +2016,8 @@ public sealed partial class MainForm : DpiAwareForm
                 UiStyle.SetStatus(
                     _unifiedStatus,
                     cloudConfigured
-                        ? "Cloud authentication is unavailable; searching Active Directory only..."
+                        ? "Cloud session is not active. Searching Active Directory only. " +
+                          "Use Connect Microsoft 365 to sign in explicitly, then Search again."
                         : "Cloud is not configured; searching Active Directory only...",
                     UiStatusKind.Warning);
 
@@ -2030,7 +2032,8 @@ public sealed partial class MainForm : DpiAwareForm
                 UiStyle.SetStatus(
                     _unifiedStatus,
                     cloudConfigured
-                        ? "Cloud authentication did not complete and Active Directory is not connected. Retry Cloud authentication or connect AD on Start."
+                        ? "No active cloud session and AD is disconnected. " +
+                          "Click Connect Microsoft 365 to sign in, or connect AD on Start."
                         : "Active Directory is not connected and Cloud is not configured.",
                     UiStatusKind.Error);
 
@@ -2039,9 +2042,10 @@ public sealed partial class MainForm : DpiAwareForm
                 {
                     _unifiedDiagnostics.ShowMessage(
                         "No device source is currently available.",
-                        "Microsoft Graph authentication did not complete, and there is no active AD session." +
+                        "Microsoft Graph is not signed in; this search did not " +
+                        "start a Device Code / MFA prompt, and AD is disconnected." +
                         Environment.NewLine +
-                        "Retry the search to authenticate to Cloud, or connect to Active Directory on Start.");
+                        "Click Connect Microsoft 365 or connect to Active Directory on Start.");
                 }
 
                 return;
@@ -2129,7 +2133,8 @@ public sealed partial class MainForm : DpiAwareForm
                       (sourceReport.IsPartial
                           ? "Some metadata is unverified; see diagnostics."
                           : "All requested sources responded; recovery passwords were not requested.")
-                    : $"AD search returned {rows.Count} record(s). Cloud is not authenticated; configure Cloud to include Entra/Intune.",
+                    : $"AD search returned {rows.Count} record(s). " +
+                      "Cloud is not connected; use Connect Microsoft 365 to include Entra/Intune.",
                 sourceReport?.IsPartial == true || !cloudReady
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
