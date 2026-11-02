@@ -141,7 +141,7 @@ internal static class UnifiedSourceRetry
             [], "Synthetic 429", MetadataFailureKind.RateLimited);
         var cloudFailure = UnifiedDeviceSearchReport.Combine(
             recoveredAd, healthyIntune, throttled);
-        cloudFailure.SourceState = restored.SourceState with { Entra = throttled };
+        cloudFailure.SourceState = restored.SourceState! with { Entra = throttled };
         if (!CanRetry(cloudFailure, UnifiedMetadataSource.Entra) ||
             CanRetry(cloudFailure, UnifiedMetadataSource.Intune))
             failures.Add("Entra 429 selective retry was not available.");
@@ -150,7 +150,7 @@ internal static class UnifiedSourceRetry
             [], "Synthetic 403", MetadataFailureKind.AccessDenied);
         var denied = UnifiedDeviceSearchReport.Combine(
             recoveredAd, forbidden, emptyEntra);
-        denied.SourceState = restored.SourceState with { Intune = forbidden };
+        denied.SourceState = restored.SourceState! with { Intune = forbidden };
         if (CanRetry(denied, UnifiedMetadataSource.Intune))
             failures.Add("Denied Intune metadata could be retried without consent.");
 
