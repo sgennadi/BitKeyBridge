@@ -412,6 +412,7 @@ public sealed partial class MainForm
             return;
 
         _homeConnectionsRecentReflowRunning = true;
+        _preservingLocalizedCaptionsForResponsiveMove = true;
         layout.SuspendLayout();
         try
         {
@@ -448,6 +449,7 @@ public sealed partial class MainForm
         finally
         {
             layout.ResumeLayout(true);
+            _preservingLocalizedCaptionsForResponsiveMove = false;
             _homeConnectionsRecentReflowRunning = false;
         }
     }
@@ -487,6 +489,7 @@ public sealed partial class MainForm
 
         var cardsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         _homeResultsReflowRunning = true;
+        _preservingLocalizedCaptionsForResponsiveMove = true;
         _homeServiceCards.SuspendLayout();
         try
         {
@@ -592,6 +595,7 @@ public sealed partial class MainForm
             // ResumeLayout(true) already lays out the modified card grid once.
             // A second forced PerformLayout repaints all recovery children.
             _homeServiceCards.ResumeLayout(true);
+            _preservingLocalizedCaptionsForResponsiveMove = false;
             _homeResultsReflowRunning = false;
             UiLayoutTelemetry.RecordHomeCards(cardsStarted);
         }
