@@ -2356,7 +2356,8 @@ public static class UiLayoutSelfTest
                                             failures.Add("1366x768 at 125% " +
                                                 "zoom clips the lower border " +
                                                 "of " + cardName + ": " +
-                                                bottom + " > " + safeBottom);
+                                                bottom + " > " + safeBottom +
+                                                "; " + form.StartViewportGeometryReport());
                                     }
                                 }
                             }
