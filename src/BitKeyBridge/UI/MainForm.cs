@@ -77,6 +77,9 @@ public sealed partial class MainForm : DpiAwareForm
     private readonly ProgressBar _unifiedProgress = new();
     private readonly UiDiagnosticPanel _unifiedDiagnostics = new();
     private CancellationTokenSource? _unifiedCancellation;
+    // Invalidates a late search result after Start navigates to an exact
+    // in-memory object; a stale response must never replace the device.
+    private int _unifiedSearchGeneration;
 
     private readonly ListView _auditResults = new();
     private readonly UiStatusLabel _auditSigningStatus = new();
@@ -1940,6 +1943,7 @@ public sealed partial class MainForm : DpiAwareForm
 
         using var cancellation =
             new CancellationTokenSource();
+        var generation = ++_unifiedSearchGeneration;
         _unifiedCancellation =
             cancellation;
         _unifiedSearch.Enabled =
@@ -2057,6 +2061,9 @@ public sealed partial class MainForm : DpiAwareForm
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
+            if (generation != _unifiedSearchGeneration)
+                return; // Start selected a different exact source object.
+
             // Only a completed metadata search can set this status.
             // Source errors never establish that recovery data is absent.
             _device360LastUnifiedPartial = sourceReport?.IsPartial == true;
@@ -2130,6 +2137,8 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (OperationCanceledException)
         {
+            if (generation != _unifiedSearchGeneration)
+                return; // Invalidation owns the new status/selection.
             SetDevicesCloudWarningAction(false);
             UiStyle.SetStatus(
                 _unifiedStatus,
@@ -2138,6 +2147,8 @@ public sealed partial class MainForm : DpiAwareForm
         }
         catch (Exception ex)
         {
+            if (generation != _unifiedSearchGeneration)
+                return; // A late failed lookup must not overwrite a newer object.
             SetDevicesCloudWarningAction(false);
             UiStyle.SetStatus(
                 _unifiedStatus,
@@ -2162,22 +2173,18 @@ public sealed partial class MainForm : DpiAwareForm
         }
         finally
         {
-            if (ReferenceEquals(
-                    _unifiedCancellation,
-                    cancellation))
+            // A newer search or Start->Devices navigation now owns the UI.
+            // The old task may complete AFTER cancellation; only its own
+            // generation may reset the busy indicators.
+            if (generation == _unifiedSearchGeneration)
             {
-                _unifiedCancellation =
-                    null;
+                if (ReferenceEquals(_unifiedCancellation, cancellation))
+                    _unifiedCancellation = null;
+                _unifiedSearch.Enabled = true;
+                _unifiedCancel.Enabled = false;
+                _unifiedQuery.Enabled = true;
+                _unifiedProgress.Visible = false;
             }
-
-            _unifiedSearch.Enabled =
-                true;
-            _unifiedCancel.Enabled =
-                false;
-            _unifiedQuery.Enabled =
-                true;
-            _unifiedProgress.Visible =
-                false;
         }
     }
 

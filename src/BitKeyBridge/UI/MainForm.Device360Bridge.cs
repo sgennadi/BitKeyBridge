@@ -107,7 +107,22 @@ public sealed partial class MainForm
                 AdComputerDistinguishedName = adRecord.AdDistinguishedName,
                 InventoryMetadata = adRecord
             };
+            // Simulate an older in-flight Devices search when Start opens
+            // this already verified AD object. It must be invalidated
+            // without a new LDAP/Graph call or an MFA prompt.
+            using var staleSearch = new CancellationTokenSource();
+            _unifiedCancellation = staleSearch;
+            _unifiedSearch.Enabled = false;
+            _unifiedCancel.Enabled = true;
+            _unifiedQuery.Enabled = false;
+            _unifiedProgress.Visible = true;
+            var previousGeneration = _unifiedSearchGeneration;
             if (!TryReuseHomeInventoryInDevices(adHome) ||
+                !staleSearch.IsCancellationRequested ||
+                _unifiedCancellation is not null ||
+                _unifiedSearchGeneration != previousGeneration + 1 ||
+                !_unifiedSearch.Enabled || _unifiedCancel.Enabled ||
+                !_unifiedQuery.Enabled || _unifiedProgress.Visible ||
                 _unifiedResults.Items.Count != 1 ||
                 !ReferenceEquals(_unifiedResults.Items[0].Tag, adRecord) ||
                 _cloudToken is not null)
@@ -136,6 +151,12 @@ public sealed partial class MainForm
         }
         finally
         {
+            _unifiedCancellation?.Cancel();
+            _unifiedCancellation = null;
+            _unifiedSearch.Enabled = true;
+            _unifiedCancel.Enabled = false;
+            _unifiedQuery.Enabled = true;
+            _unifiedProgress.Visible = false;
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
         }
@@ -163,8 +184,24 @@ public sealed partial class MainForm
             !sameSourceIdentity)
             return false;
 
+        // An earlier Devices search may still be resolving AD/Graph.
+        // Cancel and invalidate that generation before changing the view.
+        // If it later completes or fails, it cannot replace this object,
+        // misreport an error or reset the current UI controls.
+        if (_unifiedCancellation is { } priorSearch)
+        {
+            ++_unifiedSearchGeneration;
+            _unifiedCancellation = null;
+            priorSearch.Cancel();
+            _unifiedSearch.Enabled = true;
+            _unifiedCancel.Enabled = false;
+            _unifiedQuery.Enabled = true;
+            _unifiedProgress.Visible = false;
+        }
+
         // Clear previous confidential recovery results before changing device
         // context. No previous secret is retained or displayed in Devices.
+        _unifiedDiagnostics.Clear();
         _deviceCurrentKey = null;
         _deviceRecoveryKey.Clear();
         _deviceRecoveryIds.Items.Clear();
