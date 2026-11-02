@@ -647,6 +647,11 @@ public sealed partial class MainForm
                     }
                 }
             }
+            // Setting Height while the old MinimumSize is still larger
+            // gets clamped silently by WinForms. Apply the measured height
+            // AFTER replacing the minimum with the fitted value.
+            if (heightFitsViewport && _homeServiceCards.Height != scaledHeight)
+                _homeServiceCards.Height = scaledHeight;
             _homeResultsLayoutKey = desiredKey;
         }
         finally
@@ -654,6 +659,8 @@ public sealed partial class MainForm
             // ResumeLayout(true) already lays out the modified card grid once.
             // A second forced PerformLayout repaints all recovery children.
             _homeServiceCards.ResumeLayout(true);
+            if (heightFitsViewport && _homeServiceCards.Height != scaledHeight)
+                _homeServiceCards.Height = scaledHeight;
             _preservingLocalizedCaptionsForResponsiveMove = false;
             _homeResultsReflowRunning = false;
             UiLayoutTelemetry.RecordHomeCards(cardsStarted);
