@@ -70,8 +70,11 @@ internal static class Device360ReportService
         Field("LAPS metadata detected", snapshot.LapsMetadataDetected ? "Yes" : "Not verified");
         Field("LAPS metadata expired", snapshot.LapsMetadataExpired ? "Yes" : "Not reported");
         Field("AD search evidence", status.Ad.ToString());
+        Field("AD failure reason", status.AdFailureKind.ToString());
         Field("Entra search evidence", status.Entra.ToString());
+        Field("Entra failure reason", status.EntraFailureKind.ToString());
         Field("Intune search evidence", status.Intune.ToString());
+        Field("Intune failure reason", status.IntuneFailureKind.ToString());
         Field("Metadata search partial", status.SearchPartial ? "Yes" : "No");
         Field("RBAC configured", status.RbacEnabledByConfiguration ? "Yes" : "No");
         Field("Recovery ticket required", status.TicketRequiredByConfiguration ? "Yes" : "No");
