@@ -2323,7 +2323,43 @@ public static class UiLayoutSelfTest
 
                             if (size.Width == 1366 && zoom == 125 &&
                                 densityMode == "Auto")
+                            {
                                 VerifyStartRecoveryButtonsOnScreen(form, failures);
+                                // Existence and full button visibility did
+                                // not catch the cut-off rounded *bottom* of
+                                // the two cards in the original CI screenshots.
+                                if (FindByName(form, "HomeLayoutRoot") is
+                                        Control compactViewport)
+                                {
+                                    var safeBottom =
+                                        compactViewport.ClientRectangle.Bottom -
+                                        UiStyle.ScaleLogicalPixels(8,
+                                            form.DeviceDpi);
+                                    foreach (var cardName in new[]
+                                    {
+                                        "HomeBitLockerCard", "HomeLapsCard",
+                                        "HomeComputersCard"
+                                    })
+                                    {
+                                        if (FindByName(form, cardName) is not
+                                                Control card || !card.Visible)
+                                        {
+                                            failures.Add("Compact Start rounded " +
+                                                "card missing: " + cardName);
+                                            continue;
+                                        }
+                                        var bottom =
+                                            compactViewport.RectangleToClient(
+                                                card.RectangleToScreen(
+                                                    card.ClientRectangle)).Bottom;
+                                        if (bottom > safeBottom)
+                                            failures.Add("1366x768 at 125% " +
+                                                "zoom clips the lower border " +
+                                                "of " + cardName + ": " +
+                                                bottom + " > " + safeBottom);
+                                    }
+                                }
+                            }
 
                             if (expectedColumns == 2)
                             {
