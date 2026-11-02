@@ -37,6 +37,61 @@ public sealed partial class MainForm
     /// No hostname-only matching. The Start record must carry a complete
     /// source-qualified snapshot obtained in the already completed search.
     /// </summary>
+    internal bool PreviewDevice360SharedSearchForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI self-test only.");
+
+        var record = new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-EXACT-SESSION-001",
+            IdentityKey = "INTUNE:MANAGED:ui-exact-device-001",
+            IdentityStatus = "Intune object",
+            FoundInIntune = true,
+            FoundInEntra = true,
+            ManagedDeviceId = "ui-exact-device-001",
+            EntraDeviceId = "a9c5e909-23a2-4274-8786-714d6c8ef305",
+            Manufacturer = "Synthetic Test Manufacturer",
+            Model = "Synthetic Model",
+            OperatingSystem = "Windows",
+            OsVersion = "11"
+        };
+        var row = new HomeSearchResult
+        {
+            ComputerName = record.ComputerName,
+            SourceIdentity = record.IdentityKey,
+            ComputerId = record.EntraDeviceId,
+            IsCloudRecord = true,
+            InventoryMetadata = record
+        };
+        try
+        {
+            if (!TryReuseHomeInventoryInDevices(row) ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, record) ||
+                _cloudToken is not null)
+                return false;
+
+            // An unrelated authoritative ID must never be accepted solely
+            // because a hostname matches; stale context must remain intact.
+            var forged = new HomeSearchResult
+            {
+                ComputerName = record.ComputerName,
+                IsCloudRecord = true,
+                SourceIdentity = "INTUNE:MANAGED:a-different-object",
+                InventoryMetadata = record
+            };
+            return !TryReuseHomeInventoryInDevices(forged) &&
+                _unifiedResults.Items.Count == 1 &&
+                ReferenceEquals(_unifiedResults.Items[0].Tag, record);
+        }
+        finally
+        {
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+        }
+    }
+
     private bool TryReuseHomeInventoryInDevices(HomeSearchResult selected)
     {
         if (selected is null || selected.IdentityAmbiguous ||
