@@ -70,7 +70,7 @@ internal static class Device360HardwareService
         try
         {
             ct.ThrowIfCancellationRequested();
-            using var scope = new ManagementScope(
+            var scope = new ManagementScope(
                 @"\\" + dnsHost + @"\root\cimv2", Options());
             scope.Connect();
 
@@ -131,7 +131,7 @@ internal static class Device360HardwareService
             try
             {
                 ct.ThrowIfCancellationRequested();
-                using var tpmScope = new ManagementScope(
+                var tpmScope = new ManagementScope(
                     @"\\" + dnsHost + @"\root\cimv2\security\microsofttpm", Options());
                 tpmScope.Connect();
                 using var objects = Find(tpmScope,
