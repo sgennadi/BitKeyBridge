@@ -1964,6 +1964,7 @@ public sealed partial class MainForm : DpiAwareForm
             // Do not retain a previous query's partial-source status.
             _device360LastUnifiedPartial = false;
             _device360UnifiedLookupFailed = default;
+            _device360UnifiedFailureKinds = default;
             _deviceRecoveryIds.Items.Clear();
             _deviceCurrentKey = null;
             _deviceRecoveryKey.Clear();
@@ -2063,6 +2064,10 @@ public sealed partial class MainForm : DpiAwareForm
                 Ad: sourceReport is { AdAttempted: true, AdSucceeded: false },
                 Entra: sourceReport is { EntraSucceeded: false },
                 Intune: sourceReport is { IntuneSucceeded: false });
+            _device360UnifiedFailureKinds = (
+                sourceReport?.AdFailureKind ?? MetadataFailureKind.None,
+                sourceReport?.EntraFailureKind ?? MetadataFailureKind.None,
+                sourceReport?.IntuneFailureKind ?? MetadataFailureKind.None);
 
             foreach (var row in rows)
                 AddUnifiedDeviceSearchResultRow(row);
