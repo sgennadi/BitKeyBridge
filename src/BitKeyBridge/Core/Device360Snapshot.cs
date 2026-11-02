@@ -72,13 +72,7 @@ internal sealed class Device360Snapshot
                   string.Equals(qualifiedId,
                       SafeQualifiedIdentity(inventory.IdentityKey),
                       StringComparison.OrdinalIgnoreCase)
-                : inventory.FoundInAd &&
-                  ((!string.IsNullOrWhiteSpace(adDn) &&
-                    string.Equals(adDn, inventory.AdDistinguishedName,
-                        StringComparison.OrdinalIgnoreCase)) ||
-                   (!string.IsNullOrWhiteSpace(adGuid) &&
-                    string.Equals(adGuid, inventory.AdObjectGuid,
-                        StringComparison.OrdinalIgnoreCase))));
+                : Device360AdIdentityMatcher.Matches(row, inventory));
         if (!verifiedInventory)
             inventory = null;
 

@@ -81,9 +81,58 @@ public sealed partial class MainForm
                 SourceIdentity = "INTUNE:MANAGED:a-different-object",
                 InventoryMetadata = record
             };
-            return !TryReuseHomeInventoryInDevices(forged) &&
+            if (TryReuseHomeInventoryInDevices(forged) ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, record))
+                return false;
+
+            // AD-only inventory from the same Start search may be
+            // DN-qualified here and GUID-qualified in Unified Devices.
+            // No Graph session exists and no new search is needed.
+            var adRecord = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-AD-EXACT-001",
+                IdentityKey = "AD:GUID:00000000-0000-0000-0000-000000000099",
+                IdentityStatus = "AD object",
+                FoundInAd = true,
+                AdObjectGuid = "00000000-0000-0000-0000-000000000099",
+                AdDistinguishedName = "CN=UI-AD-EXACT-001,OU=Test,DC=example,DC=com",
+                AdDnsHostName = "ui-ad-exact-001.example.com",
+                OperatingSystem = "Windows 11",
+                RecoveryMetadataIncomplete = true
+            };
+            var adHome = new HomeSearchResult
+            {
+                ComputerName = adRecord.ComputerName,
+                AdComputerDistinguishedName = adRecord.AdDistinguishedName,
+                InventoryMetadata = adRecord
+            };
+            if (!TryReuseHomeInventoryInDevices(adHome) ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, adRecord) ||
+                _cloudToken is not null)
+                return false;
+
+            // Both a forged AD DN and a conflicting AD GUID must fail
+            // without overwriting the already selected record.
+            var wrongDn = new HomeSearchResult
+            {
+                ComputerName = adRecord.ComputerName,
+                AdComputerDistinguishedName =
+                    "CN=UI-AD-EXACT-001,OU=Foreign,DC=example,DC=com",
+                InventoryMetadata = adRecord
+            };
+            var wrongGuid = new HomeSearchResult
+            {
+                ComputerName = adRecord.ComputerName,
+                ComputerId = "00000000-0000-0000-0000-000000000098",
+                AdComputerDistinguishedName = adRecord.AdDistinguishedName,
+                InventoryMetadata = adRecord
+            };
+            return !TryReuseHomeInventoryInDevices(wrongDn) &&
+                !TryReuseHomeInventoryInDevices(wrongGuid) &&
                 _unifiedResults.Items.Count == 1 &&
-                ReferenceEquals(_unifiedResults.Items[0].Tag, record);
+                ReferenceEquals(_unifiedResults.Items[0].Tag, adRecord);
         }
         finally
         {
@@ -101,10 +150,17 @@ public sealed partial class MainForm
 
         var home = Device360Snapshot.FromHome(selected);
         var unified = Device360Snapshot.FromUnified(metadata);
+        // AD can be DN-qualified on Start and GUID-qualified in Devices.
+        // Compare proven AD object identifiers, not dissimilar key formats
+        // or a matching hostname. Cloud identities still require the same
+        // exact managed/Entra device key on both sides.
+        var sameSourceIdentity = selected.IsCloudRecord
+            ? string.Equals(home.QualifiedIdentity,
+                unified.QualifiedIdentity, StringComparison.OrdinalIgnoreCase)
+            : Device360AdIdentityMatcher.Matches(selected, metadata);
         if (!home.IdentityVerified || !unified.IdentityVerified ||
             string.IsNullOrWhiteSpace(home.QualifiedIdentity) ||
-            !string.Equals(home.QualifiedIdentity, unified.QualifiedIdentity,
-                StringComparison.OrdinalIgnoreCase))
+            !sameSourceIdentity)
             return false;
 
         // Clear previous confidential recovery results before changing device

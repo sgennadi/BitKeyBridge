@@ -660,6 +660,54 @@ public static class UiLayoutSelfTest
                 "notexample.com", adInventory.AdDistinguishedName))
             failures.Add("Remote WMI did not restrict the target to the exact AD DNS domain.");
 
+        // AD GUID and DN formats are different source-qualified keys for
+        // the SAME object. Accept a proven common DN while rejecting every
+        // contradictory authoritative GUID, even if the DNS name matches.
+        var twoIdInventory = new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-TEST-AD-001",
+            IdentityKey = "AD:GUID:00000000-0000-0000-0000-000000000010",
+            IdentityStatus = "AD object",
+            FoundInAd = true,
+            AdObjectGuid = "00000000-0000-0000-0000-000000000010",
+            AdDistinguishedName = adInventory.AdDistinguishedName,
+            AdDnsHostName = adInventory.AdDnsHostName,
+            OperatingSystem = "Windows 11 Pro"
+        };
+        var matchingHome = new HomeSearchResult
+        {
+            ComputerName = twoIdInventory.ComputerName,
+            AdComputerDistinguishedName = twoIdInventory.AdDistinguishedName,
+            InventoryMetadata = twoIdInventory
+        };
+        if (!Device360AdIdentityMatcher.Matches(matchingHome, twoIdInventory) ||
+            Device360Snapshot.FromHome(matchingHome).OperatingSystem !=
+                "Windows 11 Pro")
+            failures.Add("Device 360 did not preserve exact AD DN/GUID identity.");
+        var conflictingGuidHome = new HomeSearchResult
+        {
+            ComputerName = twoIdInventory.ComputerName,
+            ComputerId = "00000000-0000-0000-0000-000000000011",
+            AdComputerDistinguishedName = twoIdInventory.AdDistinguishedName,
+            InventoryMetadata = twoIdInventory
+        };
+        if (Device360AdIdentityMatcher.Matches(conflictingGuidHome,
+                twoIdInventory) ||
+            !string.IsNullOrWhiteSpace(
+                Device360Snapshot.FromHome(conflictingGuidHome).OperatingSystem))
+            failures.Add("Device 360 accepted conflicting AD GUIDs on a matching DN.");
+        var forgedKey = new UnifiedDeviceInfo
+        {
+            ComputerName = twoIdInventory.ComputerName,
+            IdentityKey = "AD:GUID:00000000-0000-0000-0000-000000000011",
+            IdentityStatus = "AD object",
+            FoundInAd = true,
+            AdObjectGuid = twoIdInventory.AdObjectGuid,
+            AdDistinguishedName = twoIdInventory.AdDistinguishedName
+        };
+        if (Device360AdIdentityMatcher.Matches(matchingHome, forgedKey))
+            failures.Add("Device 360 accepted an AD identity key that conflicts with its GUID.");
+
         // Failure diagnostics are pure synthetic HRESULT mappings. An
         // inaccessible WMI namespace must not be misreported as a firewall
         // error, and unknown COM failures must not imply an RPC outage.
