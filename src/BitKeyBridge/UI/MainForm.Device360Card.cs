@@ -95,6 +95,11 @@ public sealed partial class MainForm
                 {
                     _mainTabs.SelectedTab = devicesTab;
                     QueueNavigationViewportReflow();
+                    if (!reused)
+                        UiStyle.SetStatus(_unifiedStatus,
+                            "The selected Start record has no exact inventory metadata. " +
+                            "Press Search to request a fresh source-qualified result.",
+                            UiStatusKind.Warning);
                 }
                 break;
         }
