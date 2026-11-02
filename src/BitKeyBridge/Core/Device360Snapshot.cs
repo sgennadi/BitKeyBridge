@@ -54,6 +54,30 @@ internal sealed class Device360Snapshot
                     : string.Empty;
         var lapsDetected = !cloud && !row.LapsLookupFailed &&
             row.LapsCandidateFound && row.LapsStatus is ("Detected" or "Expired");
+
+        // Inventory was collected during this Start search. Verify the
+        // authoritative identity again before copying its hardware fields.
+        // A matching hostname, serial number or UPN is never enough to
+        // correlate different AD/Entra/Intune objects.
+        var inventory = row.InventoryMetadata;
+        var verifiedInventory = inventory is not null &&
+            !row.IdentityAmbiguous &&
+            inventory.IdentityStatus is not ("Name collision" or "Ambiguous device ID") &&
+            (cloud
+                ? !string.IsNullOrWhiteSpace(qualifiedId) &&
+                  string.Equals(qualifiedId,
+                      SafeQualifiedIdentity(inventory.IdentityKey),
+                      StringComparison.OrdinalIgnoreCase)
+                : inventory.FoundInAd &&
+                  ((!string.IsNullOrWhiteSpace(adDn) &&
+                    string.Equals(adDn, inventory.AdDistinguishedName,
+                        StringComparison.OrdinalIgnoreCase)) ||
+                   (!string.IsNullOrWhiteSpace(adGuid) &&
+                    string.Equals(adGuid, inventory.AdObjectGuid,
+                        StringComparison.OrdinalIgnoreCase))));
+        if (!verifiedInventory)
+            inventory = null;
+
         return new Device360Snapshot
         {
             Computer = row.ComputerName,
@@ -62,11 +86,13 @@ internal sealed class Device360Snapshot
             IdentityVerified = !row.IdentityAmbiguous &&
                 !string.IsNullOrWhiteSpace(qualifiedId),
             InAd = cloud ? null : true,
-            InEntra = cloud && sourceId.StartsWith("ENTRA:",
-                StringComparison.OrdinalIgnoreCase) ? true :
+            InEntra = inventory?.FoundInEntra == true ? true :
+                cloud && sourceId.StartsWith("ENTRA:",
+                    StringComparison.OrdinalIgnoreCase) ? true :
                 cloud && Guid.TryParse(row.ComputerId, out _) ? true : null,
-            InIntune = cloud && sourceId.StartsWith("INTUNE:",
-                StringComparison.OrdinalIgnoreCase) ? true : null,
+            InIntune = inventory?.FoundInIntune == true ? true :
+                cloud && sourceId.StartsWith("INTUNE:",
+                    StringComparison.OrdinalIgnoreCase) ? true : null,
             BitLockerMetadataCount = Math.Max(0, row.BitLockerKeyCount),
             BitLockerMetadataIncomplete = row.BitLockerLookupFailed ||
                 row.BitLockerKeyCount <= 0,
@@ -77,7 +103,19 @@ internal sealed class Device360Snapshot
             AdDistinguishedName = adDn,
             EntraDeviceId = cloud && Guid.TryParse(row.ComputerId, out _)
                 ? row.ComputerId : string.Empty,
-            AdLastLogonUtc = null
+            IntuneManagedDeviceId = inventory?.ManagedDeviceId ?? string.Empty,
+            OperatingSystem = inventory is null ? string.Empty :
+                (inventory.OperatingSystem + " " + inventory.OsVersion).Trim(),
+            Hardware = inventory is null ? string.Empty :
+                (inventory.Manufacturer + " " + inventory.Model).Trim(),
+            SerialNumber = inventory?.SerialNumber ?? string.Empty,
+            AssignedUser = inventory is null ? string.Empty :
+                string.IsNullOrWhiteSpace(inventory.UserPrincipalName)
+                    ? inventory.UserDisplayName : inventory.UserPrincipalName,
+            Compliance = inventory?.ComplianceState ?? string.Empty,
+            Encrypted = inventory?.IsEncrypted,
+            LastSyncUtc = inventory?.LastSyncDateTime,
+            AdLastLogonUtc = inventory?.AdLastLogonTimestamp
         };
     }
 
