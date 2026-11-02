@@ -80,8 +80,9 @@ internal static class Device360HardwareService
             var biosManufacturer = string.Empty;
             var biosDate = string.Empty;
 
-            using (var objects = Find(scope,
+            using (var searcher = NewSearcher(scope,
                 "SELECT Manufacturer,Model FROM Win32_ComputerSystem"))
+            using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
                 {
@@ -95,8 +96,9 @@ internal static class Device360HardwareService
             }
             ct.ThrowIfCancellationRequested();
 
-            using (var objects = Find(scope,
+            using (var searcher = NewSearcher(scope,
                 "SELECT Manufacturer,SMBIOSBIOSVersion,ReleaseDate FROM Win32_BIOS"))
+            using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
                 {
@@ -134,8 +136,9 @@ internal static class Device360HardwareService
                 var tpmScope = new ManagementScope(
                     @"\\" + dnsHost + @"\root\cimv2\security\microsofttpm", Options());
                 tpmScope.Connect();
-                using var objects = Find(tpmScope,
+                using var searcher = NewSearcher(tpmScope,
                     "SELECT SpecVersion,IsEnabled_InitialValue,IsActivated_InitialValue,IsOwned_InitialValue FROM Win32_Tpm");
+                using var objects = searcher.Get();
                 var observed = false;
                 foreach (ManagementObject row in objects)
                 {
@@ -195,17 +198,14 @@ internal static class Device360HardwareService
         Timeout = TimeSpan.FromSeconds(7)
     };
 
-    private static ManagementObjectCollection Find(
-        ManagementScope scope, string query)
-    {
-        using var searcher = new ManagementObjectSearcher(scope,
-            new ObjectQuery(query), new System.Management.EnumerationOptions
+    private static ManagementObjectSearcher NewSearcher(
+        ManagementScope scope, string query) =>
+        new(scope, new ObjectQuery(query),
+            new System.Management.EnumerationOptions
             {
                 ReturnImmediately = false,
                 Timeout = TimeSpan.FromSeconds(7)
             });
-        return searcher.Get();
-    }
 
     private static string Read(ManagementBaseObject row, string property)
     {
