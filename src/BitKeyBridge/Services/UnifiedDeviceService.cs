@@ -191,6 +191,11 @@ public sealed class UnifiedDeviceSearchReport
     public string AdError { get; init; } = string.Empty;
     public string IntuneError { get; init; } = string.Empty;
     public string EntraError { get; init; } = string.Empty;
+    // Typed, secret-free failure reasons. Never interpret arbitrary Graph
+    // response text or a missing value as an authorization decision.
+    public MetadataFailureKind AdFailureKind { get; init; }
+    public MetadataFailureKind EntraFailureKind { get; init; }
+    public MetadataFailureKind IntuneFailureKind { get; init; }
     public int RecoveryEnrichmentFailures;
 
     public bool IsPartial =>
@@ -261,7 +266,10 @@ public sealed class UnifiedDeviceSearchReport
             EntraSucceeded = entra.Succeeded,
             AdError = ad?.Error ?? string.Empty,
             IntuneError = intune.Error ?? string.Empty,
-            EntraError = entra.Error ?? string.Empty
+            EntraError = entra.Error ?? string.Empty,
+            AdFailureKind = ad?.FailureKind ?? MetadataFailureKind.None,
+            IntuneFailureKind = intune.FailureKind,
+            EntraFailureKind = entra.FailureKind
         };
     }
 }
