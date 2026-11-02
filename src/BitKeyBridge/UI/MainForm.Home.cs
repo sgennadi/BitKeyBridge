@@ -182,7 +182,8 @@ public sealed partial class MainForm
 
             var recoveryOutcome = await recoveryTask;
             var lapsOutcome = await lapsTask;
-            var inventoryRows = (await inventoryTask).Rows;
+            var inventoryOutcome = await inventoryTask;
+            var inventoryRows = inventoryOutcome.Rows;
             var recoveryRows = recoveryOutcome.Rows;
             var lapsRows = lapsOutcome.Rows;
             string? recoveryFailure = recoveryOutcome.Error;
@@ -501,6 +502,16 @@ public sealed partial class MainForm
                     MetadataFailureGuidance.NextAction(lapsFailureKind, "AD"));
             }
 
+            if (inventoryOutcome.Error is { } inventoryFailure)
+            {
+                failedSources.Add("AD inventory");
+                diagnosticDetails.Add("AD inventory [" +
+                    MetadataFailureGuidance.Label(inventoryOutcome.FailureKind) +
+                    "]: " + inventoryFailure + Environment.NewLine +
+                    "Next check: " + MetadataFailureGuidance.NextAction(
+                        inventoryOutcome.FailureKind, "AD"));
+            }
+
             if (cloudOutcome is { Failure: not null })
             {
                 failedSources.Add("Cloud");
@@ -528,9 +539,11 @@ public sealed partial class MainForm
                 ? (Kind: recoveryFailureKind, Source: "AD")
                 : lapsFailure is not null
                     ? (Kind: lapsFailureKind, Source: "AD")
-                    : cloudOutcome is { Failure: not null }
-                        ? (Kind: cloudOutcome.FailureKind, Source: "Cloud")
-                        : (Kind: MetadataFailureKind.Unknown, Source: "Cloud");
+                    : inventoryOutcome.Error is not null
+                        ? (Kind: inventoryOutcome.FailureKind, Source: "AD")
+                        : cloudOutcome is { Failure: not null }
+                            ? (Kind: cloudOutcome.FailureKind, Source: "Cloud")
+                            : (Kind: MetadataFailureKind.Unknown, Source: "Cloud");
 
             var statusText = failedSources.Count > 0
                 ? UiLanguageService.Translate(_uiLanguageCode, "MetadataPartial") +
