@@ -114,6 +114,7 @@ public static class MetadataSourceIsolation
         // Exercise the shared technician-facing typed classifier under the
         // existing portable offline self-test, without calling a directory.
         failures.AddRange(MetadataFailureGuidance.RunOfflineTests());
+        failures.AddRange(UnifiedSourceRetry.RunOfflineTests());
         return failures;
     }
 

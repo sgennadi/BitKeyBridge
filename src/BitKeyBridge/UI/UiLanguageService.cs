@@ -138,6 +138,15 @@ internal static class UiLanguageService
             ["Tools"] = ["Tools", "Инструменты", "כלים"],
             ["Language"] = ["Language", "Язык", "שפה"],
             ["DevicesConfigureCloud"] = ["Configure Cloud...", "Настроить облако...", "הגדרת ענן..."],
+            ["DevicesRetryFailedSource"] = ["Retry failed source...", "Повторить сбойный источник...", "ניסיון חוזר למקור שנכשל..."],
+            ["DevicesRetryAd"] = ["Retry Active Directory", "Повторить Active Directory", "ניסיון חוזר ב-Active Directory"],
+            ["DevicesRetryEntra"] = ["Retry Entra metadata", "Повторить данные Entra", "ניסיון חוזר לנתוני Entra"],
+            ["DevicesRetryIntune"] = ["Retry Intune inventory", "Повторить данные Intune", "ניסיון חוזר לנתוני Intune"],
+            ["DevicesRetryBusy"] = ["Retrying selected metadata source...", "Повторный запрос выбранного источника...", "מתבצע ניסיון חוזר למקור הנבחר..."],
+            ["DevicesRetryUnavailable"] = ["Source is not eligible for retry or its session is unavailable.", "Источник нельзя повторить или сеанс недоступен.", "המקור אינו זמין לניסיון חוזר או שהחיבור נותק."],
+            ["DevicesRetryChanged"] = ["Device identity changed. Select the exact record again.", "Идентификатор изменился. Выберите точную запись заново.", "זהות המכשיר השתנתה. יש לבחור שוב ברשומה המדויקת."],
+            ["DevicesRetryCooldown"] = ["Wait before retrying this metadata source again.", "Подождите перед повторным запросом источника.", "יש להמתין לפני ניסיון חוזר נוסף למקור."],
+
             ["HelpdeskDeploymentProgressTemplate"] =
                 ["{0} of {1} steps marked complete",
                  "Отмечено {0} из {1} этапов",

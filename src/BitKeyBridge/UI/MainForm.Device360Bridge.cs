@@ -216,6 +216,10 @@ public sealed partial class MainForm
         _device360LastUnifiedPartial = metadata.RecoveryMetadataIncomplete;
         _device360UnifiedLookupFailed = default;
         _device360UnifiedFailureKinds = default;
+        // The Start object is a new exact source context. Do not leave a
+        // retry menu pointing at a previous Devices search or stale token.
+        _unifiedSourceReport = null;
+        RefreshUnifiedSourceRetryButton();
         SetDevicesCloudWarningAction(!HasCloudSearchSession());
 
         UiStyle.SetStatus(_unifiedStatus,

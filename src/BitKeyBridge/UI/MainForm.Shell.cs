@@ -651,6 +651,7 @@ public sealed partial class MainForm
             var captionsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             ApplyUpdateCenterLanguage();
             ApplyLocalizedShellCaptions(rtl);
+            RefreshUnifiedSourceRetryButton();
             ApplyHomeStaticStatusCaptions();
             ApplyHomePaneDragCaptions();
             _homeBrandBanner?.SetCaptionDirection(rtl);
@@ -2524,9 +2525,10 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             Padding = new Padding(16),
             ColumnCount = 1,
-            RowCount = 8
+            RowCount = 9
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -2646,10 +2648,34 @@ public sealed partial class MainForm
             0,
             2);
 
+        // The source-retry action occupies one small row only when an
+        // individual metadata source has a recoverable failure. Keeping it
+        // outside the search header avoids clipping Connect/Configure at
+        // compact 1366x768 / 150%-200% DPI.
+        var retryActions = new FlowLayoutPanel
+        {
+            Name = "DevicesSourceRetryActions",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            WrapContents = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0)
+        };
+        _unifiedRetryButton.Name = "DevicesRetryFailedSourceButton";
+        _unifiedRetryButton.Text = UiLanguageService.Translate(
+            _uiLanguageCode, "DevicesRetryFailedSource");
+        _unifiedRetryButton.AccessibleName = _unifiedRetryButton.Text;
+        _unifiedRetryButton.Enabled = false;
+        _unifiedRetryButton.Visible = false;
+        UiStyle.ConfigureActionButton(_unifiedRetryButton);
+        _unifiedRetryButton.Click += (_, _) => ShowUnifiedSourceRetryMenu();
+        retryActions.Controls.Add(_unifiedRetryButton);
+        root.Controls.Add(retryActions, 0, 3);
+
         root.Controls.Add(
             _unifiedDiagnostics,
             0,
-            3);
+            4);
 
         _unifiedResults.View = View.Details;
         _unifiedResults.FullRowSelect = true;
@@ -2671,12 +2697,12 @@ public sealed partial class MainForm
             ("Encrypted", 70),
             ("Last Sync", 140),
             ("Cloud Keys", 80));
-        root.Controls.Add(_unifiedResults, 0, 4);
+        root.Controls.Add(_unifiedResults, 0, 5);
 
         _unifiedDetails.ReadOnly = true;
         _unifiedDetails.Font = UiStyle.CreateMonospaceFont(9F);
         _unifiedDetails.Dock = DockStyle.Fill;
-        root.Controls.Add(_unifiedDetails, 0, 5);
+        root.Controls.Add(_unifiedDetails, 0, 6);
 
         var keyPanel =
             new TableLayoutPanel
@@ -2788,7 +2814,7 @@ public sealed partial class MainForm
         root.Controls.Add(
             keyPanel,
             0,
-            6);
+            7);
 
         var actions = new FlowLayoutPanel
         {
@@ -2809,7 +2835,7 @@ public sealed partial class MainForm
         openCard.AccessibleName =
             "Open the selected device metadata card without retrieving secrets";
         actions.Controls.Add(openCard);
-        root.Controls.Add(actions, 0, 7);
+        root.Controls.Add(actions, 0, 8);
 
         _unifiedSearch.Click +=
             async (_, _) => await SearchUnifiedDevicesAsync();

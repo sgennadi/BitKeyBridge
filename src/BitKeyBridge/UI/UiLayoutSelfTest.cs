@@ -1847,6 +1847,10 @@ public static class UiLayoutSelfTest
                 layoutSelfTest: true);
             if (!main.PreviewDevicesCloudShortcutForUiTest())
                 failures.Add("Devices missing-Cloud action failed to open Settings > Cloud.");
+            if (!main.PreviewTargetedSourceRetryForUiTest() ||
+                FindByName(main, "DevicesRetryFailedSourceButton") is not Button)
+                failures.Add("Source retry action missing, enabled on a denied source, " +
+                    "or not translated correctly in EN/RU/HE.");
             if (!main.PreviewDevice360SharedSearchForUiSelfTest())
                 failures.Add("Start -> Devices reused a name instead of source identity " +
                     "or attempted an additional Microsoft 365 authentication.");

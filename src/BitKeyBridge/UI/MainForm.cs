@@ -1955,6 +1955,8 @@ public sealed partial class MainForm : DpiAwareForm
         _unifiedProgress.Visible =
             true;
         _unifiedDiagnostics.Clear();
+        _unifiedSourceReport = null;
+        RefreshUnifiedSourceRetryButton();
         SetDevicesCloudWarningAction(false);
 
         try
@@ -2029,11 +2031,12 @@ public sealed partial class MainForm : DpiAwareForm
                         : "Cloud is not configured; searching Active Directory only...",
                     UiStatusKind.Warning);
 
-                rows =
-                    await service.SearchAdOnlyAsync(
+                sourceReport =
+                    await service.SearchAdOnlyWithStatusAsync(
                         _unifiedQuery.Text,
                         ct:
                             cancellation.Token);
+                rows = sourceReport.Rows;
             }
             else
             {
@@ -2064,13 +2067,18 @@ public sealed partial class MainForm : DpiAwareForm
             if (generation != _unifiedSearchGeneration)
                 return; // Start selected a different exact source object.
 
+            // Only this generation owns the current source snapshot.
+            // Retry never replays a successful metadata request.
+            _unifiedSourceReport = sourceReport;
+            RefreshUnifiedSourceRetryButton();
+
             // Only a completed metadata search can set this status.
             // Source errors never establish that recovery data is absent.
             _device360LastUnifiedPartial = sourceReport?.IsPartial == true;
             _device360UnifiedLookupFailed = (
                 Ad: sourceReport is { AdAttempted: true, AdSucceeded: false },
-                Entra: sourceReport is { EntraSucceeded: false },
-                Intune: sourceReport is { IntuneSucceeded: false });
+                Entra: sourceReport is { EntraAttempted: true, EntraSucceeded: false },
+                Intune: sourceReport is { IntuneAttempted: true, IntuneSucceeded: false });
             _device360UnifiedFailureKinds = (
                 sourceReport?.AdFailureKind ?? MetadataFailureKind.None,
                 sourceReport?.EntraFailureKind ?? MetadataFailureKind.None,
@@ -2184,6 +2192,7 @@ public sealed partial class MainForm : DpiAwareForm
                 _unifiedCancel.Enabled = false;
                 _unifiedQuery.Enabled = true;
                 _unifiedProgress.Visible = false;
+                RefreshUnifiedSourceRetryButton();
             }
         }
     }

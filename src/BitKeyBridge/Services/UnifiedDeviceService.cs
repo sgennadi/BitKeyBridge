@@ -49,6 +49,29 @@ public sealed class UnifiedDeviceService
         return devices;
     }
 
+    // Return typed status for AD-only search, including the case where AD
+    // is unreachable. Cloud is explicitly NOT attempted in this search.
+    public async Task<UnifiedDeviceSearchReport> SearchAdOnlyWithStatusAsync(
+        string query, int maximumItems = 250, CancellationToken ct = default)
+    {
+        query = query?.Trim() ?? string.Empty;
+        maximumItems = Math.Clamp(maximumItems, 1, 1000);
+        var ad = await MetadataSourceIsolation.ExecuteAsync(
+            () => Task.Run(() =>
+            {
+                var dc = _ad.GetPreferredWritableDc();
+                return _ad.SearchComputers(dc, query, maximumItems);
+            }, ct), ct);
+        ct.ThrowIfCancellationRequested();
+        var intune = new MetadataLookupResult<ManagedDeviceInfo>([], null);
+        var entra = new MetadataLookupResult<CloudRecoveryMetadata>([], null);
+        var result = UnifiedDeviceSearchReport.Combine(
+            ad, intune, entra, maximumItems, cloudAttempted: false);
+        result.SourceState = new UnifiedSourceRetryState(
+            query, maximumItems, false, ad, intune, entra);
+        return result;
+    }
+
     public async Task<List<UnifiedDeviceInfo>> SearchAsync(
         string accessToken,
         string query,
@@ -109,6 +132,10 @@ public sealed class UnifiedDeviceService
 
         var report = UnifiedDeviceSearchReport.Combine(
             ad, intune, entra, maximumItems);
+        // Original responses live only as long as this in-memory result.
+        // Never persist source rows or recovery IDs into a new cache.
+        report.SourceState = new UnifiedSourceRetryState(
+            query, maximumItems, true, ad, intune, entra);
 
         // A failed recovery-metadata query must NOT fall back to fetching up
         // to 100 keys individually. This avoids 403/429 storms and falsely
@@ -175,6 +202,48 @@ public sealed class UnifiedDeviceService
 
         return report;
     }
+
+    // Explicit operator action: retry ONLY a failed metadata source using
+    // the existing source session and original query. No MFA, key reveal,
+    // password read, rotation or fallback to another source.
+    public async Task<UnifiedDeviceSearchReport> RetryFailedSourceAsync(
+        UnifiedDeviceSearchReport previous, UnifiedMetadataSource source,
+        string accessToken, CancellationToken ct = default)
+    {
+        if (!UnifiedSourceRetry.CanRetry(previous, source))
+            throw new InvalidOperationException(
+                "This source is not eligible for a targeted metadata retry.");
+        var state = previous.SourceState!;
+        ct.ThrowIfCancellationRequested();
+        if (source == UnifiedMetadataSource.Ad)
+        {
+            var ad = await MetadataSourceIsolation.ExecuteAsync(
+                () => Task.Run(() =>
+                {
+                    var dc = _ad.GetPreferredWritableDc();
+                    return _ad.SearchComputers(dc, state.Query, state.MaximumItems);
+                }, ct), ct);
+            ct.ThrowIfCancellationRequested();
+            return UnifiedSourceRetry.Apply(previous, source, ad: ad);
+        }
+
+        if (!state.CloudAttempted || string.IsNullOrWhiteSpace(accessToken))
+            throw new InvalidOperationException(
+                "An active authenticated Microsoft 365 session is required.");
+        using var graph = new CloudGraphService();
+        if (source == UnifiedMetadataSource.Entra)
+        {
+            var entra = await MetadataSourceIsolation.ExecuteWithTransientRetryAsync(
+                () => graph.SearchAsync(accessToken, state.Query, ct), ct);
+            ct.ThrowIfCancellationRequested();
+            return UnifiedSourceRetry.Apply(previous, source, entra: entra);
+        }
+        var intune = await MetadataSourceIsolation.ExecuteWithTransientRetryAsync(
+            () => graph.SearchManagedDevicesAsync(
+                accessToken, state.Query, state.MaximumItems, ct), ct);
+        ct.ThrowIfCancellationRequested();
+        return UnifiedSourceRetry.Apply(previous, source, intune: intune);
+    }
 }
 
 /// <summary>
@@ -186,8 +255,12 @@ public sealed class UnifiedDeviceSearchReport
     public List<UnifiedDeviceInfo> Rows { get; init; } = [];
     public bool AdAttempted { get; init; }
     public bool AdSucceeded { get; init; }
+    public bool IntuneAttempted { get; init; } = true;
+    public bool EntraAttempted { get; init; } = true;
     public bool IntuneSucceeded { get; init; }
     public bool EntraSucceeded { get; init; }
+    // Metadata results and retry eligibility; this must never be serialized.
+    internal UnifiedSourceRetryState? SourceState { get; set; }
     public string AdError { get; init; } = string.Empty;
     public string IntuneError { get; init; } = string.Empty;
     public string EntraError { get; init; } = string.Empty;
@@ -200,14 +273,14 @@ public sealed class UnifiedDeviceSearchReport
 
     public bool IsPartial =>
         (AdAttempted && !AdSucceeded) ||
-        !IntuneSucceeded ||
-        !EntraSucceeded ||
+        (IntuneAttempted && !IntuneSucceeded) ||
+        (EntraAttempted && !EntraSucceeded) ||
         RecoveryEnrichmentFailures > 0;
 
     public string SourceSummary =>
         "AD: " + (!AdAttempted ? "not connected" : AdSucceeded ? "OK" : "failed") +
-        " | Intune: " + (IntuneSucceeded ? "OK" : "failed") +
-        " | Entra BitLocker: " + (EntraSucceeded ? "OK" : "failed") +
+        " | Intune: " + (!IntuneAttempted ? "not connected" : IntuneSucceeded ? "OK" : "failed") +
+        " | Entra BitLocker: " + (!EntraAttempted ? "not connected" : EntraSucceeded ? "OK" : "failed") +
         (RecoveryEnrichmentFailures > 0
             ? $" | Entra key metadata errors: {RecoveryEnrichmentFailures}"
             : string.Empty);
@@ -216,8 +289,8 @@ public sealed class UnifiedDeviceSearchReport
         string.Join(Environment.NewLine, new[]
         {
             AdAttempted && !AdSucceeded ? "AD: " + AdError : string.Empty,
-            !IntuneSucceeded ? "Intune: " + IntuneError : string.Empty,
-            !EntraSucceeded ? "Entra BitLocker metadata: " + EntraError : string.Empty,
+            IntuneAttempted && !IntuneSucceeded ? "Intune: " + IntuneError : string.Empty,
+            EntraAttempted && !EntraSucceeded ? "Entra BitLocker metadata: " + EntraError : string.Empty,
             RecoveryEnrichmentFailures > 0
                 ? $"Additional per-device recovery metadata lookups failed: {RecoveryEnrichmentFailures}."
                 : string.Empty
@@ -227,18 +300,10 @@ public sealed class UnifiedDeviceSearchReport
         MetadataLookupResult<AdComputerInfo>? ad,
         MetadataLookupResult<ManagedDeviceInfo> intune,
         MetadataLookupResult<CloudRecoveryMetadata> entra,
-        int maximumItems = 250)
+        int maximumItems = 250, bool cloudAttempted = true)
     {
-        if (ad?.Succeeded != true && !intune.Succeeded && !entra.Succeeded)
-            throw new InvalidOperationException(
-                "All device inventory sources failed. " +
-                string.Join("; ", new[]
-                {
-                    ad is { Succeeded: false } ? "AD: " + ad.Error : string.Empty,
-                    "Intune: " + intune.Error,
-                    "Entra BitLocker: " + entra.Error
-                }.Where(text => !string.IsNullOrWhiteSpace(text))));
-
+        // Return typed source failures even when every lookup fails.
+        // Empty results are not proof that a device or backup is absent.
         var rows = UnifiedDeviceMerge.Merge(
                 ad?.Rows, intune.Rows, entra.Rows)
             .Values
@@ -253,7 +318,8 @@ public sealed class UnifiedDeviceSearchReport
         {
             // AD-only rows have no Entra identity and were not queried for
             // recovery IDs; an empty collection is not a key-absence proof.
-            if (!entra.Succeeded || (row.FoundInAd && !row.FoundInEntra))
+            if (!cloudAttempted || !entra.Succeeded ||
+                (row.FoundInAd && !row.FoundInEntra))
                 row.RecoveryMetadataIncomplete = true;
         }
 
@@ -262,11 +328,13 @@ public sealed class UnifiedDeviceSearchReport
             Rows = rows,
             AdAttempted = ad is not null,
             AdSucceeded = ad?.Succeeded == true,
-            IntuneSucceeded = intune.Succeeded,
-            EntraSucceeded = entra.Succeeded,
+            IntuneAttempted = cloudAttempted,
+            EntraAttempted = cloudAttempted,
+            IntuneSucceeded = cloudAttempted && intune.Succeeded,
+            EntraSucceeded = cloudAttempted && entra.Succeeded,
             AdError = ad?.Error ?? string.Empty,
-            IntuneError = intune.Error ?? string.Empty,
-            EntraError = entra.Error ?? string.Empty,
+            IntuneError = cloudAttempted ? intune.Error ?? string.Empty : string.Empty,
+            EntraError = cloudAttempted ? entra.Error ?? string.Empty : string.Empty,
             AdFailureKind = ad?.FailureKind ?? MetadataFailureKind.None,
             IntuneFailureKind = intune.FailureKind,
             EntraFailureKind = entra.FailureKind
