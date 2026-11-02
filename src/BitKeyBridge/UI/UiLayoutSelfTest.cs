@@ -2381,6 +2381,51 @@ public static class UiLayoutSelfTest
                     if (size.Width == 1600)
                         SaveSyntheticStartSnapshotForCi(
                             form, "compact-selected-" + language, failures);
+
+                    // Regression: a responsive TableLayoutPanel reparent
+                    // previously discarded the original English caption
+                    // lookup. After RU -> narrow -> wide -> HE the recent
+                    // heading and recovery buttons could remain Russian.
+                    // Use the real shown WinForms tree and synthetic device.
+                    if (size.Width == 1366 && language == "he")
+                    {
+                        form.PreviewShellLanguageForLayoutTest("ru");
+                        form.ReflowMainViewport();
+                        form.ClientSize = new Size(1000, 720);
+                        Application.DoEvents();
+                        form.ReflowMainViewport();
+                        form.ClientSize = size;
+                        Application.DoEvents();
+                        form.ReflowMainViewport();
+                        form.PreviewShellLanguageForLayoutTest("he");
+                        Application.DoEvents();
+                        form.ReflowMainViewport();
+
+                        if (FindByName(form, "HomeRecentQuickPanel") is not
+                                TableLayoutPanel recentAfterReflow ||
+                            recentAfterReflow.GetControlFromPosition(0, 0)
+                                is not Label recentTitle ||
+                            recentTitle.Text !=
+                                UiStaticCaptionCatalog.TranslateOrOriginal(
+                                    "he", "Recent computers"))
+                            failures.Add("RU -> resize/reparent -> HE kept an " +
+                                "old-language Recent computers heading.");
+
+                        foreach (var (name, english) in new[]
+                        {
+                            ("HomeRevealLapsButton", "Reveal Password"),
+                            ("HomeCopyLapsButton", "Copy Password")
+                        })
+                        {
+                            if (FindByName(form, name) is not Button action ||
+                                action.Text !=
+                                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                                        "he", english))
+                                failures.Add("RU -> resize/reparent -> HE " +
+                                    "retained a stale recovery button: " + name);
+                        }
+                        VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    }
                 }
             }
         }
