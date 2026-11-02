@@ -69,6 +69,11 @@ public sealed partial class MainForm
     private readonly ConditionalWeakTable<ToolStripDropDownItem, object>
         _observedLocalizedMenus = new();
     private bool _localizedCaptionCacheBuilt;
+    // Responsive pane reparenting moves the *same* live controls. Do not
+    // unregister their original English captions on a temporary detach:
+    // once a Russian caption becomes the new current Text, re-discovery
+    // cannot recover that original and Hebrew would retain Russian labels.
+    private bool _preservingLocalizedCaptionsForResponsiveMove;
     // Per-form bounded and source-validated; never caches arbitrary row values.
     private readonly UiHeaderWidthCache _headerWidthCache = new();
 
@@ -181,6 +186,18 @@ public sealed partial class MainForm
     {
         if (args.Control is not { } removed)
             return;
+        if (_preservingLocalizedCaptionsForResponsiveMove &&
+            (ReferenceEquals(removed, _homeBitLockerPaneHost) ||
+             ReferenceEquals(removed, _homeLapsPaneHost) ||
+             ReferenceEquals(removed, _homeComputersPaneHost) ||
+             ReferenceEquals(removed, _homeAdConnectionLayout) ||
+             ReferenceEquals(removed, _homeRecentQuickPanel)))
+        {
+            // These roots are immediately reattached to the same form.
+            // Their nested labels, buttons and grid header caches remain
+            // valid, including their immutable English translation keys.
+            return;
+        }
         var pending = new Stack<Control>();
         pending.Push(removed);
         while (pending.Count > 0)
