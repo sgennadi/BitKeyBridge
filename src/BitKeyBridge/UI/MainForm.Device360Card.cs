@@ -86,8 +86,9 @@ public sealed partial class MainForm
                 await OpenSelectedHomeLapsAsync();
                 break;
             case Device360Route.Devices when current.IsCloudRecord:
-                // Switch workspaces only. Search, reveal and rotation remain
-                // separate operator actions on source-qualified objects.
+                // The exact inventory obtained on Start is the context.
+                // Navigating must not run a duplicate Graph search or MFA.
+                var reused = TryReuseHomeInventoryInDevices(current);
                 var devicesTab = _mainTabs.TabPages.Cast<TabPage>()
                     .FirstOrDefault(tab => tab.Name == "DevicesWorkspace");
                 if (devicesTab is not null)
