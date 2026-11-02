@@ -796,6 +796,21 @@ public static class UiLayoutSelfTest
                     dialog.PerformLayout();
                     Application.DoEvents();
 
+                    if (FindByName(dialog, "Device360CardTabs") is TabControl compactTabs)
+                    {
+                        // All five localized tabs must remain physically
+                        // selectable at 610px, including long RU/HE captions.
+                        for (var index = 0; index < compactTabs.TabCount; index++)
+                        {
+                            var box = compactTabs.GetTabRect(index);
+                            if (box.Left < 0 ||
+                                box.Right > compactTabs.ClientRectangle.Right + 2)
+                                failures.Add("Device 360 v2 tab header clipped (" +
+                                    language + ", " + compactSize.Width + "px, " +
+                                    compactTabs.TabPages[index].Name + ").");
+                        }
+                    }
+
                     foreach (var tile in new[] { adSource, entraSource, intuneSource })
                     {
                         if (tile is not Label tileLabel)
@@ -904,22 +919,35 @@ public static class UiLayoutSelfTest
                         "ui-device-360-" + language + ".png"),
                         System.Drawing.Imaging.ImageFormat.Png);
 
-                    // Also render the new policy/source-completeness section,
-                    // which is deliberately below the identity and recovery
-                    // information in the scrollable device overview.
-                    if (FindByName(dialog, "Device360CardScroll") is Panel scroller)
+                    // Render each real selected tab with native controls:
+                    // old scroll-to-policy captures would only show Overview
+                    // after Device 360 became a genuine five-page workspace.
+                    if (FindByName(dialog, "Device360CardTabs") is TabControl screenshots)
                     {
-                        scroller.AutoScrollPosition = new Point(0,
-                            Math.Max(0, scroller.DisplayRectangle.Height -
-                                scroller.ClientSize.Height));
+                        var original = screenshots.SelectedTab;
+                        foreach (var (pageName, suffix) in new[]
+                        {
+                            ("Device360TabHardware", "hardware"),
+                            ("Device360TabSecurity", "policy"),
+                            ("Device360TabIdentity", "identity"),
+                            ("Device360TabDiagnostics", "diagnostics")
+                        })
+                        {
+                            var page = screenshots.TabPages.Cast<TabPage>()
+                                .FirstOrDefault(tab => tab.Name == pageName);
+                            if (page is null) continue;
+                            screenshots.SelectedTab = page;
+                            Application.DoEvents();
+                            using var selectedBitmap = new Bitmap(
+                                dialog.ClientSize.Width, dialog.ClientSize.Height);
+                            dialog.DrawToBitmap(selectedBitmap,
+                                new Rectangle(Point.Empty, selectedBitmap.Size));
+                            selectedBitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                                "ui-device-360-" + language + "-" + suffix + ".png"),
+                                System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                        screenshots.SelectedTab = original;
                         Application.DoEvents();
-                        using var policyBitmap = new Bitmap(dialog.ClientSize.Width,
-                            dialog.ClientSize.Height);
-                        dialog.DrawToBitmap(policyBitmap,
-                            new Rectangle(Point.Empty, policyBitmap.Size));
-                        policyBitmap.Save(Path.Combine(AppContext.BaseDirectory,
-                            "ui-device-360-" + language + "-policy.png"),
-                            System.Drawing.Imaging.ImageFormat.Png);
                     }
                 }
                 dialog.Close();
