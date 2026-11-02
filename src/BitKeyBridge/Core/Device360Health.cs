@@ -35,9 +35,9 @@ internal static class Device360HealthService
                     ? "A source-qualified identifier was observed. Cross-source equivalence is not implied."
                     : "No authoritative device identity was verified. Recovery navigation remains restricted."));
 
-        AddSource("Active Directory", sources.Ad);
-        AddSource("Entra ID", sources.Entra);
-        AddSource("Intune", sources.Intune);
+        AddSource("Active Directory", sources.Ad, sources.AdFailureKind);
+        AddSource("Entra ID", sources.Entra, sources.EntraFailureKind);
+        AddSource("Intune", sources.Intune, sources.IntuneFailureKind);
 
         items.Add(new Device360Check("BitLocker metadata",
             device.BitLockerMetadataCount > 0
@@ -110,7 +110,8 @@ internal static class Device360HealthService
 
         return items;
 
-        void AddSource(string name, Device360SourceEvidence state)
+        void AddSource(string name, Device360SourceEvidence state,
+            MetadataFailureKind reason)
         {
             items.Add(new Device360Check(name,
                 state == Device360SourceEvidence.FoundInSearch
@@ -123,7 +124,10 @@ internal static class Device360HealthService
                     Device360SourceEvidence.FoundInSearch =>
                         "Record returned by this source during the selected search; no fresh probe was performed.",
                     Device360SourceEvidence.LookupFailed =>
-                        "The source lookup failed. Check network, permissions and diagnostics; absence is NOT established.",
+                        MetadataFailureGuidance.TechnicianSummary(
+                            reason == MetadataFailureKind.None
+                                ? MetadataFailureKind.Unknown : reason, name) +
+                        " A failed lookup does NOT establish the absence of a backup.",
                     Device360SourceEvidence.SessionPresentUnverified =>
                         "Session exists but this exact device was not verified in this source.",
                     _ =>
