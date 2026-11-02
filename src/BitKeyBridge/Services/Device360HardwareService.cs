@@ -35,7 +35,31 @@ internal static class Device360HardwareService
     // unqualified NetBIOS alias, IP, UPN, serial or Intune-only identity.
     internal static bool CanQuery(Device360Snapshot snapshot)
         => snapshot.IdentityVerified && !snapshot.IdentityAmbiguous &&
-           snapshot.InAd == true && IsStrictDnsHost(snapshot.AdDnsHostName);
+           snapshot.InAd == true && IsStrictDnsHost(snapshot.AdDnsHostName) &&
+           HasSameAdDomainSuffix(snapshot.AdDnsHostName,
+               snapshot.AdDistinguishedName);
+
+    // Restrict Windows integrated authentication to the AD DNS domain
+    // proven by the exact selected object. Do not contact arbitrary foreign
+    // hosts even if an attacker-controlled dnsHostName is present in LDAP.
+    internal static bool HasSameAdDomainSuffix(string host, string? objectDn)
+    {
+        if (string.IsNullOrWhiteSpace(objectDn)) return false;
+        var parts = Regex.Matches(objectDn,
+                @"(?:^|,)\s*DC=([^,]+)", RegexOptions.IgnoreCase |
+                    RegexOptions.CultureInvariant)
+            .Cast<Match>()
+            .Select(match => match.Groups[1].Value.Trim())
+            .ToArray();
+        if (parts.Length < 2 || parts.Any(label =>
+                !Regex.IsMatch(label,
+                    @"\A[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\z",
+                    RegexOptions.CultureInvariant)))
+            return false;
+        var suffix = "." + string.Join(".", parts);
+        return host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            host.Length > suffix.Length;
+    }
 
     internal static bool IsStrictDnsHost(string? host)
     {
