@@ -2302,6 +2302,16 @@ public static class UiLayoutSelfTest
                                     effectiveScale) ? 2 : 1;
                             var expectedRows = expectedColumns == 3 ? 1 :
                                 expectedColumns == 2 ? 2 : 3;
+                            // This is the actual short-screen complaint:
+                            // 1366x768 at 125% zoom must show BitLocker,
+                            // LAPS and Computers side by side instead of
+                            // wasting another full row on the third pane.
+                            if (size.Width == 1366 && zoom == 125 &&
+                                densityMode == "Auto" && expectedColumns != 3)
+                                failures.Add("1366x768 at 125% font zoom must " +
+                                    "fit three native Start panes; actual " +
+                                    "available width=" + width +
+                                    ", effective scale=" + effectiveScale);
                             if (adaptiveCards.ColumnCount != expectedColumns ||
                                 adaptiveCards.RowCount != expectedRows)
                                 failures.Add("Start DPI/zoom adaptive grid mismatch: " +
@@ -2310,6 +2320,10 @@ public static class UiLayoutSelfTest
                                     "; columns=" + adaptiveCards.ColumnCount +
                                     "/" + expectedColumns + "; rows=" +
                                     adaptiveCards.RowCount + "/" + expectedRows);
+
+                            if (size.Width == 1366 && zoom == 125 &&
+                                densityMode == "Auto")
+                                VerifyStartRecoveryButtonsOnScreen(form, failures);
 
                             if (expectedColumns == 2)
                             {
