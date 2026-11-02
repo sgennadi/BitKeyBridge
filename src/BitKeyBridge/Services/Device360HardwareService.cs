@@ -199,7 +199,7 @@ internal static class Device360HardwareService
         ManagementScope scope, string query)
     {
         using var searcher = new ManagementObjectSearcher(scope,
-            new ObjectQuery(query), new EnumerationOptions
+            new ObjectQuery(query), new System.Management.EnumerationOptions
             {
                 ReturnImmediately = false,
                 Timeout = TimeSpan.FromSeconds(7)
