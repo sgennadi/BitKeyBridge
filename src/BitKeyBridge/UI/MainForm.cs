@@ -229,6 +229,9 @@ public sealed partial class MainForm : DpiAwareForm
         LoadDefaultScopes();
         RefreshLastSuccess();
         LoadCloudFields();
+        // Cloud Search requires an explicit login; show the non-admin
+        // Connect action on Devices before any search is attempted.
+        SetDevicesCloudWarningAction(!HasCloudSearchSession());
         LoadDashboardSettings();
         LoadOperationsSettings();
         LoadRecentComputers();
