@@ -546,6 +546,33 @@ public static class UiLayoutSelfTest
                 failures.Add("Device 360 leaked hardware through a name-only cloud join.");
         }
 
+        // Neither report nor health calculations may promote a missing
+        // recovery backup to "absent" or include an actual recovery ID.
+        var reportSource = Device360OperationalStatus.Capture(cloud,
+            adConnected: false, cloudSessionPresent: true,
+            rbacEnabled: false, ticketRequired: false,
+            protectedAuditRequired: true, auditBrokerConfigured: false);
+        var report = Device360ReportService.Build(cloud, reportSource,
+            createdUtc: new DateTime(2026, 11, 2, 10, 0, 0, DateTimeKind.Utc));
+        if (report.Contains(syntheticRecoveryId, StringComparison.Ordinal) ||
+            report.Contains("access_token", StringComparison.OrdinalIgnoreCase) ||
+            report.Contains("Recovery password:", StringComparison.OrdinalIgnoreCase) ||
+            !report.Contains("NON-SECRET HELPDESK REPORT", StringComparison.Ordinal))
+            failures.Add("Device 360 Helpdesk report leaked a recovery ID or omitted its safety scope.");
+
+        var unknown = Device360HealthService.Evaluate(new Device360Snapshot(),
+            Device360OperationalStatus.Capture(new Device360Snapshot(),
+                adConnected: false, cloudSessionPresent: false,
+                rbacEnabled: false, ticketRequired: false,
+                protectedAuditRequired: false, auditBrokerConfigured: false));
+        if (unknown.Any(item => item.State == Device360CheckState.Observed))
+            failures.Add("Device 360 Health classified missing metadata as healthy.");
+        if (Device360HardwareService.IsStrictDnsHost("a..example.com") ||
+            Device360HardwareService.IsStrictDnsHost("localhost") ||
+            !Device360HardwareService.IsStrictDnsHost("testpc.example.com") ||
+            Device360HardwareService.CanQuery(cloud))
+            failures.Add("Device 360 remote WMI allowed an unqualified or cloud-only identity.");
+
         var operational = Device360OperationalStatus.Capture(cloud,
             adConnected: false, cloudSessionPresent: true,
             rbacEnabled: true, ticketRequired: true,
@@ -661,6 +688,20 @@ public static class UiLayoutSelfTest
                 dialog.PerformLayout();
 
                 var sections = FindByName(dialog, "Device360CardSections");
+                if (FindByName(dialog, "Device360CardTabs") is not TabControl v2Tabs ||
+                    v2Tabs.TabPages.Count != 5 ||
+                    v2Tabs.TabPages.Cast<TabPage>().Any(page =>
+                        string.IsNullOrWhiteSpace(page.Text)))
+                    failures.Add("Device 360 v2 five-page EN/RU/HE tabs missing: " + language);
+                if (FindByName(dialog, "Device360V2HealthSummary") is not Label ||
+                    FindByName(dialog, "Device360V2CopyReport") is not Button ||
+                    FindByName(dialog, "Device360V2SaveReport") is not Button ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics") is not TextBox ||
+                    FindByName(dialog, "Device360V2HardwareProbe") is not Button hardwareProbe ||
+                    hardwareProbe.Enabled)
+                    failures.Add("Device 360 v2 missing read-only health/report/diagnostic tabs " +
+                        "or enabled WMI on a device without exact AD DNS: " + language);
+
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");
                 var entraSource = FindByName(dialog, "Device360SourceEntra");
@@ -1622,6 +1663,9 @@ public static class UiLayoutSelfTest
                 layoutSelfTest: true);
             if (!main.PreviewDevicesCloudShortcutForUiTest())
                 failures.Add("Devices missing-Cloud action failed to open Settings > Cloud.");
+            if (!main.PreviewDevice360SharedSearchForUiSelfTest())
+                failures.Add("Start -> Devices reused a name instead of source identity " +
+                    "or attempted an additional Microsoft 365 authentication.");
             if (!main.PreviewDevicesSearchWithoutImplicitSignInForUiTest())
                 failures.Add("Devices search triggered implicit Microsoft 365 sign-in " +
                     "instead of offering the explicit Connect action.");
