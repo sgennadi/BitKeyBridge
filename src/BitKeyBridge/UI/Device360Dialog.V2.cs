@@ -225,7 +225,7 @@ internal sealed partial class Device360Dialog
             using var cancellation = new CancellationTokenSource();
             _device360HardwareCancellation = cancellation;
             probe.Enabled = false;
-            hardwareStatus.Text = "Read-only WMI inventory in progress...";
+            hardwareStatus.Text = Tr("Device360V2Querying");
             try
             {
                 var result = await Device360HardwareService.QueryAsync(
@@ -250,7 +250,7 @@ internal sealed partial class Device360Dialog
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
                 if (!IsDisposed && !Disposing)
-                    hardwareStatus.Text = "Hardware inspection cancelled.";
+                    hardwareStatus.Text = Tr("Device360V2HardwareCancelled");
             }
             finally
             {
@@ -351,10 +351,10 @@ internal sealed partial class Device360Dialog
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, rtl ? 65 : 35));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, rtl ? 35 : 65));
             Add("Device360V2BiosVersion", Tr("Device360V2Bios"));
-            Add("Device360V2BiosManufacturer", "BIOS manufacturer");
-            Add("Device360V2BiosReleaseDate", "BIOS release date");
+            Add("Device360V2BiosManufacturer", Tr("Device360V2BiosManufacturer"));
+            Add("Device360V2BiosReleaseDate", Tr("Device360V2BiosDate"));
             Add("Device360V2TpmVersion", Tr("Device360V2Tpm"));
-            Add("Device360V2TpmEnabled", "TPM enabled");
+            Add("Device360V2TpmEnabled", Tr("Device360V2TpmEnabled"));
             Add("Device360V2TpmDetail", Tr("Device360V2TpmStatus"));
             card.Controls.Add(grid);
             return card;
