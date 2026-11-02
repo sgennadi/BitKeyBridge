@@ -12,6 +12,9 @@ internal sealed class Device360Snapshot
     internal bool IdentityVerified { get; init; }
     internal bool IdentityAmbiguous { get; init; }
     internal string IdentityWarning { get; init; } = string.Empty;
+    // Cross-source relation is evidence only when an authoritative device ID
+    // was returned by the same source record. Never infer it by name/UPN.
+    internal string IdentityLinkEvidence { get; init; } = string.Empty;
 
     // Null means the source was not verified, NOT that the device is absent.
     internal bool? InAd { get; init; }
@@ -26,6 +29,7 @@ internal sealed class Device360Snapshot
 
     internal string AdObjectGuid { get; init; } = string.Empty;
     internal string AdDistinguishedName { get; init; } = string.Empty;
+    internal string AdDnsHostName { get; init; } = string.Empty;
     internal string EntraDeviceId { get; init; } = string.Empty;
     internal string IntuneManagedDeviceId { get; init; } = string.Empty;
     internal string OperatingSystem { get; init; } = string.Empty;
@@ -83,6 +87,13 @@ internal sealed class Device360Snapshot
             Computer = row.ComputerName,
             QualifiedIdentity = qualifiedId,
             IdentityAmbiguous = row.IdentityAmbiguous,
+            IdentityWarning = row.IdentityAmbiguous
+                ? "Duplicate or conflicting identity. Compare authoritative source IDs; never match by hostname."
+                : string.Empty,
+            IdentityLinkEvidence = inventory is { FoundInIntune: true, FoundInEntra: true } &&
+                !string.IsNullOrWhiteSpace(inventory.EntraDeviceId)
+                ? "Intune managed device explicitly references this Entra deviceId; AD relationship is unverified."
+                : "No authoritative cross-source relationship was established.",
             IdentityVerified = !row.IdentityAmbiguous &&
                 !string.IsNullOrWhiteSpace(qualifiedId),
             InAd = cloud ? null : true,
@@ -101,6 +112,7 @@ internal sealed class Device360Snapshot
             LapsExpirationUtc = lapsDetected ? row.LapsExpiresAtUtc : null,
             AdObjectGuid = adGuid,
             AdDistinguishedName = adDn,
+            AdDnsHostName = inventory?.AdDnsHostName ?? string.Empty,
             EntraDeviceId = cloud && Guid.TryParse(row.ComputerId, out _)
                 ? row.ComputerId : string.Empty,
             IntuneManagedDeviceId = inventory?.ManagedDeviceId ?? string.Empty,
@@ -133,6 +145,10 @@ internal sealed class Device360Snapshot
             IdentityVerified = !ambiguous &&
                 !string.IsNullOrWhiteSpace(qualifiedId),
             IdentityWarning = row.IdentityWarning,
+            IdentityLinkEvidence = !ambiguous && row.FoundInIntune &&
+                row.FoundInEntra && !string.IsNullOrWhiteSpace(row.EntraDeviceId)
+                ? "Intune managed device explicitly references this Entra deviceId; AD relationship is unverified."
+                : "No authoritative cross-source relationship was established.",
             InAd = row.FoundInAd ? true : null,
             InEntra = row.FoundInEntra ? true : null,
             InIntune = row.FoundInIntune ? true : null,
@@ -143,6 +159,7 @@ internal sealed class Device360Snapshot
             LapsMetadataDetected = false,
             AdObjectGuid = row.AdObjectGuid,
             AdDistinguishedName = row.AdDistinguishedName,
+            AdDnsHostName = row.AdDnsHostName,
             EntraDeviceId = row.EntraDeviceId,
             IntuneManagedDeviceId = row.ManagedDeviceId,
             OperatingSystem = (row.OperatingSystem + " " + row.OsVersion).Trim(),
