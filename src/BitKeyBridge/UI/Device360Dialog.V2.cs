@@ -239,6 +239,18 @@ internal sealed partial class Device360Dialog
                 hardwareStatus.Text = result.Explanation;
                 if (result.Inventory is { } inventory)
                 {
+                    SetHardware("Device360V2RemoteManufacturer",
+                        inventory.Manufacturer);
+                    SetHardware("Device360V2RemoteModel", inventory.Model);
+                    if (FindIn(posture, "Device360Hardware") is TextBox original &&
+                        (original.Text == Tr("Device360NotVerified") ||
+                         string.IsNullOrWhiteSpace(snapshot.Hardware)))
+                    {
+                        var text = (inventory.Manufacturer + " " +
+                            inventory.Model).Trim();
+                        if (!string.IsNullOrWhiteSpace(text))
+                            original.Text = "WMI: " + text;
+                    }
                     SetHardware("Device360V2BiosVersion", inventory.BiosVersion);
                     SetHardware("Device360V2BiosManufacturer",
                         inventory.BiosManufacturer);
@@ -247,6 +259,8 @@ internal sealed partial class Device360Dialog
                     SetHardware("Device360V2TpmVersion",
                         inventory.TpmSpecification);
                     SetHardware("Device360V2TpmEnabled", inventory.TpmEnabled);
+                    SetHardware("Device360V2TpmActivated", inventory.TpmActivated);
+                    SetHardware("Device360V2TpmOwned", inventory.TpmOwned);
                     SetHardware("Device360V2TpmDetail", inventory.TpmDiagnostic);
                 }
             }
@@ -353,11 +367,16 @@ internal sealed partial class Device360Dialog
             };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, rtl ? 65 : 35));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, rtl ? 35 : 65));
+            Add("Device360V2RemoteManufacturer",
+                Tr("Device360V2RemoteManufacturer"));
+            Add("Device360V2RemoteModel", Tr("Device360V2RemoteModel"));
             Add("Device360V2BiosVersion", Tr("Device360V2Bios"));
             Add("Device360V2BiosManufacturer", Tr("Device360V2BiosManufacturer"));
             Add("Device360V2BiosReleaseDate", Tr("Device360V2BiosDate"));
             Add("Device360V2TpmVersion", Tr("Device360V2Tpm"));
             Add("Device360V2TpmEnabled", Tr("Device360V2TpmEnabled"));
+            Add("Device360V2TpmActivated", Tr("Device360V2TpmActivated"));
+            Add("Device360V2TpmOwned", Tr("Device360V2TpmOwned"));
             Add("Device360V2TpmDetail", Tr("Device360V2TpmStatus"));
             card.Controls.Add(grid);
             return card;
