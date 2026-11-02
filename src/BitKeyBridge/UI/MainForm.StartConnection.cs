@@ -39,7 +39,7 @@ public sealed partial class MainForm
 
     private Control BuildStartConnectionSourceChooser()
     {
-        var layout = new TableLayoutPanel
+        var layout = new UiLiveWidthConnectionTable
         {
             Name = "HomeConnectionSourceChooser",
             Dock = DockStyle.Top,
@@ -51,8 +51,11 @@ public sealed partial class MainForm
             Padding = Padding.Empty
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        // Hidden options must occupy zero row height, even if WinForms
+        // previously measured a large preferred size at provisional width.
         for (var i = 0; i < 3; i++)
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(
+                i == 1 ? SizeType.Absolute : SizeType.AutoSize, 0F));
 
         // Everyday connection has one primary action. Direct source/cloud
         // maintenance stays discoverable, but does not crowd the first screen.
@@ -165,10 +168,11 @@ public sealed partial class MainForm
         _homeCloudConnectionStatus.Name = "HomeCloudConnectionStatus";
         _homeCloudConnectionStatus.AccessibleName =
             "Microsoft Entra / Intune connection status";
-        UiStyle.ConfigureStatusLabel(_homeCloudConnectionStatus);
+        UiStyle.ConfigureWrappingStatusLabel(_homeCloudConnectionStatus);
         _homeCloudConnectionStatus.MaximumSize = new Size(1100, 0);
         UiStyle.SetStatus(_homeCloudConnectionStatus,
-            "Use Connect / Change to select AD, Microsoft 365 or both.",
+            UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguageCode,
+                "Use Connect / Change to select AD, Microsoft 365 or both."),
             UiStatusKind.Neutral);
         layout.Controls.Add(_homeCloudConnectionStatus, 0, 2);
 
@@ -324,21 +328,121 @@ public sealed partial class MainForm
 
         if (cloud)
         {
+            var cloudMessage = HasCloudSearchSession()
+                ? "Connected to Microsoft Entra / Intune using delegated Graph permissions."
+                : StartCloudAppConfigured()
+                    ? "Cloud is configured. Use Connect / Change for delegated MFA sign-in."
+                    : "Cloud app not configured. Connect / Change opens guided setup.";
             UiStyle.SetStatus(_homeCloudConnectionStatus,
-                HasCloudSearchSession()
-                    ? "Connected to Microsoft Entra / Intune using delegated Graph permissions."
-                    : StartCloudAppConfigured()
-                        ? "Cloud is configured. Use Connect / Change for delegated MFA sign-in."
-                        : "Cloud app not configured. Connect / Change opens guided setup.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(
+                    _uiLanguageCode, cloudMessage),
                 HasCloudSearchSession() ? UiStatusKind.Success :
                 StartCloudAppConfigured() ? UiStatusKind.Neutral : UiStatusKind.Warning);
         }
         else if (SelectedStartSource == StartConnectionPolicy.Choose)
         {
             UiStyle.SetStatus(_homeCloudConnectionStatus,
-                "Use Connect / Change to choose a source. No credentials are requested until Connect.",
+                UiStaticCaptionCatalog.TranslateOrOriginal(_uiLanguageCode,
+                    "Use Connect / Change to choose a source. No credentials are requested until Connect."),
                 UiStatusKind.Neutral);
         }
+
+        SyncStartOptionalConnectionRows(ad);
+    }
+
+    // Explicitly collapse the *table rows* of hidden connection options.
+    // A hidden AutoSize FlowLayoutPanel can retain its old preferred height,
+    // even when the surrounding GroupBox is GrowAndShrink. Absolute zero
+    // only applies while hidden; visible rows return to content-driven sizing.
+    private void SyncStartOptionalConnectionRows(bool activeDirectory)
+    {
+        static bool SetOptionalRow(
+            TableLayoutPanel? table, Control? child, bool expanded)
+        {
+            if (table is null || child is null ||
+                table.IsDisposed || !ReferenceEquals(child.Parent, table))
+                return false;
+
+            var index = table.GetRow(child);
+            if (index < 0 || index >= table.RowStyles.Count)
+                return false;
+
+            var style = table.RowStyles[index];
+            var sizeType = expanded ? SizeType.AutoSize : SizeType.Absolute;
+            var changed = false;
+            if (style.SizeType != sizeType)
+            {
+                style.SizeType = sizeType;
+                changed = true;
+            }
+            if (!expanded && style.Height != 0F)
+            {
+                style.Height = 0F;
+                changed = true;
+            }
+            return changed;
+        }
+
+        // At a laptop/RDP height, show the AD identity and DC in the
+        // persistent bottom status bar instead of repeating them in two
+        // full-height rows above the BitLocker/LAPS recovery buttons.
+        // Do NOT collapse a warning/error: operators must see failures.
+        // The original status labels remain populated for accessibility
+        // and resume their normal layout at larger window heights.
+        var hideRedundantAdDetails = activeDirectory &&
+            _startHeightDensity == 2 &&
+            _homeConnectionStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success &&
+            _homeAdAccountStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success;
+        var showAdDetails = activeDirectory && !hideRedundantAdDetails;
+        _homeConnectionStatus.Visible = showAdDetails;
+        _homeAdAccountStatus.Visible = showAdDetails;
+
+        // The static setup summary duplicates status already available in
+        // the footer and Connection tools. On tight windows it may consume
+        // the last 35-40 pixels needed to reach the recovery buttons.
+        // Keep warning/error states fully visible. The summary's full
+        // non-secret text remains accessible from the connection action.
+        var collapseRoutineSetup = _startHeightDensity == 2 &&
+            !_connectionOptionsExpanded &&
+            _startSetupStatus.StatusKind is
+                UiStatusKind.Neutral or UiStatusKind.Success;
+        _startSetupStatus.Visible = !collapseRoutineSetup;
+        if (_homeReconnectWizardButton is { IsDisposed: false })
+            _homeReconnectWizardButton.AccessibleDescription =
+                _startSetupStatus.Text;
+
+        var choiceRow = _homeConnectionSource.Parent;
+        var changed = SetOptionalRow(_homeAdConnectionLayout,
+            _homeConnectionStatus, showAdDetails);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _homeAdAccountStatus, showAdDetails);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startSetupStatus, !collapseRoutineSetup);
+        changed |= SetOptionalRow(
+            choiceRow?.Parent as TableLayoutPanel, choiceRow,
+            _connectionOptionsExpanded);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startAdIdentityPanel, _connectionOptionsExpanded && activeDirectory);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startDirectActionsPanel, _connectionOptionsExpanded);
+        changed |= SetOptionalRow(_homeAdConnectionLayout,
+            _startDirectHint, _connectionOptionsExpanded);
+
+        if (!changed || _homeAdConnectionLayout is not { IsHandleCreated: true } adLayout)
+            return;
+
+        // TableLayoutPanel does not always propagate an AutoSize shrink
+        // through GroupBox to the scrolling Start root after hidden options
+        // lose their last visible child. Repair this chain only on an actual
+        // expanded/collapsed row-style change, never during routine status polls.
+        adLayout.PerformLayout();
+        var split = adLayout.Parent;
+        split?.PerformLayout();
+        var group = split?.Parent;
+        group?.PerformLayout();
+        group?.Parent?.PerformLayout();
     }
 
     private async Task<bool> ShowStartCloudWizardAsync(bool connectAfterSave)

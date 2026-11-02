@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -16,9 +17,35 @@ internal static class UiModernTheme
     {
         public Size LastRoundedSize;
         public int LastRoundedDpi;
+        public int RoundedRegionRadius;
     }
 
     private static readonly ConditionalWeakTable<Control, ThemeMarker> Markers = new();
+    // Sharing one renderer and ControlAdded delegate avoids creating a new
+    // object/closure for every control in the ~700-control cold Start tree.
+    private static readonly ToolStripProfessionalRenderer SharedMenuRenderer =
+        new(new NipkgMenuColorTable());
+
+    private static void ThemeChildAdded(object? sender, ControlEventArgs args)
+    {
+        if (args.Control is { } child)
+            Apply(child);
+    }
+
+    private static UiLayoutTelemetry.ThemeInstallKind ThemeKind(Control control) =>
+        control switch
+        {
+            Form => UiLayoutTelemetry.ThemeInstallKind.Form,
+            TabControl or TabPage => UiLayoutTelemetry.ThemeInstallKind.Tabs,
+            GroupBox => UiLayoutTelemetry.ThemeInstallKind.GroupBox,
+            Button => UiLayoutTelemetry.ThemeInstallKind.Buttons,
+            ComboBox or TextBoxBase or UpDownBase or DateTimePicker =>
+                UiLayoutTelemetry.ThemeInstallKind.Inputs,
+            DataGridView or ListView => UiLayoutTelemetry.ThemeInstallKind.Grids,
+            ToolStrip => UiLayoutTelemetry.ThemeInstallKind.ToolStrips,
+            Panel => UiLayoutTelemetry.ThemeInstallKind.Panels,
+            _ => UiLayoutTelemetry.ThemeInstallKind.Other
+        };
 
     internal static void Apply(Control root)
     {
@@ -33,11 +60,13 @@ internal static class UiModernTheme
 
         var marker = new ThemeMarker();
         Markers.Add(root, marker);
-        root.ControlAdded += (_, args) =>
-        {
-            if (args.Control is { } child) Apply(child);
-        };
+        UiLayoutTelemetry.RecordThemedControl();
+        root.ControlAdded += ThemeChildAdded;
+        // Stopwatch ticks only. Classification is by framework control type
+        // and never includes Name, Text, metadata or secret-bearing values.
+        var installStarted = Stopwatch.GetTimestamp();
         Install(root, marker);
+        UiLayoutTelemetry.RecordThemeInstall(ThemeKind(root), installStarted);
 
         foreach (Control child in root.Controls)
             Apply(child);
@@ -83,6 +112,7 @@ internal static class UiModernTheme
             case UiRecoveryCard:
             case UiRecoveryBadge:
             case UiRecoveryGlyph:
+            case UiNipkgBrandBanner:
                 // These already draw their own rounded geometry and palette.
                 return;
 
@@ -121,25 +151,40 @@ internal static class UiModernTheme
                 break;
 
             case Button button:
-                // Recovery-card buttons already own a distinct visual style
-                // with glyphs and measured, full-width captions.
-                if (!InsideRecoveryCard(button))
+                // Avoid multiple walks up the same Button's ancestor chain.
+                // Recovery buttons keep their existing glyph and text layout.
+                var recoveryButton = InsideRecoveryCard(button);
+                if (!recoveryButton)
                 {
                     var primary = IsPrimaryAction(button);
+                    var positive = IsPositiveAction(button);
                     button.FlatStyle = FlatStyle.Flat;
-                    button.FlatAppearance.BorderSize = primary ? 0 : 1;
+                    // GDI+ paints an AA outline after the native Button
+                    // content. Native borders and Region clips leave broken
+                    // corner segments when scaled to fractional DPI.
+                    button.FlatAppearance.BorderSize = 0;
                     button.FlatAppearance.BorderColor = UiStyle.ModernBorder;
                     button.FlatAppearance.MouseOverBackColor = primary
-                        ? UiStyle.ModernAccentHover : UiStyle.ModernHover;
+                        ? positive ? UiStyle.ModernPositiveAccentHover
+                            : UiStyle.ModernAccentHover
+                        : UiStyle.ModernHover;
                     button.FlatAppearance.MouseDownBackColor = primary
-                        ? UiStyle.ModernAccentPressed : UiStyle.ModernPressed;
+                        ? positive ? UiStyle.ModernPositiveAccentPressed
+                            : UiStyle.ModernAccentPressed
+                        : UiStyle.ModernPressed;
                     button.UseVisualStyleBackColor = false;
                     button.BackColor = primary
-                        ? UiStyle.ModernAccent : UiStyle.ModernSurface;
+                        ? positive ? UiStyle.ModernPositiveAccent
+                            : UiStyle.ModernAccent
+                        : UiStyle.ModernSurface;
                     button.ForeColor = primary
                         ? Color.White : UiStyle.ModernForeground;
                 }
-                SetupRoundedRegion(button, marker, UiStyle.ModernButtonRadius);
+                UiRecoveryGraphics.ConfigureRoundedButton(
+                    button,
+                    recoveryButton ? 12f : UiStyle.ModernButtonRadius,
+                    recoveryButton || IsPrimaryAction(button)
+                        ? Color.Empty : UiStyle.ModernBorder);
                 break;
 
             case ComboBox combo:
@@ -184,23 +229,24 @@ internal static class UiModernTheme
                 list.BorderStyle = BorderStyle.FixedSingle;
                 break;
 
-            case UiStatusLabel status:
-                if (status.BorderStyle != BorderStyle.None)
-                    SetupRoundedRegion(status, marker, UiStyle.ModernSmallRadius);
+            case UiStatusLabel:
+                // UiStatusLabel paints its own antialiased border. A native
+                // Region + rectangular ControlPaint border cuts away the
+                // rounded edge, especially at fractional monitor DPI.
                 break;
 
             case ProgressBar:
                 break;
 
             case StatusStrip statusBar:
-                statusBar.BackColor = UiStyle.ModernSurface;
+                statusBar.BackColor = UiStyle.BrandSoftBlue;
                 statusBar.ForeColor = UiStyle.ModernForeground;
                 break;
 
             case MenuStrip menu:
-                menu.BackColor = UiStyle.ModernSurface;
+                menu.BackColor = UiStyle.BrandSoftBlue;
                 menu.ForeColor = UiStyle.ModernForeground;
-                menu.RenderMode = ToolStripRenderMode.Professional;
+                menu.Renderer = SharedMenuRenderer;
                 break;
 
             case ToolStrip strip:
@@ -242,6 +288,12 @@ internal static class UiModernTheme
             "UpdateNowButton" or
             "UpdateCenterRetryCheckButton";
 
+    // Green is reserved for safe metadata-only Search (NI's positive
+    // action convention). Never make Reveal/Copy Key or rotation a green
+    // one-click action; authorization and confirmation remain unchanged.
+    internal static bool IsPositiveAction(Button button) =>
+        button.Name == "HomeUnifiedSearchButton";
+
     private static bool InsideRecoveryCard(Control control)
     {
         for (Control? parent = control.Parent; parent is not null; parent = parent.Parent)
@@ -252,30 +304,59 @@ internal static class UiModernTheme
         return false;
     }
 
+    private sealed class NipkgMenuColorTable : ProfessionalColorTable
+    {
+        public override Color MenuStripGradientBegin => UiStyle.BrandSoftBlue;
+        public override Color MenuStripGradientEnd => UiStyle.BrandSoftBlue;
+        public override Color MenuItemSelected => UiStyle.ModernHover;
+        public override Color MenuItemSelectedGradientBegin => UiStyle.ModernHover;
+        public override Color MenuItemSelectedGradientEnd => UiStyle.ModernHover;
+        public override Color MenuItemPressedGradientBegin => UiStyle.BrandSoftBlue;
+        public override Color MenuItemPressedGradientEnd => UiStyle.BrandSoftBlue;
+        public override Color MenuItemBorder => UiStyle.ModernBorder;
+        public override Color ToolStripDropDownBackground => UiStyle.ModernSurface;
+        public override Color ImageMarginGradientBegin => UiStyle.ModernSurface;
+        public override Color ImageMarginGradientMiddle => UiStyle.ModernSurface;
+        public override Color ImageMarginGradientEnd => UiStyle.ModernSurface;
+        public override Color SeparatorDark => UiStyle.ModernBorder;
+        public override Color SeparatorLight => UiStyle.ModernSurface;
+    }
+
     private static void SetupRoundedRegion(
         Control control, ThemeMarker marker, int radius)
     {
+        marker.RoundedRegionRadius = radius;
         marker.LastRoundedSize = Size.Empty;
         marker.LastRoundedDpi = -1;
         control.SizeChanged += (_, _) => UpdateCorners(control, marker);
-        control.HandleCreated += (_, _) => UpdateCorners(control, marker);
-        UpdateCorners(control, marker, radius);
+        control.HandleCreated += (_, _) =>
+        {
+            // A recreated HWND needs its rounded region on the NEW handle,
+            // even when size/DPI still match the previous native window.
+            marker.LastRoundedSize = Size.Empty;
+            marker.LastRoundedDpi = -1;
+            UpdateCorners(control, marker);
+        };
+        // Do not create hundreds of Region/GDI objects for hidden tabs at
+        // startup. The HandleCreated callback installs identical geometry
+        // before a newly visible control can draw.
+        if (control.IsHandleCreated)
+            UpdateCorners(control, marker);
+        else
+            UiLayoutTelemetry.RecordDeferredRoundedRegion();
     }
 
-    private static void UpdateCorners(Control control, ThemeMarker marker, int? radius = null)
+    private static void UpdateCorners(Control control, ThemeMarker marker)
     {
-        if (control.IsDisposed || SystemInformation.HighContrast)
+        if (control.IsDisposed || SystemInformation.HighContrast ||
+            !control.IsHandleCreated)
             return;
 
-        var logicalRadius = radius ?? (control switch
-        {
-            Button => UiStyle.ModernButtonRadius,
-            ComboBox or TextBoxBase or UpDownBase or DateTimePicker =>
-                UiStyle.ModernInputRadius,
-            UiStatusLabel or ProgressBar => UiStyle.ModernSmallRadius,
-            DataGridView or ListView or Panel => UiStyle.ModernSurfaceRadius,
-            _ => 0
-        });
+        // Only controls explicitly registered by SetupRoundedRegion use a
+        // native clip. Refresh traverses every themed control after DPI/font
+        // changes: inferring a radius from its type reintroduced jagged clips
+        // on antialiased buttons, status labels and native input HWNDs.
+        var logicalRadius = marker.RoundedRegionRadius;
         if (logicalRadius <= 0 || control.Width < 2 || control.Height < 2)
             return;
 
@@ -288,10 +369,12 @@ internal static class UiModernTheme
         marker.LastRoundedDpi = dpi;
         var scaled = logicalRadius * dpi / (float)UiStyle.BaselineDpi;
         using var path = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0, 0, control.Width, control.Height), scaled);
+            new RectangleF(0, 0, Math.Max(1, control.Width - 1),
+                Math.Max(1, control.Height - 1)), scaled);
         var old = control.Region;
         control.Region = new Region(path);
         old?.Dispose();
+        UiLayoutTelemetry.RecordRoundedRegionApplied();
     }
 
     private static void DrawTab(object? sender, DrawItemEventArgs args)
@@ -306,14 +389,18 @@ internal static class UiModernTheme
             return;
 
         args.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var path = UiRecoveryGraphics.RoundRect(rect,
+        args.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var stroke = Math.Max(1f, tabs.DeviceDpi / (float)UiStyle.BaselineDpi);
+        var bounds = UiRecoveryGraphics.InsideStrokeBounds(rect.Size, stroke);
+        bounds.Offset(rect.Location);
+        using var path = UiRecoveryGraphics.RoundRect(bounds,
             UiStyle.ModernTabRadius * tabs.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var fill = new SolidBrush(
             active ? UiStyle.ModernSurface : UiStyle.ModernCanvas);
         args.Graphics.FillPath(fill, path);
         if (active)
         {
-            using var border = new Pen(UiStyle.ModernBorder, 1f);
+            using var border = new Pen(UiStyle.ModernBorder, stroke);
             args.Graphics.DrawPath(border, path);
             // Fluent-style slim accent indicator helps recognition without
             // painting an entire new tab control or animating the workspace.
@@ -348,19 +435,19 @@ internal static class UiModernTheme
 
         var graphics = args.Graphics;
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
         var textHeight = TextRenderer.MeasureText(
             string.IsNullOrWhiteSpace(group.Text) ? " " : group.Text,
             group.Font).Height;
         var outlineTop = Math.Max(1, textHeight / 2f);
         graphics.Clear(group.Parent?.BackColor ?? UiStyle.ModernCanvas);
+        var stroke = Math.Max(1f, group.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var outline = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0.5f, outlineTop, group.Width - 1.5f,
-                Math.Max(2f, group.Height - outlineTop - 1.5f)),
+            UiRecoveryGraphics.InsideStrokeBounds(group.Size, stroke, outlineTop),
             UiStyle.ModernSurfaceRadius * group.DeviceDpi / (float)UiStyle.BaselineDpi);
         using var fill = new SolidBrush(UiStyle.ModernSurface);
         graphics.FillPath(fill, outline);
-        using var border = new Pen(UiStyle.ModernBorder,
-            Math.Max(1f, group.DeviceDpi / (float)UiStyle.BaselineDpi));
+        using var border = new Pen(UiStyle.ModernBorder, stroke);
         graphics.DrawPath(border, outline);
 
         if (!string.IsNullOrEmpty(group.Text))
@@ -392,6 +479,14 @@ internal static class UiModernTheme
             const int roundedCorners = 2; // DWMWCP_ROUND
             var preference = roundedCorners;
             _ = DwmSetWindowAttribute(form.Handle, 33, ref preference,
+                Marshal.SizeOf<int>());
+            // Match NI Package Creator's native Windows 11 navy caption.
+            // DWM rejects these attributes on older builds harmlessly.
+            var caption = ColorTranslator.ToWin32(UiStyle.BrandNavy);
+            var captionText = ColorTranslator.ToWin32(Color.White);
+            _ = DwmSetWindowAttribute(form.Handle, 35, ref caption,
+                Marshal.SizeOf<int>());
+            _ = DwmSetWindowAttribute(form.Handle, 36, ref captionText,
                 Marshal.SizeOf<int>());
         }
         catch (DllNotFoundException) { /* Earlier Windows version. */ }

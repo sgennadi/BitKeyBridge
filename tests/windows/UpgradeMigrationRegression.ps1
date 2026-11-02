@@ -256,9 +256,20 @@ try {
         $applyDir = Join-Path $legacyFolder 'apply'
         New-Item -ItemType Directory -Path $applyDir | Out-Null
         Invoke-Apply $current $current $candidateVersion $version $target $false $applyDir
-        Write-Host ("Candidate hash={0}; target hash={1}; target version={2}" -f
-            $currentHash, (Hash-Of $target),
-            ((& $target --version --no-elevation | Out-String).Trim()))
+        # WinExe --version launched with PowerShell's native invocation can
+        # return its text before the process fully releases the executable.
+        # The immediately following rollback must not race that test-only
+        # version probe and report a misleading AccessDenied on File.Move.
+        # The REAL updater already executes and waits for the installed EXE's
+        # --self-test; read ProductVersion here without launching a second
+        # process that could keep the installation file mapped.
+        $installedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo(
+            $target).ProductVersion
+        $expectedProductVersion = $candidateVersion.Split('+')[0]
+        $actualProductVersion = ([string]$installedVersion).Split('+')[0]
+        Assert-Equal $actualProductVersion $expectedProductVersion 'Installed product version'
+        Write-Host ("Candidate hash={0}; target hash={1}; target product version={2}" -f
+            $currentHash, (Hash-Of $target), $actualProductVersion)
         Assert-Equal (Hash-Of $target) $currentHash 'Installed newer executable'
         Assert-Equal (Hash-Of ($target + '.bak')) $oldHash 'Rollback backup'
         Assert-FixturePreserved

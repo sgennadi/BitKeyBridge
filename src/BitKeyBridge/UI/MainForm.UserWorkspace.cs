@@ -29,6 +29,7 @@ public sealed partial class MainForm
             : FormWindowState.Normal;
 
         ApplyUpdateCenterDensity(_workspacePreferences.CompactUpdates);
+        ApplyUiDisplayPreferences(_workspacePreferences, persist: false);
     }
 
     private void ResetVisualLayout()
@@ -53,6 +54,7 @@ public sealed partial class MainForm
         _setHelpdeskRecoveryPolicyExpanded?.Invoke(false);
         ApplyUpdateCenterDensity(compact: true);
         _workspacePreferences = new UiWorkspacePreferences();
+        ApplyUiDisplayPreferences(_workspacePreferences, persist: false);
         if (!_layoutSelfTest)
         {
             try

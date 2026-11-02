@@ -15,6 +15,54 @@ internal sealed class UiWorkspacePreferences
     public int Height { get; set; } = 820;
     public bool Maximized { get; set; } = true;
     public bool CompactUpdates { get; set; } = true;
+    // Per-user display settings only; never authorization or audit policy.
+    public string UiDensity { get; set; } = "Auto";
+    public int UiScalePercent { get; set; } = 100;
+}
+
+/// <summary>
+/// OS DPI remains owned by Windows (PerMonitorV2). This policy defines a
+/// bounded independent user zoom and non-security density preference.
+/// </summary>
+internal static class UiDisplayPreferencePolicy
+{
+    internal static readonly int[] AvailableScales = [90, 100, 110, 125];
+    internal static readonly string[] AvailableDensities =
+        ["Auto", "Compact", "Comfortable"];
+
+    internal static string NormalizeDensity(string? value) =>
+        AvailableDensities.FirstOrDefault(candidate =>
+            string.Equals(candidate, value, StringComparison.OrdinalIgnoreCase))
+        ?? "Auto";
+
+    internal static int NormalizeScale(int percent) =>
+        AvailableScales.Contains(percent) ? percent : 100;
+
+    internal static double EffectiveScale(
+        int deviceDpi, float formFontSize, float standardFontSize,
+        int zoomPercent)
+    {
+        var zoom = NormalizeScale(zoomPercent) / 100d;
+        var nativeDpi = Math.Max(1d, deviceDpi /
+            (double)UiStyle.BaselineDpi);
+        // Form.Font remains the native OS-DPI baseline. User zoom applies
+        // to text-bearing children only, so never divide by zoom here:
+        // that would silently cancel the 90% setting at 96 DPI.
+        var externalFontRatio = standardFontSize <= 0f
+            ? 1d
+            : Math.Max(1d, formFontSize / standardFontSize);
+        return Math.Max(nativeDpi, externalFontRatio) * zoom;
+    }
+
+    internal static int ResolveStartTier(
+        string density, double availableLogicalHeight) =>
+        NormalizeDensity(density) switch
+        {
+            "Compact" => 2,
+            "Comfortable" => 0,
+            _ => availableLogicalHeight < 700 ? 2 :
+                 availableLogicalHeight < 800 ? 1 : 0
+        };
 }
 
 internal static class UiWorkspacePreferenceService
@@ -26,8 +74,13 @@ internal static class UiWorkspacePreferenceService
     {
         try
         {
-            return JsonStore.Read<UiWorkspacePreferences>(path ?? FilePath)
+            var loaded = JsonStore.Read<UiWorkspacePreferences>(path ?? FilePath)
                 ?? new UiWorkspacePreferences();
+            loaded.UiDensity = UiDisplayPreferencePolicy.NormalizeDensity(
+                loaded.UiDensity);
+            loaded.UiScalePercent = UiDisplayPreferencePolicy.NormalizeScale(
+                loaded.UiScalePercent);
+            return loaded;
         }
         catch (Exception ex) when (ex is IOException or
                                    UnauthorizedAccessException or
@@ -48,6 +101,10 @@ internal static class UiWorkspacePreferenceService
             preferences.Width > 16384 || preferences.Height > 16384)
             throw new ArgumentOutOfRangeException(nameof(preferences));
 
+        preferences.UiDensity = UiDisplayPreferencePolicy.NormalizeDensity(
+            preferences.UiDensity);
+        preferences.UiScalePercent = UiDisplayPreferencePolicy.NormalizeScale(
+            preferences.UiScalePercent);
         JsonStore.WriteAtomic(path ?? FilePath, preferences);
     }
 
@@ -133,15 +190,55 @@ internal static class UiWorkspacePreferenceService
             Save(new UiWorkspacePreferences
             {
                 X = 75, Y = 84, Width = 1080, Height = 740,
-                Maximized = false, CompactUpdates = false
+                Maximized = false, CompactUpdates = false,
+                UiDensity = "Compact", UiScalePercent = 125
             }, path);
             var loaded = Load(path);
             if (loaded.X != 75 || loaded.Y != 84 || loaded.Width != 1080 ||
-                loaded.Height != 740 || loaded.Maximized || loaded.CompactUpdates)
-                errors.Add("Workspace and compact density settings did not round-trip.");
+                loaded.Height != 740 || loaded.Maximized || loaded.CompactUpdates ||
+                loaded.UiDensity != "Compact" || loaded.UiScalePercent != 125)
+                errors.Add("Workspace/density/zoom settings did not round-trip.");
+
+            // Old preference JSON did not contain appearance fields.
+            File.WriteAllText(path,
+                "{\"Width\":1080,\"Height\":740,\"CompactUpdates\":true}");
+            var legacy = Load(path);
+            if (legacy.UiDensity != "Auto" || legacy.UiScalePercent != 100)
+                errors.Add("Legacy visual settings lost default Auto/100%.");
+
+            File.WriteAllText(path,
+                "{\"UiDensity\":\"Invalid\",\"UiScalePercent\":999}");
+            var invalid = Load(path);
+            if (invalid.UiDensity != "Auto" || invalid.UiScalePercent != 100)
+                errors.Add("Invalid visual preferences were not normalized.");
+
+            foreach (var dpi in new[] { 96, 120, 144, 192 })
+            foreach (var zoom in UiDisplayPreferencePolicy.AvailableScales)
+            {
+                var expected = dpi / 96d * zoom / 100d;
+                var actual = UiDisplayPreferencePolicy.EffectiveScale(
+                    dpi, 9f, 9f, zoom);
+                if (Math.Abs(expected - actual) > 0.0001d)
+                    errors.Add("OS DPI/user zoom scaling regression at " +
+                        dpi + " DPI / " + zoom + "%.");
+            }
+            // OS accessibility font scaling is distinct from user zoom.
+            var accessible = UiDisplayPreferencePolicy.EffectiveScale(
+                96, 10.8f, 9f, 110);
+            if (Math.Abs(accessible - 1.32d) > 0.0001d)
+                errors.Add("User zoom double-counted or ignored OS accessibility font.");
+
+            if (UiDisplayPreferencePolicy.ResolveStartTier("Auto", 680) != 2 ||
+                UiDisplayPreferencePolicy.ResolveStartTier("Auto", 750) != 1 ||
+                UiDisplayPreferencePolicy.ResolveStartTier("Auto", 900) != 0 ||
+                UiDisplayPreferencePolicy.ResolveStartTier("Compact", 900) != 2 ||
+                UiDisplayPreferencePolicy.ResolveStartTier("Comfortable", 550) != 0)
+                errors.Add("UI density breakpoints/overrides are incorrect.");
 
             File.WriteAllText(path, "{ invalid");
-            if (!Load(path).Maximized || !Load(path).CompactUpdates)
+            var reset = Load(path);
+            if (!reset.Maximized || !reset.CompactUpdates ||
+                reset.UiDensity != "Auto" || reset.UiScalePercent != 100)
                 errors.Add("Corrupted visual preferences failed to use safe defaults.");
         }
         catch (Exception ex)

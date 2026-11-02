@@ -76,6 +76,44 @@ public sealed partial class MainForm
         {
             if (!labels.Any(entry => ReferenceEquals(entry.Label, label)))
                 label.GlyphColumnInset = 0;
+
+            // FlowLayoutPanel retains an AutoSize Label's specified bounds
+            // when only our custom glyph inset changes. Reconcile the actual
+            // size after alignment so the inset cannot steal caption space.
+            if (label.Visible && label.AutoSize &&
+                label.Dock == DockStyle.None &&
+                label.Parent is FlowLayoutPanel flow)
+            {
+                // An AutoSize flow may still have the width of its old,
+                // clipped label. Measuring against flow.ClientSize creates
+                // a feedback loop that keeps the last caption word hidden.
+                // Its containing selection cell is the true available width.
+                var parent = flow.Parent;
+                var rowWidth = parent is { IsDisposed: false, ClientSize.Width: > 0 }
+                    ? parent.ClientSize.Width - parent.Padding.Horizontal -
+                      flow.Margin.Horizontal
+                    : flow.ClientSize.Width;
+                var available = Math.Max(1,
+                    rowWidth - flow.Padding.Horizontal -
+                    label.Margin.Horizontal);
+
+                // The label may have been restricted by DPI measurement
+                // when this flow was only its old provisional width.
+                // Restore its design maximum against the LIVE selection
+                // cell before measuring the full caption. This does not
+                // scan the rest of the form or touch status/secret text.
+                RefreshResponsiveLabelWidth(label);
+
+                // Preserve the complete unwrapped caption whenever it fits.
+                // The flow already wraps neighbouring action buttons when
+                // a narrow/DPI-scaled viewport cannot fit them on one row.
+                var intrinsic = label.GetPreferredSize(Size.Empty);
+                var preferred = intrinsic.Width <= available
+                    ? intrinsic
+                    : label.GetPreferredSize(new Size(available, 0));
+                if (label.Size != preferred)
+                    label.Size = preferred;
+            }
         }
     }
 

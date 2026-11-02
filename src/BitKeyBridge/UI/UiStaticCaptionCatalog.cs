@@ -146,7 +146,7 @@ internal static class UiStaticCaptionCatalog
             ["Least-Privilege Remote API Tokens"] = ["Токены Remote API с минимальными правами", "אסימוני API מרחוק בהרשאות מזעריות"],
             ["Generate"] = ["Создать", "יצירה"],
             ["Revoke"] = ["Отозвать", "ביטול"],
-            ["BitKeyBridge RBAC"] = ["RBAC BitKeyBridge", "RBAC של BitKeyBridge"],
+            ["BitKeyBridge RBAC"] = ["Ролевой доступ BitKeyBridge (RBAC)", "RBAC של BitKeyBridge"],
             ["Windows User / Group Authorization"] = ["Разрешения пользователей и групп Windows", "הרשאות משתמשים וקבוצות Windows"],
             ["Enable RBAC"] = ["Включить RBAC", "הפעלת RBAC"],
             ["Validate"] = ["Проверить", "בדיקה"],
@@ -174,6 +174,23 @@ internal static class UiStaticCaptionCatalog
             ["Copy Key"] = ["Копировать ключ", "העתקת מפתח"],
             ["Copy BitLocker Key"] = ["Копировать ключ BitLocker", "העתקת מפתח BitLocker"],
             ["Reveal BitLocker Key"] = ["Показать ключ BitLocker", "הצגת מפתח BitLocker"],
+            // Start recovery cards: translate only fixed captions, never key data.
+            ["Reveal Password"] = ["Показать пароль", "הצגת סיסמה"],
+            ["Copy Password"] = ["Копировать пароль", "העתקת סיסמה"],
+            ["Recovery Key ID"] = ["ID ключа восстановления", "מזהה מפתח שחזור"],
+            ["Recovery password"] = ["Пароль восстановления", "סיסמת שחזור"],
+            ["Password"] = ["Пароль", "סיסמה"],
+            // Only fixed, metadata-only notices; dynamic AD/Graph status
+            // text and recovery values are deliberately excluded.
+            ["No recovery secret is currently retained."] = ["Сейчас секреты восстановления не сохранены.", "לא נשמר כרגע סוד שחזור."],
+            ["Setup status is loading..."] = ["Загрузка состояния настройки...", "מצב ההגדרה נטען..."],
+            ["Enter at least two characters. Live search starts after a short pause; Enter searches immediately."] = ["Введите не менее двух символов. Поиск начинается после короткой паузы; Enter запускает его сразу.", "הזינו לפחות שני תווים. חיפוש בזמן אמת מתחיל לאחר השהיה קצרה; Enter מפעיל חיפוש מיד."],
+            ["Select a result to see the helpdesk actions and source summary."] = ["Выберите результат, чтобы увидеть действия поддержки и сведения об источнике.", "בחרו תוצאה להצגת פעולות התמיכה ופרטי המקור."],
+            ["Use Connect / Change to select AD, Microsoft 365 or both."] = ["Нажмите «Подключить / изменить», чтобы выбрать AD, Microsoft 365 или оба источника.", "לחצו על ״התחברות / שינוי״ כדי לבחור AD, Microsoft 365 או שניהם."],
+            ["Use Connect / Change to choose a source. No credentials are requested until Connect."] = ["Выберите источник через «Подключить / изменить». Учётные данные запрашиваются только при подключении.", "בחרו מקור דרך ״התחברות / שינוי״. פרטי ההתחברות יתבקשו רק בעת התחברות."],
+            ["Connected to Microsoft Entra / Intune using delegated Graph permissions."] = ["Подключено к Microsoft Entra / Intune с делегированными разрешениями Graph.", "מחובר ל-Microsoft Entra / Intune עם הרשאות Graph מואצלות."],
+            ["Cloud is configured. Use Connect / Change for delegated MFA sign-in."] = ["Облако настроено. Используйте «Подключить / изменить» для входа с MFA.", "הענן מוגדר. השתמשו ב״התחברות / שינוי״ לכניסה עם MFA."],
+            ["Cloud app not configured. Connect / Change opens guided setup."] = ["Облачное приложение не настроено. «Подключить / изменить» открывает мастер настройки.", "יישום הענן לא הוגדר. ״התחברות / שינוי״ פותח את אשף ההגדרה."],
             ["Clear secrets now"] = ["Очистить секреты", "ניקוי סודות כעת"],
             ["Back to Start"] = ["Назад на главную", "חזרה למסך ההתחלה"],
             ["Search BitLocker"] = ["Поиск BitLocker", "חיפוש BitLocker"],
@@ -214,7 +231,7 @@ internal static class UiStaticCaptionCatalog
             ["Delete stored credential"] = ["Удалить сохранённые учётные данные", "מחיקת פרטי גישה שמורים"],
             ["Clear session password"] = ["Очистить пароль сеанса", "ניקוי סיסמת הפעלה"],
             ["Search AD + Cloud"] = ["Поиск AD + облако", "חיפוש AD + ענן"],
-            ["Entra Recovery ID:"] = ["Entra Recovery ID:", "מזהה שחזור Entra:"],
+            ["Entra Recovery ID:"] = ["Идентификатор восстановления Entra:", "מזהה שחזור Entra:"],
             ["Rotate BitLocker Key in Intune"] = ["Сменить ключ BitLocker в Intune", "החלפת מפתח BitLocker ב-Intune"],
             ["Copy Device 360 Summary"] = ["Копировать сводку устройства", "העתקת סיכום מכשיר"],
             ["Microsoft Graph / Entra / Intune"] = ["Microsoft Graph / Entra / Intune", "Microsoft Graph / Entra / Intune"],
@@ -603,6 +620,25 @@ internal static class UiStaticCaptionCatalog
         return true;
     }
 
+    // Exact UI labels that deliberately remain technical brand/acronym names.
+    // Never exempt new prose merely because it contains Latin characters.
+    private static readonly HashSet<string> UntranslatedTechnicalCaptions =
+        new(StringComparer.Ordinal)
+        {
+            "Active Directory",
+            "Microsoft 365 (Entra / Intune)",
+            "AD + Microsoft 365",
+            "Microsoft Entra / Intune",
+            "Microsoft Graph / Entra / Intune",
+            "Intune",
+            "LocalSystem",
+            "RODC",
+            "IPv4",
+            "Microsoft Entra / Intune (Microsoft 365)",
+            "BitLocker",
+            "LAPS"
+        };
+
     internal static bool Contains(string english) => Captions.ContainsKey(english);
 
     internal static string TranslateOrOriginal(string? language, string english) =>
@@ -610,12 +646,26 @@ internal static class UiStaticCaptionCatalog
 
     internal static IEnumerable<string> ValidateLanguages()
     {
+        // This catalogue contains only fixed, non-secret English source text.
+        // Dynamically generated content must never be inspected by this check.
         foreach (var (english, variants) in Captions)
         {
             if (string.IsNullOrWhiteSpace(english) || variants.Length != 2 ||
                 string.IsNullOrWhiteSpace(variants[0]) ||
                 string.IsNullOrWhiteSpace(variants[1]))
+            {
                 yield return "Missing RU/HE static UI caption: " + english;
+                continue;
+            }
+            if (UntranslatedTechnicalCaptions.Contains(english))
+                continue;
+            if (!UiLanguageService.HasLanguageScript("ru", variants[0]))
+                yield return "Untranslated Russian static UI caption: " + english;
+            if (!UiLanguageService.HasLanguageScript("he", variants[1]))
+                yield return "Untranslated Hebrew static UI caption: " + english;
         }
+        foreach (var technical in UntranslatedTechnicalCaptions)
+            if (!Captions.ContainsKey(technical))
+                yield return "Stale technical-caption exception: " + technical;
     }
 }

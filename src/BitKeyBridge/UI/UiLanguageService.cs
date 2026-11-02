@@ -26,9 +26,65 @@ internal static class UiLanguageService
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["Start"] = ["Start", "Главная", "התחלה"],
+            ["HomePaneDragInstruction"] = ["drag to rearrange", "перетащите для перестановки", "גררו לשינוי הסדר"],
+            ["HomePaneComputers"] = ["Computers", "Компьютеры", "מחשבים"],
             ["BitLocker"] = ["BitLocker", "BitLocker", "BitLocker"],
             ["LAPS"] = ["LAPS", "LAPS", "LAPS"],
             ["Devices"] = ["Devices", "Устройства", "מכשירים"],
+            ["Device360HealthSection"] = ["Sources from current search", "Источники текущего поиска", "מקורות מהחיפוש הנוכחי"],
+            ["Device360AccessSection"] = ["Access readiness / policy", "Доступ и политика безопасности", "מוכנות גישה ומדיניות"],
+            ["Device360SourcePresent"] = ["Record found", "Запись найдена", "נמצאה רשומה"],
+            ["Device360SourceLookupFailed"] = ["Source query failed; unverified", "Ошибка запроса; не проверено", "שאילתת המקור נכשלה; לא אומת"],
+            ["Device360SourceUnverified"] = ["Session present; unverified", "Сеанс есть; не проверено", "קיים חיבור; לא אומת"],
+            ["Device360SourceDisconnected"] = ["Not connected; unverified", "Нет подключения; не проверено", "אין חיבור; לא אומת"],
+            ["Device360AccessEffective"] = ["Effective recovery rights", "Права на восстановление", "הרשאות שחזור בפועל"],
+            ["Device360AccessUnchecked"] = ["Not checked by this card", "В карточке не проверялись", "לא נבדק בכרטיס זה"],
+            ["Device360PolicyRbac"] = ["RBAC policy", "Политика RBAC", "מדיניות RBAC"],
+            ["Device360PolicyTicket"] = ["Recovery ticket", "Заявка на восстановление", "פניית שחזור"],
+            ["Device360PolicyAudit"] = ["Protected audit", "Защищённый аудит", "ביקורת מוגנת"],
+            ["Device360PolicyBroker"] = ["Audit broker setting", "Настройка Audit Broker", "הגדרת מתווך ביקורת"],
+            ["Device360PolicyEnabled"] = ["Enabled by configuration", "Включено настройками", "מופעל בתצורה"],
+            ["Device360PolicyDisabled"] = ["Disabled by configuration", "Отключено настройками", "מושבת בתצורה"],
+            ["Device360PolicyRequired"] = ["Required by configuration", "Обязательно по настройкам", "נדרש בתצורה"],
+            ["Device360PolicyOptional"] = ["Not required by configuration", "Не требуется по настройкам", "לא נדרש בתצורה"],
+            ["Device360PartialWarning"] = ["Search incomplete; no absence or access conclusion", "Поиск неполный; отсутствие ключа и права не подтверждены", "החיפוש חלקי; אין מסקנה על היעדר מפתח או הרשאות"],
+            ["Device360CompleteMetadata"] = ["No source error reported for this result", "Для результата нет общей ошибки источников", "לא דווחה שגיאת מקור עבור תוצאה זו"],
+            ["Device360OpenAccessHealth"] = ["Open Access Health", "Проверить права доступа", "פתיחת בדיקת הרשאות"],
+            ["Device360Open"] = ["Computer card", "Карточка компьютера", "כרטיס מחשב"],
+            ["Device360CardTitle"] = ["Device 360 · Computer overview", "Device 360 · Карточка компьютера", "Device 360 · סקירת מחשב"],
+            ["Device360CardComputer"] = ["Selected device", "Выбранный компьютер", "מחשב שנבחר"],
+            ["Device360Identity"] = ["Verified identity / source IDs", "Идентификаторы и источники", "זהות מאומתת ומזהי מקורות"],
+            ["Device360IdentityWarning"] = ["Identity is ambiguous or unverified. Recovery shortcuts are disabled; verify the exact object in its source.", "Идентификатор не подтверждён или неоднозначен. Проверьте точный объект; переходы к восстановлению недоступны.", "זהות המכשיר אינה מאומתת או חד-משמעית. יש לבדוק את האובייקט המדויק; קיצורי השחזור חסומים."],
+            ["Device360QualifiedIdentity"] = ["Qualified source identity", "Идентификатор источника", "מזהה מקור ייחודי"],
+            ["Device360AdGuid"] = ["AD object GUID", "GUID объекта AD", "מזהה GUID של AD"],
+            ["Device360AdDn"] = ["AD distinguished name", "Путь объекта в AD", "נתיב אובייקט ב-AD"],
+            ["Device360EntraId"] = ["Entra device ID", "ID устройства Entra", "מזהה מכשיר Entra"],
+            ["Device360IntuneId"] = ["Intune managed-device ID", "ID устройства Intune", "מזהה מכשיר Intune"],
+            ["Device360Recovery"] = ["BitLocker and LAPS metadata", "Метаданные BitLocker и LAPS", "נתוני BitLocker ו-LAPS"],
+            ["Device360BitLockerPartial"] = ["{0} recovery record(s) · partial", "{0} записей восстановления · данные неполные", "{0} רשומות שחזור · מידע חלקי"],
+            ["Device360BitLockerFound"] = ["{0} recovery record(s) · metadata only", "{0} записей восстановления · только метаданные", "{0} רשומות שחזור · נתונים בלבד"],
+            ["Device360NotVerified"] = ["Not verified", "Не проверено", "לא אומת"],
+            ["Device360Found"] = ["Found", "Найдено", "נמצא"],
+            ["Device360LapsDetected"] = ["LAPS backup metadata detected", "Обнаружены метаданные LAPS", "נמצאו נתוני גיבוי LAPS"],
+            ["Device360LapsExpired"] = ["LAPS metadata expired", "Срок действия LAPS истёк", "תוקף נתוני LAPS פג"],
+            ["Device360Permission"] = ["Access / audit", "Доступ / аудит", "הרשאות / ביקורת"],
+            ["Device360PermissionNotice"] = ["Not authorized by this card. The original recovery action checks rights, ticket and protected audit before any secret retrieval.", "Карточка не даёт доступ к секретам. Исходное действие отдельно проверяет права, заявку и защищённый аудит.", "הכרטיס אינו מעניק גישה לסודות. פעולת השחזור המקורית בודקת הרשאות, פנייה וביקורת מוגנת לפני חשיפה."],
+            ["Device360Inventory"] = ["Hardware and management", "Оборудование и управление", "חומרה וניהול"],
+            ["Device360Os"] = ["Operating system", "Операционная система", "מערכת הפעלה"],
+            ["Device360Hardware"] = ["Hardware", "Оборудование", "חומרה"],
+            ["Device360Serial"] = ["Serial number", "Серийный номер", "מספר סידורי"],
+            ["Device360AssignedUser"] = ["Assigned user", "Назначенный пользователь", "משתמש משויך"],
+            ["Device360Compliance"] = ["Intune compliance", "Соответствие Intune", "תאימות Intune"],
+            ["Device360Encrypted"] = ["Disk encryption", "Шифрование диска", "הצפנת דיסק"],
+            ["Device360Yes"] = ["Yes", "Да", "כן"],
+            ["Device360No"] = ["No", "Нет", "לא"],
+            ["Device360LastSync"] = ["Last Intune sync", "Синхронизация Intune", "סנכרון Intune אחרון"],
+            ["Device360AdLastLogon"] = ["Last AD logon", "Последний вход AD", "כניסה אחרונה ל-AD"],
+            ["Device360Close"] = ["Close", "Закрыть", "סגירה"],
+            ["Device360NavigationOnly"] = ["Navigation only; no secrets retrieved", "Только переход, без чтения секретов", "ניווט בלבד, ללא שליפת סודות"],
+            ["Device360OpenBitLocker"] = ["Open BitLocker", "Открыть BitLocker", "פתיחת BitLocker"],
+            ["Device360OpenLaps"] = ["Open LAPS", "Открыть LAPS", "פתיחת LAPS"],
+            ["Device360OpenDevices"] = ["Open Devices", "Открыть устройства", "פתיחת מכשירים"],
             ["Helpdesk"] = ["Helpdesk", "Поддержка", "תמיכה"],
             ["Diagnostics"] = ["Diagnostics", "Диагностика", "אבחון"],
             ["Settings"] = ["Settings", "Настройки", "הגדרות"],
@@ -254,6 +310,16 @@ internal static class UiLanguageService
     internal static bool IsRightToLeft(string? language) =>
         Normalize(language) == "he";
 
+    // Resource coverage only. Do NOT run script checks against user-entered
+    // identities, computer names, recovery values or dynamic status text.
+    internal static bool HasLanguageScript(string language, string value) =>
+        Normalize(language) switch
+        {
+            "ru" => value.Any(static c => c >= '\u0400' && c <= '\u052f'),
+            "he" => value.Any(static c => c >= '\u0590' && c <= '\u05ff'),
+            _ => true
+        };
+
     internal static string Translate(string? language, string key)
     {
         if (!Messages.TryGetValue(key, out var words))
@@ -300,6 +366,28 @@ internal static class UiLanguageService
         var failures = new List<string>();
         try
         {
+            // All shell resources must have three nonempty translations.
+            // Some technical product names are deliberately language-neutral.
+            foreach (var (key, words) in Messages)
+            {
+                if (words.Length != 3 || words.Any(string.IsNullOrWhiteSpace))
+                {
+                    failures.Add("Missing EN/RU/HE shell resource: " + key);
+                    continue;
+                }
+                if (!HasLanguageScript("ru", words[1]) &&
+                    key is not ("BitLocker" or "LAPS" or "RecoveryStatusOk"))
+                    failures.Add("Untranslated Russian shell resource: " + key);
+                if (!HasLanguageScript("he", words[2]) &&
+                    key is not ("BitLocker" or "LAPS"))
+                    failures.Add("Untranslated Hebrew shell resource: " + key);
+            }
+            if (!HasLanguageScript("ru", "Тест") ||
+                !HasLanguageScript("he", "בדיקה") ||
+                HasLanguageScript("ru", "Untranslated") ||
+                HasLanguageScript("he", "Untranslated"))
+                failures.Add("Language-script coverage validator is incorrect.");
+
             if (Normalize("ru-RU") != "ru" ||
                 Normalize("he-IL") != "he" ||
                 Normalize("en-US") != "en" ||
@@ -431,6 +519,17 @@ internal static class UiLanguageService
             }
 
             failures.AddRange(UiStaticCaptionCatalog.ValidateLanguages());
+            // Previously missing Russian captions are explicit regressions;
+            // brand/product identifiers must remain unchanged when intended.
+            if (UiStaticCaptionCatalog.TranslateOrOriginal("ru", "Entra Recovery ID:") !=
+                    "Идентификатор восстановления Entra:" ||
+                UiStaticCaptionCatalog.TranslateOrOriginal("ru", "BitKeyBridge RBAC") !=
+                    "Ролевой доступ BitKeyBridge (RBAC)" ||
+                UiStaticCaptionCatalog.TranslateOrOriginal("he", "Entra Recovery ID:") !=
+                    "מזהה שחזור Entra:" ||
+                UiStaticCaptionCatalog.TranslateOrOriginal("ru", "BitLocker") !=
+                    "BitLocker")
+                failures.Add("Russian recovery ID / RBAC localization regressed.");
             foreach (var original in new[]
             {
                 "Export & Automation", "Recovery Export Storage",

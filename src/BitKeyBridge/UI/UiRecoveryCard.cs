@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.CompilerServices;
 
 namespace BitKeyBridge;
 
@@ -32,12 +33,24 @@ public sealed class UiRecoveryCard : Panel
 
     protected override void OnPaintBackground(PaintEventArgs e)
     {
-        e.Graphics.Clear(Parent?.BackColor ?? SystemColors.Control);
+        // Transparent intermediate TableLayoutPanels cannot be used as a
+        // GDI+ clear color. Their alpha-zero background turns into opaque
+        // black wedges in native DrawToBitmap and can leave rounded corners
+        // visibly unfinished on some WinForms painting paths. Paint the
+        // nearest opaque ancestor surface before the antialiased card path.
+        Control? backdrop = Parent;
+        while (backdrop is not null && backdrop.BackColor.A < 255)
+            backdrop = backdrop.Parent;
+        e.Graphics.Clear(backdrop?.BackColor ??
+            (SystemInformation.HighContrast
+                ? SystemColors.Control : UiStyle.ModernCanvas));
         if (Width <= 1 || Height <= 1)
             return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var stroke = Math.Max(1f, DeviceDpi / (float)UiStyle.BaselineDpi);
         using var path = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f),
+            UiRecoveryGraphics.InsideStrokeBounds(Size, stroke),
             UiStyle.RecoveryCardCornerRadius * DeviceDpi / (float)UiStyle.BaselineDpi);
         using var fill = new SolidBrush(
             SystemInformation.HighContrast ? SystemColors.Window : UiStyle.RecoveryCardBackground);
@@ -49,12 +62,14 @@ public sealed class UiRecoveryCard : Panel
         if (Width > 1 && Height > 1)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            var stroke = Math.Max(1f, DeviceDpi / (float)UiStyle.BaselineDpi);
             using var path = UiRecoveryGraphics.RoundRect(
-                new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f),
+                UiRecoveryGraphics.InsideStrokeBounds(Size, stroke),
                 UiStyle.RecoveryCardCornerRadius * DeviceDpi / (float)UiStyle.BaselineDpi);
             using var pen = new Pen(
                 SystemInformation.HighContrast ? SystemColors.WindowText : UiStyle.RecoveryCardBorder,
-                Math.Max(1f, DeviceDpi / (float)UiStyle.BaselineDpi));
+                stroke);
             e.Graphics.DrawPath(pen, path);
         }
 
@@ -93,8 +108,8 @@ public sealed class UiRecoveryGlyph : Control
 public sealed class UiRecoveryBadge : Label
 {
     private UiStatusKind _kind = UiStatusKind.Neutral;
-    private Size _lastRoundedSize;
-    private int _lastRoundedDpi;
+    // Draw pill-shaped backgrounds with GDI+ rather than binary Region
+    // clipping, which loses subpixel edge coverage at 125%-200% DPI.
 
     [System.ComponentModel.DesignerSerializationVisibility(
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -114,6 +129,9 @@ public sealed class UiRecoveryBadge : Label
 
     public UiRecoveryBadge()
     {
+        SetStyle(ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer |
+                 ControlStyles.ResizeRedraw, true);
         AutoSize = true;
         AutoEllipsis = false;
         UseMnemonic = false;
@@ -122,8 +140,7 @@ public sealed class UiRecoveryBadge : Label
         Padding = new Padding(14, 6, 14, 6);
         Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.SectionGap);
         RefreshPalette();
-        SizeChanged += (_, _) => RoundCorners();
-        DpiChangedAfterParent += (_, _) => RoundCorners();
+        DpiChangedAfterParent += (_, _) => Invalidate();
     }
 
     private void RefreshPalette()
@@ -132,27 +149,132 @@ public sealed class UiRecoveryBadge : Label
         BackColor = pair.Background;
         ForeColor = pair.Foreground;
         AccessibleDescription = _kind + " recovery availability.";
-        RoundCorners();
+        Invalidate();
     }
 
-    private void RoundCorners()
+    protected override void OnPaintBackground(PaintEventArgs e)
     {
-        if (Width < 2 || Height < 2)
+        if (SystemInformation.HighContrast || Width < 3 || Height < 3)
+        {
+            base.OnPaintBackground(e);
             return;
-        if (_lastRoundedSize == Size && _lastRoundedDpi == DeviceDpi)
-            return;
-        using var path = UiRecoveryGraphics.RoundRect(
-            new RectangleF(0, 0, Width, Height), Height / 2f);
-        var previous = Region;
-        Region = new Region(path);
-        previous?.Dispose();
-        _lastRoundedSize = Size;
-        _lastRoundedDpi = DeviceDpi;
+        }
+
+        var parent = Parent;
+        while (parent is not null && parent.BackColor.A < 255)
+            parent = parent.Parent;
+        e.Graphics.Clear(parent?.BackColor ?? UiStyle.RecoveryCardBackground);
+        var state = e.Graphics.Save();
+        try
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using var path = UiRecoveryGraphics.RoundRect(
+                new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f),
+                Height / 2f);
+            using var fill = new SolidBrush(BackColor);
+            e.Graphics.FillPath(fill, path);
+        }
+        finally
+        {
+            e.Graphics.Restore(state);
+        }
     }
 }
 
 internal static class UiRecoveryGraphics
 {
+    // A 1-2 pixel stroke centered on an unadjusted client edge is clipped
+    // by GDI+ at the window boundary; the corner then looks unfinished.
+    // Keep the entire antialiased stroke within the physical client pixels.
+    internal static RectangleF InsideStrokeBounds(
+        Size size, float stroke, float topInset = 0f)
+    {
+        var inset = Math.Max(1f, stroke * 0.5f + 0.5f);
+        var topEdge = Math.Max(inset, topInset);
+        return new RectangleF(inset, topEdge,
+            Math.Max(0f, size.Width - 2f * inset),
+            Math.Max(0f, size.Height - topEdge - inset));
+    }
+
+    private sealed class RoundedButtonChrome
+    {
+        internal float LogicalRadius;
+        internal Color BorderColor;
+    }
+
+    private static readonly ConditionalWeakTable<Button, RoundedButtonChrome>
+        RoundedButtons = new();
+
+    // Keep native Button keyboard, focus, accessible name, text and image
+    // drawing, but replace binary Region clipping with an antialiased GDI+
+    // corner mask. Set up once per button; subsequent updates only change
+    // radius/border colors and never attach duplicate Paint event handlers.
+    internal static void ConfigureRoundedButton(
+        Button button, float logicalRadius, Color borderColor)
+    {
+        if (!RoundedButtons.TryGetValue(button, out var chrome))
+        {
+            chrome = new RoundedButtonChrome();
+            RoundedButtons.Add(button, chrome);
+            var state = chrome;
+            button.Paint += (_, e) => PaintRoundedButton(button, e.Graphics, state);
+        }
+        chrome.LogicalRadius = logicalRadius;
+        chrome.BorderColor = borderColor;
+        button.Invalidate();
+    }
+
+    private static void PaintRoundedButton(
+        Button button, Graphics graphics, RoundedButtonChrome chrome)
+    {
+        if (button.IsDisposed || SystemInformation.HighContrast ||
+            button.Width <= 4 || button.Height <= 4)
+            return;
+
+        var oldState = graphics.Save();
+        try
+        {
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            var radius = chrome.LogicalRadius *
+                Math.Max(UiStyle.BaselineDpi, button.DeviceDpi) /
+                (float)UiStyle.BaselineDpi;
+
+            // The native FlatStyle painter draws a rectangular background,
+            // including accessible text, glyphs and focus cues. Paint only
+            // the pixels outside the rounded surface with the parent color,
+            // avoiding the jagged, 1-bit clipping of Control.Region.
+            using var rounded = RoundRect(
+                new RectangleF(0.5f, 0.5f,
+                    button.Width - 1f, button.Height - 1f), radius);
+            using var corners = new GraphicsPath(FillMode.Alternate);
+            corners.AddRectangle(new RectangleF(
+                0, 0, button.Width, button.Height));
+            corners.AddPath(rounded, false);
+            var parent = button.Parent;
+            while (parent is not null && parent.BackColor.A < 255)
+                parent = parent.Parent;
+            var background = parent?.BackColor ?? UiStyle.ModernCanvas;
+            using var cornerBrush = new SolidBrush(background);
+            graphics.FillPath(cornerBrush, corners);
+
+            if (chrome.BorderColor != Color.Empty)
+            {
+                var stroke = Math.Max(1f, button.DeviceDpi /
+                    (float)UiStyle.BaselineDpi);
+                using var outline = RoundRect(
+                    InsideStrokeBounds(button.Size, stroke), radius);
+                using var pen = new Pen(chrome.BorderColor, stroke);
+                graphics.DrawPath(pen, outline);
+            }
+        }
+        finally
+        {
+            graphics.Restore(oldState);
+        }
+    }
+
     public static GraphicsPath RoundRect(RectangleF rect, float radius)
     {
         var path = new GraphicsPath();

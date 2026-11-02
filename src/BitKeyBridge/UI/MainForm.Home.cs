@@ -664,6 +664,7 @@ public sealed partial class MainForm
         var connected = _directoryConnected && !_directoryConnecting;
 
         _homeRecoveryStepsButton.Enabled = selected is not null;
+        _homeDevice360Button.Enabled = selected is not null;
 
         _homeRevealBitLockerButton.Enabled =
             connected &&
@@ -682,6 +683,7 @@ public sealed partial class MainForm
         // Opens the real BitLocker diagnostic-command dialog in-place.
         _homeBitLockerDiagnosticLink.Enabled = selected is not null;
 
+        var wasSelectionVisible = _homeSelectionPanel.Visible;
         _homeSelectionPanel.Visible =
             selected is not null ||
             _secretVisibleUntilUtc is not null ||
@@ -689,6 +691,16 @@ public sealed partial class MainForm
 
         UpdateHomeServiceCards(selected);
         RefreshHomeSelectionSummary();
+        // A newly visible summary was often first measured at WinForms'
+        // provisional width while hidden, retaining an oversized AutoSize
+        // row and pushing all three recovery cards below the viewport.
+        // Reflow ONLY on visibility transitions, after status text updates.
+        if (wasSelectionVisible != _homeSelectionPanel.Visible &&
+            _homeSelectionPanel.Visible && _homeResultsArea.Visible)
+        {
+            _homeSelectionPanel.PerformLayout();
+            _homeResultsArea.PerformLayout();
+        }
         // Helpdesk reflects this exact selected record, without a duplicate
         // query, background lookup or new credential request.
         UpdateHelpdeskSelectedDeviceSummary();
@@ -905,6 +917,13 @@ public sealed partial class MainForm
                 "Recent computer list could not be loaded: " +
                 DiagnosticRedaction.Sanitize(
                     ex.Message));
+        }
+        finally
+        {
+            // The entire list is rebuilt here, including after a failed or
+            // corrupt local history read. Keep the Start layout consistent
+            // when zero, one or several metadata-only rows are available.
+            ReflowConnectionsRecent();
         }
     }
 

@@ -7,6 +7,14 @@ WinForms style for related administrative utilities.
 
 - Use a clean Windows-native administrative UI. Prefer system colors and standard
   controls over decorative chrome.
+- In the 0.34 Draft visual trial only, use the NI Package Creator palette through
+  `UiStyle`: navy/blue brand header, green metadata-only primary Search, blue
+  connection/settings actions, pale blue/green status cards and readable
+  blue-gray outlines. Keep native main TabControl, keyboard and screen-reader
+  semantics; never encode authorization or secret visibility in colors.
+- Use native label text over the drawn gradient header so EN/RU/HE, RTL and
+  PerMonitorV2 scaling stay sharp. Decorative paths are antialiased with all
+  strokes inside client bounds. Respect Windows High Contrast system colors.
 - Body text uses the Windows message-box/system UI font through `UiStyle.BodyFont`.
 - Page titles use Segoe UI Semibold 18 pt.
 - Section titles use Segoe UI Semibold 14 pt.

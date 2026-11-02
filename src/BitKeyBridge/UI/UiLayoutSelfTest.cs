@@ -2,6 +2,11 @@ namespace BitKeyBridge;
 
 public static class UiLayoutSelfTest
 {
+    private sealed class RecreatedHandleLayoutForm : DpiAwareForm
+    {
+        internal void RecreateNativeHandleForTest() => RecreateHandle();
+    }
+
     private sealed record Scenario(
         string Name,
         Size ClientSize,
@@ -67,12 +72,24 @@ public static class UiLayoutSelfTest
         var failures =
             new List<string>();
 
+        // Runtime check: a native Explorer icon is insufficient if WinForms
+        // modal windows still use the default framework title-bar icon.
+        using (var brandIconForm = new DpiAwareForm())
+        {
+            if (!brandIconForm.HasBrandIconForUiSelfTest)
+                failures.Add("BitKeyBridge branded icon is not assigned to WinForms dialogs.");
+        }
+
+        VerifyNipkgBrandBanner(failures);
         VerifyModernAccentAndDynamicTheme(failures);
 
         VerifyStatusGlyphScaling(
             failures);
 
         VerifyUnchangedStatusDoesNotRepaint(failures);
+        VerifyVisibleLabelReflowCoalescing(failures);
+
+        VerifyFixedHeaderWidthCaching(failures);
 
         VerifyWrappingStatusMeasurement(
             failures);
@@ -97,6 +114,7 @@ public static class UiLayoutSelfTest
         VerifyIntuneSetupWizardNavigation(failures);
         VerifyDeviceCodeCancellation(failures);
         VerifyDevicesCloudShortcut(failures);
+        VerifyStartupSettingsWithoutAdministrativePages(failures);
 
         VerifyDiagnosticCopyVisibility(failures);
 
@@ -112,12 +130,18 @@ public static class UiLayoutSelfTest
             "DPI phase - work-area adjustment",
             "DPI phase - WinForms PerformLayout",
             "DPI phase - label widths",
-            "DPI phase - theme refresh"
+            "DPI phase - theme refresh",
+            "Language EN/RU -> Hebrew",
+            "Language Hebrew -> EN/RU",
+            "Language EN <-> RU",
+            "p50=", "p95=", "recent="
         })
             if (!performanceReport.Contains(expected, StringComparison.Ordinal))
                 failures.Add("Missing DPI timing phase: " + expected);
 
+        VerifyStartupWizardTextWrapping(failures);
         VerifyModalDialogLocalization(failures);
+        VerifyDevice360CardIsolation(failures);
 
         VerifyStartSourcePolicies(failures);
 
@@ -232,6 +256,596 @@ public static class UiLayoutSelfTest
             : 1;
     }
 
+    private static void VerifyVisibleLabelReflowCoalescing(List<string> failures)
+    {
+        try
+        {
+            using var dialog = new RecreatedHandleLayoutForm
+            {
+                Size = new Size(620, 360),
+                StartPosition = FormStartPosition.Manual
+            };
+            using var host = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false
+            };
+            var first = new Label
+            {
+                AutoSize = true,
+                Visible = false,
+                MaximumSize = new Size(900, 0),
+                Text = "First fixed-width label on a hidden page"
+            };
+            var second = new Label
+            {
+                AutoSize = true,
+                Visible = false,
+                MaximumSize = new Size(900, 0),
+                Text = "Second fixed-width label on a hidden page"
+            };
+            host.Controls.Add(first);
+            host.Controls.Add(second);
+            dialog.Controls.Add(host);
+            dialog.Show();
+            Application.DoEvents();
+
+            var baseline = dialog.VisibleLabelWidthBatchCountForUiSelfTest;
+            first.Visible = true;
+            second.Visible = true;
+            if (dialog.PendingVisibleLabelWidthsForUiSelfTest != 2)
+                failures.Add("Visible label widths were not coalesced before UI dispatch.");
+            Application.DoEvents();
+
+            if (dialog.VisibleLabelWidthBatchCountForUiSelfTest != baseline + 1 ||
+                dialog.PendingVisibleLabelWidthsForUiSelfTest != 0)
+                failures.Add("Two visible labels scheduled more than one layout callback.");
+            if (first.MaximumSize.Width <= 0 || second.MaximumSize.Width <= 0 ||
+                first.MaximumSize.Width > host.ClientSize.Width ||
+                second.MaximumSize.Width > host.ClientSize.Width)
+                failures.Add("Batched visible labels were not constrained to their viewport.");
+
+            // A no-op pump must not perform an additional parent reflow.
+            Application.DoEvents();
+            if (dialog.VisibleLabelWidthBatchCountForUiSelfTest != baseline + 1)
+                failures.Add("Idle UI dispatch repeated a visible-label layout batch.");
+
+            first.Visible = false;
+            second.Visible = false;
+            first.Visible = true;
+            second.Visible = true;
+            Application.DoEvents();
+            if (dialog.VisibleLabelWidthBatchCountForUiSelfTest != baseline + 2)
+                failures.Add("Second tab activation did not coalesce visible labels.");
+            if (!UiLayoutTelemetry.Report().Contains(
+                    "Visible-label width batches: batches=", StringComparison.Ordinal))
+                failures.Add("Non-secret visible-label layout telemetry is missing.");
+
+            // Simulate the native HWND recreation caused by RTL/DPI/RDP.
+            // A previously posted callback may be discarded by WinForms;
+            // new visible-label updates must not remain permanently blocked.
+            var beforeRecreation = dialog.VisibleLabelWidthBatchCountForUiSelfTest;
+            first.Visible = false;
+            second.Visible = false;
+            first.Visible = true;
+            second.Visible = true;
+            dialog.RecreateNativeHandleForTest();
+            Application.DoEvents();
+            first.Visible = false;
+            second.Visible = false;
+            first.Visible = true;
+            second.Visible = true;
+            Application.DoEvents();
+            if (dialog.PendingVisibleLabelWidthsForUiSelfTest != 0 ||
+                dialog.VisibleLabelWidthBatchCountForUiSelfTest <= beforeRecreation)
+                failures.Add("HWND recreation stranded a coalesced label-width batch.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Visible-label coalescing regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private static void VerifyFixedHeaderWidthCaching(List<string> failures)
+    {
+        // Real TextRenderer measurement. The same fixed caption/font/DPI
+        // must reuse a result; changes to DPI/font/header style cannot.
+        try
+        {
+            using var regular = new Font(UiStyle.BodyFont, FontStyle.Regular);
+            using var bold = new Font(UiStyle.BodyFont, FontStyle.Bold);
+            var cache = new UiHeaderWidthCache(capacity: 4);
+            var caption = UiStaticCaptionCatalog.TranslateOrOriginal("he", "Back");
+            var first = cache.Measure(
+                "Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            var expected = TextRenderer.MeasureText(
+                caption, regular, new Size(4096, 1024),
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding |
+                TextFormatFlags.NoPrefix).Width +
+                UiStyle.ScaleLogicalPixels(26, 96);
+            var second = cache.Measure(
+                "Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (first != expected || second != expected ||
+                cache.CacheHits != 1 || cache.CacheMisses != 1 ||
+                cache.EntryCount != 1)
+                failures.Add("Fixed header width cache did not reuse an identical measurement.");
+
+            cache.Measure("Back", caption, regular, 144,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            cache.Measure("Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.ListView);
+            cache.Measure("Back", caption, bold, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (cache.CacheMisses != 4 || cache.EntryCount != 4)
+                failures.Add("Fixed header width cache mixed font, DPI or rendering styles.");
+
+            // Device identifiers, account values and recovery keys are not
+            // permitted as a key, even if caller passes a text measurement.
+            var unknownRejected = false;
+            try
+            {
+                cache.Measure("device-identity-not-a-caption", "SENSITIVE",
+                    regular, 96, UiHeaderWidthCache.HeaderKind.DataGrid);
+            }
+            catch (ArgumentException)
+            {
+                unknownRejected = true;
+            }
+            if (!unknownRejected)
+                failures.Add("Fixed header width cache accepted arbitrary live metadata.");
+
+            // Supplying a valid catalogue source alone is not enough:
+            // reject arbitrary caller data masquerading as its translation.
+            var spoofedRejected = false;
+            try
+            {
+                cache.Measure("Back", "SENSITIVE", regular, 96,
+                    UiHeaderWidthCache.HeaderKind.DataGrid);
+            }
+            catch (ArgumentException)
+            {
+                spoofedRejected = true;
+            }
+            if (!spoofedRejected || cache.CacheMisses != 4)
+                failures.Add("Fixed header width cache accepted an untrusted caption value.");
+
+            cache.Measure("Back", caption, regular, 192,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (cache.EntryCount != cache.Capacity || cache.CacheMisses != 5)
+                failures.Add("Fixed header cache exceeded its bounded capacity.");
+            cache.Measure("Back", caption, regular, 96,
+                UiHeaderWidthCache.HeaderKind.DataGrid);
+            if (cache.CacheMisses != 6)
+                failures.Add("Fixed header cache did not evict the oldest measurement.");
+            if (!UiLayoutTelemetry.Report().Contains(
+                    "Fixed-header width cache: hits=", StringComparison.Ordinal))
+                failures.Add("Non-secret header cache diagnostics were not reported.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Fixed header width cache regression: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private static void VerifyStartupWizardTextWrapping(List<string> failures)
+    {
+        // The chooser is purely local: no AD/Graph authentication, no
+        // credentials and no recovery values. Its prose must wrap at
+        // 100-200% DPI/RDP without extending outside the actual dialog.
+        try
+        {
+            using var wizard = new StartupConnectionWizardDialog(
+                StartConnectionPolicy.Both);
+            wizard.Show();
+            try
+            {
+                var root = wizard.Controls.Find(
+                    "StartupConnectionWizardLayout", true).FirstOrDefault()
+                    as TableLayoutPanel;
+                var caption = wizard.Controls.Find(
+                    "StartupConnectionIntro", true).FirstOrDefault()
+                    as Label;
+                var explanation = wizard.Controls.Find(
+                    "StartupConnectionExplanation", true).FirstOrDefault()
+                    as Label;
+                if (root is null || caption is null || explanation is null)
+                {
+                    failures.Add("Connection chooser wrapping controls are absent.");
+                    return;
+                }
+
+                foreach (var width in new[] { 620, 750, 950 })
+                {
+                    wizard.ClientSize = new Size(width, 525);
+                    Application.DoEvents();
+                    root.PerformLayout();
+                    var available = root.ClientSize.Width -
+                        root.Padding.Horizontal + 2;
+                    if (available < 120 ||
+                        caption.MaximumSize.Width <= 0 ||
+                        caption.MaximumSize.Width > available ||
+                        explanation.MaximumSize.Width <= 0 ||
+                        explanation.MaximumSize.Width > available ||
+                        caption.AutoEllipsis || explanation.AutoEllipsis)
+                    {
+                        failures.Add(
+                            "Connection chooser prose is clipped or exceeds its live DPI width.");
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                wizard.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Connection chooser responsive prose: " +
+                ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
+    private static void VerifyDevice360CardIsolation(List<string> failures)
+    {
+        // Native WinForms test with ONLY synthetic metadata. No login, LDAP,
+        // Graph, recovery-key lookup, LAPS secret, audit write or clipboard.
+        const string syntheticRecoveryId = "UI-DO-NOT-DISPLAY-RECOVERY-ID";
+        var cloudRecord = new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-TEST-INTUNE-001",
+            IdentityKey = "INTUNE:MANAGED:ui-example-001",
+            IdentityStatus = "Intune object",
+            FoundInEntra = true,
+            FoundInIntune = true,
+            EntraDeviceId = "0f29ed68-8f58-478e-bb0f-89bc64aa1a2b",
+            ManagedDeviceId = "ui-example-001",
+            OperatingSystem = "Windows",
+            OsVersion = "11",
+            ComplianceState = "compliant",
+            IsEncrypted = true,
+            RecoveryIds = [syntheticRecoveryId]
+        };
+        var cloud = Device360Snapshot.FromUnified(cloudRecord);
+        if (!cloud.IdentityVerified || cloud.BitLockerMetadataCount != 1 ||
+            cloud.InAd != null || cloud.InEntra != true ||
+            cloud.InIntune != true)
+            failures.Add("Device 360 source-qualified cloud metadata projection is incorrect.");
+
+        var operational = Device360OperationalStatus.Capture(cloud,
+            adConnected: false, cloudSessionPresent: true,
+            rbacEnabled: true, ticketRequired: true,
+            protectedAuditRequired: true, auditBrokerConfigured: true,
+            searchPartial: true);
+        if (operational.Ad != Device360SourceEvidence.NotConnectedUnverified ||
+            operational.Entra != Device360SourceEvidence.FoundInSearch ||
+            operational.Intune != Device360SourceEvidence.FoundInSearch ||
+            operational.EffectiveRecoveryRightsChecked || !operational.SearchPartial)
+            failures.Add("Device 360 inferred recovery permissions from search metadata.");
+
+        // The structured per-source report can fail even when another
+        // source supplied the matching Entra device ID. Fail closed:
+        // never turn that linked identifier into a green source tile.
+        var cloudFailure = Device360OperationalStatus.Capture(cloud,
+            adConnected: false, cloudSessionPresent: true,
+            rbacEnabled: false, ticketRequired: false,
+            protectedAuditRequired: true, auditBrokerConfigured: true,
+            entraLookupFailed: true);
+        if (cloudFailure.Entra != Device360SourceEvidence.LookupFailed ||
+            cloudFailure.Intune != Device360SourceEvidence.FoundInSearch ||
+            !cloudFailure.SearchPartial ||
+            cloudFailure.EffectiveRecoveryRightsChecked)
+            failures.Add("Device 360 failed to preserve structured Entra source errors.");
+
+        var unverifiedSession = Device360OperationalStatus.Capture(
+            new Device360Snapshot(), adConnected: true,
+            cloudSessionPresent: true, rbacEnabled: true,
+            ticketRequired: true, protectedAuditRequired: true,
+            auditBrokerConfigured: true);
+        if (unverifiedSession.Ad != Device360SourceEvidence.SessionPresentUnverified ||
+            unverifiedSession.Intune != Device360SourceEvidence.SessionPresentUnverified)
+            failures.Add("Device 360 confused active sessions with verified device records.");
+
+        var unresolved = Device360Snapshot.FromUnified(new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-TEST-UNVERIFIED",
+            IdentityKey = "ENTRA:KEY:" + syntheticRecoveryId,
+            RecoveryIds = [syntheticRecoveryId]
+        });
+        if (unresolved.IdentityVerified ||
+            unresolved.QualifiedIdentity.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal))
+            failures.Add("Device 360 accepted a recovery ID as a device identity.");
+
+        var ad = Device360Snapshot.FromHome(new HomeSearchResult
+        {
+            ComputerName = "UI-TEST-AD-001",
+            AdComputerDistinguishedName =
+                "CN=UI-TEST-AD-001,OU=Test,DC=example,DC=com",
+            BitLockerKeyCount = 1,
+            LapsCandidateFound = true,
+            LapsStatus = "Detected"
+        });
+        if (!ad.IdentityVerified || ad.InAd != true ||
+            !ad.LapsMetadataDetected || ad.BitLockerMetadataCount != 1)
+            failures.Add("Device 360 AD/LAPS metadata projection is incorrect.");
+
+        try
+        {
+            foreach (var (language, snapshot) in new[]
+            {
+                ("en", ad),
+                ("ru", ad),
+                ("he", cloud)
+            })
+            {
+                // Exercise source-specific failures and usable-but-unverified
+                // sessions rather than only the shortest disconnected labels.
+                var tileStatus = Device360OperationalStatus.Capture(snapshot,
+                    adConnected: true, cloudSessionPresent: true,
+                    rbacEnabled: true, ticketRequired: true,
+                    protectedAuditRequired: true, auditBrokerConfigured: true,
+                    intuneLookupFailed: language == "ru",
+                    entraLookupFailed: language == "he");
+                using var dialog = new Device360Dialog(snapshot, language,
+                    operational: tileStatus);
+                dialog.Show();
+                dialog.ClientSize = new Size(980, 700);
+                Application.DoEvents();
+                dialog.PerformLayout();
+
+                var sections = FindByName(dialog, "Device360CardSections");
+                var recovery = FindByName(dialog, "Device360CardRecoverySection");
+                var adSource = FindByName(dialog, "Device360SourceAd");
+                var entraSource = FindByName(dialog, "Device360SourceEntra");
+                var intuneSource = FindByName(dialog, "Device360SourceIntune");
+                var close = FindByName(dialog, "Device360CardClose");
+                if (dialog.RightToLeftLayout != (language == "he") ||
+                    sections is not TableLayoutPanel ||
+                    recovery is not UiRecoveryCard ||
+                    adSource is not Label ||
+                    entraSource is not Label ||
+                    intuneSource is not Label ||
+                    close is not Button)
+                    failures.Add("Device 360 RTL/control regression (" + language +
+                        "): FormRTL=" + dialog.RightToLeft +
+                        "; Mirrored=" + dialog.RightToLeftLayout +
+                        "; Sections=" + (sections is TableLayoutPanel) +
+                        "; Recovery=" + (recovery is UiRecoveryCard) +
+                        "; AD=" + (adSource is Label) +
+                        "; Entra=" + (entraSource is Label) +
+                        "; Intune=" + (intuneSource is Label) +
+                        "; Close=" + (close is Button) + ".");
+
+                // This regression checks the actual native client viewport,
+                // not only GetPreferredSize or successful UI event dispatch.
+                // The previous footer was cut off in all three CI PNGs.
+                if (FindByName(dialog, "Device360CardActions") is not TableLayoutPanel footer)
+                {
+                    failures.Add("Device 360 footer grid is missing: " + language + ".");
+                }
+                else
+                {
+                    var buttons = footer.Controls.OfType<Button>().ToArray();
+                    if (buttons.Length < 2 || buttons.Length > 4)
+                        failures.Add("Device 360 footer button count is invalid: " + language + ".");
+                    // An odd number of routes must not leave the last row
+                    // half-empty. Preserve two equal columns for four actions.
+                    var lastFooterButton = buttons
+                        .OrderBy(button => footer.GetRow(button))
+                        .ThenBy(button => footer.GetColumn(button))
+                        .LastOrDefault(button => footer.GetRow(button) ==
+                            (buttons.Length - 1) / 2);
+                    if (buttons.Length % 2 != 0 &&
+                        (lastFooterButton is null ||
+                         footer.GetColumn(lastFooterButton) != 0 ||
+                         footer.GetColumnSpan(lastFooterButton) != 2))
+                        failures.Add("Device 360 last action did not span the row: " +
+                            language + ".");
+                    if (buttons.Length % 2 == 0 &&
+                        buttons.Any(button => footer.GetColumnSpan(button) != 1))
+                        failures.Add("Device 360 even footer actions overlap columns: " +
+                            language + ".");
+                    var expectedCloseColumn = language == "he" ? 1 : 0;
+                    if (footer.RightToLeft != RightToLeft.No ||
+                        FindByName(dialog, "Device360CardClose") is not Button closeAction ||
+                        footer.GetColumn(closeAction) != expectedCloseColumn)
+                        failures.Add("Device 360 footer was mirrored twice: " + language + ".");
+                    foreach (var button in buttons)
+                    {
+                        var visibleBounds = dialog.RectangleToClient(
+                            button.RectangleToScreen(button.ClientRectangle));
+                        var area = dialog.ClientRectangle;
+                        // Bottom-border clearance is required: a previous
+                        // version passed ClientRectangle geometry yet painted
+                        // buttons touching the PNG's last pixel.
+                        var bottomSafetyInset = UiStyle.ScaleLogicalPixels(12,
+                            dialog.DeviceDpi);
+                        if (visibleBounds.Width <= 0 || visibleBounds.Height <= 0 ||
+                            visibleBounds.Left < area.Left ||
+                            visibleBounds.Top < area.Top ||
+                            visibleBounds.Right > area.Right ||
+                            visibleBounds.Bottom > area.Bottom - bottomSafetyInset)
+                        {
+                            failures.Add("Device 360 action clipped (" + language +
+                                ", " + button.Name + "): bounds=" +
+                                visibleBounds + ", client=" + area + ".");
+                        }
+                    }
+                }
+
+                // The 980x700 screenshot alone did not catch truncated
+                // localized source statuses or missing footer borders at the
+                // window's documented minimum size. Resize the *real shown*
+                // WinForms form; do not assert only preferred dimensions.
+                foreach (var compactSize in new[]
+                {
+                    new Size(720, 540),
+                    new Size(610, 440)
+                })
+                {
+                    dialog.ClientSize = compactSize;
+                    Application.DoEvents();
+                    dialog.PerformLayout();
+                    Application.DoEvents();
+
+                    foreach (var tile in new[] { adSource, entraSource, intuneSource })
+                    {
+                        if (tile is not Label tileLabel)
+                            continue;
+                        var measured = TextRenderer.MeasureText(
+                            tileLabel.Text, tileLabel.Font,
+                            new Size(Math.Max(1, tileLabel.ClientSize.Width), 10000),
+                            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                        if (measured.Height > tileLabel.ClientSize.Height + 2)
+                            failures.Add("Device 360 localized source text clipped (" +
+                                language + ", " + compactSize.Width + "px, " +
+                                tileLabel.Name + "): measured=" + measured.Height +
+                                ", available=" + tileLabel.ClientSize.Height + ".");
+                    }
+
+                    if (FindByName(dialog, "Device360CardActions") is TableLayoutPanel compactFooter)
+                    {
+                        var safeBottom = dialog.ClientRectangle.Bottom -
+                            UiStyle.ScaleLogicalPixels(12, dialog.DeviceDpi);
+                        foreach (var button in compactFooter.Controls.OfType<Button>())
+                        {
+                            var bounds = dialog.RectangleToClient(
+                                button.RectangleToScreen(button.ClientRectangle));
+                            if (bounds.Width <= 0 || bounds.Height <= 0 ||
+                                bounds.Left < 0 || bounds.Top < 0 ||
+                                bounds.Right > dialog.ClientRectangle.Right ||
+                                bounds.Bottom > safeBottom)
+                                failures.Add("Device 360 compact footer clipped (" +
+                                    language + ", " + compactSize.Width + "px, " +
+                                    button.Name + "): " + bounds + ".");
+                        }
+                    }
+                    else
+                    {
+                        failures.Add("Device 360 compact footer missing (" +
+                            language + ", " + compactSize.Width + "px).");
+                    }
+
+                    if (compactSize.Width == 610 &&
+                        string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                            "true", StringComparison.OrdinalIgnoreCase) &&
+                        Environment.GetEnvironmentVariable(
+                            "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS") == "1")
+                    {
+                        using var compactBitmap = new Bitmap(dialog.ClientSize.Width,
+                            dialog.ClientSize.Height);
+                        dialog.DrawToBitmap(compactBitmap,
+                            new Rectangle(Point.Empty, compactBitmap.Size));
+                        compactBitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                            "ui-device-360-" + language + "-compact.png"),
+                            System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+                // Preserve the established full-size top/policy screenshots.
+                dialog.ClientSize = new Size(980, 700);
+                Application.DoEvents();
+                dialog.PerformLayout();
+
+                if (language == "he" &&
+                    FindByName(dialog, "Device360SourceStates") is TableLayoutPanel sourceTable &&
+                    ((sourceTable.GetColumn(
+                        FindByName(dialog, "Device360SourceAdCard")!) != 2) ||
+                     (sourceTable.GetColumn(
+                        FindByName(dialog, "Device360SourceIntuneCard")!) != 0)))
+                    failures.Add("Device 360 source tiles are not mirrored in Hebrew.");
+
+                if ((language == "he") !=
+                    (FindByName(dialog, "Device360RouteDevices") is Button) ||
+                    (language != "he") !=
+                    (FindByName(dialog, "Device360RouteBitLocker") is Button))
+                    failures.Add("Device 360 source-qualified navigation is incorrect: " +
+                        language + ".");
+
+                if (FindByName(dialog, "Device360CardAccessSection") is not UiRecoveryCard ||
+                    FindByName(dialog, "Device360AuthorizationResult") is not TextBox rights ||
+                    rights.Text != UiLanguageService.Translate(language,
+                        "Device360AccessUnchecked") ||
+                    FindByName(dialog, "Device360RouteAccessHealth") is not Button)
+                    failures.Add("Device 360 access-policy/navigation regression: " +
+                        language + ".");
+
+                var texts = new List<string>();
+                void Collect(Control control)
+                {
+                    texts.Add(control.Text ?? string.Empty);
+                    foreach (Control child in control.Controls)
+                        Collect(child);
+                }
+                Collect(dialog);
+                if (texts.Any(value => value.Contains(syntheticRecoveryId,
+                        StringComparison.Ordinal)) ||
+                    texts.Any(value => value.Contains("Recovery IDs:",
+                        StringComparison.Ordinal)))
+                    failures.Add("Device 360 leaked a recovery identifier: " + language + ".");
+
+                if (string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                        "true", StringComparison.OrdinalIgnoreCase) &&
+                    Environment.GetEnvironmentVariable(
+                        "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS") == "1")
+                {
+                    using var bitmap = new Bitmap(dialog.ClientSize.Width,
+                        dialog.ClientSize.Height);
+                    dialog.DrawToBitmap(bitmap,
+                        new Rectangle(Point.Empty, bitmap.Size));
+                    bitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                        "ui-device-360-" + language + ".png"),
+                        System.Drawing.Imaging.ImageFormat.Png);
+
+                    // Also render the new policy/source-completeness section,
+                    // which is deliberately below the identity and recovery
+                    // information in the scrollable device overview.
+                    if (FindByName(dialog, "Device360CardScroll") is Panel scroller)
+                    {
+                        scroller.AutoScrollPosition = new Point(0,
+                            Math.Max(0, scroller.DisplayRectangle.Height -
+                                scroller.ClientSize.Height));
+                        Application.DoEvents();
+                        using var policyBitmap = new Bitmap(dialog.ClientSize.Width,
+                            dialog.ClientSize.Height);
+                        dialog.DrawToBitmap(policyBitmap,
+                            new Rectangle(Point.Empty, policyBitmap.Size));
+                        policyBitmap.Save(Path.Combine(AppContext.BaseDirectory,
+                            "ui-device-360-" + language + "-policy.png"),
+                            System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+                dialog.Close();
+            }
+
+            using var blocked = new Device360Dialog(
+                Device360Snapshot.FromHome(new HomeSearchResult
+                {
+                    ComputerName = "UI-TEST-COLLISION",
+                    IdentityAmbiguous = true,
+                    AdComputerDistinguishedName =
+                        "CN=UI-TEST-COLLISION,DC=example,DC=com"
+                }), "en");
+            blocked.CreateControl();
+            if (FindByName(blocked, "Device360RouteBitLocker") is not null ||
+                FindByName(blocked, "Device360RouteLaps") is not null ||
+                FindByName(blocked, "Device360RouteDevices") is not null)
+                failures.Add("Ambiguous Device 360 identity has a recovery shortcut.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Device 360 metadata UI regression: " +
+                ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
     private static void VerifyModalDialogLocalization(List<string> failures)
     {
         static bool HasText(Control root, string text)
@@ -254,6 +868,45 @@ public static class UiLayoutSelfTest
             using var prompt = new AdCredentialPromptDialog(@"DOMAIN\helpdesk");
             using var startup = new StartupConnectionWizardDialog(
                 StartConnectionPolicy.ActiveDirectory);
+
+            // Test real TextBox and ToolStrip properties, not only labels.
+            // Previously translated placeholders did not return to English
+            // after switching RU/HE. Caller-owned dynamic hints and text
+            // must not be overwritten by the static-caption localizer.
+            using var hints = new DpiAwareForm { Text = "Choose a connection" };
+            using var menu = new ContextMenuStrip();
+            var localizedAction = new ToolStripMenuItem("Back")
+            {
+                ToolTipText = "Copy diagnostics",
+                Tag = "fixed-command-token"
+            };
+            menu.Items.Add(localizedAction);
+            var tenant = new TextBox
+            {
+                Name = "LanguageRoundtripTenant",
+                PlaceholderText = "Tenant GUID or verified domain",
+                Text = "contoso.onmicrosoft.com",
+                ContextMenuStrip = menu
+            };
+            var dynamicHint = new TextBox
+            {
+                Name = "LanguageRoundtripDynamic",
+                PlaceholderText = "custom hint: 12345",
+                Text = "live value: 67890"
+            };
+            // Exercise native ListView/DataGridView header captions in addition
+            // to ToolStripItem.Text: callers may later replace any with live
+            // device/identity metadata that must remain untouched.
+            var localizedList = new ListView { Name = "LanguageRoundtripList" };
+            UiStyle.ConfigureListViewColumns(localizedList, ("Back", 120));
+            var localizedGrid = new DataGridView { Name = "LanguageRoundtripGrid" };
+            localizedGrid.Columns.AddRange(UiStyle.CreateSortableTextColumn(
+                "LanguageRoundtripHeader", "Back"));
+            hints.Controls.Add(tenant);
+            hints.Controls.Add(dynamicHint);
+            hints.Controls.Add(localizedList);
+            hints.Controls.Add(localizedGrid);
+
             foreach (var (language, domainTitle, startupTitle, connectText) in
                 new[]
                 {
@@ -265,6 +918,26 @@ public static class UiLayoutSelfTest
             {
                 UiDialogLocalization.Apply(prompt, language);
                 UiDialogLocalization.Apply(startup, language);
+                UiDialogLocalization.Apply(hints, language);
+                if (tenant.PlaceholderText !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Tenant GUID or verified domain") ||
+                    localizedAction.ToolTipText !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Copy diagnostics") ||
+                    localizedAction.Text !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Back") ||
+                    localizedList.Columns[0].Text !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(language, "Back") ||
+                    localizedGrid.Columns[0].HeaderText !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(language, "Back") ||
+                    (string?)localizedAction.Tag != "fixed-command-token" ||
+                    tenant.Text != "contoso.onmicrosoft.com" ||
+                    dynamicHint.Text != "live value: 67890" ||
+                    dynamicHint.PlaceholderText != "custom hint: 12345")
+                    failures.Add("RU/HE/EN modal hint roundtrip or live data regression: " +
+                        language);
                 if (prompt.Text != domainTitle || !HasText(startup, startupTitle) ||
                     !HasText(prompt, connectText))
                     failures.Add("Modal dialog translation missing or stale: " + language);
@@ -283,6 +956,45 @@ public static class UiLayoutSelfTest
                 if (prompt.Username != @"DOMAIN\helpdesk")
                     failures.Add("Dialog localization modified supplied AD account data.");
             }
+
+            // Replacing a known hint with runtime information must not
+            // silently restore old translations. A NEW known English hint
+            // must become the new baseline instead of reverting to the old.
+            tenant.PlaceholderText = "operator supplied hint";
+            localizedAction.ToolTipText = "runtime tooltip";
+            localizedAction.Text = "Current device: 001";
+            localizedList.Columns[0].Text = "device-001";
+            localizedGrid.Columns[0].HeaderText = "account@example.invalid";
+            UiDialogLocalization.Apply(hints, "he");
+            if (tenant.PlaceholderText != "operator supplied hint" ||
+                localizedAction.ToolTipText != "runtime tooltip" ||
+                localizedAction.Text != "Current device: 001" ||
+                localizedList.Columns[0].Text != "device-001" ||
+                localizedGrid.Columns[0].HeaderText != "account@example.invalid")
+                failures.Add("Modal localizer rewrote externally updated hints.");
+
+            tenant.PlaceholderText = "Domain DNS name (optional)";
+            localizedAction.ToolTipText = "Copy diagnostics";
+            localizedAction.Text = "Copy diagnostics";
+            localizedList.Columns[0].Text = "Copy diagnostics";
+            localizedGrid.Columns[0].HeaderText = "Copy diagnostics";
+            UiDialogLocalization.Apply(hints, "ru");
+            if (tenant.PlaceholderText !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Domain DNS name (optional)") ||
+                localizedAction.ToolTipText !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics") ||
+                localizedAction.Text !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics") ||
+                localizedList.Columns[0].Text !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics") ||
+                localizedGrid.Columns[0].HeaderText !=
+                    UiStaticCaptionCatalog.TranslateOrOriginal(
+                        "ru", "Copy diagnostics"))
+                failures.Add("Modal localizer did not adopt new known English hints.");
         }
         catch (Exception ex)
         {
@@ -323,6 +1035,58 @@ public static class UiLayoutSelfTest
         }
     }
 
+    private static void VerifyNipkgBrandBanner(List<string> failures)
+    {
+        // Visual fixture uses static localized copy only: no domain, device,
+        // account, clipboard or recovery material is ever rendered or logged.
+        try
+        {
+            using var host = new Panel { Size = new Size(940, 170) };
+            using var banner = new UiNipkgBrandBanner();
+            host.Controls.Add(banner);
+            host.CreateControl();
+            banner.CreateControl();
+            host.PerformLayout();
+            banner.PerformLayout();
+
+            if (banner.Heading.Text != "BitKeyBridge" ||
+                banner.Tagline.Text != UiNipkgBrandBanner.IntroCaption ||
+                banner.Tagline.MaximumSize.Width <= 0 ||
+                banner.Tagline.MaximumSize.Width >
+                    banner.ClientSize.Width - banner.Padding.Horizontal + 2)
+                failures.Add("NI-style brand header is missing text or its DPI wrapping width.");
+
+            banner.SetCaptionDirection(true);
+            if (banner.Tagline.TextAlign != ContentAlignment.MiddleRight ||
+                banner.Tagline.Anchor != AnchorStyles.Right)
+                failures.Add("NI-style brand header lost Hebrew text alignment.");
+            banner.SetCaptionDirection(false);
+            if (banner.Tagline.TextAlign != ContentAlignment.MiddleLeft ||
+                banner.Tagline.Anchor != AnchorStyles.Left)
+                failures.Add("NI-style brand header failed to restore LTR.");
+
+            if (!SystemInformation.HighContrast &&
+                banner.Width > 200 && banner.Height > 20)
+            {
+                using var image = new Bitmap(banner.Width, banner.Height);
+                banner.DrawToBitmap(image,
+                    new Rectangle(Point.Empty, banner.Size));
+                // The gradient must contain visibly different navy/blue
+                // regions, not a solid color or a missing paint callback.
+                var navyPixel = image.GetPixel(8, image.Height / 2);
+                var right = image.GetPixel(image.Width - 8, image.Height / 2);
+                if (navyPixel.ToArgb() == right.ToArgb() ||
+                    navyPixel.ToArgb() == UiStyle.ModernCanvas.ToArgb())
+                    failures.Add("NI-style navy-to-blue banner did not paint.");
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("NI-style brand banner: " + ex.GetType().Name + ": " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+    }
+
     private static void VerifyModernAccentAndDynamicTheme(List<string> failures)
     {
         if (SystemInformation.HighContrast)
@@ -337,11 +1101,38 @@ public static class UiLayoutSelfTest
             reveal.Name = "HomeRevealBitLockerButton";
             host.Controls.Add(search);
             host.Controls.Add(reveal);
+            // Generic bordered panels still use native Region hit-testing.
+            // Test that their deferred Region is rebuilt after HWND creation;
+            // buttons instead use antialiased owner-painted rounded chrome.
+            var borderedPanel = new Panel
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(120, 40)
+            };
+            host.Controls.Add(borderedPanel);
+            var input = new TextBox { Size = new Size(160, 30) };
+            var plainPanel = new Panel { Size = new Size(160, 46) };
+            host.Controls.Add(input);
+            host.Controls.Add(plainPanel);
 
+            var themeBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            var perTypeBefore = UiLayoutTelemetry.ThemeInstallCallsForUiSelfTest();
             UiModernTheme.Apply(host);
+            var themeAfter = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            var perTypeAfter = UiLayoutTelemetry.ThemeInstallCallsForUiSelfTest();
+            if (themeAfter.Installed - themeBefore.Installed !=
+                    perTypeAfter - perTypeBefore ||
+                !UiLayoutTelemetry.ThemeInstallReport().Contains(
+                    "Theme install - Buttons: calls=", StringComparison.Ordinal))
+                failures.Add("NI theme per-control profiling missed installed controls.");
+            if (themeAfter.Installed <= themeBefore.Installed ||
+                themeAfter.Deferred <= themeBefore.Deferred)
+                failures.Add("Theme failed to defer rounded regions before native handles exist.");
             if (!UiModernTheme.IsPrimaryAction(search) ||
                 UiModernTheme.IsPrimaryAction(reveal) ||
-                search.BackColor != UiStyle.ModernAccent ||
+                search.BackColor != UiStyle.ModernPositiveAccent ||
+                !UiModernTheme.IsPositiveAction(search) ||
+                UiModernTheme.IsPositiveAction(reveal) ||
                 search.ForeColor != Color.White ||
                 reveal.BackColor != UiStyle.ModernSurface)
             {
@@ -352,11 +1143,105 @@ public static class UiLayoutSelfTest
             // An idempotent second application must preserve already-themed
             // controls, while ControlAdded styles dynamic buttons.
             UiModernTheme.Apply(host);
+            // Native handle creation must install the deferred region, and
+            // a second idempotent Apply must not repeat full-tree setup.
+            var installedBefore = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            _ = borderedPanel.Handle;
+            var appliedAfter = UiLayoutTelemetry.ThemeCountsForUiSelfTest();
+            if (appliedAfter.Applied <= installedBefore.Applied ||
+                borderedPanel.Region is null)
+                failures.Add("Deferred rounded region was not applied on HandleCreated.");
+
+            _ = search.Handle;
+            if (search.Region is not null || reveal.Region is not null ||
+                search.FlatAppearance.BorderSize != 0)
+                failures.Add("Rounded buttons still use clipped native borders.");
+
+            // DPI/font refresh walks the entire tree, unlike idempotent Apply.
+            // It must not opt owner-painted buttons or native inputs back into
+            // Region clipping, while registered bordered panels keep rounding.
+            _ = host.Handle;
+            _ = reveal.Handle;
+            _ = input.Handle;
+            _ = plainPanel.Handle;
+            for (var pass = 0; pass < 2; pass++)
+            {
+                search.Width += 10;
+                input.Width += 10;
+                borderedPanel.Width += 10;
+                UiModernTheme.Refresh(host);
+                if (host.Region is not null || search.Region is not null ||
+                    reveal.Region is not null || input.Region is not null ||
+                    plainPanel.Region is not null)
+                    failures.Add("Theme refresh reintroduced native clipping on unregistered controls.");
+                if (borderedPanel.Region is null)
+                    failures.Add("Theme refresh lost registered panel rounding.");
+            }
+
+            // Draw the real FlatStyle.Button to a bitmap: both outer corners
+            // must show the parent surface, not the square native fill.
+            search.Size = new Size(160, 46);
+            using (var image = new Bitmap(search.Width, search.Height))
+            {
+                search.DrawToBitmap(image,
+                    new Rectangle(Point.Empty, search.Size));
+                var middle = image.GetPixel(image.Width / 2, image.Height / 2);
+                var corner = image.GetPixel(0, 0);
+                if (middle.ToArgb() == corner.ToArgb())
+                    failures.Add("Antialiased button corner mask was not painted.");
+            }
+
+            foreach (var scale in new[] { 1f, 1.25f, 1.5f, 1.75f, 2f })
+            {
+                var bounds = UiRecoveryGraphics.InsideStrokeBounds(
+                    new Size(160, 46), scale);
+                if (bounds.Left < scale / 2f ||
+                    bounds.Top < scale / 2f ||
+                    bounds.Right > 160f - scale / 2f ||
+                    bounds.Bottom > 46f - scale / 2f)
+                    failures.Add("Rounded border stroke exceeds client bounds.");
+
+                // Render each physical scale into an isolated bitmap. Curved
+                // edges must have antialiased intermediate pixels, with no
+                // extra stroke drawn outside the target's client rectangle.
+                using var pixels = new Bitmap(160, 46);
+                using var g = Graphics.FromImage(pixels);
+                g.Clear(Color.White);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.PixelOffsetMode =
+                    System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                using var curve = UiRecoveryGraphics.RoundRect(
+                    bounds, Math.Min(14f * scale, 20f));
+                using var brush = new SolidBrush(Color.Black);
+                g.FillPath(brush, curve);
+                var blended = false;
+                for (var y = 0; y < Math.Min(24, pixels.Height); y++)
+                {
+                    for (var x = 0; x < Math.Min(24, pixels.Width); x++)
+                    {
+                        var value = pixels.GetPixel(x, y).R;
+                        if (value is > 0 and < 255)
+                        {
+                            blended = true;
+                            break;
+                        }
+                    }
+                    if (blended)
+                        break;
+                }
+                if (!blended)
+                    failures.Add("Rounded geometry has no antialiased edge pixels.");
+            }
+
+            UiModernTheme.Apply(host);
+            if (UiLayoutTelemetry.ThemeCountsForUiSelfTest().Installed !=
+                appliedAfter.Installed)
+                failures.Add("Repeated theme Apply reinstalled themed controls.");
             var retry = UiStyle.CreateActionButton("Retry check");
             retry.Name = "UpdateCenterRetryCheckButton";
             host.Controls.Add(retry);
             if (retry.BackColor != UiStyle.ModernAccent ||
-                search.BackColor != UiStyle.ModernAccent)
+                search.BackColor != UiStyle.ModernPositiveAccent)
                 failures.Add("Theme failed to style dynamically added primary controls.");
         }
         catch (Exception ex)
@@ -632,6 +1517,38 @@ public static class UiLayoutSelfTest
         }
     }
 
+    private static void VerifyStartupSettingsWithoutAdministrativePages(List<string> failures)
+    {
+        foreach (var admin in new[] { false, true })
+        {
+            try
+            {
+                // Exercise the real startup value loaders, which ordinary
+                // layout tests skipped. Values above NumericUpDown's default
+                // max=100 reproduce the second restricted-startup failure.
+                using var main = new MainForm(
+                    new AppConfig
+                    {
+                        AutoConnectOnStart = false,
+                        HealthEndpointEnabled = false,
+                        ServiceIdentityMode = "LocalSystem",
+                        RemoteApiPort = 8443,
+                        SecretDisplaySeconds = 300,
+                        SensitiveClipboardSeconds = 120
+                    },
+                    layoutSelfTest: true,
+                    administrationAllowedForLayoutSelfTest: admin);
+                if (!main.PreviewStartupSettingsForUiSelfTest(admin))
+                    failures.Add("Startup settings/page visibility mismatch; admin=" + admin);
+            }
+            catch (Exception ex)
+            {
+                failures.Add("Startup settings; admin=" + admin + ": " +
+                    DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message));
+            }
+        }
+    }
+
     private static void VerifyDevicesCloudShortcut(List<string> failures)
     {
         try
@@ -840,6 +1757,828 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // Synthetic/metadata-only Start fixture. A control can be Visible=true
+    // while its entire native rectangle lies below the scroll viewport.
+    // Intersect every parent clipping rectangle, including the recovery card
+    // and the outer Start page, rather than trusting the Visible property.
+    private static void VerifyStartRecoveryButtonsOnScreen(
+        MainForm form, List<string> failures)
+    {
+        if (FindByName(form, "HomeLayoutRoot") is not Control viewport)
+        {
+            failures.Add("Start viewport is missing for the 1080p recovery action check.");
+            return;
+        }
+
+        foreach (var name in new[]
+        {
+            "HomeRevealBitLockerButton", "HomeCopyBitLockerButton",
+            "HomeRevealLapsButton", "HomeCopyLapsButton"
+        })
+        {
+            if (FindByName(form, name) is not Button button ||
+                button.IsDisposed || !button.Visible ||
+                button.ClientSize.Width < 20 || button.ClientSize.Height < 20)
+            {
+                failures.Add("1080p Start recovery action is absent: " + name);
+                continue;
+            }
+
+            // Also catch a fully visible but oversized action: an
+            // AutoSize+Dock.Fill feedback loop previously inflated the
+            // nominal 46px recovery button to 100px at 96 DPI.
+            var maxHeight = (int)Math.Ceiling(72d *
+                Math.Max(UiStyle.BaselineDpi, button.DeviceDpi) /
+                UiStyle.BaselineDpi);
+            if (button.ClientSize.Height > maxHeight)
+                failures.Add("1080p Start recovery action inflated vertically: " +
+                    name + "; height=" + button.ClientSize.Height +
+                    "; limit=" + maxHeight + ".");
+
+            var visible = button.RectangleToScreen(button.ClientRectangle);
+            var foundViewport = false;
+            for (Control? ancestor = button.Parent; ancestor is not null;
+                 ancestor = ancestor.Parent)
+            {
+                visible = Rectangle.Intersect(
+                    visible, ancestor.RectangleToScreen(ancestor.ClientRectangle));
+                if (!ReferenceEquals(ancestor, viewport))
+                    continue;
+                foundViewport = true;
+                break;
+            }
+
+            var viewportBounds = viewport.RectangleToScreen(
+                viewport.ClientRectangle);
+            var bottomClearance = UiStyle.ScaleLogicalPixels(8,
+                button.DeviceDpi);
+            if (!foundViewport ||
+                visible.Width < button.ClientSize.Width - 4 ||
+                visible.Height < button.ClientSize.Height - 4 ||
+                button.RectangleToScreen(button.ClientRectangle).Bottom >
+                    viewportBounds.Bottom - bottomClearance)
+            {
+                failures.Add("1080p Start recovery action clipped or touching " +
+                    "the bottom viewport border: " + name +
+                    "; visible=" + visible.Width + "x" + visible.Height +
+                    "; expected=" + button.ClientSize.Width + "x" +
+                    button.ClientSize.Height + "; bottomClearance=" +
+                    bottomClearance + ". " +
+                    form.StartViewportGeometryReport());
+            }
+        }
+    }
+
+    // The generic language regression constructs hidden controls and cannot
+    // prove that their translated captions fit the native Start viewport.
+    // Run the real 1600x900 selected-device fixture in each UI language;
+    // no AD/Graph calls, personal history, clipboard or secrets are used.
+    private static void VerifyNativeLocalizedSelectedStart(
+        MainForm form, DataGridView results, List<string> failures)
+    {
+        var selected = results.CurrentRow?.Tag;
+        if (selected is null)
+        {
+            failures.Add("Localized native Start lost its synthetic selection.");
+            return;
+        }
+
+        try
+        {
+            foreach (var language in new[] { "ru", "he", "ru", "en" })
+            {
+                form.PreviewShellLanguageForLayoutTest(language);
+                Application.DoEvents();
+                form.ReflowMainViewport();
+                form.PerformLayout();
+                Application.DoEvents();
+
+                var tabs = FindByName(form, "MainWorkspaceTabs") as TabControl;
+                if (tabs is null || tabs.SelectedIndex != 0 ||
+                    tabs.TabPages[0].Text !=
+                        UiLanguageService.Translate(language, "Start") ||
+                    tabs.RightToLeftLayout != (language == "he"))
+                {
+                    failures.Add("Native Start language/RTL navigation mismatch: " +
+                        language + ".");
+                }
+
+                // Test object identity, not device data or recovery material.
+                if (!ReferenceEquals(results.CurrentRow?.Tag, selected) ||
+                    results.SelectedRows.Count != 1)
+                {
+                    failures.Add("Native Start language change lost selection: " +
+                        language + ".");
+                }
+
+                // The catalog auditor examines only registered fixed captions,
+                // including menus and column headers, never live identity data.
+                var captions = form.PreviewFixedCaptionAuditForUiSelfTest();
+                if (captions.Stale != 0)
+                {
+                    failures.Add("Native Start has stale fixed translations: " +
+                        language + " (count=" + captions.Stale + ").");
+                }
+
+                if (language is "ru" or "he")
+                {
+                    if (FindByName(form, "SecretLifetimeStatus") is not
+                            UiStatusLabel lifetime ||
+                        lifetime.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "No recovery secret is currently retained."))
+                        failures.Add("Native Start lifetime notice was not localized: " +
+                            language + ".");
+
+                    // The disconnected Choose-source notice is a known
+                    // fixed caption, never a live authentication result.
+                    if (FindByName(form, "HomeConnectionSource") is ComboBox source &&
+                        source.SelectedIndex == 0 &&
+                        (FindByName(form, "HomeCloudConnectionStatus") is not
+                            UiStatusLabel chooser ||
+                         chooser.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                             language,
+                             "Use Connect / Change to choose a source. No credentials are requested until Connect.")))
+                        failures.Add("Native Start source instruction was not localized: " +
+                            language + ".");
+
+                    var lapsReveal = FindByName(form,
+                        "HomeRevealLapsButton") as Button;
+                    var lapsCopy = FindByName(form,
+                        "HomeCopyLapsButton") as Button;
+                    if (lapsReveal?.Text !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Reveal Password") ||
+                        lapsCopy?.Text !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Copy Password"))
+                        failures.Add("Start LAPS action captions remain untranslated: " +
+                            language + ".");
+
+                    var paneHandle = FindByName(form,
+                        "HomeLapsPaneHostDragHandle") as Label;
+                    if (paneHandle is null || !paneHandle.Text.Contains(
+                            UiLanguageService.Translate(
+                                language, "HomePaneDragInstruction"),
+                            StringComparison.Ordinal))
+                        failures.Add("Start drag-handle instruction remains untranslated: " +
+                            language + ".");
+
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    VerifySelectedHomeStatusBounds(form, "NativeLocalizedStart1080p",
+                        new Scenario(language + "-Selected1600x900",
+                            new Size(1600, 900), 1F), failures);
+                    SaveSyntheticStartSnapshotForCi(
+                        form, "selected-" + language, failures);
+                }
+            }
+
+            // Synthetic-only negative test: a runtime message must survive
+            // a language round-trip unchanged. Never sample actual data.
+            if (FindByName(form, "HomeUnifiedSearchStatus") is UiStatusLabel live)
+            {
+                var before = live.Text;
+                const string synthetic = "UI-TEST-DYNAMIC-STATUS";
+                try
+                {
+                    live.Text = synthetic;
+                    foreach (var language in new[] { "he", "ru", "en" })
+                    {
+                        form.PreviewShellLanguageForLayoutTest(language);
+                        if (live.Text != synthetic)
+                            failures.Add("Runtime Start status changed on language switch: " +
+                                language + ".");
+                    }
+                }
+                finally
+                {
+                    live.Text = before;
+                }
+            }
+        }
+        finally
+        {
+            // Never leave the test shell in another language; the ordinary
+            // navigation and HWND recreation tests expect English here.
+            form.PreviewShellLanguageForLayoutTest("en");
+            Application.DoEvents();
+            form.ReflowMainViewport();
+            form.PerformLayout();
+        }
+    }
+
+    // Explicitly opted-in CI screenshots are generated only from the
+    // disconnected layout-self-test fixture, which contains one synthetic
+    // UI-TEST-PC row but never retrieves recovery keys, passwords or tokens.
+    // Normal desktop --ui-self-test invocations never write screenshots.
+    private static void SaveSyntheticStartSnapshotForCi(
+        MainForm form, string phase, List<string> failures)
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                "true", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(Environment.GetEnvironmentVariable(
+                "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS"), "1",
+                StringComparison.Ordinal))
+            return;
+
+        var compact = phase.StartsWith("compact-", StringComparison.Ordinal);
+        if (FindByName(form, "HomeLayoutRoot") is not Control viewport ||
+            viewport.ClientSize.Width < (compact ? 1200 : 1450) ||
+            viewport.ClientSize.Height < (compact ? 500 : 700))
+        {
+            failures.Add("Synthetic Start snapshot viewport is not ready: " + phase);
+            return;
+        }
+
+        try
+        {
+            using var bitmap = new Bitmap(
+                viewport.ClientSize.Width, viewport.ClientSize.Height);
+            viewport.DrawToBitmap(bitmap,
+                new Rectangle(Point.Empty, bitmap.Size));
+            var path = Path.Combine(AppContext.BaseDirectory,
+                "ui-start-1080p-" + phase + ".png");
+            bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+            // CI's native DrawToBitmap exposed opaque black outside the
+            // rounded card path. Test the top-left corner (outside the 20px
+            // radius) of both synthetic cards. A normal light-theme parent
+            // must paint an opaque surface here, never black GDI remnants.
+            if (!SystemInformation.HighContrast)
+            {
+                foreach (var cardName in new[]
+                {
+                    "HomeBitLockerCard", "HomeLapsCard"
+                })
+                {
+                    if (FindByName(form, cardName) is not UiRecoveryCard card)
+                    {
+                        failures.Add("Synthetic recovery card missing: " + cardName);
+                        continue;
+                    }
+                    var origin = viewport.PointToClient(
+                        card.PointToScreen(Point.Empty));
+                    var point = new Point(origin.X + 2, origin.Y + 2);
+                    if (point.X < 0 || point.X >= bitmap.Width ||
+                        point.Y < 0 || point.Y >= bitmap.Height)
+                    {
+                        failures.Add("Synthetic recovery corner is outside viewport: " +
+                            cardName);
+                        continue;
+                    }
+                    var pixel = bitmap.GetPixel(point.X, point.Y);
+                    if (pixel.R < 40 && pixel.G < 40 && pixel.B < 40)
+                        failures.Add("Synthetic recovery card has a black rounded corner: " +
+                            cardName + "; RGB=" + pixel.R + "," + pixel.G +
+                            "," + pixel.B + ".");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Synthetic Start snapshot failed: " +
+                ex.GetType().Name);
+        }
+    }
+
+    // Opt-in screenshot of the ENTIRE synthetic shell, not only HomeLayoutRoot:
+    // this proves the footer warning is visible and there is no global banner
+    // above the tab bar. Never inspect or capture a connected workstation.
+    private static void SaveSyntheticAuditFooterSnapshotForCi(
+        MainForm form, List<string> failures)
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                "true", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(Environment.GetEnvironmentVariable(
+                "BITKEYBRIDGE_SYNTHETIC_UI_SNAPSHOTS"), "1",
+                StringComparison.Ordinal))
+            return;
+
+        if (FindByName(form, "MainLayoutRoot") is not Control shell ||
+            shell.ClientSize.Width < 1450 || shell.ClientSize.Height < 650)
+        {
+            failures.Add("Portable audit shell snapshot was not ready.");
+            return;
+        }
+
+        try
+        {
+            using var bitmap = new Bitmap(
+                shell.ClientSize.Width, shell.ClientSize.Height);
+            shell.DrawToBitmap(bitmap,
+                new Rectangle(Point.Empty, bitmap.Size));
+            var path = Path.Combine(AppContext.BaseDirectory,
+                "ui-start-1080p-portable-audit-footer.png");
+            bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Portable audit shell snapshot failed: " +
+                ex.GetType().Name);
+        }
+    }
+
+    // Regression for the reported real 1600x720 screenshot with five recent
+    // records and a selected computer. The old 1600x900-only native fixture
+    // passed even while the visible short window clipped the recovery panes.
+    // This test never loads live AD, Intune, prior history or recovery secrets.
+    private static void VerifyCompactNativeSelectedStart(
+        MainForm form, DataGridView results, List<string> failures)
+    {
+        var originalSize = form.ClientSize;
+        var selected = results.CurrentRow?.Tag;
+        if (selected is null)
+        {
+            failures.Add("Compact native Start is missing synthetic selection.");
+            return;
+        }
+
+        // Reproduce a generic diagnostic notice, distinct from the portable
+        // audit fallback (which now lives in the persistent footer). Genuine
+        // errors still need a compact inline detail panel with Copy/Dismiss.
+        var diagnostic = FindByName(form, "ApplicationDiagnostics") as
+            UiDiagnosticPanel;
+        var originalDiagnosticActive = diagnostic?.HasActiveDiagnostics ?? false;
+        if (diagnostic is null)
+            failures.Add("Compact Start is missing global diagnostics panel.");
+        else if (!originalDiagnosticActive)
+            diagnostic.ShowMessage("Synthetic diagnostic notice",
+                "UI-only diagnostics: no device identities or secrets.");
+
+        try
+        {
+            foreach (var size in new[]
+            {
+                new Size(1600, 720),
+                new Size(1366, 768)
+            })
+            {
+                form.ClientSize = size;
+                foreach (var language in new[] { "en", "ru", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    Application.DoEvents();
+                    form.ReflowMainViewport();
+                    form.PerformLayout();
+                    Application.DoEvents();
+
+                    var geometry = form.CaptureStartViewportGeometry();
+                    var report = form.StartViewportGeometryReport();
+                    var scale = Math.Max(form.DeviceDpi /
+                        (double)UiStyle.BaselineDpi,
+                        form.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+                    if (diagnostic is { HasActiveDiagnostics: true } &&
+                        (diagnostic.Height > 72 * scale ||
+                         !diagnostic.AreActionsWithinVisibleBounds()))
+                        failures.Add("Compact Start audit notice reserves too much " +
+                            "height or clips Copy/Dismiss: " +
+                            size.Width + "x" + size.Height + "/" + language +
+                            "; diagnosticHeight=" + diagnostic.Height +
+                            "; " + diagnostic.ActionBoundsReport());
+                    if (geometry is null ||
+                        geometry.Value.CardColumns != 3 ||
+                        geometry.Value.CardRows != 1 ||
+                        geometry.Value.CardsVisibleHeight < 125 * scale)
+                        failures.Add("Compact Start hid recovery panes: " +
+                            size.Width + "x" + size.Height + "/" + language +
+                            ". " + report);
+
+                    // A successful/neutral search notice duplicates the
+                    // selected-device summary and may consume the last 40px
+                    // needed for complete recovery buttons. Warnings and
+                    // failures must instantly take their row back.
+                    if (FindByName(form, "HomeUnifiedSearchStatus") is
+                            UiStatusLabel searchStatus)
+                    {
+                        var previousText = searchStatus.Text;
+                        var previousKind = searchStatus.StatusKind;
+                        if (searchStatus.Visible)
+                            failures.Add("Compact selected Start retained redundant " +
+                                "search-status height: " + language + "/" +
+                                size.Width + "x" + size.Height);
+                        UiStyle.SetStatus(searchStatus, "Synthetic warning: test-only",
+                            UiStatusKind.Warning);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (!searchStatus.Visible)
+                            failures.Add("Compact Start hid a real search warning: " +
+                                language + "/" + size.Width + "x" + size.Height);
+
+                        // Successful privileged actions must remain visible:
+                        // "key/password copied" is not a disposable search hint.
+                        UiStyle.SetStatus(searchStatus,
+                            "Recovery key copied. Clipboard clears in 30 seconds.",
+                            UiStatusKind.Success);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (!searchStatus.Visible)
+                            failures.Add("Compact Start hid the recovery-key " +
+                                "clipboard confirmation: " + language + "/" +
+                                size.Width + "x" + size.Height);
+
+                        // Routine successful metadata searches may collapse
+                        // only while the matching selected-device summary lives.
+                        UiStyle.SetStatus(searchStatus,
+                            "One computer found. BitLocker and LAPS actions are below.",
+                            UiStatusKind.Success);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (searchStatus.Visible)
+                            failures.Add("Compact Start retained a redundant " +
+                                "successful-search row: " + language + "/" +
+                                size.Width + "x" + size.Height);
+
+                        UiStyle.SetStatus(searchStatus, previousText, previousKind);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                    }
+
+                    // The Start viewport is smaller than ClientSize because
+                    // the native menu/tabs/status strips also take vertical
+                    // pixels. Evaluate the density for that *actual* viewport
+                    // and allow the two compact tiers their distinct caps.
+                    var logicalHeight = (geometry?.ViewportHeight ?? 0) / scale;
+                    var density = logicalHeight < 700 ? 2 :
+                        logicalHeight < 800 ? 1 : 0;
+                    var maxRecent = density == 2 ? 74 :
+                        density == 1 ? 96 : UiStyle.HomeRecentQuickListHeight + 2;
+                    var maxCard = density == 2 ? 215 :
+                        density == 1 ? 255 : UiStyle.HomeThreePaneMinimumHeight + 5;
+
+                    if (FindByName(form, "HomeNipkgBrandBanner") is not
+                            UiNipkgBrandBanner banner ||
+                        banner.Tagline.Visible == (density != 0) ||
+                        (density != 0 &&
+                         banner.AccessibleDescription !=
+                             UiNipkgBrandBanner.IntroCaption))
+                        failures.Add("Start height density did not adapt its banner: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    if (FindByName(form, "HomeRecentQuickPanel") is not
+                            TableLayoutPanel recent ||
+                        recent.RowStyles.Count < 2 ||
+                        recent.RowStyles[1].Height > maxRecent * scale)
+                        failures.Add("Start recent-computer list retained tall row: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    if (FindByName(form, "HomeServiceCards") is not
+                            TableLayoutPanel cards ||
+                        cards.MinimumSize.Height > maxCard * scale)
+                        failures.Add("Start card minimum height not adapted: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    if (!ReferenceEquals(results.CurrentRow?.Tag, selected) ||
+                        results.SelectedRows.Count != 1)
+                        failures.Add("Compact Start resized away the selected computer: " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    // Preserve exact native HWND/client geometry while changing
+                    // font zoom. The earlier whole-form Font setter silently
+                    // rescaled the 1600x720 fixture to 945x507.
+                    var nativeFormFontPoints = form.Font.SizeInPoints;
+                    var nativeGridFontPoints = results.Font.SizeInPoints;
+                    // Explicit density/zoom regression uses the same live WinForms
+                    // tree, selected metadata and three-language fixture.
+                    foreach (var densityMode in new[]
+                             { "Auto", "Compact", "Comfortable" })
+                    foreach (var zoom in new[] { 90, 100, 110, 125 })
+                    {
+                        form.PreviewSetUiDisplayPreferencesForUiSelfTest(
+                            densityMode, zoom);
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        var display = form.PreviewUiDisplayStateForUiSelfTest();
+                        if (form.ClientSize != size)
+                            failures.Add("UI zoom changed native window size: " +
+                                size.Width + "x" + size.Height +
+                                ", actual=" + form.ClientSize + "/" +
+                                language + "/" + densityMode + "/" + zoom);
+                        if (Math.Abs(form.Font.SizeInPoints -
+                                     nativeFormFontPoints) > 0.01f)
+                            failures.Add("UI zoom changed native Form DPI font.");
+                        if (display.Density != densityMode ||
+                            display.Scale != zoom ||
+                            display.StartTier !=
+                                UiDisplayPreferencePolicy.ResolveStartTier(
+                                    densityMode, form.CaptureStartViewportGeometry()
+                                        is { } snapshot
+                                        ? snapshot.ViewportHeight /
+                                          UiDisplayPreferencePolicy.EffectiveScale(
+                                              form.DeviceDpi, form.Font.Size,
+                                              UiStyle.BodyFont.Size, zoom)
+                                        : 0))
+                            failures.Add("Start visual preference mismatch: " +
+                                size.Width + "x" + size.Height + "/" +
+                                language + "/" + densityMode + "/" + zoom);
+                        if (!ReferenceEquals(results.CurrentRow?.Tag, selected))
+                            failures.Add("UI zoom changed selected computer.");
+
+                        // Save the real native 1366px / 125%-font intermediate
+                        // two-column layout for visual review in Windows CI.
+                        // Only synthetic names and masked metadata are present.
+                        if (size.Width == 1366 && densityMode == "Auto" &&
+                            zoom == 125)
+                            SaveSyntheticStartSnapshotForCi(form,
+                                "compact-selected-1366-zoom125-" + language,
+                                failures);
+
+                        // Test the adaptive card BREAKPOINT using the actual
+                        // native pixel width after font zoom, not a model of
+                        // the window or only the default 100% setting.
+                        if (FindByName(form, "HomeServiceCards") is
+                                TableLayoutPanel adaptiveCards &&
+                            adaptiveCards.Parent is Control cardArea)
+                        {
+                            var width = Math.Max(0,
+                                cardArea.ClientSize.Width -
+                                cardArea.Padding.Horizontal);
+                            var effectiveScale =
+                                UiDisplayPreferencePolicy.EffectiveScale(
+                                    form.DeviceDpi, form.Font.Size,
+                                    UiStyle.BodyFont.Size, zoom);
+                            var expectedColumns = width >= (int)Math.Ceiling(
+                                UiStyle.HomeThreePaneMinimumWidth * effectiveScale)
+                                ? 3 : width >= (int)Math.Ceiling(
+                                    UiStyle.HomeRecoveryCardsPairMinimumWidth *
+                                    effectiveScale) ? 2 : 1;
+                            var expectedRows = expectedColumns == 3 ? 1 :
+                                expectedColumns == 2 ? 2 : 3;
+                            // This is the actual short-screen complaint:
+                            // 1366x768 at 125% zoom must show BitLocker,
+                            // LAPS and Computers side by side instead of
+                            // wasting another full row on the third pane.
+                            if (size.Width == 1366 && zoom == 125 &&
+                                densityMode == "Auto" && expectedColumns != 3)
+                                failures.Add("1366x768 at 125% font zoom must " +
+                                    "fit three native Start panes; actual " +
+                                    "available width=" + width +
+                                    ", effective scale=" + effectiveScale);
+                            if (adaptiveCards.ColumnCount != expectedColumns ||
+                                adaptiveCards.RowCount != expectedRows)
+                                failures.Add("Start DPI/zoom adaptive grid mismatch: " +
+                                    size.Width + "x" + size.Height + "/" +
+                                    language + "/" + densityMode + "/" + zoom +
+                                    "; columns=" + adaptiveCards.ColumnCount +
+                                    "/" + expectedColumns + "; rows=" +
+                                    adaptiveCards.RowCount + "/" + expectedRows);
+
+                            if (size.Width == 1366 && zoom == 125 &&
+                                densityMode == "Auto")
+                                VerifyStartRecoveryButtonsOnScreen(form, failures);
+
+                            if (expectedColumns == 2)
+                            {
+                                var lastPane = adaptiveCards.Controls
+                                    .Cast<Control>()
+                                    .FirstOrDefault(pane =>
+                                        adaptiveCards.GetRow(pane) == 1);
+                                if (lastPane is null ||
+                                    adaptiveCards.GetColumn(lastPane) != 0 ||
+                                    adaptiveCards.GetColumnSpan(lastPane) != 2)
+                                    failures.Add("Start DPI/zoom third pane has lost " +
+                                        "its two-column span: " + size.Width +
+                                        "x" + size.Height + "/" + language +
+                                        "/" + densityMode + "/" + zoom);
+                            }
+
+                            if (expectedRows > 1 &&
+                                FindByName(form, "HomeLayoutRoot") is
+                                    TableLayoutPanel startScroller)
+                            {
+                                var heights = startScroller.GetRowHeights();
+                                var required = heights.Take(5).Sum() +
+                                    adaptiveCards.MinimumSize.Height +
+                                    startScroller.Padding.Vertical;
+                                if (required > startScroller.ClientSize.Height &&
+                                    startScroller.AutoScrollMinSize.Height < required)
+                                    failures.Add("Start DPI/zoom lost scroll " +
+                                        "reachability for stacked cards: " +
+                                        size.Width + "x" + size.Height + "/" +
+                                        language + "/" + densityMode + "/" + zoom +
+                                        "; scrollExtent=" +
+                                        startScroller.AutoScrollMinSize.Height +
+                                        "; required=" + required);
+                            }
+                        }
+                        else
+                        {
+                            failures.Add("Start adaptive card viewport is missing " +
+                                "after DPI/font zoom.");
+                        }
+                    }
+                    form.PreviewSetUiDisplayPreferencesForUiSelfTest("Auto", 100);
+                    form.ReflowMainViewport();
+                    Application.DoEvents();
+                    if (form.ClientSize != size ||
+                        Math.Abs(results.Font.SizeInPoints -
+                            nativeGridFontPoints) > 0.01f)
+                        failures.Add("Start zoom roundtrip failed to restore native " +
+                            "window bounds/grid font at " +
+                            size.Width + "x" + size.Height + "/" + language);
+
+                    // The four sensitive actions must remain reachable. Their
+                    // existence alone is not enough; check native clipping.
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    if (size.Width == 1600)
+                        SaveSyntheticStartSnapshotForCi(
+                            form, "compact-selected-" + language, failures);
+                }
+            }
+        }
+        finally
+        {
+            if (!originalDiagnosticActive)
+                diagnostic?.Clear();
+            form.PreviewShellLanguageForLayoutTest("en");
+            form.ClientSize = originalSize;
+            Application.DoEvents();
+            form.ReflowMainViewport();
+            form.PerformLayout();
+            Application.DoEvents();
+        }
+    }
+
+    // Verify the real fallback warning's geometry without calling AuditService
+    // or requesting a recovery secret. The notice should live in the footer,
+    // not reserve another AutoSize row above Start. Clicking reveals details
+    // on demand; dismissing the details must never dismiss the warning.
+    private static void VerifyPortableAuditFooterNative(
+        MainForm form, List<string> failures)
+    {
+        if (FindByName(form, "ApplicationDiagnostics") is not
+                UiDiagnosticPanel diagnostics ||
+            FindByName(form, "MainLayoutRoot") is not
+                TableLayoutPanel shell ||
+            FindByName(form, "GlobalStatusBar") is not
+                StatusStrip status ||
+            status.Items.Find("GlobalPortableAuditStatus", false)
+                .FirstOrDefault() is not ToolStripStatusLabel footer)
+        {
+            failures.Add("Portable audit footer UI fixture is incomplete.");
+            return;
+        }
+
+        var originalSize = form.ClientSize;
+        var hadDiagnostics = diagnostics.HasActiveDiagnostics;
+        if (hadDiagnostics)
+        {
+            failures.Add("Portable audit footer fixture started with an active " +
+                "global diagnostic banner.");
+            return;
+        }
+
+        try
+        {
+            form.PreviewPortableAuditFallbackForUiSelfTest(true);
+            foreach (var size in new[]
+                     { new Size(1600, 720), new Size(1366, 768) })
+            {
+                form.ClientSize = size;
+                foreach (var language in new[] { "en", "ru", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    form.ReflowMainViewport();
+                    form.PerformLayout();
+                    Application.DoEvents();
+
+                    var expected = language switch
+                    {
+                        "ru" => "Аудит: локальный",
+                        "he" => "ביקורת: מקומית",
+                        _ => "Audit: portable"
+                    };
+                    if (!footer.Available ||
+                        footer.Placement != ToolStripItemPlacement.Main ||
+                        footer.Bounds.Width <= 0 ||
+                        footer.Bounds.Right > status.ClientSize.Width + 2 ||
+                        footer.Text != expected ||
+                        footer.AccessibleDescription?.Contains(
+                            "not tamper-proof", StringComparison.Ordinal) != true)
+                        failures.Add("Portable audit footer is hidden, clipped or " +
+                            "untranslated: " + size.Width + "x" + size.Height +
+                            "/" + language + "; bounds=" + footer.Bounds +
+                            "; placement=" + footer.Placement + ".");
+
+                    if (diagnostics.HasActiveDiagnostics ||
+                        diagnostics.Visible ||
+                        shell.GetRowHeights()[1] > 4)
+                        failures.Add("Portable audit warning reserved the old " +
+                            "global diagnostic banner height: " + size.Width +
+                            "x" + size.Height + "/" + language +
+                            "; rowHeight=" + shell.GetRowHeights()[1] + ".");
+
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    if (size.Width == 1600 && language == "en")
+                    {
+                        SaveSyntheticAuditFooterSnapshotForCi(form, failures);
+                        footer.PerformClick();
+                        form.PerformLayout();
+                        Application.DoEvents();
+                        if (!diagnostics.HasActiveDiagnostics ||
+                            !diagnostics.AreActionsWithinVisibleBounds())
+                            failures.Add("Portable audit footer cannot open the " +
+                                "full accessible warning details.");
+                        diagnostics.Clear();
+                        form.ReflowMainViewport();
+                        Application.DoEvents();
+                        if (!footer.Available ||
+                            diagnostics.HasActiveDiagnostics)
+                            failures.Add("Dismissing portable audit details " +
+                                "also dismissed the persistent footer warning.");
+                    }
+                }
+            }
+            form.PreviewPortableAuditFallbackForUiSelfTest(false);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            if (footer.Available)
+                failures.Add("Portable audit footer remained after clearing " +
+                    "the UI-only fallback fixture.");
+        }
+        finally
+        {
+            form.PreviewPortableAuditFallbackForUiSelfTest(false);
+            if (!hadDiagnostics)
+                diagnostics.Clear();
+            form.PreviewShellLanguageForLayoutTest("en");
+            form.ClientSize = originalSize;
+            form.ReflowMainViewport();
+            form.PerformLayout();
+            Application.DoEvents();
+        }
+    }
+
+    // No disk history or directory session: the UI test uses synthetic rows
+    // to verify 0 -> 1 -> 15 -> 0 recent devices and stacked/wide transitions.
+    private static void VerifyAdaptiveRecentHistory(
+        MainForm form, List<string> failures)
+    {
+        if (FindByName(form, "HomeRecentComputers") is not DataGridView grid ||
+            FindByName(form, "HomeRecentQuickPanel") is not TableLayoutPanel recent ||
+            FindByName(form, "HomeConnectionsAndRecent") is not TableLayoutPanel split)
+        {
+            failures.Add("Adaptive Recent history fixture is missing from Start.");
+            return;
+        }
+
+        var originalSize = form.ClientSize;
+        try
+        {
+            grid.Rows.Clear();
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var noHistory = form.CaptureStartViewportGeometry();
+            if (recent.Visible || split.ColumnCount != 1 ||
+                split.RowStyles.Count != 2 ||
+                split.RowStyles[1].SizeType != SizeType.Absolute ||
+                split.RowStyles[1].Height != 0F)
+                failures.Add("Empty Recent history still reserves a connection column or row.");
+
+            grid.Rows.Add("UI-TEST-RECENT-01", "Search", DateTime.UtcNow);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var shortHeight = recent.RowStyles[1].Height;
+            var scale = Math.Max(form.DeviceDpi / (double)UiStyle.BaselineDpi,
+                form.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
+            var maxHeight = UiStyle.HomeRecentQuickListHeight * scale;
+            if (!recent.Visible || split.ColumnCount != 1 ||
+                shortHeight < 45 * scale || shortHeight >= maxHeight - 4)
+                failures.Add("One Recent computer did not produce a compact, stacked list.");
+
+            for (var index = 2; index <= 15; index++)
+                grid.Rows.Add("UI-TEST-RECENT-" + index.ToString("00"),
+                    "Search", DateTime.UtcNow);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var longHeight = recent.RowStyles[1].Height;
+            if (longHeight <= shortHeight ||
+                longHeight > maxHeight + 2)
+                failures.Add("Recent history did not expand and cap its grid height.");
+
+            form.ClientSize = new Size(1600, 900);
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            if (split.ColumnCount != 2 || !recent.Visible)
+                failures.Add("Populated Recent history must occupy the right wide-screen column.");
+
+            grid.Rows.Clear();
+            form.ClientSize = originalSize;
+            form.ReflowMainViewport();
+            Application.DoEvents();
+            var cleared = form.CaptureStartViewportGeometry();
+            if (split.ColumnCount != 1 || recent.Visible ||
+                (noHistory is { } before && cleared is { } after &&
+                 after.ConnectionHeight > before.ConnectionHeight + 12))
+                failures.Add("Cleared Recent history retained a visible panel, extra height or empty column.");
+        }
+        finally
+        {
+            grid.Rows.Clear();
+            form.ClientSize = originalSize;
+            form.ReflowMainViewport();
+            Application.DoEvents();
+        }
+    }
+
     /// <summary>
     /// Regression for a visually missing copy button: the old check only
     /// looked up button names, while Hebrew WinForms AutoSize/RTL could
@@ -865,6 +2604,333 @@ public static class UiLayoutSelfTest
             // handles and visibility, not just Controls.Find/Text.
             form.Show();
             Application.DoEvents();
+            // Shown queues a 55-ms deferred viewport repair. The baseline
+            // must include the same completed native layout as expand/collapse.
+            form.ReflowMainViewport();
+            form.PerformLayout();
+            Application.DoEvents();
+
+            // Exercise native geometry, not only the existence of controls.
+            // This report is pixels only: no device identifiers or secrets.
+            var initialStart = form.CaptureStartViewportGeometry();
+            // On a stacked 1024px Start, every connection section must
+            // actually receive the wide single-column cell. A 200px
+            // provisional chooser width wraps a one-line status into a
+            // phantom 120px row and hides the recovery cards.
+            var sourceChooser = FindByName(
+                form, "HomeConnectionSourceChooser") as TableLayoutPanel;
+            var splitLayout = FindByName(
+                form, "HomeConnectionsAndRecent") as TableLayoutPanel;
+            if (initialStart is { } initialGeometry &&
+                initialGeometry.ViewportWidth > 800 &&
+                splitLayout is { ColumnCount: 1 } &&
+                (sourceChooser is null || sourceChooser.Width < 500))
+                failures.Add("Start connection chooser retained provisional 200px width after viewport reflow. " +
+                    form.StartViewportGeometryReport());
+
+            if (initialStart is null ||
+                !form.StartViewportGeometryReport().Contains(
+                    "Start viewport (pixels only): viewport=", StringComparison.Ordinal))
+            {
+                failures.Add("Visible Start did not publish non-secret pixel geometry.");
+            }
+            else
+            {
+                form.PreviewSetConnectionOptionsExpandedForUiTest(true);
+                form.ReflowMainViewport();
+                Application.DoEvents();
+                var expanded = form.CaptureStartViewportGeometry();
+                form.PreviewSetConnectionOptionsExpandedForUiTest(false);
+                form.ReflowMainViewport();
+                Application.DoEvents();
+                var collapsed = form.CaptureStartViewportGeometry();
+                if (expanded is null || collapsed is null ||
+                    // Expanded controls must not leave the original
+                    // Connections height behind when collapsed again.
+                    collapsed.Value.ConnectionHeight >
+                        initialStart.Value.ConnectionHeight + 12)
+                {
+                    failures.Add("Collapsing Start connection options retained expanded panel height. " +
+                        "Before=" + initialStart.Value.ConnectionHeight +
+                        "; Expanded=" + (expanded?.ConnectionHeight ?? -1) +
+                        "; Collapsed=" + (collapsed?.ConnectionHeight ?? -1) + ". " +
+                        form.StartViewportGeometryReport());
+                }
+            }
+
+            VerifyAdaptiveRecentHistory(form, failures);
+
+            // Reproduce the reported 1920x1080 / 100% desktop with an
+            // approximately 1600x900 application client area. WinForms HWNDs
+            // can measure a larger client than the CI runner's virtual display;
+            // check real control geometry before any scheduled work-area clamp.
+            // No AD/Graph session, computer identifier or secret is involved.
+            var originalClientSize = form.ClientSize;
+            // The real 1080p screenshot included Recent computers. Populate
+            // metadata-only synthetic rows for both visual QA screenshots,
+            // without reading the user's persisted recent-device history.
+            var snapshotRecent = FindByName(
+                form, "HomeRecentComputers") as DataGridView;
+            try
+            {
+                if (snapshotRecent is not null)
+                {
+                    snapshotRecent.Rows.Clear();
+                    for (var index = 1; index <= 5; index++)
+                        snapshotRecent.Rows.Add(
+                            "UI-TEST-RECENT-" + index.ToString("00"),
+                            "Search", DateTime.UtcNow);
+                }
+                form.ClientSize = new Size(1600, 900);
+                form.ReflowMainViewport();
+                form.PerformLayout();
+                var wideStart = form.CaptureStartViewportGeometry();
+                SaveSyntheticStartSnapshotForCi(form, "empty", failures);
+                if (wideStart is null ||
+                    wideStart.Value.ViewportWidth < 1450 ||
+                    wideStart.Value.ViewportHeight < 700 ||
+                    wideStart.Value.CardColumns != 3 ||
+                    wideStart.Value.CardRows != 1 ||
+                    wideStart.Value.CardsVisibleHeight <
+                        Math.Min(150, wideStart.Value.CardsHeight / 2))
+                {
+                    failures.Add("Standard 1080p Start viewport hides BitLocker/LAPS/Computers cards beneath unused status space.");
+                }
+
+                // The customer screenshot had a selected computer and two
+                // extra status rows. Measure that real selection geometry too,
+                // not only the default unselected workspace.
+                if (FindByName(form, "HomeUnifiedSearchResults") is DataGridView results)
+                {
+                    var row = results.Rows.Add(
+                        "UI-TEST-PC", "AD", "Available", DateTime.UtcNow,
+                        "Detected", DateTime.UtcNow);
+                    results.Rows[row].Tag = new HomeSearchResult
+                    {
+                        ComputerName = "UI-TEST-PC",
+                        ComputerId = Guid.Empty.ToString(),
+                        BitLockerKeyCount = 1,
+                        BitLockerStatus = "Available",
+                        LapsCandidateFound = true,
+                        LapsStatus = "Detected"
+                    };
+                    results.ClearSelection();
+                    results.Rows[row].Selected = true;
+                    results.CurrentCell = results.Rows[row].Cells[0];
+                    form.ReflowMainViewport();
+                    form.PerformLayout();
+                    // Run the caption bounds assertion on the exact native
+                    // 1600x900 fixture that produces the screenshot. The
+                    // generic compact/DPI matrix alone missed this clipping.
+                    VerifySelectedHomeStatusBounds(
+                        form, "NativeStart1080p",
+                        new Scenario("Selected1600x900", new Size(1600, 900), 1F),
+                        failures);
+                    var selectedWideStart = form.CaptureStartViewportGeometry();
+                    // Assert the actual buttons are wholly on screen; merely
+                    // seeing the top of a card is not sufficient for helpdesk.
+                    VerifyStartRecoveryButtonsOnScreen(form, failures);
+                    SaveSyntheticStartSnapshotForCi(form, "selected", failures);
+                    if (selectedWideStart is null ||
+                        selectedWideStart.Value.SelectionHeight <= 0 ||
+                        selectedWideStart.Value.SelectionHeight > 150 ||
+                        selectedWideStart.Value.CardsVisibleHeight <
+                            Math.Min(120, selectedWideStart.Value.CardsHeight / 2))
+                        failures.Add("Standard 1080p selected computer pushes recovery cards below the visible viewport. " +
+                            form.StartViewportGeometryReport());
+                    // Exercise the ACTUAL shown selected-device Start window
+                    // through Russian and Hebrew before restoring English.
+                    // Keep the selected metadata object unchanged and capture
+                    // separate synthetic PNGs for each language.
+                    VerifyNativeLocalizedSelectedStart(form, results, failures);
+                    VerifyCompactNativeSelectedStart(form, results, failures);
+                    VerifyPortableAuditFooterNative(form, failures);
+                    results.Rows.Clear();
+                    form.ReflowMainViewport();
+                }
+            }
+            finally
+            {
+                snapshotRecent?.Rows.Clear();
+                form.ClientSize = originalClientSize;
+                form.ReflowMainViewport();
+                form.PerformLayout();
+            }
+
+            // Three requested viewport repairs during one UI-message turn
+            // must schedule just one native callback. A second burst must
+            // still execute rather than getting stranded behind a stale flag.
+            var firstNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            var queuedNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            if (!queuedNavigation.Pending ||
+                queuedNavigation.Posted != firstNavigation.Posted + 1 ||
+                queuedNavigation.Coalesced != firstNavigation.Coalesced + 2)
+                failures.Add("Rapid tab navigation posted redundant WinForms callbacks.");
+            Application.DoEvents();
+            var drainedNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            if (drainedNavigation.Pending ||
+                drainedNavigation.Dispatched != firstNavigation.Dispatched + 1)
+                failures.Add("Navigation coalescing lost the latest viewport repair.");
+            form.PreviewQueueNavigationReflowForUiSelfTest();
+            Application.DoEvents();
+            var secondNavigation = form.PreviewNavigationReflowStateForUiSelfTest();
+            if (secondNavigation.Pending ||
+                secondNavigation.Posted != queuedNavigation.Posted + 1 ||
+                secondNavigation.Dispatched != drainedNavigation.Dispatched + 1)
+                failures.Add("Navigation reflow did not schedule after an earlier batch.");
+
+            // Exercise real WinForms SelectedIndexChanged events, rather
+            // than just manually queueing three identical root-page repairs.
+            // A nested-tab event with no stopwatch must not erase timing
+            // of the final main-tab change. Retain the same TabPage objects,
+            // selected layout and main native HWND across both bursts.
+            if (FindByName(form, "MainWorkspaceTabs") is not TabControl mainTabs ||
+                mainTabs.TabPages.Count < 3)
+            {
+                failures.Add("Main navigation tabs are missing from the UI fixture.");
+            }
+            else
+            {
+                var initialTabHandle = mainTabs.Handle;
+                var originalPages = mainTabs.TabPages.Cast<TabPage>().ToArray();
+                var beforeRealNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                mainTabs.SelectedIndex = 1;
+                mainTabs.SelectedIndex = 2;
+                mainTabs.SelectedIndex = 0;
+                form.PreviewQueueNavigationReflowForUiSelfTest();
+                var queuedRealNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                if (!queuedRealNavigation.Pending ||
+                    queuedRealNavigation.Posted != beforeRealNavigation.Posted + 1 ||
+                    queuedRealNavigation.Coalesced < beforeRealNavigation.Coalesced + 3 ||
+                    queuedRealNavigation.RequestedIndex != 0 ||
+                    !queuedRealNavigation.HasPendingTiming)
+                    failures.Add("Main/nested tab burst lost final selection or timing.");
+
+                Application.DoEvents();
+                var afterRealNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                if (afterRealNavigation.Pending ||
+                    afterRealNavigation.Dispatched !=
+                        beforeRealNavigation.Dispatched + 1 ||
+                    afterRealNavigation.LastDispatchedIndex != 0 ||
+                    mainTabs.SelectedIndex != 0 ||
+                    mainTabs.Handle != initialTabHandle ||
+                    !originalPages.SequenceEqual(
+                        mainTabs.TabPages.Cast<TabPage>()))
+                    failures.Add("Rapid real-tab navigation lost page state or recreated tabs.");
+
+                mainTabs.SelectedIndex = 2;
+                Application.DoEvents();
+                var finalNavigation =
+                    form.PreviewNavigationReflowStateForUiSelfTest();
+                if (finalNavigation.Pending ||
+                    finalNavigation.LastDispatchedIndex != 2 ||
+                    finalNavigation.Dispatched != afterRealNavigation.Dispatched + 1)
+                    failures.Add("Second real-tab navigation did not display latest selection.");
+                mainTabs.SelectedIndex = 0;
+                Application.DoEvents();
+
+                // Recreate the native parent HWND while navigation repair is
+                // pending. Any callback for the old HWND must be ignored, and
+                // a new callback must reflow the current selected page.
+                var beforeRecreation = form.PreviewNavigationReflowStateForUiSelfTest();
+                form.PreviewQueueNavigationReflowForUiSelfTest();
+                form.PreviewRecreateNativeHandleForUiSelfTest();
+                Application.DoEvents();
+                var afterRecreation = form.PreviewNavigationReflowStateForUiSelfTest();
+                if (afterRecreation.Pending ||
+                    afterRecreation.LastDispatchedIndex != mainTabs.SelectedIndex ||
+                    afterRecreation.Dispatched <= beforeRecreation.Dispatched)
+                    failures.Add("HWND recreation stranded the latest navigation reflow.");
+            }
+
+            // Measure a REAL deferred selected-page pass, not only the
+            // synchronous caption translation. Two changes in one message
+            // burst must keep the newest timestamp and end with no pending
+            // language stopwatch. Tests do not change saved user preferences.
+            var beforeLanguage = UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            form.PreviewShellLanguageForLayoutTest("he");
+            if (!form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("Deferred language viewport timer did not start.");
+            form.PreviewShellLanguageForLayoutTest("ru");
+            if (!form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("Rapid language change lost latest viewport timing.");
+            Application.DoEvents();
+            var afterLanguage = UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                afterLanguage.Ready <= beforeLanguage.Ready ||
+                afterLanguage.Superseded <= beforeLanguage.Superseded)
+                failures.Add("Rapid language changes stranded the deferred viewport timer.");
+
+            form.PreviewShellLanguageForLayoutTest("he");
+            var beforeRecreatedLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            form.PreviewRecreateNativeHandleForUiSelfTest();
+            Application.DoEvents();
+            var afterRecreatedLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                afterRecreatedLanguage.Ready <= beforeRecreatedLanguage.Ready)
+                failures.Add("HWND recreation stranded the latest language viewport measurement.");
+
+            form.PreviewShellLanguageForLayoutTest("en");
+            Application.DoEvents();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                !UiLayoutTelemetry.Report().Contains(
+                    "Language to selected viewport ready: runs=", StringComparison.Ordinal) ||
+                !UiLayoutTelemetry.Report().Contains(
+                    "Language viewport measurements superseded:", StringComparison.Ordinal))
+                failures.Add("Deferred language p50/p95 diagnostics were not completed.");
+
+            // A native layout can already be running when the language
+            // callback arrives. Dispatch alone must not record a completed
+            // geometry pass or clear the pending language stopwatch.
+            var beforeBusyLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            form.PreviewHoldMainViewportReflowForUiSelfTest(true);
+            try
+            {
+                form.PreviewShellLanguageForLayoutTest("ru");
+                Application.DoEvents();
+                var whileBusyLanguage =
+                    UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+                if (!form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                    whileBusyLanguage.Ready != beforeBusyLanguage.Ready)
+                    failures.Add("Busy native layout falsely completed language viewport timing.");
+            }
+            finally
+            {
+                form.PreviewHoldMainViewportReflowForUiSelfTest(false);
+            }
+            // A successful follow-up WM_SIZE/idle viewport pass completes
+            // the exact same stopwatch without inventing a new language
+            // change or recording the skipped attempt as a success.
+            form.ReflowMainViewport();
+            var afterBusyLanguage =
+                UiLayoutTelemetry.LanguageViewportCountsForUiSelfTest();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest() ||
+                afterBusyLanguage.Ready != beforeBusyLanguage.Ready + 1)
+                failures.Add("Busy native layout retry stranded language viewport timing.");
+
+            // The busy-layout fixture deliberately finishes in Russian.
+            // Check the actual Russian status-link caption before returning
+            // to the original English baseline for subsequent assertions.
+            if (FindByName(form, "GlobalStatusBar") is not StatusStrip russianStatus ||
+                russianStatus.Items.Find("GlobalCopyDiagnostics", false)
+                    .FirstOrDefault() is not ToolStripStatusLabel russianCopy ||
+                russianCopy.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                    "ru", "Copy diagnostics"))
+                failures.Add("Busy-language viewport repair lost the Russian status copy link.");
+
+            form.PreviewShellLanguageForLayoutTest("en");
+            Application.DoEvents();
+            if (form.PreviewLanguageViewportPendingForUiSelfTest())
+                failures.Add("English baseline restoration left viewport timing pending.");
 
             if (FindByName(form, "GlobalStatusBar") is not StatusStrip initialStatus ||
                 initialStatus.RightToLeft != RightToLeft.No ||
@@ -892,11 +2958,13 @@ public static class UiLayoutSelfTest
                     form.PerformLayout();
                     Application.DoEvents();
 
-                    if (FindByName(form, "ApplicationDiagnostics") is not
-                        UiDiagnosticPanel banner ||
-                        !banner.AreActionsWithinVisibleBounds())
+                    var diagnosticPanel = FindByName(
+                        form, "ApplicationDiagnostics") as UiDiagnosticPanel;
+                    if (diagnosticPanel is null ||
+                        !diagnosticPanel.AreActionsWithinVisibleBounds())
                         failures.Add("Copy Diagnostics is clipped or not visible: " +
-                            language + ", font scale " + (i == 0 ? "100" : "200") + "%.");
+                            language + ", font scale " + (i == 0 ? "100" : "200") +
+                            "%. " + (diagnosticPanel?.ActionBoundsReport() ?? "No panel"));
 
                     if (FindByName(form, "GlobalStatusBar") is not StatusStrip status ||
                         status.Items.Find("GlobalCopyDiagnostics", false)
@@ -1037,9 +3105,26 @@ public static class UiLayoutSelfTest
             using var nestedMenu = new ToolStripMenuItem("Nested menu fixture");
             using var nestedItem = new ToolStripMenuItem("Windows Event Log");
             nestedMenu.DropDownItems.Add(nestedItem);
+            // Real ToolStripItems are not Controls. After a fixed-caption
+            // translation, operators may replace the item with runtime
+            // device text. Editable menu fields must never be translated.
+            var dynamicMenuTag = new object();
+            using var mutableMenuItem = new ToolStripMenuItem("Back")
+            {
+                Tag = dynamicMenuTag
+            };
+            using var menuInput = new ToolStripTextBox { Text = "Back" };
+            using var menuChoice = new ToolStripComboBox { Text = "Back" };
+            nestedMenu.DropDownItems.Add(mutableMenuItem);
+            nestedMenu.DropDownItems.Add(menuInput);
+            nestedMenu.DropDownItems.Add(menuChoice);
             topTools?.DropDownItems.Add(nestedMenu);
 
             form.PreviewShellLanguageForLayoutTest("he");
+            if (mutableMenuItem.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                    "he", "Back"))
+                failures.Add("Nested fixed menu fixture did not translate to Hebrew.");
+            mutableMenuItem.Text = "live device: test-001";
             form.PreviewShowUiPerformanceReportForLayoutTest();
 
             var banner = FindByName(form, "ApplicationDiagnostics") as UiDiagnosticPanel;
@@ -1166,6 +3251,18 @@ public static class UiLayoutSelfTest
             foreach (var language in new[] { "he", "en", "ru", "he" })
             {
                 form.PreviewShellLanguageForLayoutTest(language);
+                if (FindByName(form, "HomeNipkgBrandBanner")
+                        is not UiNipkgBrandBanner brand ||
+                    brand.Heading.Text != "BitKeyBridge" ||
+                    brand.Tagline.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, UiNipkgBrandBanner.IntroCaption) ||
+                    brand.Tagline.TextAlign != (language == "he"
+                        ? ContentAlignment.MiddleRight
+                        : ContentAlignment.MiddleLeft) ||
+                    brand.Tagline.Anchor != (language == "he"
+                        ? AnchorStyles.Right : AnchorStyles.Left))
+                    failures.Add("NI-style Start banner lost EN/RU/HE caption or direction: " +
+                        language);
                 var expectedEventLog = UiStaticCaptionCatalog.TranslateOrOriginal(
                     language, "Windows Event Log");
                 var expectedLatestRelease = UiStaticCaptionCatalog.TranslateOrOriginal(
@@ -1180,6 +3277,11 @@ public static class UiLayoutSelfTest
                 if (copyItemBeforeTranslation is not null &&
                     !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
                     failures.Add("Language switch overwrote ToolStrip command Tag: " +
+                        language);
+                if (mutableMenuItem.Text != "live device: test-001" ||
+                    !ReferenceEquals(mutableMenuItem.Tag, dynamicMenuTag) ||
+                    menuInput.Text != "Back" || menuChoice.Text != "Back")
+                    failures.Add("Language switch rewrote runtime menu caption or editable value: " +
                         language);
                 // The performance report must not disappear when a
                 // high-DPI WinForms TabControl changes RTL orientation.
@@ -1357,6 +3459,100 @@ public static class UiLayoutSelfTest
                     tabs.TabPages.Cast<TabPage>().Any(
                         page => string.IsNullOrWhiteSpace(page.Text)))
                     failures.Add("Language switch left an empty main workspace tab.");
+
+                // Audit every REGISTERED static source, rather than only the
+                // hand-picked controls above. Output is numeric only; never
+                // retain or report user-entered text or recovery material.
+                var captionAudit = form.PreviewFixedCaptionAuditForUiSelfTest();
+                if (captionAudit.Controls < 10 ||
+                    captionAudit.Menus < 1 || captionAudit.Headers < 5)
+                    failures.Add("Static caption audit did not cover controls, menus and headers.");
+                if (captionAudit.Stale != 0)
+                    failures.Add("Static caption audit found stale EN/RU/HE values: " +
+                        language + " (count=" + captionAudit.Stale + ").");
+            }
+
+            // Confirm this audit can DETECT an actual stale English caption
+            // after Hebrew localization, then verify the ordinary language
+            // pass repairs it. The fixture is a fixed registered action.
+            lateAction1.Text = UiLanguageService.Translate("en", "MainRecoverySteps");
+            var intentionallyStale = form.PreviewFixedCaptionAuditForUiSelfTest();
+            if (intentionallyStale.Stale < 1)
+                failures.Add("Static caption audit failed to detect a stale English label.");
+            form.PreviewShellLanguageForLayoutTest("he");
+            if (form.PreviewFixedCaptionAuditForUiSelfTest().Stale != 0)
+                failures.Add("Static caption audit did not recover after Hebrew repair.");
+
+            // Adopting a NEW known English caption must still work after
+            // runtime text was preserved. It must not touch menu bindings.
+            mutableMenuItem.Text = "Copy diagnostics";
+            foreach (var language in new[] { "ru", "en", "he" })
+            {
+                form.PreviewShellLanguageForLayoutTest(language);
+                if (mutableMenuItem.Text !=
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            language, "Copy diagnostics") ||
+                    !ReferenceEquals(mutableMenuItem.Tag, dynamicMenuTag) ||
+                    menuInput.Text != "Back" || menuChoice.Text != "Back")
+                    failures.Add("Runtime menu source replacement failed EN/RU/HE: " +
+                        language);
+            }
+
+
+            // MainForm's native grid/list headers can also be overwritten by
+            // live device or account details after an initial static caption
+            // was translated. Such data must never be cached or localized.
+            DataGridViewColumn? dynamicGridHeader = null;
+            if (FindByName(form, "LapsCoverageChanges") is DataGridView sourceGrid)
+                dynamicGridHeader = sourceGrid.Columns
+                    .Cast<DataGridViewColumn>()
+                    .FirstOrDefault(column => column.HeaderText ==
+                        UiStaticCaptionCatalog.TranslateOrOriginal(
+                            "he", "Change type"));
+
+            ColumnHeader? dynamicListHeader = null;
+            var headerSearch = new Stack<Control>();
+            headerSearch.Push(form);
+            while (headerSearch.Count > 0)
+            {
+                var current = headerSearch.Pop();
+                if (current is ListView list && dynamicListHeader is null)
+                    dynamicListHeader = list.Columns.Cast<ColumnHeader>()
+                        .FirstOrDefault(column => column.Text ==
+                            UiStaticCaptionCatalog.TranslateOrOriginal("he", "Scope"));
+                foreach (Control child in current.Controls)
+                    headerSearch.Push(child);
+            }
+            if (dynamicGridHeader is null || dynamicListHeader is null)
+                failures.Add("Native main-window dynamic column fixture was not found.");
+            else
+            {
+                dynamicGridHeader.HeaderText = "runtime account: user@example.invalid";
+                dynamicListHeader.Text = "runtime device: PC-001";
+                foreach (var language in new[] { "ru", "en", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    if (dynamicGridHeader.HeaderText !=
+                            "runtime account: user@example.invalid" ||
+                        dynamicListHeader.Text != "runtime device: PC-001")
+                        failures.Add("Main grid/list localization overwrote live header data: " +
+                            language);
+                }
+
+                dynamicGridHeader.HeaderText = "Change type";
+                dynamicListHeader.Text = "Scope";
+                foreach (var language in new[] { "ru", "en", "he" })
+                {
+                    form.PreviewShellLanguageForLayoutTest(language);
+                    if (dynamicGridHeader.HeaderText !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Change type") ||
+                        dynamicListHeader.Text !=
+                            UiStaticCaptionCatalog.TranslateOrOriginal(
+                                language, "Scope"))
+                        failures.Add("Main grid/list failed to adopt replacement English captions: " +
+                            language);
+                }
             }
 
             if (FindByName(form, "LapsCoverageChanges") is DataGridView lateGrid)
@@ -1940,6 +4136,28 @@ public static class UiLayoutSelfTest
             return;
         }
 
+        // Regression for the real 1920x1080 / 100%-DPI screenshot:
+        // status and connection rows must not hold stale expanded heights.
+        // Checking layout policy here is reliable for virtual DPI scenarios;
+        // native screen geometry is also verified below on wide viewports.
+        var connectionGroup = FindByName(main, "HomeConnectionsGroup") as GroupBox;
+        var adConnection = FindByName(main, "HomeAdConnectionLayout") as TableLayoutPanel;
+        var searchControls = FindByName(main, "HomeSearchControls") as TableLayoutPanel;
+        var selectionPanel = FindByName(main, "HomeSelectionPanel") as TableLayoutPanel;
+        var lifetimeActions = FindByName(main, "HomeSecretLifetimeActions") as FlowLayoutPanel;
+        if (connectionGroup is null || adConnection is null ||
+            searchControls is null || selectionPanel is null ||
+            lifetimeActions is null ||
+            new Control[] { connectionGroup, adConnection, searchControls,
+                selectionPanel, lifetimeActions }.Any(control =>
+                !control.AutoSize || control is GroupBox group &&
+                    group.AutoSizeMode != AutoSizeMode.GrowAndShrink ||
+                control is Panel panel &&
+                    panel.AutoSizeMode != AutoSizeMode.GrowAndShrink))
+        {
+            failures.Add($"{formName}/{scenario.Name}: Start status sections must shrink after hiding expanded controls.");
+        }
+
         var connectionLayout =
             FindByName(main, "HomeConnectionsAndRecent") as TableLayoutPanel;
         if (connectionLayout is null)
@@ -1954,14 +4172,23 @@ public static class UiLayoutSelfTest
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
             var actualWidth = connectionLayout.Parent?.ClientSize.Width ?? 0;
             actualWidth -= connectionLayout.Parent?.Padding.Horizontal ?? 0;
-            var pair = actualWidth >= (int)Math.Ceiling(
-                UiStyle.HomeConnectionRecentPairMinimumWidth * scale);
-            if (pair && connectionLayout.ColumnCount != 2 ||
-                !pair && connectionLayout.ColumnCount != 1)
+            var hasRecentEntries = recent.Rows.Count > 0;
+            var pair = hasRecentEntries &&
+                actualWidth >= (int)Math.Ceiling(
+                    UiStyle.HomeConnectionRecentPairMinimumWidth * scale);
+            if (connectionLayout.ColumnCount != (pair ? 2 : 1) ||
+                connectionLayout.RowCount != (pair ? 1 : 2))
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: Recent computers must use unused Connections space on wide screens and stack on narrow/high-DPI screens.");
+                    $"{formName}/{scenario.Name}: Recent computers must be absent from empty space, appear beside Connections on wide screens, and stack on narrow/high-DPI screens.");
             }
+            if (!hasRecentEntries &&
+                (quickRecent.Visible ||
+                 connectionLayout.RowStyles.Count < 2 ||
+                 connectionLayout.RowStyles[1].SizeType != SizeType.Absolute ||
+                 connectionLayout.RowStyles[1].Height != 0F))
+                failures.Add(
+                    $"{formName}/{scenario.Name}: an empty Recent history must consume zero Start rows.");
         }
 
         if (root.RowCount != 6 ||
@@ -2003,6 +4230,22 @@ public static class UiLayoutSelfTest
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size));
             bool expectedThree = width >= (int)Math.Ceiling(
                 UiStyle.HomeThreePaneMinimumWidth * effectiveScale);
+            bool expectedTwo = !expectedThree && width >= (int)Math.Ceiling(
+                UiStyle.HomeRecoveryCardsPairMinimumWidth * effectiveScale);
+
+            // This failure previously survived structural three-column tests:
+            // all three cards existed but started below the visible viewport.
+            // At wide 100%-scale sizes, verify that the card row is actually
+            // on screen after a metadata-only selection.
+            if (expectedThree && effectiveScale <= 1.05 &&
+                root.ClientSize.Height >= 700 && cards.Height > 0)
+            {
+                var cardTop = cards.PointToScreen(Point.Empty).Y;
+                var viewportTop = root.PointToScreen(Point.Empty).Y;
+                var cardBottomLimit = viewportTop + root.ClientSize.Height;
+                if (cardTop >= cardBottomLimit - 60)
+                    failures.Add($"{formName}/{scenario.Name}: Start recovery cards are pushed below the visible viewport.");
+            }
 
             var hosts = new[] { bitLocker, laps, computers };
             var cells = hosts.Select(cards.GetPositionFromControl).ToArray();
@@ -2062,6 +4305,26 @@ public static class UiLayoutSelfTest
                 main.ExchangeHomePanesForUiSelfTest("Laps", "Computers");
                 main.ReflowMainViewport();
             }
+            else if (expectedTwo)
+            {
+                var bottomHost = hosts.FirstOrDefault(
+                    host => cards.GetPositionFromControl(host).Row == 1);
+                if (cards.ColumnCount != 2 || cards.RowCount != 2 ||
+                    cards.RowStyles.Count != 2 ||
+                    cards.RowStyles.Cast<RowStyle>().Any(
+                        row => row.SizeType != SizeType.Absolute) ||
+                    cells.Count(position => position.Row == 0) != 2 ||
+                    cells.Count(position => position.Row == 1) != 1 ||
+                    cells.Where(position => position.Row == 0)
+                        .Select(position => position.Column).Distinct().Count() != 2 ||
+                    bottomHost is null ||
+                    cards.GetColumn(bottomHost) != 0 ||
+                    cards.GetColumnSpan(bottomHost) != 2)
+                {
+                    failures.Add(
+                        $"{formName}/{scenario.Name}: intermediate-width Start must retain two side-by-side panes and a full-width third pane.");
+                }
+            }
             else
             {
                 if (cards.ColumnCount != 1 || cards.RowCount != 3 ||
@@ -2097,8 +4360,12 @@ public static class UiLayoutSelfTest
             var resetLayoutCorrect = expectedThree
                 ? resetCells.Select(x => x.Column).SequenceEqual([0, 1, 2]) &&
                   resetCells.All(x => x.Row == 0)
-                : resetCells.Select(x => x.Row).SequenceEqual([0, 1, 2]) &&
-                  resetCells.All(x => x.Column == 0);
+                : expectedTwo
+                    ? resetCells.Select(x => x.Column).SequenceEqual([0, 1, 0]) &&
+                      resetCells.Select(x => x.Row).SequenceEqual([0, 0, 1]) &&
+                      cards.GetColumnSpan(computers) == 2
+                    : resetCells.Select(x => x.Row).SequenceEqual([0, 1, 2]) &&
+                      resetCells.All(x => x.Column == 0);
             if (!resetLayoutCorrect)
             {
                 failures.Add(
@@ -2117,6 +4384,80 @@ public static class UiLayoutSelfTest
         {
             grid.Rows.Clear();
             main.ReflowMainViewport();
+        }
+    }
+
+    private static void VerifySelectedHomeStatusBounds(
+        MainForm main, string formName, Scenario scenario,
+        List<string> failures)
+    {
+        // This specifically tests the metadata-only selected-device view.
+        // The previous test checked only the label's HEIGHT after wrapping;
+        // a narrow AutoSize flow could still hide "retained." on the same
+        // one-line caption while all other layout assertions passed.
+        if (FindByName(main, "SecretLifetimeStatus") is not UiStatusLabel status ||
+            status.Parent is not FlowLayoutPanel flow ||
+            flow.Parent is not Control parent ||
+            !status.Visible || parent.ClientSize.Width <= 0)
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Selected Start lifetime status is not visible.");
+            return;
+        }
+
+        var rowWidth = Math.Max(flow.ClientSize.Width,
+            parent.ClientSize.Width - parent.Padding.Horizontal -
+            flow.Margin.Horizontal);
+        var available = Math.Max(1, rowWidth - flow.Padding.Horizontal -
+            status.Margin.Horizontal);
+
+        // Never calculate the expected text bounds with the status label's
+        // own GetPreferredSize(): an already-clamped MaximumSize can make a
+        // truncated caption appear geometrically correct to that method.
+        // Measure the full caption independently with the same TextRenderer
+        // flags that UiStatusLabel uses when painting.
+        const TextFormatFlags flags = TextFormatFlags.Left |
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;
+        var glyphGap = status.Image is null ? 0 :
+            (int)Math.Ceiling(UiStyle.ControlGap *
+                status.DeviceDpi / (double)UiStyle.BaselineDpi);
+        var chromeWidth = status.Padding.Horizontal +
+            (status.BorderStyle == BorderStyle.None ? 0 : 2) +
+            status.GlyphColumnInset +
+            (status.Image?.Width ?? 0) + glyphGap;
+        var chromeHeight = status.Padding.Vertical +
+            (status.BorderStyle == BorderStyle.None ? 0 : 2);
+        var text = status.Text ?? string.Empty;
+        var textFullWidth = TextRenderer.MeasureText(
+            text, status.Font, new Size(8192, 16384), flags).Width;
+        var requiredOneLine = chromeWidth + textFullWidth;
+        var wrappedHeight = TextRenderer.MeasureText(
+            text, status.Font, new Size(
+                Math.Max(1, status.ClientSize.Width - chromeWidth), 16384),
+            flags).Height;
+        var requiredHeight = chromeHeight +
+            Math.Max(status.Image?.Height ?? 0, wrappedHeight);
+        var shouldFitOneLine = requiredOneLine <= available;
+
+        // At the exact painted width, GDI's constrained MeasureText can
+        // report a height up to two logical pixels above the visible glyph
+        // line (default overhang padding). The latest native PNG confirms
+        // the complete one-line caption. Allow only that DPI-scaled rounding
+        // difference; an actual hidden wrapped line still adds ~font height
+        // and must fail the assertion.
+        var heightRoundingTolerance = Math.Max(2,
+            (int)Math.Ceiling(2d * status.DeviceDpi /
+                UiStyle.BaselineDpi));
+        if (status.ClientSize.Width <= 0 ||
+            status.ClientSize.Height + heightRoundingTolerance < requiredHeight ||
+            (shouldFitOneLine &&
+             status.ClientSize.Width + 2 < requiredOneLine))
+        {
+            failures.Add(
+                $"{formName}/{scenario.Name}: Selected Start lifetime caption is clipped " +
+                $"(label={status.ClientSize.Width}x{status.ClientSize.Height}, " +
+                $"fullWidth={requiredOneLine}, neededHeight={requiredHeight}, " +
+                $"availableWidth={available}, maxWidth={status.MaximumSize.Width}).");
         }
     }
 
@@ -3634,6 +5975,20 @@ public static class UiLayoutSelfTest
             UiStyle.HomeStatusGlyphGroupingDistance *
             Math.Max(main.DeviceDpi / (double)UiStyle.BaselineDpi,
                 main.Font.Size / Math.Max(1F, UiStyle.BodyFont.Size)));
+
+        foreach (var item in visible)
+        {
+            var label = item.Label;
+            if (label.Parent is not FlowLayoutPanel || !label.AutoSize ||
+                label.Dock != DockStyle.None)
+                continue;
+
+            // Check the real bounds after glyph alignment, not merely the
+            // preferred width: the old flow row kept a narrower stored size.
+            var required = label.GetPreferredSize(new Size(label.Width, 0));
+            if (label.Height < required.Height)
+                failures.Add($"{formName}/{scenario.Name}: Start inline status clips its caption after glyph alignment (height={label.Height}, required={required.Height}).");
+        }
 
         var sorted = visible.OrderBy(item =>
             item.Painted!.Value - item.Label.GlyphColumnInset).ToArray();

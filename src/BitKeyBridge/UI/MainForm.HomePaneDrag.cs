@@ -294,6 +294,28 @@ public sealed partial class MainForm
             Enum.Parse<HomePaneKind>(destination, true));
     }
 
+    // These three headers are fixed UI commands, not device/status text.
+    // Keep the drag behavior and host identities untouched during localization.
+    private void ApplyHomePaneDragCaptions()
+    {
+        var instruction = UiLanguageService.Translate(
+            _uiLanguageCode, "HomePaneDragInstruction");
+        foreach (var (handle, title) in new[]
+        {
+            (_homeBitLockerDragHandle, "BitLocker"),
+            (_homeLapsDragHandle, "LAPS"),
+            (_homeComputersDragHandle,
+                UiLanguageService.Translate(_uiLanguageCode, "HomePaneComputers"))
+        })
+        {
+            if (handle.IsDisposed)
+                continue;
+            var caption = "⠿  " + title + "  — " + instruction;
+            if (!string.Equals(handle.Text, caption, StringComparison.Ordinal))
+                handle.Text = caption;
+        }
+    }
+
     private void UpdateHomePaneDragUi(bool threeColumns)
     {
         var cursor = threeColumns ? Cursors.SizeAll : Cursors.Default;

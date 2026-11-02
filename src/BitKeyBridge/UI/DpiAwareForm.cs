@@ -9,6 +9,21 @@ public class DpiAwareForm : Form
 {
     private readonly Dictionary<Label, Size> _labelMaximumSizes =
         new();
+    // A tab with many captions can fire dozens of VisibleChanged events.
+    // Batch them once on the UI thread; never capture or log label contents.
+    private readonly HashSet<Label> _pendingVisibleLabelWidths = new();
+    private bool _visibleLabelWidthRefreshPosted;
+    private int _visibleLabelHandleGeneration;
+    private bool _responsiveHandleRecreated;
+    private int _visibleLabelWidthBatchCount;
+    private bool _brandedIconAssigned;
+
+    internal bool HasBrandIconForUiSelfTest => _brandedIconAssigned;
+
+    internal int VisibleLabelWidthBatchCountForUiSelfTest =>
+        _visibleLabelWidthBatchCount;
+    internal int PendingVisibleLabelWidthsForUiSelfTest =>
+        _pendingVisibleLabelWidths.Count;
 
     // WinForms can send hundreds of WM_SIZE notifications while dragging or
     // reconnecting an RDP session. Batch expensive text measurement.
@@ -31,6 +46,29 @@ public class DpiAwareForm : Form
                 UiStyle.BaselineDpi);
         Font =
             UiStyle.BodyFont;
+
+        // The PE icon alone changes Explorer but not every WinForms dialog.
+        // Assign each window its own clone from the managed .ico resource so
+        // the title bar, taskbar and Device 360 share the same blue shield.
+        // No external files, elevation, security policy or directory access.
+        try
+        {
+            using var iconStream = typeof(DpiAwareForm).Assembly
+                .GetManifestResourceStream("BitKeyBridge.BrandIcon");
+            if (iconStream is not null)
+            {
+                using var resourceIcon = new System.Drawing.Icon(iconStream);
+                Icon = (System.Drawing.Icon)resourceIcon.Clone();
+                _brandedIconAssigned = true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or
+                                   InvalidOperationException or
+                                   System.ComponentModel.Win32Exception)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "Application icon unavailable: " + ex.GetType().Name);
+        }
 
         _responsiveLabelTimer.Tick += (_, _) =>
         {
@@ -58,19 +96,48 @@ public class DpiAwareForm : Form
         };
         Disposed += (_, _) =>
         {
+            _pendingVisibleLabelWidths.Clear();
             _responsiveLabelTimer.Dispose();
             _responsiveLayoutTimer.Dispose();
         };
+    }
+
+    // A WinForms HWND may be recreated on RTL, DPI and RDP transitions.
+    // BeginInvoke callbacks queued against the old handle may never run;
+    // invalidate them and allow the next visible tab to schedule normally.
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        unchecked { _visibleLabelHandleGeneration++; }
+        _pendingVisibleLabelWidths.Clear();
+        _visibleLabelWidthRefreshPosted = false;
+        _responsiveLabelTimer.Stop();
+        _responsiveLayoutTimer.Stop();
+        _responsiveHandleRecreated = _responsiveLayoutInitialized &&
+            !IsDisposed && !Disposing;
+        base.OnHandleDestroyed(e);
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (_responsiveHandleRecreated && !IsDisposed && !Disposing)
+        {
+            _responsiveHandleRecreated = false;
+            QueueResponsiveLayoutRefresh();
+        }
     }
 
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
 
-        // Reuse the per-user EN/RU/HE preference for every modal dialog.
-        // Perform this once before DPI/layout measurement. The main shell
-        // and explicit-language recovery workflow have their own localizer.
-        if (this is not MainForm && this is not RecoveryWorkflowDialog)
+        // Reuse per-user EN/RU/HE for ordinary modal dialogs. Explicitly
+        // localized RecoveryWorkflow/Device360 windows supply their language
+        // from the current MainForm instead; applying the saved (possibly EN)
+        // preference here silently resets their Hebrew RightToLeftLayout.
+        if (this is not MainForm &&
+            this is not RecoveryWorkflowDialog &&
+            this is not Device360Dialog)
             UiDialogLocalization.Apply(this);
 
         // A scrollbar is preferable to clipped controls on high DPI, large-text
@@ -274,30 +341,75 @@ public class DpiAwareForm : Form
         object? sender,
         EventArgs e)
     {
-        if (sender is not Label label ||
-            !label.Visible ||
-            label.IsDisposed ||
-            IsDisposed ||
-            !IsHandleCreated)
-        {
+        if (sender is not Label label || !label.Visible || label.IsDisposed ||
+            IsDisposed || Disposing || !IsHandleCreated)
             return;
+
+        _pendingVisibleLabelWidths.Add(label);
+        if (_visibleLabelWidthRefreshPosted)
+            return;
+
+        _visibleLabelWidthRefreshPosted = true;
+        try
+        {
+            // Exactly one posted callback for a burst of newly visible
+            // labels. It runs after WinForms has activated the tab/page.
+            var generation = _visibleLabelHandleGeneration;
+            BeginInvoke(new MethodInvoker(
+                () => DrainPendingVisibleLabelWidths(generation)));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or
+                                   ObjectDisposedException)
+        {
+            _visibleLabelWidthRefreshPosted = false;
+            _pendingVisibleLabelWidths.Clear();
+            System.Diagnostics.Debug.WriteLine(
+                "Visible-label reflow was not scheduled: " + ex.GetType().Name);
+        }
+    }
+
+    private void DrainPendingVisibleLabelWidths(int generation)
+    {
+        // Do not clear a newer HWND's pending queue if a stale callback
+        // somehow arrives after RecreateHandle().
+        if (generation != _visibleLabelHandleGeneration)
+            return;
+        _visibleLabelWidthRefreshPosted = false;
+        var pending = _pendingVisibleLabelWidths.ToArray();
+        _pendingVisibleLabelWidths.Clear();
+
+        if (IsDisposed || Disposing || !IsHandleCreated)
+            return;
+
+        // MaximumSize already requests layout on an actual width change.
+        // Preserve one explicit parent reflow per parent at most; never
+        // force N identical layouts for N captions on one selected tab.
+        var parents = new HashSet<Control>();
+        var changed = 0;
+        foreach (var label in pending)
+        {
+            if (label.IsDisposed || !label.Visible || label.Parent is null)
+                continue;
+
+            if (RefreshResponsiveLabelWidth(label))
+            {
+                changed++;
+                if (!label.Parent.IsDisposed)
+                    parents.Add(label.Parent);
+            }
         }
 
-        BeginInvoke(
-            new MethodInvoker(
-                () =>
-                {
-                    if (label.IsDisposed ||
-                        !label.Visible ||
-                        IsDisposed)
-                    {
-                        return;
-                    }
+        var reflowed = 0;
+        foreach (var parent in parents)
+        {
+            if (parent.IsDisposed || !parent.Visible)
+                continue;
+            parent.PerformLayout();
+            reflowed++;
+        }
 
-                    RefreshResponsiveLabelWidth(
-                        label);
-                    label.Parent?.PerformLayout();
-                }));
+        _visibleLabelWidthBatchCount++;
+        UiLayoutTelemetry.RecordVisibleLabelBatch(changed, reflowed);
     }
 
     private void ResponsiveLabelDisposed(
@@ -305,7 +417,10 @@ public class DpiAwareForm : Form
         EventArgs e)
     {
         if (sender is Label label)
+        {
             _labelMaximumSizes.Remove(label);
+            _pendingVisibleLabelWidths.Remove(label);
+        }
     }
 
     private void RefreshResponsiveLabelWidths()
@@ -323,7 +438,7 @@ public class DpiAwareForm : Form
         }
     }
 
-    private void RefreshResponsiveLabelWidth(
+    protected bool RefreshResponsiveLabelWidth(
         Label label)
     {
         if (!_labelMaximumSizes.TryGetValue(
@@ -332,7 +447,7 @@ public class DpiAwareForm : Form
             designMaximum.Width <= 0 ||
             label.Parent is null)
         {
-            return;
+            return false;
         }
 
         var availableWidth =
@@ -340,7 +455,7 @@ public class DpiAwareForm : Form
                 label);
 
         if (availableWidth <= 0)
-            return;
+            return false;
 
         var maximumWidth =
             Math.Max(
@@ -354,12 +469,13 @@ public class DpiAwareForm : Form
                 maximumWidth,
                 designMaximum.Height);
 
-        if (label.MaximumSize !=
+        if (label.MaximumSize ==
             target)
-        {
-            label.MaximumSize =
-                target;
-        }
+            return false;
+
+        label.MaximumSize =
+            target;
+        return true;
     }
 
     private static int GetAvailableWidth(
@@ -370,6 +486,27 @@ public class DpiAwareForm : Form
 
         if (parent is null)
             return 0;
+
+        // A horizontal AutoSize flow can shrink to the width of an older
+        // status caption before its TableLayoutPanel cell is measured.
+        // If we subsequently cap the caption's MaximumSize to that stale
+        // flow width, the missing final word can never be laid out again.
+        // The containing cell supplies the real wrapping limit; other
+        // controls in the flow may wrap onto the next line as intended.
+        if (control is UiStatusLabel &&
+            parent is FlowLayoutPanel
+            {
+                AutoSize: true,
+                Dock: DockStyle.Top,
+                WrapContents: true
+            } flow &&
+            flow.Parent is { IsDisposed: false, ClientSize.Width: > 0 } cell)
+        {
+            return Math.Max(1,
+                cell.ClientSize.Width - cell.Padding.Horizontal -
+                flow.Margin.Horizontal - flow.Padding.Horizontal -
+                control.Margin.Horizontal);
+        }
 
         var available =
             parent.ClientSize.Width -

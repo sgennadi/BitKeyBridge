@@ -6,8 +6,36 @@ public sealed class UiDiagnosticPanel : Panel
     private readonly Label _copyStatus = new();
     private readonly Button _copy = UiStyle.CreateActionButton("Copy diagnostics");
     private readonly Button _dismiss = UiStyle.CreateActionButton("Dismiss");
+    private readonly TableLayoutPanel _actions = new();
     private string _diagnostics = string.Empty;
     private string _language = "en";
+    private bool _compactHeight;
+
+    // The diagnostics strip must consume its *content* height, never fill a
+    // phantom AutoSize row above Start. Short windows keep both buttons and
+    // the complete summary; the full sanitized report stays copyable.
+    internal void SetCompactHeight(bool compact)
+    {
+        if (_compactHeight == compact)
+            return;
+        _compactHeight = compact;
+        SuspendLayout();
+        try
+        {
+            var gap = compact ? Math.Max(3, UiStyle.ControlGap / 2) :
+                UiStyle.ControlGap;
+            Padding = new Padding(gap);
+            Margin = new Padding(0, compact ? 0 : gap, 0, gap);
+            _summary.Margin = new Padding(0, 0, gap, 0);
+            _copyStatus.Margin = new Padding(
+                0, compact ? 0 : Math.Max(2, gap / 2), gap, 0);
+            UpdateSummaryWrapWidth();
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
+    }
 
     // The source text can be lost visually when native tab handles are
     // rebuilt. Keep the sanitized report independent of visibility/painting.
@@ -20,6 +48,7 @@ public sealed class UiDiagnosticPanel : Panel
             _language, "Copy diagnostics");
         _dismiss.Text = UiStaticCaptionCatalog.TranslateOrOriginal(
             _language, "Dismiss");
+        UpdateSummaryWrapWidth();
         if (_copyStatus.Text.Length > 0 &&
             new[] { "en", "ru", "he" }.Any(language =>
                 _copyStatus.Text == UiStaticCaptionCatalog.TranslateOrOriginal(
@@ -63,14 +92,31 @@ public sealed class UiDiagnosticPanel : Panel
         }
     }
 
+    // Geometry-only evidence for the native self-test. Never reads Text,
+    // report contents, user names or credentials.
+    internal string ActionBoundsReport()
+    {
+        var actions = _copy.Parent;
+        var root = actions?.Parent;
+        static string Bounds(Control? c) =>
+            c is null ? "-" :
+            c.Name + "=" + c.Bounds.ToString() +
+            "/client=" + c.ClientSize.ToString() +
+            "/visible=" + c.Visible;
+        return Bounds(this) + "; " + Bounds(root) + "; " +
+            Bounds(actions) + "; " + Bounds(_copy) + "; " +
+            Bounds(_dismiss) + "; " + Bounds(_summary) + ".";
+    }
+
     public UiDiagnosticPanel()
     {
         Name = "DiagnosticPanel";
         AccessibleName = "Diagnostics";
-        // This lives in an AutoSize row of MainLayoutRoot. Dock.Fill makes
-        // its bounds fill that row on every DPI/RTL change instead of keeping
-        // a narrow preferred-size rectangle whose copy controls are clipped.
-        Dock = DockStyle.Fill;
+        // Dock.Top fills the AutoSize cell's width WITHOUT feeding an
+        // artificially expanded cell height back into its preferred height.
+        // Dock.Fill previously left a tall empty diagnostic band on short
+        // desktop/RDP windows, hiding the recovery cards.
+        Dock = DockStyle.Top;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         MinimumSize = new Size(0, UiStyle.MinimumButtonHeight +
@@ -92,56 +138,99 @@ public sealed class UiDiagnosticPanel : Panel
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             RightToLeft = RightToLeft.No,
-            ColumnCount = 1,
-            RowCount = 3,
-            Margin = new Padding(0)
+            // A simple notice should not reserve a tall empty band above
+            // Start. Keep the summary and Copy/Dismiss on the same line.
+            ColumnCount = 2,
+            RowCount = 2,
+            Margin = Padding.Empty
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         // Buttons FIRST. Even if summary text expands or an inherited
         // WinForms AutoSize pass clips a later row, copy stays at the top.
-        var actions = new FlowLayoutPanel
-        {
-            Name = "DiagnosticPanelActions",
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MinimumSize = new Size(0, UiStyle.MinimumButtonHeight),
-            RightToLeft = RightToLeft.No,
-            WrapContents = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0)
-        };
+        // FlowLayoutPanel measured only the widest single button (175px)
+        // and silently wrapped Dismiss onto a second row (76px), even
+        // when WrapContents=false. Its parent remained 48px, clipping
+        // Dismiss behind the tabs. A two-column table cannot reflow the
+        // second action vertically under constrained measurements.
+        var actions = _actions;
+        actions.Name = "DiagnosticPanelActions";
+        actions.Dock = DockStyle.Top;
+        actions.AutoSize = true;
+        actions.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        actions.RightToLeft = RightToLeft.No;
+        actions.ColumnCount = 2;
+        actions.RowCount = 1;
+        actions.Margin = new Padding(UiStyle.ControlGap, 0, 0, 0);
+        actions.Padding = Padding.Empty;
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        actions.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         _copy.Name = "CopyDiagnosticsButton";
         _copy.AccessibleName = "Copy redacted diagnostics to clipboard";
         _copy.RightToLeft = RightToLeft.No;
         _dismiss.Name = "DismissDiagnosticsButton";
         _dismiss.RightToLeft = RightToLeft.No;
-        actions.Controls.Add(_copy);
-        actions.Controls.Add(_dismiss);
-        root.Controls.Add(actions, 0, 0);
+        actions.Controls.Add(_copy, 0, 0);
+        actions.Controls.Add(_dismiss, 1, 0);
+        UpdateSummaryWrapWidth();
+        root.Controls.Add(actions, 1, 0);
+        root.SetRowSpan(actions, 2);
 
         _summary.AutoSize = true;
         _summary.Dock = DockStyle.Top;
         _summary.MaximumSize = new Size(980, 0);
         _summary.Font = UiStyle.CreateEmphasisFont();
         _summary.AccessibleName = "Diagnostic reason";
-        _summary.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
-        root.Controls.Add(_summary, 0, 1);
+        _summary.Margin = new Padding(0, 0, UiStyle.ControlGap, 0);
+        root.Controls.Add(_summary, 0, 0);
 
         _copyStatus.AutoSize = true;
         _copyStatus.Dock = DockStyle.Top;
         _copyStatus.AccessibleName = "Diagnostic copy status";
-        _copyStatus.Margin = new Padding(0, UiStyle.ControlGap, 0, 0);
-        root.Controls.Add(_copyStatus, 0, 2);
+        _copyStatus.Margin = new Padding(
+            0, Math.Max(2, UiStyle.ControlGap / 2), UiStyle.ControlGap, 0);
+        root.Controls.Add(_copyStatus, 0, 1);
 
         Controls.Add(root);
+        SizeChanged += (_, _) => UpdateSummaryWrapWidth();
+        _copy.FontChanged += (_, _) => UpdateSummaryWrapWidth();
+        _dismiss.FontChanged += (_, _) => UpdateSummaryWrapWidth();
 
         _copy.Click += (_, _) => CopyDiagnostics();
         _dismiss.Click += (_, _) => Clear();
+    }
+
+    private void UpdateSummaryWrapWidth()
+    {
+        if (IsDisposed)
+            return;
+
+        // Reserve both buttons' measured (possibly localized) widths.
+        // TableLayoutPanel must not choose just one button's width on
+        // an unconstrained AutoSize pass, including at 200% DPI.
+        var actionWidth = _copy.GetPreferredSize(Size.Empty).Width +
+            _dismiss.GetPreferredSize(Size.Empty).Width +
+            _copy.Margin.Horizontal + _dismiss.Margin.Horizontal;
+        var minimum = new Size(Math.Max(actionWidth, 2 * UiStyle.MinimumButtonWidth),
+            UiStyle.MinimumButtonHeight);
+        if (_actions.MinimumSize != minimum)
+            _actions.MinimumSize = minimum;
+        if (ClientSize.Width < 160)
+            return;
+
+        // AutoSize summaries must wrap BEFORE they push Copy/Dismiss
+        // out of the visible two-column viewport at 200% DPI.
+        var remaining = ClientSize.Width - Padding.Horizontal -
+            minimum.Width - UiStyle.ControlGap - 8;
+        var maximum = Math.Max(110, Math.Min(980, remaining));
+        if (_summary.MaximumSize.Width != maximum)
+            _summary.MaximumSize = new Size(maximum, 0);
+        if (_copyStatus.MaximumSize.Width != maximum)
+            _copyStatus.MaximumSize = new Size(maximum, 0);
     }
 
     public void ShowError(
@@ -173,6 +262,7 @@ public sealed class UiDiagnosticPanel : Panel
         _summary.Text = DiagnosticRedaction.Sanitize(summary);
         _diagnostics = DiagnosticRedaction.Sanitize(string.Join(Environment.NewLine, lines));
         _copyStatus.Text = string.Empty;
+        UpdateSummaryWrapWidth();
         Visible = true;
         BringToFront();
     }
@@ -184,6 +274,7 @@ public sealed class UiDiagnosticPanel : Panel
         _summary.Text = DiagnosticRedaction.Sanitize(summary);
         _diagnostics = DiagnosticRedaction.Sanitize(diagnostics);
         _copyStatus.Text = string.Empty;
+        UpdateSummaryWrapWidth();
         Visible = true;
         BringToFront();
     }
