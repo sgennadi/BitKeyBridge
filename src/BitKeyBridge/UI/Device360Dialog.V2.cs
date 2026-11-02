@@ -77,12 +77,11 @@ internal sealed partial class Device360Dialog
             BackColor = UiStyle.ModernSurface,
             ForeColor = UiStyle.ModernForeground,
             Font = UiStyle.BodyFont,
-            Text = Device360HealthService.Summary(observations) +
+            Text = Device360HealthUiFormatter.Summary(observations, language) +
                 Environment.NewLine + Environment.NewLine +
                 string.Join(Environment.NewLine + Environment.NewLine,
                     observations.Select(item =>
-                        item.Area + " [" + item.State + "]" +
-                        Environment.NewLine + item.Explanation))
+                        Device360HealthUiFormatter.Format(item, language)))
         };
         diagnosticsPage.Container.Controls.Add(diagnostics);
         tabs.TabPages.Add(diagnosticsPage.Tab);
@@ -127,7 +126,7 @@ internal sealed partial class Device360Dialog
         {
             Name = "Device360V2HealthSummary",
             Text = Tr("Device360V2HealthTitle") + Environment.NewLine +
-                Device360HealthService.Summary(observations),
+                Device360HealthUiFormatter.Summary(observations, language),
             Font = UiStyle.CreateEmphasisFont(11),
             AutoSize = true,
             Dock = DockStyle.Top,
