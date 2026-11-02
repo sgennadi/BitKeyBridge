@@ -479,48 +479,50 @@ public sealed partial class MainForm
         var twoColumns = !threeColumns && width >= (int)Math.Ceiling(
             UiStyle.HomeRecoveryCardsPairMinimumWidth * effectiveScale);
 
-        // On a short but WIDE Start viewport, let the THREE columns end
-        // above the bottom edge. Otherwise Dock.Fill expands the cards to
-        // their 210px logical minimum and cuts off the rounded lower arcs
-        // even when all Reveal/Copy buttons are already visible.
-        // Recovery card content scrolls *inside* its own Panel; never shrink
-        // below the actual localized action buttons and bottom clearance.
+        // Compute the actual remaining *screen* height from the recovery
+        // grid's native origin. The earlier sum of five root rows plus the
+        // selection panel could double-count nested AutoSize space, wrongly
+        // selecting Dock.Fill even when the buttons and rounded lower border
+        // would fit. Reuse the same 8px DPI-scaled bottom safety inset as
+        // the native clipping test, with one extra physical pixel of slack.
+        //
+        // Card contents (including history/details) scroll inside their
+        // respective rounded panels. Keep actions fully visible; if that
+        // is impossible, leave root-level scrolling enabled rather than
+        // squeeze buttons or change the user's Windows DPI.
         var heightFitsViewport = false;
         if (threeColumns && _startHeightDensity != 0 &&
             _homeWorkspaceTab?.Controls.OfType<TableLayoutPanel>()
                 .FirstOrDefault(root => root.Name == "HomeLayoutRoot")
-                is { IsDisposed: false } startRoot &&
-            startRoot.ClientSize.Height > 150 &&
-            startRoot.RowStyles.Count >= 6)
+                is { IsDisposed: false, IsHandleCreated: true } startRoot &&
+            startRoot.Visible && startRoot.ClientSize.Height > 150 &&
+            _homeServiceCards.IsHandleCreated && _homeServiceCards.Visible)
         {
-            var topRowsHeight = startRoot.GetRowHeights().Take(5).Sum();
-            var selectionHeight = _homeSelectionPanel.Visible
-                ? _homeSelectionPanel.Height : 0;
-            var bottomInset = (int)Math.Ceiling(
-                UiStyle.SectionGap * effectiveScale);
-            var availableHeight = startRoot.ClientSize.Height -
-                startRoot.Padding.Vertical - topRowsHeight -
-                selectionHeight - bottomInset;
+            var cardTop = _homeServiceCards.PointToScreen(Point.Empty).Y;
+            var viewportBottom = startRoot.RectangleToScreen(
+                startRoot.ClientRectangle).Bottom;
+            var bottomInset = UiStyle.ScaleLogicalPixels(8, DeviceDpi) + 1;
+            var availableHeight = viewportBottom - cardTop - bottomInset;
             var minimumActionHeight = (int)Math.Ceiling(
                 168 * effectiveScale);
-            if (_homeServiceCards.IsHandleCreated)
+            var actionsMeasured = true;
+            foreach (var action in new[]
             {
-                var cardTop = _homeServiceCards.PointToScreen(Point.Empty).Y;
-                foreach (var action in new[]
+                _homeRevealBitLockerButton, _homeCopyBitLockerButton,
+                _homeRevealLapsButton, _homeCopyLapsButton
+            })
+            {
+                if (!action.IsHandleCreated || !action.Visible)
                 {
-                    _homeRevealBitLockerButton, _homeCopyBitLockerButton,
-                    _homeRevealLapsButton, _homeCopyLapsButton
-                })
-                {
-                    if (!action.IsHandleCreated || !action.Visible)
-                        continue;
-                    var actionBottom = action.RectangleToScreen(
-                        action.ClientRectangle).Bottom;
-                    minimumActionHeight = Math.Max(minimumActionHeight,
-                        actionBottom - cardTop + bottomInset);
+                    actionsMeasured = false;
+                    break;
                 }
+                var actionBottom = action.RectangleToScreen(
+                    action.ClientRectangle).Bottom;
+                minimumActionHeight = Math.Max(minimumActionHeight,
+                    actionBottom - cardTop + bottomInset);
             }
-            if (availableHeight >= minimumActionHeight)
+            if (actionsMeasured && availableHeight >= minimumActionHeight)
             {
                 scaledHeight = Math.Min(scaledHeight, availableHeight);
                 heightFitsViewport = true;
