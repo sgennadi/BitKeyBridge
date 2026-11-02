@@ -779,9 +779,15 @@ public sealed partial class MainForm
                 await OpenSelectedHomeLapsAsync();
                 return;
             case HomeDefaultAction.Devices:
-                // Requires exact source-qualified selection before cloud operations.
+                // Carry already verified cloud metadata into Devices. Do not
+                // open a second Graph search/MFA dialog while navigating.
                 OpenHomeDeviceDetails();
-                await SearchUnifiedDevicesAsync();
+                if (!TryReuseHomeInventoryInDevices(selected!))
+                    UiStyle.SetStatus(_unifiedStatus,
+                        "No exact source-qualified inventory to reuse. " +
+                        "Press Search for new results; sign in only using " +
+                        "the separate Connect Microsoft 365 button.",
+                        UiStatusKind.Warning);
                 return;
             case HomeDefaultAction.ChooseRecoveryType:
                 // Missing metadata is not proof that BitLocker is absent.
