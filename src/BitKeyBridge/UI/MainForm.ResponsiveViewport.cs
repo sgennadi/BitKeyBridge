@@ -478,6 +478,63 @@ public sealed partial class MainForm
         var threeColumns = width >= scaledWidth;
         var twoColumns = !threeColumns && width >= (int)Math.Ceiling(
             UiStyle.HomeRecoveryCardsPairMinimumWidth * effectiveScale);
+
+        // On a short but WIDE Start viewport, let the THREE columns end
+        // above the bottom edge. Otherwise Dock.Fill expands the cards to
+        // their 210px logical minimum and cuts off the rounded lower arcs
+        // even when all Reveal/Copy buttons are already visible.
+        // Recovery card content scrolls *inside* its own Panel; never shrink
+        // below the actual localized action buttons and bottom clearance.
+        var heightFitsViewport = false;
+        if (threeColumns && _startHeightDensity != 0 &&
+            _homeWorkspaceTab?.Controls.OfType<TableLayoutPanel>()
+                .FirstOrDefault(root => root.Name == "HomeLayoutRoot")
+                is { IsDisposed: false } startRoot &&
+            startRoot.ClientSize.Height > 150 &&
+            startRoot.RowStyles.Count >= 6)
+        {
+            var topRowsHeight = startRoot.GetRowHeights().Take(5).Sum();
+            var selectionHeight = _homeSelectionPanel.Visible
+                ? _homeSelectionPanel.Height : 0;
+            var bottomInset = (int)Math.Ceiling(
+                UiStyle.SectionGap * effectiveScale);
+            var availableHeight = startRoot.ClientSize.Height -
+                startRoot.Padding.Vertical - topRowsHeight -
+                selectionHeight - bottomInset;
+            var minimumActionHeight = (int)Math.Ceiling(
+                168 * effectiveScale);
+            if (_homeServiceCards.IsHandleCreated)
+            {
+                var cardTop = _homeServiceCards.PointToScreen(Point.Empty).Y;
+                foreach (var action in new[]
+                {
+                    _homeRevealBitLockerButton, _homeCopyBitLockerButton,
+                    _homeRevealLapsButton, _homeCopyLapsButton
+                })
+                {
+                    if (!action.IsHandleCreated || !action.Visible)
+                        continue;
+                    var actionBottom = action.RectangleToScreen(
+                        action.ClientRectangle).Bottom;
+                    minimumActionHeight = Math.Max(minimumActionHeight,
+                        actionBottom - cardTop + bottomInset);
+                }
+            }
+            if (availableHeight >= minimumActionHeight)
+            {
+                scaledHeight = Math.Min(scaledHeight, availableHeight);
+                heightFitsViewport = true;
+            }
+        }
+        // Dock.Top keeps the computed native height instead of stretching
+        // the rounded panel through the visible lower border. The stacked
+        // modes and too-small RDP screens still use full scroll coverage.
+        var desiredDock = heightFitsViewport
+            ? DockStyle.Top : DockStyle.Fill;
+        if (_homeServiceCards.Dock != desiredDock)
+            _homeServiceCards.Dock = desiredDock;
+        if (heightFitsViewport && _homeServiceCards.Height != scaledHeight)
+            _homeServiceCards.Height = scaledHeight;
         UpdateHomePaneDragUi(threeColumns);
 
         var desiredKey = (threeColumns ? "3cols:" :
@@ -750,12 +807,15 @@ public sealed partial class MainForm
                 {
                     var heights = startRoot.GetRowHeights();
                     var topHeight = heights.Take(5).Sum();
-                    var minimumCardHeight = (int)Math.Ceiling(
-                        _startMinimumCardHeight * EffectiveHomeDpiScale());
-                    var stackedRows = Math.Clamp(
-                        _homeServiceCards.RowCount, 1, 3);
-                    var required = topHeight +
-                        minimumCardHeight * stackedRows +
+                    // Include the selected-computer toolbar (it lives in
+                    // row 5) and the actual adaptive pane height. The old
+                    // formula omitted that toolbar while forcing the full
+                    // uncompressed height, causing the rounded card bottoms
+                    // to sit below the short-screen viewport.
+                    var selectionHeight = _homeSelectionPanel.Visible
+                        ? _homeSelectionPanel.Height : 0;
+                    var required = topHeight + selectionHeight +
+                        _homeServiceCards.MinimumSize.Height +
                         startRoot.Padding.Vertical;
                     var minScroll = required > startRoot.ClientSize.Height
                         ? new Size(0, required + UiStyle.ControlGap)
