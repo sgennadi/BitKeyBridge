@@ -122,6 +122,7 @@ public sealed partial class MainForm
         _unifiedDetails.Text = Device360Formatter.Format(metadata);
         _device360LastUnifiedPartial = metadata.RecoveryMetadataIncomplete;
         _device360UnifiedLookupFailed = default;
+        _device360UnifiedFailureKinds = default;
         SetDevicesCloudWarningAction(!HasCloudSearchSession());
 
         UiStyle.SetStatus(_unifiedStatus,
