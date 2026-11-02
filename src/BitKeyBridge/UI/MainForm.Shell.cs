@@ -7,6 +7,7 @@ public sealed partial class MainForm
     private readonly TabControl _mainTabs = new();
     private TabPage? _cloudSettingsPage;
     private readonly Button _devicesCloudSettingsLink = new();
+    private readonly Button _devicesCloudConnectButton = new();
     private readonly TableLayoutPanel _devicesSearchStatusRow = new();
     private ToolStripMenuItem? _toolsTopMenu;
     private ToolStripMenuItem? _recoveryStepsMenu;
@@ -2595,20 +2596,36 @@ public sealed partial class MainForm
         _devicesSearchStatusRow.Name = "DevicesCloudWarningActions";
         _devicesSearchStatusRow.Dock = DockStyle.Top;
         _devicesSearchStatusRow.AutoSize = true;
-        _devicesSearchStatusRow.ColumnCount = 2;
+        _devicesSearchStatusRow.ColumnCount = 3;
         _devicesSearchStatusRow.RowCount = 1;
         _devicesSearchStatusRow.ColumnStyles.Add(
             new ColumnStyle(SizeType.Percent, 100F));
         _devicesSearchStatusRow.ColumnStyles.Add(
             new ColumnStyle(SizeType.AutoSize));
+        _devicesSearchStatusRow.ColumnStyles.Add(
+            new ColumnStyle(SizeType.AutoSize));
         _devicesSearchStatusRow.Controls.Add(_unifiedStatus, 0, 0);
+
+        // Search never prompts for MFA. Explicit connection is available to
+        // standard users here and reuses the Start tenant/client configuration.
+        _devicesCloudConnectButton.Name = "DevicesConnectMicrosoft365Button";
+        _devicesCloudConnectButton.Text = "Connect Microsoft 365";
+        _devicesCloudConnectButton.AccessibleName =
+            "Explicitly sign in once using Device Code and MFA";
+        _devicesCloudConnectButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        UiStyle.ConfigureActionButton(_devicesCloudConnectButton);
+        _devicesCloudConnectButton.Click +=
+            async (_, _) => await ConnectCloudFromDevicesAsync();
+        _devicesSearchStatusRow.Controls.Add(_devicesCloudConnectButton, 1, 0);
+        _devicesCloudConnectButton.Visible = false;
+
         _devicesCloudSettingsLink.Name = "DevicesOpenCloudSettingsButton";
         _devicesCloudSettingsLink.Text = "Configure Cloud...";
         _devicesCloudSettingsLink.AccessibleName = "Open Cloud settings";
         _devicesCloudSettingsLink.Anchor = AnchorStyles.Right | AnchorStyles.Top;
         UiStyle.ConfigureActionButton(_devicesCloudSettingsLink);
         _devicesCloudSettingsLink.Click += (_, _) => OpenCloudSettingsFromDevices();
-        _devicesSearchStatusRow.Controls.Add(_devicesCloudSettingsLink, 1, 0);
+        _devicesSearchStatusRow.Controls.Add(_devicesCloudSettingsLink, 2, 0);
         _devicesCloudSettingsLink.Visible = false;
         root.Controls.Add(_devicesSearchStatusRow, 0, 1);
 
@@ -2902,11 +2919,40 @@ public sealed partial class MainForm
 
     private void SetDevicesCloudWarningAction(bool needed)
     {
-        // Never suggest an admin-only destination to an unauthorized user.
+        // Sign-in (delegated MFA) is a standard-user action; configuring
+        // tenant-wide permissions is a separate, administrator-only task.
+        _devicesCloudConnectButton.Visible = needed && !HasCloudSearchSession();
+        _devicesCloudConnectButton.Enabled = !_cloudConnecting;
         _devicesCloudSettingsLink.Visible = needed &&
             _cloudSettingsPage is not null &&
             _mainTabs.TabPages.Cast<TabPage>().Any(
                 page => page.Name == "SettingsWorkspace");
+    }
+
+    private async Task ConnectCloudFromDevicesAsync()
+    {
+        if (_cloudConnecting)
+            return;
+        _devicesCloudConnectButton.Enabled = false;
+        try
+        {
+            // This is the ONLY Devices path that may open Device Code/MFA,
+            // explicitly selected by the operator. Search never calls it.
+            if (!HasCloudSearchSession())
+                await ConnectStartCloudAsync();
+            var connected = HasCloudSearchSession();
+            SetDevicesCloudWarningAction(!connected);
+            UiStyle.SetStatus(_unifiedStatus,
+                connected
+                    ? "Microsoft 365 connected. Search again to load Intune and Entra inventory."
+                    : "Cloud is not signed in. AD search remains available; " +
+                      "use Connect Microsoft 365 when ready.",
+                connected ? UiStatusKind.Success : UiStatusKind.Warning);
+        }
+        finally
+        {
+            _devicesCloudConnectButton.Enabled = !_cloudConnecting;
+        }
     }
 
     private void OpenCloudSettingsFromDevices()
