@@ -22,6 +22,9 @@ internal sealed class Device360OperationalStatus
     internal Device360SourceEvidence Entra { get; init; }
     internal Device360SourceEvidence Intune { get; init; }
     internal bool SearchPartial { get; init; }
+    internal MetadataFailureKind AdFailureKind { get; init; }
+    internal MetadataFailureKind EntraFailureKind { get; init; }
+    internal MetadataFailureKind IntuneFailureKind { get; init; }
     internal bool RbacEnabledByConfiguration { get; init; }
     internal bool TicketRequiredByConfiguration { get; init; }
     internal bool ProtectedAuditRequiredByConfiguration { get; init; }
@@ -36,20 +39,32 @@ internal sealed class Device360OperationalStatus
         bool rbacEnabled, bool ticketRequired, bool protectedAuditRequired,
         bool auditBrokerConfigured, bool searchPartial = false,
         bool adLookupFailed = false, bool entraLookupFailed = false,
-        bool intuneLookupFailed = false)
+        bool intuneLookupFailed = false,
+        MetadataFailureKind adFailureKind = MetadataFailureKind.None,
+        MetadataFailureKind entraFailureKind = MetadataFailureKind.None,
+        MetadataFailureKind intuneFailureKind = MetadataFailureKind.None)
     {
         ArgumentNullException.ThrowIfNull(record);
         return new Device360OperationalStatus
         {
-            Ad = Resolve(record.InAd, adConnected, adLookupFailed),
-            Entra = Resolve(record.InEntra, cloudSessionPresent, entraLookupFailed),
-            Intune = Resolve(record.InIntune, cloudSessionPresent, intuneLookupFailed),
+            Ad = Resolve(record.InAd, adConnected,
+                adLookupFailed || adFailureKind != MetadataFailureKind.None),
+            Entra = Resolve(record.InEntra, cloudSessionPresent,
+                entraLookupFailed || entraFailureKind != MetadataFailureKind.None),
+            Intune = Resolve(record.InIntune, cloudSessionPresent,
+                intuneLookupFailed || intuneFailureKind != MetadataFailureKind.None),
+            AdFailureKind = adFailureKind,
+            EntraFailureKind = entraFailureKind,
+            IntuneFailureKind = intuneFailureKind,
             RbacEnabledByConfiguration = rbacEnabled,
             TicketRequiredByConfiguration = ticketRequired,
             ProtectedAuditRequiredByConfiguration = protectedAuditRequired,
             AuditBrokerEnabledByConfiguration = auditBrokerConfigured,
             SearchPartial = searchPartial || adLookupFailed ||
-                entraLookupFailed || intuneLookupFailed
+                entraLookupFailed || intuneLookupFailed ||
+                adFailureKind != MetadataFailureKind.None ||
+                entraFailureKind != MetadataFailureKind.None ||
+                intuneFailureKind != MetadataFailureKind.None
         };
     }
 
