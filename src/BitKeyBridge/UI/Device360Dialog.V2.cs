@@ -200,6 +200,8 @@ internal sealed partial class Device360Dialog
         // checked again immediately before the query.
         var probe = UiStyle.CreateActionButton(Tr("Device360V2HardwareCheck"));
         probe.Name = "Device360V2HardwareProbe";
+        probe.Dock = DockStyle.Top;
+        probe.Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap);
         probe.Enabled = Device360HardwareService.CanQuery(snapshot);
         probe.AccessibleDescription = Tr("Device360V2HardwareHint");
         var hardwareStatus = new Label
