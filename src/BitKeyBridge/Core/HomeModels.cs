@@ -20,6 +20,11 @@ public sealed class HomeSearchResult
     public bool IsCloudRecord { get; set; }
     public string SourceIdentity { get; set; } = string.Empty;
 
+    // Read-only inventory from the SAME search, attached only by a verified
+    // AD object DN/GUID or a source-qualified Entra/Intune identity. Never
+    // match by computer name; never retain any recovery password or token.
+    internal UnifiedDeviceInfo? InventoryMetadata { get; set; }
+
     // The exact-computer BitLocker metadata was only found after
     // retrying outside the operator's currently selected OU.
     public bool BitLockerOutsideSelectedScope { get; set; }
