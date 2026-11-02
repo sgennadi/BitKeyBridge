@@ -7,6 +7,8 @@ public sealed partial class MainForm
     // Only three safe per-source error booleans are carried from the
     // completed Unified Search; never cache its rows or error messages.
     private (bool Ad, bool Entra, bool Intune) _device360UnifiedLookupFailed;
+    private (MetadataFailureKind Ad, MetadataFailureKind Entra,
+        MetadataFailureKind Intune) _device360UnifiedFailureKinds;
 
     private Device360OperationalStatus CaptureDevice360OperationalStatus(
         Device360Snapshot snapshot, bool searchPartial,
@@ -31,7 +33,13 @@ public sealed partial class MainForm
             entraLookupFailed: useUnifiedSourceFailures &&
                 _device360UnifiedLookupFailed.Entra,
             intuneLookupFailed: useUnifiedSourceFailures &&
-                _device360UnifiedLookupFailed.Intune);
+                _device360UnifiedLookupFailed.Intune,
+            adFailureKind: useUnifiedSourceFailures
+                ? _device360UnifiedFailureKinds.Ad : MetadataFailureKind.None,
+            entraFailureKind: useUnifiedSourceFailures
+                ? _device360UnifiedFailureKinds.Entra : MetadataFailureKind.None,
+            intuneFailureKind: useUnifiedSourceFailures
+                ? _device360UnifiedFailureKinds.Intune : MetadataFailureKind.None);
     }
 
     // A single read-only card for the EXACT selected Start object. It does
