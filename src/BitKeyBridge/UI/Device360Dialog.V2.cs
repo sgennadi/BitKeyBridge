@@ -52,18 +52,21 @@ internal sealed partial class Device360Dialog
             Tr("Device360V2Identity"));
         identityPage.Container.Controls.Add(Stack(identity,
             IdentityEvidence()));
-        tabs.TabPages.Add(identityPage.Tab);
 
         var securityPage = NewPage("Device360TabSecurity",
             Tr("Device360V2Security"));
         securityPage.Container.Controls.Add(Stack(recovery, access));
-        tabs.TabPages.Add(securityPage.Tab);
 
         var hardwarePage = NewPage("Device360TabHardware",
             Tr("Device360V2Hardware"));
         var hardwareDetails = HardwareFields();
         hardwarePage.Container.Controls.Add(Stack(posture, hardwareDetails));
+        // Keep page order consistent with the helpdesk workflow in all
+        // languages. In Hebrew the native tab strip mirrors visually, but
+        // these semantic pages retain the same logical order.
         tabs.TabPages.Add(hardwarePage.Tab);
+        tabs.TabPages.Add(securityPage.Tab);
+        tabs.TabPages.Add(identityPage.Tab);
 
         var diagnosticsPage = NewPage("Device360TabDiagnostics",
             Tr("Device360V2Diagnostics"));

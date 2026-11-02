@@ -713,6 +713,14 @@ public static class UiLayoutSelfTest
                     v2Tabs.TabPages.Cast<TabPage>().Any(page =>
                         string.IsNullOrWhiteSpace(page.Text)))
                     failures.Add("Device 360 v2 five-page EN/RU/HE tabs missing: " + language);
+                else if (!v2Tabs.TabPages.Cast<TabPage>()
+                    .Select(page => page.Name).SequenceEqual(new[]
+                    {
+                        "Device360TabOverview", "Device360TabHardware",
+                        "Device360TabSecurity", "Device360TabIdentity",
+                        "Device360TabDiagnostics"
+                    }))
+                    failures.Add("Device 360 v2 tab order changed: " + language);
                 if (FindByName(dialog, "Device360V2HealthSummary") is not Label ||
                     FindByName(dialog, "Device360V2CopyReport") is not Button ||
                     FindByName(dialog, "Device360V2SaveReport") is not Button ||
