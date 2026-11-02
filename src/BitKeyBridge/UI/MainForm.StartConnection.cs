@@ -518,6 +518,8 @@ public sealed partial class MainForm
         await ConnectCloudFromUiAsync();
         UpdateStartConnectionSourceControls();
         RefreshHomeConnectionUi();
+        // Start and Devices share the same memory-only Graph session.
+        SetDevicesCloudWarningAction(!HasCloudSearchSession());
         if (HasCloudSearchSession())
         {
             UiStyle.SetStatus(_homeSearchStatus,
