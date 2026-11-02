@@ -126,7 +126,10 @@ internal static class Device360HealthService
                     Device360SourceEvidence.LookupFailed =>
                         MetadataFailureGuidance.TechnicianSummary(
                             reason == MetadataFailureKind.None
-                                ? MetadataFailureKind.Unknown : reason, name) +
+                                ? MetadataFailureKind.Unknown : reason,
+                            name.StartsWith("Entra", StringComparison.Ordinal)
+                                ? "Entra" :
+                            name == "Active Directory" ? "AD" : name) +
                         " A failed lookup does NOT establish the absence of a backup.",
                     Device360SourceEvidence.SessionPresentUnverified =>
                         "Session exists but this exact device was not verified in this source.",
