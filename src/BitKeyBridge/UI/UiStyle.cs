@@ -30,7 +30,9 @@ public static class UiStyle
     public const int HomeRecoveryCardsPairMinimumWidth = 820;
     // Equal three-way Start layout, with a responsive vertical fallback.
     // All sizes are centralized for 100%-200% DPI and RDP.
-    public const int HomeThreePaneMinimumWidth = 1200;
+    // Three readable panes still fit at 1366px with 125% font zoom.
+    // Each recovery card has internal action buttons that wrap at narrower widths.
+    public const int HomeThreePaneMinimumWidth = 1050;
     public const int HomeThreePaneMinimumHeight = 325;
     public const int HomeRecentQuickListHeight = 154;
     public const int HomeConnectionRecentPairMinimumWidth = 1020;
