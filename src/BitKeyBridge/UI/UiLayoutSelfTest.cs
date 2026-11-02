@@ -638,6 +638,7 @@ public static class UiLayoutSelfTest
             IdentityStatus = "AD object",
             FoundInAd = true,
             AdDistinguishedName = "CN=UI-TEST-AD-001,OU=Test,DC=example,DC=com",
+            AdDnsHostName = "ui-test-ad-001.example.com",
             OperatingSystem = "Windows 11 Pro",
             OsVersion = "10.0.22631",
             AdLastLogonTimestamp = new DateTime(2026, 10, 1, 9, 0, 0,
@@ -652,6 +653,12 @@ public static class UiLayoutSelfTest
         if (withAdInventory.OperatingSystem != "Windows 11 Pro 10.0.22631" ||
             withAdInventory.AdLastLogonUtc != adInventory.AdLastLogonTimestamp)
             failures.Add("Device 360 Start dropped exact AD OS/last-logon inventory.");
+        if (!Device360HardwareService.CanQuery(withAdInventory) ||
+            Device360HardwareService.HasSameAdDomainSuffix(
+                "malicious.external.test", adInventory.AdDistinguishedName) ||
+            Device360HardwareService.HasSameAdDomainSuffix(
+                "notexample.com", adInventory.AdDistinguishedName))
+            failures.Add("Remote WMI did not restrict the target to the exact AD DNS domain.");
 
         var wrongAdInventory = Device360Snapshot.FromHome(new HomeSearchResult
         {
