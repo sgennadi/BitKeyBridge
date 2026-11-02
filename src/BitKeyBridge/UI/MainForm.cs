@@ -2065,62 +2065,7 @@ public sealed partial class MainForm : DpiAwareForm
                 Intune: sourceReport is { IntuneSucceeded: false });
 
             foreach (var row in rows)
-            {
-                var item =
-                    new ListViewItem(
-                        row.ComputerName);
-
-                item.SubItems.Add(row.IdentityStatus);
-                item.SubItems.Add(
-                    row.FoundInAd
-                        ? "Yes"
-                        : "No");
-                item.SubItems.Add(
-                    row.FoundInEntra
-                        ? "Yes"
-                        : "No");
-                item.SubItems.Add(
-                    row.FoundInIntune
-                        ? "Yes"
-                        : "No");
-                item.SubItems.Add(
-                    row.SerialNumber);
-                item.SubItems.Add(
-                    string.IsNullOrWhiteSpace(
-                        row.UserPrincipalName)
-                        ? row.UserDisplayName
-                        : row.UserPrincipalName);
-                item.SubItems.Add(
-                    (row.Manufacturer +
-                     " " +
-                     row.Model).Trim());
-                item.SubItems.Add(
-                    (row.OperatingSystem +
-                     " " +
-                     row.OsVersion).Trim());
-                item.SubItems.Add(
-                    row.ComplianceState);
-                item.SubItems.Add(
-                    row.IsEncrypted is null
-                        ? "-"
-                        : row.IsEncrypted.Value
-                            ? "Yes"
-                            : "No");
-                item.SubItems.Add(
-                    row.LastSyncDateTime?
-                        .ToString(
-                            "yyyy-MM-dd HH:mm") ??
-                    string.Empty);
-                item.SubItems.Add(
-                    row.RecoveryKeyCount == 0 &&
-                    row.RecoveryMetadataIncomplete
-                        ? "?"
-                        : row.RecoveryKeyCount.ToString());
-                item.Tag =
-                    row;
-                _unifiedResults.Items.Add(
-                    item);
-            }
+                AddUnifiedDeviceSearchResultRow(row);
 
             var source =
                 cloudReady
