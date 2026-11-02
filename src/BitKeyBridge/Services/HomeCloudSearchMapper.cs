@@ -28,7 +28,13 @@ public static class HomeCloudSearchMapper
                     SourceIdentity = row.IdentityKey ?? string.Empty,
                     IsCloudRecord = true,
                     IdentityAmbiguous = ambiguousGroup ||
-                        row.IdentityStatus == "Ambiguous device ID",
+                        row.IdentityStatus is "Ambiguous device ID" or "Name collision",
+                    // Preserve inventory returned by this same authenticated
+                    // Graph query. Device 360 can render it WITHOUT another
+                    // search, identity guess or Microsoft 365 sign-in.
+                    InventoryMetadata = !ambiguousGroup &&
+                        row.IdentityStatus is not ("Ambiguous device ID" or "Name collision")
+                        ? row : null,
                     BitLockerKeyCount = row.RecoveryKeyCount,
                     BitLockerLookupFailed = row.RecoveryMetadataIncomplete ||
                                            ambiguousGroup,
