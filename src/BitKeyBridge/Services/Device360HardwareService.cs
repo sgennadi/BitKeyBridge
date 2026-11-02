@@ -208,9 +208,10 @@ internal static class Device360HardwareService
         }
         catch (Exception ex) when (IsExpectedWmiFailure(ex))
         {
+            var category = ErrorCategory(ex);
             return new Device360HardwareOutcome(false, null,
-                "Remote WMI not available (" + ErrorCategory(ex) +
-                "). Check device reachability, DCOM/RPC firewall policy, WMI service and delegated read permissions. Nothing was modified.");
+                "Remote WMI not available (" + category + "). " +
+                FailureGuidance(category) + " Nothing was modified.");
         }
     }
 
@@ -245,13 +246,48 @@ internal static class Device360HardwareService
             or System.Security.SecurityException or TimeoutException
             or InvalidOperationException or ArgumentException;
 
-    private static string ErrorCategory(Exception ex) => ex switch
+    // A generic COMException is NOT proof that the firewall/RPC failed.
+    // Distinguish real RPC failures, WMI provider faults, access denial and
+    // timeouts without exposing remote exception messages or account details.
+    // ManagementException exposes a WBEM status rather than an ordinary
+    // COM HResult, so use ErrorCode for its classification.
+    internal static string ErrorCategory(Exception ex)
     {
-        UnauthorizedAccessException or System.Security.SecurityException
-            => "AccessDenied",
-        TimeoutException => "Timeout",
-        COMException => "DCOM/RPCUnavailable",
-        ManagementException => "WmiError",
-        _ => "Unavailable"
+        if (ex is UnauthorizedAccessException or System.Security.SecurityException)
+            return "AccessDenied";
+        if (ex is TimeoutException)
+            return "Timeout";
+
+        var code = ex switch
+        {
+            ManagementException management => (int)management.ErrorCode,
+            COMException com => com.HResult,
+            _ => 0
+        };
+        return code switch
+        {
+            unchecked((int)0x80070005) or // E_ACCESSDENIED
+            unchecked((int)0x80041003) or // WBEM_E_ACCESS_DENIED
+            unchecked((int)0x80041062) => "AccessDenied", // WBEM_E_PRIVILEGE_NOT_HELD
+            unchecked((int)0x80041069) or // WBEM_E_TIMED_OUT
+            unchecked((int)0x80041088) or // WBEM_E_PROVIDER_TIMED_OUT
+            unchecked((int)0x800705B4) => "Timeout", // WAIT_TIMEOUT
+            unchecked((int)0x800706BA) or // RPC_S_SERVER_UNAVAILABLE
+            unchecked((int)0x800706BE) or // RPC_S_CALL_FAILED
+            unchecked((int)0x800706D9) => "DCOM/RPCUnavailable", // EPT_S_NOT_REGISTERED
+            unchecked((int)0x8004100E) or // WBEM_E_INVALID_NAMESPACE
+            unchecked((int)0x80041010) or // WBEM_E_INVALID_CLASS
+            unchecked((int)0x80041004) => "WmiError", // WBEM_E_PROVIDER_FAILURE
+            _ => ex is ManagementException ? "WmiError" : "Unavailable"
+        };
+    }
+
+    private static string FailureGuidance(string category) => category switch
+    {
+        "AccessDenied" => "Check the signed-in operator's existing DCOM/WMI namespace read permissions.",
+        "Timeout" => "The remote query timed out. Check host availability and the authorized network path.",
+        "DCOM/RPCUnavailable" => "Check DNS, TCP 135, dynamic RPC connectivity and the existing firewall policy.",
+        "WmiError" => "Check the WMI namespace, service and provider state on the selected Windows host.",
+        _ => "Check device connectivity and read-only WMI availability."
     };
 }

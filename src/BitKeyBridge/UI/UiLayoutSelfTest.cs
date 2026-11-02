@@ -660,6 +660,19 @@ public static class UiLayoutSelfTest
                 "notexample.com", adInventory.AdDistinguishedName))
             failures.Add("Remote WMI did not restrict the target to the exact AD DNS domain.");
 
+        // Failure diagnostics are pure synthetic HRESULT mappings. An
+        // inaccessible WMI namespace must not be misreported as a firewall
+        // error, and unknown COM failures must not imply an RPC outage.
+        static System.Runtime.InteropServices.COMException WmiFailure(uint code)
+            => new("Synthetic WMI failure", unchecked((int)code));
+        if (Device360HardwareService.ErrorCategory(WmiFailure(0x80070005)) != "AccessDenied" ||
+            Device360HardwareService.ErrorCategory(WmiFailure(0x80041003)) != "AccessDenied" ||
+            Device360HardwareService.ErrorCategory(WmiFailure(0x80041069)) != "Timeout" ||
+            Device360HardwareService.ErrorCategory(WmiFailure(0x800706BA)) != "DCOM/RPCUnavailable" ||
+            Device360HardwareService.ErrorCategory(WmiFailure(0x8004100E)) != "WmiError" ||
+            Device360HardwareService.ErrorCategory(WmiFailure(0x8000FFFF)) != "Unavailable")
+            failures.Add("Device 360 WMI diagnostics confused access, timeout, RPC and provider failures.");
+
         var wrongAdInventory = Device360Snapshot.FromHome(new HomeSearchResult
         {
             ComputerName = adInventory.ComputerName,
