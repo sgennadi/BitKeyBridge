@@ -110,8 +110,10 @@ internal sealed class Device360Snapshot
             LapsMetadataDetected = lapsDetected,
             LapsMetadataExpired = lapsDetected && row.LapsStatus == "Expired",
             LapsExpirationUtc = lapsDetected ? row.LapsExpiresAtUtc : null,
-            AdObjectGuid = adGuid,
-            AdDistinguishedName = adDn,
+            AdObjectGuid = !string.IsNullOrWhiteSpace(adGuid)
+                ? adGuid : inventory?.AdObjectGuid ?? string.Empty,
+            AdDistinguishedName = !string.IsNullOrWhiteSpace(adDn)
+                ? adDn : inventory?.AdDistinguishedName ?? string.Empty,
             AdDnsHostName = inventory?.AdDnsHostName ?? string.Empty,
             EntraDeviceId = cloud && Guid.TryParse(row.ComputerId, out _)
                 ? row.ComputerId : string.Empty,
