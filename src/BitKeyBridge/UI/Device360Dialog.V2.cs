@@ -51,7 +51,7 @@ internal sealed partial class Device360Dialog
         var identityPage = NewPage("Device360TabIdentity",
             Tr("Device360V2Identity"));
         identityPage.Container.Controls.Add(Stack(identity,
-            IdentityEvidence()));
+            IdentitySourceMap(), IdentityEvidence()));
 
         var securityPage = NewPage("Device360TabSecurity",
             Tr("Device360V2Security"));
@@ -67,6 +67,14 @@ internal sealed partial class Device360Dialog
         tabs.TabPages.Add(hardwarePage.Tab);
         tabs.TabPages.Add(securityPage.Tab);
         tabs.TabPages.Add(identityPage.Tab);
+
+        // Audit is a separate, strictly read-only POLICY overview. The
+        // actual protected journal ACK is evaluated by the existing recovery
+        // handlers; opening a card cannot assert an untested audit result.
+        var auditPage = NewPage("Device360TabAudit",
+            Tr("Device360V2Audit"));
+        auditPage.Container.Controls.Add(Stack(AuditEvidence()));
+        tabs.TabPages.Add(auditPage.Tab);
 
         var diagnosticsPage = NewPage("Device360TabDiagnostics",
             Tr("Device360V2Diagnostics"));
@@ -327,6 +335,120 @@ internal sealed partial class Device360Dialog
                 column.Controls.Add(cards[i], 0, i);
             }
             return column;
+        }
+
+        UiRecoveryCard IdentitySourceMap()
+        {
+            var card = new UiRecoveryCard
+            {
+                Name = "Device360V2IdentityMap",
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(UiStyle.RecoveryCardPadding),
+                Margin = new Padding(0, UiStyle.ControlGap, 0, 0)
+            };
+            var grid = new TableLayoutPanel
+            {
+                Name = "Device360V2IdentityMapRows",
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 2,
+                RowCount = 0,
+                RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No
+            };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
+            Row(Tr("Device360V2CheckAd"), State(operational.Ad));
+            Row(Tr("Device360V2CheckEntra"), State(operational.Entra));
+            Row(Tr("Device360V2CheckIntune"), State(operational.Intune));
+
+            // Intune can supply an Entra device ID as a relationship
+            // attribute. That does NOT verify an AD-to-Entra/Intune link
+            // and does not prove an independent Entra metadata search.
+            var intuneReferencesEntra = snapshot.IdentityVerified &&
+                !snapshot.IdentityAmbiguous && snapshot.InIntune == true &&
+                snapshot.InEntra == true &&
+                !string.IsNullOrWhiteSpace(snapshot.EntraDeviceId) &&
+                !string.IsNullOrWhiteSpace(snapshot.IntuneManagedDeviceId);
+            Row(Tr("Device360V2LinkEntraIntune"),
+                intuneReferencesEntra
+                    ? Tr("Device360V2EntraIntuneEvidence")
+                    : Tr("Device360V2LinkUnverified"));
+            Row(Tr("Device360V2LinkAdCloud"),
+                Tr("Device360V2LinkUnverified"));
+            Row(Tr("Device360V2IdentityRisk"),
+                snapshot.IdentityAmbiguous
+                    ? Tr("Device360V2IdentityConflict")
+                    : snapshot.IdentityVerified
+                        ? Tr("Device360V2IdentitySourceOnly")
+                        : Tr("Device360NotVerified"));
+            card.Controls.Add(grid);
+            return card;
+
+            string State(Device360SourceEvidence evidence) => evidence switch
+            {
+                Device360SourceEvidence.FoundInSearch =>
+                    Tr("Device360SourcePresent"),
+                Device360SourceEvidence.LookupFailed =>
+                    Tr("Device360SourceLookupFailed"),
+                Device360SourceEvidence.SessionPresentUnverified =>
+                    Tr("Device360SourceUnverified"),
+                _ => Tr("Device360SourceDisconnected")
+            };
+            void Row(string title, string description)
+            {
+                var index = grid.RowCount++;
+                grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                var caption = new Label
+                {
+                    Text = title,
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    TextAlign = rtl ? ContentAlignment.MiddleRight :
+                        ContentAlignment.MiddleLeft,
+                    RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
+                    Margin = new Padding(3, 5, 8, 5)
+                };
+                var status = new Label
+                {
+                    Text = description,
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    ForeColor = UiStyle.ModernForeground,
+                    RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
+                    TextAlign = rtl ? ContentAlignment.MiddleRight :
+                        ContentAlignment.MiddleLeft,
+                    Margin = new Padding(3, 5, 3, 5)
+                };
+                UiStyle.ConfigureWrappingLabel(status);
+                grid.Controls.Add(caption, 0, index);
+                grid.Controls.Add(status, 1, index);
+            }
+        }
+
+        UiRecoveryCard AuditEvidence()
+        {
+            // Configuration is visible. Effective rights and a durable audit
+            // event are NOT tested by Device 360 and never claimed as green.
+            return SimpleCard("Device360V2AuditEvidence",
+                Tr("Device360V2AuditExplanation") + Environment.NewLine +
+                Tr("Device360PolicyAudit") + ": " +
+                Tr(operational.ProtectedAuditRequiredByConfiguration
+                    ? "Device360PolicyRequired" : "Device360PolicyOptional") +
+                Environment.NewLine +
+                Tr("Device360PolicyBroker") + ": " +
+                Tr(operational.AuditBrokerEnabledByConfiguration
+                    ? "Device360PolicyEnabled" : "Device360PolicyDisabled") +
+                Environment.NewLine +
+                Tr("Device360PolicyRbac") + ": " +
+                Tr(operational.RbacEnabledByConfiguration
+                    ? "Device360PolicyEnabled" : "Device360PolicyDisabled") +
+                Environment.NewLine +
+                Tr("Device360AccessEffective") + ": " +
+                Tr("Device360AccessUnchecked") + Environment.NewLine +
+                Tr("Device360V2AuditNotVerified"));
         }
 
         UiRecoveryCard IdentityEvidence()

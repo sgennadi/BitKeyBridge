@@ -837,21 +837,24 @@ public static class UiLayoutSelfTest
 
                 var sections = FindByName(dialog, "Device360CardSections");
                 if (FindByName(dialog, "Device360CardTabs") is not TabControl v2Tabs ||
-                    v2Tabs.TabPages.Count != 5 ||
+                    v2Tabs.TabPages.Count != 6 ||
                     v2Tabs.TabPages.Cast<TabPage>().Any(page =>
                         string.IsNullOrWhiteSpace(page.Text)))
-                    failures.Add("Device 360 v2 five-page EN/RU/HE tabs missing: " + language);
+                    failures.Add("Device 360 v2 six-page EN/RU/HE tabs missing: " + language);
                 else if (!v2Tabs.TabPages.Cast<TabPage>()
                     .Select(page => page.Name).SequenceEqual(new[]
                     {
                         "Device360TabOverview", "Device360TabHardware",
                         "Device360TabSecurity", "Device360TabIdentity",
-                        "Device360TabDiagnostics"
+                        "Device360TabAudit", "Device360TabDiagnostics"
                     }))
                     failures.Add("Device 360 v2 tab order changed: " + language);
                 if (FindByName(dialog, "Device360V2HealthSummary") is not Label ||
                     FindByName(dialog, "Device360V2CopyReport") is not Button ||
                     FindByName(dialog, "Device360V2SaveReport") is not Button ||
+                    FindByName(dialog, "Device360V2AuditEvidence") is not UiRecoveryCard ||
+                    FindByName(dialog, "Device360V2IdentityMapRows") is not TableLayoutPanel identityMap ||
+                    identityMap.RowCount != 6 ||
                     FindByName(dialog, "Device360V2SmartDiagnostics") is not TextBox ||
                     FindByName(dialog, "Device360V2HardwareProbe") is not Button hardwareProbe ||
                     hardwareProbe.Enabled)
@@ -1077,7 +1080,7 @@ public static class UiLayoutSelfTest
 
                     // Render each real selected tab with native controls:
                     // old scroll-to-policy captures would only show Overview
-                    // after Device 360 became a genuine five-page workspace.
+                    // after Device 360 became a genuine tabbed workspace.
                     if (FindByName(dialog, "Device360CardTabs") is TabControl screenshots)
                     {
                         var original = screenshots.SelectedTab;
@@ -1086,6 +1089,7 @@ public static class UiLayoutSelfTest
                             ("Device360TabHardware", "hardware"),
                             ("Device360TabSecurity", "policy"),
                             ("Device360TabIdentity", "identity"),
+                            ("Device360TabAudit", "audit"),
                             ("Device360TabDiagnostics", "diagnostics")
                         })
                         {

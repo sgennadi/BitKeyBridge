@@ -14,6 +14,7 @@ The features below do not change recovery-policy enforcement, identity authoriza
    - **Security:** observed BitLocker/LAPS metadata and configured policy gates; the actual recovery rights are explicitly untested;
    - **Identity:** AD object GUID/DN, Entra ID, Intune managed-device ID and link evidence; hostname/UPN/serial are never accepted as cross-source identity proof;
    - **Diagnostics:** per-source failure vs unverified distinction and suggested checks, including stale Intune sync, noncompliance, expired LAPS metadata.
+   - **Audit:** a separate read-only view of configured protected audit, RBAC and broker requirements. It NEVER asserts an actual durable audit ACK, journal integrity, runtime permission or recovery authorization. The existing Access Health / authorized recovery workflow performs effective checks.
 5. Start -> Devices navigation **reuses the exact UnifiedDeviceInfo** already collected on Start. If it cannot prove an authoritative identity, it does NOT silently search or link by name; use an explicit Devices Search or select a new exact record.
 6. The Devices Search never calls Device Code. It uses a valid in-memory delegated session or returns AD-only metadata with a **Connect Microsoft 365** button. Reauth is an explicit operator action.
 7. Reports use an explicit Copy or Save action. The report contains *allowlisted* nonsecret fields only. It never traverses the original Graph/AD result objects; no recovery IDs/passwords, LAPS passwords, OAuth tokens or credentials are exported.
@@ -52,3 +53,33 @@ Before Stable: test on actual Windows 11 (100/125/150/200% scaling, EN/RU/HE), d
 - Native Intune managedDevices supplies model, manufacturer, serial, operating system, compliance, encryption, last sync; **BIOS/TPM are not invented** from Intune when the queried endpoint lacks an accessible remote WMI source.
 - This milestone does not install agents, enable WinRM, open ports, change domain GPOs, persist auth tokens, or auto-link an AD computer and Intune object by display name.
 - This is not a continuous monitoring service or automatic remediation engine.
+
+## Source Health targeted metadata retry (RC development)
+
+Devices can retain the original AD / Entra / Intune source responses in the
+active in-memory search result. **Retry failed source...** lets the operator
+explicitly repeat only one failed metadata source: AD, Entra or Intune. Good
+sources are never queried again. AccessDenied, SignInRequired and NoRecord
+are not eligible; transient/unavailable failures are individually selectable.
+The retry requires the original query and the same live AD/Graph connection,
+never launches Device Code/MFA or touches credentials/recovery secrets. A
+10-second manual-click throttle protects the endpoint from rapid repeat
+requests. Source IDs, duplicate-name warnings and recovery metadata are
+re-evaluated; prior selection is retained only on an exact, non-ambiguous
+ID match. No new persistent cache or background polling is created.
+
+Automated tests include partial source failure, 403 and 429, AD-only mode,
+name collision, unchanged-source preservation and localized retry controls.
+Real delegated/denied source retry must still be accepted on a managed
+Windows 11 device.
+
+## Identity map and Audit tab
+
+Identity shows independent AD, Entra and Intune record evidence. It presents
+the Intune-record -> Entra device-ID reference when present, but it **never**
+asserts that a same-named AD object is equivalent to the Entra or Intune
+record without authoritative cross-source proof. Duplicate/conflicting
+IDs are flagged separately. Audit displays configured RBAC, protected journal
+and broker policy plus an explicit NOT VERIFIED warning about runtime journal
+ACK and access. It does not inspect the journal, retrieve secrets, grant
+permission or enable unsigned updates.
