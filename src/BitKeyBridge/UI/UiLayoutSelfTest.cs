@@ -518,6 +518,34 @@ public static class UiLayoutSelfTest
             cloud.InIntune != true)
             failures.Add("Device 360 source-qualified cloud metadata projection is incorrect.");
 
+        // The Start panel must display hardware from the SAME Unified
+        // search object, with no duplicate Graph request or secret read.
+        var cloudOnStart = HomeCloudSearchMapper.Map([cloudRecord]);
+        if (cloudOnStart.Count != 1)
+            failures.Add("Start did not preserve exact Intune metadata.");
+        else
+        {
+            var fromStart = Device360Snapshot.FromHome(cloudOnStart[0]);
+            if (fromStart.OperatingSystem != "Windows 11" ||
+                fromStart.Compliance != "compliant" ||
+                fromStart.Encrypted != true ||
+                fromStart.IntuneManagedDeviceId != "ui-example-001")
+                failures.Add("Device 360 Start lost verified Intune inventory fields.");
+
+            // Never combine two cloud records merely because their names
+            // happen to match. A different authoritative ID stays unknown.
+            var forgedNameMatch = new HomeSearchResult
+            {
+                ComputerName = cloudRecord.ComputerName,
+                IsCloudRecord = true,
+                SourceIdentity = "INTUNE:MANAGED:another-device",
+                InventoryMetadata = cloudRecord
+            };
+            if (!string.IsNullOrEmpty(
+                    Device360Snapshot.FromHome(forgedNameMatch).OperatingSystem))
+                failures.Add("Device 360 leaked hardware through a name-only cloud join.");
+        }
+
         var operational = Device360OperationalStatus.Capture(cloud,
             adConnected: false, cloudSessionPresent: true,
             rbacEnabled: true, ticketRequired: true,
@@ -575,6 +603,38 @@ public static class UiLayoutSelfTest
         if (!ad.IdentityVerified || ad.InAd != true ||
             !ad.LapsMetadataDetected || ad.BitLockerMetadataCount != 1)
             failures.Add("Device 360 AD/LAPS metadata projection is incorrect.");
+
+        var adInventory = new UnifiedDeviceInfo
+        {
+            ComputerName = "UI-TEST-AD-001",
+            IdentityKey = "AD:DN:CN=UI-TEST-AD-001,OU=Test,DC=example,DC=com",
+            IdentityStatus = "AD object",
+            FoundInAd = true,
+            AdDistinguishedName = "CN=UI-TEST-AD-001,OU=Test,DC=example,DC=com",
+            OperatingSystem = "Windows 11 Pro",
+            OsVersion = "10.0.22631",
+            AdLastLogonTimestamp = new DateTime(2026, 10, 1, 9, 0, 0,
+                DateTimeKind.Utc)
+        };
+        var withAdInventory = Device360Snapshot.FromHome(new HomeSearchResult
+        {
+            ComputerName = adInventory.ComputerName,
+            AdComputerDistinguishedName = adInventory.AdDistinguishedName,
+            InventoryMetadata = adInventory
+        });
+        if (withAdInventory.OperatingSystem != "Windows 11 Pro 10.0.22631" ||
+            withAdInventory.AdLastLogonUtc != adInventory.AdLastLogonTimestamp)
+            failures.Add("Device 360 Start dropped exact AD OS/last-logon inventory.");
+
+        var wrongAdInventory = Device360Snapshot.FromHome(new HomeSearchResult
+        {
+            ComputerName = adInventory.ComputerName,
+            AdComputerDistinguishedName = "CN=OTHER,OU=Test,DC=example,DC=com",
+            InventoryMetadata = adInventory
+        });
+        if (!string.IsNullOrEmpty(wrongAdInventory.OperatingSystem) ||
+            wrongAdInventory.AdLastLogonUtc.HasValue)
+            failures.Add("Device 360 joined AD inventory using the device name.");
 
         try
         {
@@ -1562,6 +1622,9 @@ public static class UiLayoutSelfTest
                 layoutSelfTest: true);
             if (!main.PreviewDevicesCloudShortcutForUiTest())
                 failures.Add("Devices missing-Cloud action failed to open Settings > Cloud.");
+            if (!main.PreviewDevicesSearchWithoutImplicitSignInForUiTest())
+                failures.Add("Devices search triggered implicit Microsoft 365 sign-in " +
+                    "instead of offering the explicit Connect action.");
         }
         catch (Exception ex)
         {
