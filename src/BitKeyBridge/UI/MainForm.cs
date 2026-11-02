@@ -2231,6 +2231,38 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
+    internal bool PreviewDevicesSearchWithoutImplicitSignInForUiTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+
+        // Fully configured synthetic tenant/client, but NO authenticated
+        // token. This search must never open Device Code or call Graph.
+        // AD is disconnected in the offline test fixture.
+        var oldConfig = _cloudConfig;
+        var oldQuery = _unifiedQuery.Text;
+        try
+        {
+            _cloudConfig = new CloudAuthConfig
+            {
+                TenantId = "00000000-0000-0000-0000-000000000001",
+                ClientId = "00000000-0000-0000-0000-000000000002"
+            };
+            _unifiedQuery.Text = "UI-SYNTHETIC-DEVICE";
+            SearchUnifiedDevicesAsync().GetAwaiter().GetResult();
+            return _cloudToken is null &&
+                _unifiedStatus.Text.Contains("No active cloud session",
+                    StringComparison.OrdinalIgnoreCase) &&
+                _devicesCloudConnectButton.Enabled &&
+                _unifiedCancellation is null;
+        }
+        finally
+        {
+            _cloudConfig = oldConfig;
+            _unifiedQuery.Text = oldQuery;
+        }
+    }
+
     private void CancelUnifiedDeviceSearch()
     {
         if (_unifiedCancellation is null)
