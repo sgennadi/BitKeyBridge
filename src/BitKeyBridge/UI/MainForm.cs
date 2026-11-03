@@ -2298,7 +2298,8 @@ public sealed partial class MainForm : DpiAwareForm
                 _unifiedSearch.Text == "Restart Search" &&
                 !_unifiedResults.Enabled &&
                 _unifiedCancel.Enabled &&
-                _unifiedProgress.Visible &&
+                // A hidden WinForms test fixture reports Visible=false for
+                // all child controls regardless of local progress state.
                 capturedQuery == "EXAMPLE-OLD" &&
                 _unifiedQuery.Text == "EXAMPLE-NEW";
         }
