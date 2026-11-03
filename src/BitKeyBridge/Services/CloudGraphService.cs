@@ -287,6 +287,63 @@ public sealed partial class CloudGraphService : IDisposable
         return results.SelectMany(rows => rows).ToList();
     }
 
+    // Pure OData filter planner; name fragments, exact serial, UPN,
+    // Entra device GUID and Intune managed-device GUID need distinct paths.
+    // OData single quotes are escaped even though the final URI is encoded.
+    internal static IReadOnlyList<string> BuildManagedDeviceServerFilters(
+        string? query)
+    {
+        query = query?.Trim() ?? string.Empty;
+        if (query.Length < 2 || query.Length > 128)
+            return [];
+
+        var safe = query.Replace("'", "''");
+        if (query.Contains('@'))
+            return ["userPrincipalName eq '" + safe + "'"];
+
+        if (Guid.TryParse(query, out var id))
+        {
+            var exact = id.ToString("D");
+            return [
+                "azureADDeviceId eq '" + exact + "'",
+                "id eq '" + exact + "'"
+            ];
+        }
+
+        return [
+            "contains(deviceName,'" + safe + "')",
+            "serialNumber eq '" + safe + "'"
+        ];
+    }
+
+    internal static IEnumerable<string> RunManagedDeviceFilterOfflineTests()
+    {
+        var errors = new List<string>();
+        var serial = BuildManagedDeviceServerFilters(" S'1234 ");
+        if (serial.Count != 2 ||
+            serial[0] != "contains(deviceName,'S''1234')" ||
+            serial[1] != "serialNumber eq 'S''1234'")
+            errors.Add("Intune device name/serial filters were not escaped or prioritized.");
+
+        var upn = BuildManagedDeviceServerFilters("tech@example.test");
+        if (upn.Count != 1 ||
+            upn[0] != "userPrincipalName eq 'tech@example.test'")
+            errors.Add("Intune exact UPN filter was not preferred.");
+
+        var guid = BuildManagedDeviceServerFilters(
+            "AA140B4A-36C1-40BE-9622-A8204EBD2929");
+        if (guid.Count != 2 ||
+            !guid[0].StartsWith("azureADDeviceId eq 'aa140b4a-", StringComparison.Ordinal) ||
+            !guid[1].StartsWith("id eq 'aa140b4a-", StringComparison.Ordinal))
+            errors.Add("Intune Entra/managed GUID search did not check both IDs.");
+
+        if (BuildManagedDeviceServerFilters("").Count != 0 ||
+            BuildManagedDeviceServerFilters("x").Count != 0)
+            errors.Add("Intune source filter accepted a tenant-wide empty query.");
+
+        return errors;
+    }
+
     public async Task<List<ManagedDeviceInfo>> SearchManagedDevicesAsync(
         string accessToken,
         string query,
@@ -302,35 +359,33 @@ public sealed partial class CloudGraphService : IDisposable
         query = query?.Trim() ?? string.Empty;
         maximumItems = Math.Clamp(maximumItems, 1, 50000);
 
-        // Prefer a narrow server-side Intune name filter. Otherwise the
-        // original implementation walked up to 50,000 managed devices before
-        // showing a SINGLE result for "clinic". Exact serial/UPN/ID queries
-        // are still supported by the bounded fallback below.
-        if (query.Length >= 2 && query.Length <= 128)
+        // Prefer source-side matching before the potentially expensive
+        // tenant-wide scan. A serial number is NOT a deviceName, and an
+        // Intune managedDevice ID is NOT the Entra device GUID. Query each
+        // exact identity in its own supported filter; never fetch secrets.
+        foreach (var filter in BuildManagedDeviceServerFilters(query))
         {
-            var safe = query.Replace("'", "''");
-            var filter = query.Contains('@')
-                ? "userPrincipalName eq '" + safe + "'"
-                : Guid.TryParse(query, out _)
-                    ? "azureADDeviceId eq '" + safe + "'"
-                    : "contains(deviceName,'" + safe + "')";
             var filteredUri = endpoint + "?$select=" + selected +
                 "&$filter=" + Uri.EscapeDataString(filter) + "&$top=250";
             try
             {
                 var filtered = await GetCollectionAsync(
                     accessToken, filteredUri, Math.Min(maximumItems, 1000), ct);
-                if (filtered.Count > 0)
-                    return filtered.Select(ConvertManagedDevice)
-                        .Where(x =>
-                            Contains(x.DeviceName, query) ||
-                            Contains(x.SerialNumber, query) ||
-                            Contains(x.UserPrincipalName, query) ||
-                            Contains(x.UserDisplayName, query) ||
-                            Contains(x.EntraDeviceId, query) ||
-                            Contains(x.ManagedDeviceId, query))
-                        .OrderBy(x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
-                        .Take(maximumItems).ToList();
+                if (filtered.Count == 0)
+                    continue;
+
+                var matching = filtered.Select(ConvertManagedDevice)
+                    .Where(x =>
+                        Contains(x.DeviceName, query) ||
+                        Contains(x.SerialNumber, query) ||
+                        Contains(x.UserPrincipalName, query) ||
+                        Contains(x.UserDisplayName, query) ||
+                        Contains(x.EntraDeviceId, query) ||
+                        Contains(x.ManagedDeviceId, query))
+                    .OrderBy(x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
+                    .Take(maximumItems).ToList();
+                if (matching.Count > 0)
+                    return matching;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -340,9 +395,9 @@ public sealed partial class CloudGraphService : IDisposable
                 when (ex.StatusCode is System.Net.HttpStatusCode.BadRequest or
                     System.Net.HttpStatusCode.NotImplemented)
             {
-                // Some tenants/Graph versions reject a filter. Fall back to
-                // the existing client-side multi-field matching, not a
-                // false "not found". 401/403 must remain visible failures.
+                // Some Graph tenants do not support an individual filter.
+                // Try the other narrow filter, then the existing fallback.
+                // 401/403 and per-source timeouts remain visible failures.
             }
         }
 

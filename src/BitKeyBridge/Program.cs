@@ -1930,6 +1930,7 @@ internal static class Program
             failures.AddRange(UpdateCenterStatusService.RunOfflineTests());
             failures.AddRange(UpdateService.RunReleaseChannelOfflineTests());
             failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
+            failures.AddRange(CloudGraphService.RunManagedDeviceFilterOfflineTests());
             failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
             failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
             failures.AddRange(HomeRecoverySelectionGuard.RunOfflineTests());

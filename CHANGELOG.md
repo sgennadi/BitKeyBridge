@@ -1,5 +1,7 @@
 ## 0.35.0-rc.4
 
+- Intune now tries an exact serialNumber filter when a name fragment does not match, and an exact managed-device ID after an Entra GUID lookup; correct OData quote escaping and offline identity-filter tests reduce tenant-wide scan timeouts without treating Graph errors as missing devices.
+
 - Native Start card self-test now expects clickable Reveal/Copy diagnostics for a selected metadata-only record but still requires LAPS history to remain disabled without a connected AD source. It does not treat button Enabled as permission to retrieve secrets.
 
 **Release candidate only (3 November 2026); UNSIGNED isolated manual QA; not Stable.** Continues in single PR #115 and replaces RC3 only after exact-HEAD CI gates pass.
