@@ -2,6 +2,7 @@
 
 **Release candidate only (3 November 2026); UNSIGNED isolated manual QA; not Stable.** Continues in single PR #115 and replaces RC3 only after exact-HEAD CI gates pass.
 
+- Devices query now stays editable during a slow search. A new Restart Search uses a captured query and invalidates previous results; native WinForms self-test checks input responsiveness while preview recovery remains blocked.
 - The updater now retries transient Windows executable replacement contention only for an atomic same-directory swap, for a maximum of seven bounded backoffs (~3.5 seconds). Persistent access denied still fails and triggers transactional rollback. Security authorization, signing, hash and prerelease checks are unchanged.
 - Sanitize and store the failure phase (e.g. Preserve old executable, Replace executable, Verify installed executable health) in update history without recording secrets or configuration.
 - Add a native Windows synthetic locked-EXE regression. Keep v0.30.1/v0.30.3 real legacy migration, ACL and DPAPI rollback gates mandatory, not skipped.

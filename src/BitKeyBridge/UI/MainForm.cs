@@ -1936,9 +1936,24 @@ public sealed partial class MainForm : DpiAwareForm
         }
     }
 
+    // Keep the query editable during slow AD/Graph requests. Recovery
+    // actions remain disabled on preview rows until reconciliation.
+    private void SetUnifiedDevicesSearchBusyUi()
+    {
+        _unifiedSearch.Enabled = true;
+        _unifiedSearch.Text = "Restart Search";
+        _unifiedResults.Enabled = false;
+        _unifiedCancel.Enabled = true;
+        _unifiedQuery.Enabled = true;
+        _unifiedProgress.Visible = true;
+    }
+
     private async Task SearchUnifiedDevicesAsync()
     {
-        if (_unifiedQuery.Text.Trim().Length <
+        // Snapshot the query: later edits must not change the running
+        // request or accidentally attribute old results to a new term.
+        var requestedQuery = _unifiedQuery.Text.Trim();
+        if (requestedQuery.Length <
             SearchText.MinimumLiveSearchCharacters)
         {
             UiStyle.SetStatus(_unifiedStatus,
@@ -1962,15 +1977,7 @@ public sealed partial class MainForm : DpiAwareForm
         var generation = ++_unifiedSearchGeneration;
         _unifiedCancellation =
             cancellation;
-        _unifiedSearch.Enabled = true;
-        _unifiedSearch.Text = "Restart Search";
-        _unifiedResults.Enabled = false; // preview is metadata only, not actionable
-        _unifiedCancel.Enabled =
-            true;
-        _unifiedQuery.Enabled =
-            false;
-        _unifiedProgress.Visible =
-            true;
+        SetUnifiedDevicesSearchBusyUi();
         _unifiedDiagnostics.Clear();
         _unifiedSourceReport = null;
         _unifiedSourceCloudSession = null;
@@ -2057,7 +2064,7 @@ public sealed partial class MainForm : DpiAwareForm
                 sourceReport =
                     await service.SearchWithStatusAsync(
                         _cloudToken!.AccessToken,
-                        _unifiedQuery.Text,
+                        requestedQuery,
                         includeActiveDirectory:
                             adReady,
                         ct:
@@ -2077,7 +2084,7 @@ public sealed partial class MainForm : DpiAwareForm
 
                 sourceReport =
                     await service.SearchAdOnlyWithStatusAsync(
-                        _unifiedQuery.Text,
+                        requestedQuery,
                         ct:
                             cancellation.Token);
                 rows = sourceReport.Rows;
@@ -2201,7 +2208,7 @@ public sealed partial class MainForm : DpiAwareForm
             _audit.Write(
                 "UnifiedDeviceSearch",
                 computerName:
-                    _unifiedQuery.Text.Trim(),
+                    requestedQuery,
                 source:
                     source,
                 authMode:
@@ -2245,7 +2252,7 @@ public sealed partial class MainForm : DpiAwareForm
                 "Device search failed.",
                 "UnifiedDeviceSearch",
                 ex,
-                ("Query", _unifiedQuery.Text),
+                ("Query", requestedQuery),
                 ("CloudConfigured", (!string.IsNullOrWhiteSpace(_cloudConfig.TenantId) && !string.IsNullOrWhiteSpace(_cloudConfig.ClientId)).ToString()));
         }
         finally
@@ -2265,6 +2272,45 @@ public sealed partial class MainForm : DpiAwareForm
                 _unifiedProgress.Visible = false;
                 RefreshUnifiedSourceRetryButton();
             }
+        }
+    }
+
+
+    internal bool PreviewDevicesSearchQueryEditableForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        var previousText = _unifiedQuery.Text;
+        var previousQueryEnabled = _unifiedQuery.Enabled;
+        var previousResultsEnabled = _unifiedResults.Enabled;
+        var previousSearchEnabled = _unifiedSearch.Enabled;
+        var previousSearchText = _unifiedSearch.Text;
+        var previousCancelEnabled = _unifiedCancel.Enabled;
+        var previousProgressVisible = _unifiedProgress.Visible;
+        try
+        {
+            SetUnifiedDevicesSearchBusyUi();
+            _unifiedQuery.Text = "EXAMPLE-OLD";
+            var capturedQuery = _unifiedQuery.Text.Trim();
+            _unifiedQuery.Text = "EXAMPLE-NEW";
+            return _unifiedQuery.Enabled &&
+                _unifiedSearch.Enabled &&
+                _unifiedSearch.Text == "Restart Search" &&
+                !_unifiedResults.Enabled &&
+                _unifiedCancel.Enabled &&
+                _unifiedProgress.Visible &&
+                capturedQuery == "EXAMPLE-OLD" &&
+                _unifiedQuery.Text == "EXAMPLE-NEW";
+        }
+        finally
+        {
+            _unifiedQuery.Text = previousText;
+            _unifiedQuery.Enabled = previousQueryEnabled;
+            _unifiedResults.Enabled = previousResultsEnabled;
+            _unifiedSearch.Enabled = previousSearchEnabled;
+            _unifiedSearch.Text = previousSearchText;
+            _unifiedCancel.Enabled = previousCancelEnabled;
+            _unifiedProgress.Visible = previousProgressVisible;
         }
     }
 
