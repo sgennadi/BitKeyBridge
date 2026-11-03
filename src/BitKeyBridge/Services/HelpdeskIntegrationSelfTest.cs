@@ -550,23 +550,34 @@ public static class HelpdeskIntegrationSelfTest
             "Devices all attempted source failures are explicit",
             () =>
             {
-                var failed = false;
-                try
-                {
-                    _ = UnifiedDeviceSearchReport.Combine(
-                        null,
-                        new MetadataLookupResult<ManagedDeviceInfo>(
-                            [], "Intune unavailable"),
-                        new MetadataLookupResult<CloudRecoveryMetadata>(
-                            [], "Entra unavailable"));
-                }
-                catch (InvalidOperationException ex)
-                {
-                    failed = ex.Message.Contains("All device inventory sources failed",
-                        StringComparison.Ordinal);
-                }
+                // Source Health must retain a typed, metadata-only failure
+                // report so an operator can retry ONE transient source.
+                // An empty result is never a successful negative lookup.
+                var report = UnifiedDeviceSearchReport.Combine(
+                    null,
+                    new MetadataLookupResult<ManagedDeviceInfo>(
+                        [], "Intune unavailable",
+                        MetadataFailureKind.SourceOffline),
+                    new MetadataLookupResult<CloudRecoveryMetadata>(
+                        [], "Entra unavailable",
+                        MetadataFailureKind.SourceOffline));
 
-                Assert(failed, "All failed sources must not become a successful empty result.");
+                Assert(report.Rows.Count == 0 &&
+                       report.IsPartial &&
+                       !report.AdAttempted &&
+                       report.IntuneAttempted &&
+                       !report.IntuneSucceeded &&
+                       report.IntuneFailureKind == MetadataFailureKind.SourceOffline &&
+                       report.EntraAttempted &&
+                       !report.EntraSucceeded &&
+                       report.EntraFailureKind == MetadataFailureKind.SourceOffline &&
+                       report.SourceSummary.Contains("Intune: failed",
+                           StringComparison.Ordinal) &&
+                       report.DiagnosticSummary.Contains("Intune unavailable",
+                           StringComparison.Ordinal) &&
+                       report.DiagnosticSummary.Contains("Entra unavailable",
+                           StringComparison.Ordinal),
+                    "All failed sources must remain unverified and diagnosable, not a successful empty result.");
             });
 
         Check(
