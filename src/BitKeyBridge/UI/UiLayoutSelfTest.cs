@@ -4756,12 +4756,28 @@ public static class UiLayoutSelfTest
                     $"{formName}/{scenario.Name}: visual reset left overlapping or incorrectly ordered WinForms panes.");
             }
 
-            if (FindByName(cards, "HomeRevealBitLockerButton") is Button { Enabled: true } ||
-                FindByName(cards, "HomeRevealLapsButton") is Button { Enabled: true } ||
-                FindByName(cards, "HomeLoadLapsHistoryButton") is Button { Enabled: true })
+            // Clickable Reveal/Copy is intentional for a selected record:
+            // the handlers explain missing metadata or a disconnected source.
+            // Enabled must never be mistaken for RecoveryRead authorization.
+            // Actual secret retrieval still requires exact identity, source
+            // connection, RBAC and protected audit/ticket checks.
+            var bitLockerReveal = FindByName(cards, "HomeRevealBitLockerButton") as Button;
+            var bitLockerCopy = FindByName(cards, "HomeCopyBitLockerButton") as Button;
+            var lapsReveal = FindByName(cards, "HomeRevealLapsButton") as Button;
+            var lapsCopy = FindByName(cards, "HomeCopyLapsButton") as Button;
+            var lapsHistory = FindByName(cards, "HomeLoadLapsHistoryButton") as Button;
+            if (bitLockerReveal is not { Enabled: true } ||
+                bitLockerCopy is not { Enabled: true } ||
+                lapsReveal is not { Enabled: true } ||
+                lapsCopy is not { Enabled: true })
             {
                 failures.Add(
-                    $"{formName}/{scenario.Name}: metadata-only selection cannot reveal LAPS/BitLocker secrets or load history without authorization.");
+                    $"{formName}/{scenario.Name}: selected metadata-only device must offer clickable Reveal/Copy diagnostics (never silently disabled).");
+            }
+            if (lapsHistory is not { Enabled: false })
+            {
+                failures.Add(
+                    $"{formName}/{scenario.Name}: LAPS history loading must stay disabled until an authorized AD connection exists.");
             }
         }
         finally

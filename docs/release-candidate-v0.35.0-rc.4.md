@@ -11,6 +11,9 @@
 
 ## Changes in RC4
 
+- Native UI regression checks that selected metadata-only Start records have responsive Reveal/Copy actions, while LAPS history remains gated by a connected AD session. These controls only explain eligibility; they do not authorize a secret read.
+
+
 - Source-local Graph timeout is explicitly classified as Timeout, including base OperationCanceledException. A user pressing Cancel still cancels the whole search; a timed-out single source does not imply missing BitLocker backup.
 
 1. A temporary Windows EXE file lock (for example after a health probe or an endpoint scanner) now gets at most seven short retries for the atomic File.Move replacement step only. Persistent access denial remains fatal, and rollback/backup integrity checks remain mandatory.

@@ -1,5 +1,7 @@
 ## 0.35.0-rc.4
 
+- Native Start card self-test now expects clickable Reveal/Copy diagnostics for a selected metadata-only record but still requires LAPS history to remain disabled without a connected AD source. It does not treat button Enabled as permission to retrieve secrets.
+
 **Release candidate only (3 November 2026); UNSIGNED isolated manual QA; not Stable.** Continues in single PR #115 and replaces RC3 only after exact-HEAD CI gates pass.
 
 - Source-specific Graph deadlines now report a typed Timeout even if the API throws the base OperationCanceledException; user Cancel still propagates and is never converted to an empty successful search. Added offline classifier regression.
