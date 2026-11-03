@@ -3319,12 +3319,22 @@ public sealed partial class MainForm
             _deviceRecoveryKey.UseSystemPasswordChar = false;
             _deviceShowKey.Text = "Hide Key";
             InvalidateDeviceCloudSecretOnSessionChange();
-            return _deviceRecoverySelectionGeneration == before + 1 &&
+            var masked = _deviceRecoverySelectionGeneration == before + 1 &&
                 _deviceCurrentKey is null &&
                 _deviceCurrentKeySession is null &&
                 _deviceRecoveryKey.Text.Length == 0 &&
                 _deviceRecoveryKey.UseSystemPasswordChar &&
                 _deviceShowKey.Text == "Reveal Key";
+
+            // The offline fixture has no cloud token. Confirm Reveal/Copy
+            // preflight responds immediately with actionable guidance.
+            // This test never invokes tickets, RBAC or remote Graph.
+            var preflightDenied = !EnsureDevicesCloudRecoverySessionReady() &&
+                _unifiedStatus.Text.Contains("Connect Microsoft 365",
+                    StringComparison.Ordinal) &&
+                _deviceCurrentKey is null &&
+                _deviceRecoveryKey.Text.Length == 0;
+            return masked && preflightDenied;
         }
         finally
         {
@@ -3406,6 +3416,23 @@ public sealed partial class MainForm
         ReferenceEquals(selected, row) &&
         string.Equals(selectedId, recoveryId, StringComparison.OrdinalIgnoreCase);
 
+    // Deny before ticket/JIT dialogs. A disconnected source cannot reveal
+    // a secret, and requesting a recovery ticket before checking the Graph
+    // session creates misleading UI and unnecessary protected audit prompts.
+    private bool EnsureDevicesCloudRecoverySessionReady()
+    {
+        if (HasCloudSearchSession())
+            return true;
+
+        InvalidateDeviceCloudSecretOnSessionChange();
+        UiStyle.SetStatus(_unifiedStatus,
+            "Microsoft 365 recovery session is disconnected or expired. " +
+            "Click Connect Microsoft 365 explicitly before Reveal/Copy. " +
+            "No recovery ticket or secret request was started.",
+            UiStatusKind.Warning);
+        return false;
+    }
+
     private async Task<(string Key, RecoveryAccessContext Context,
         UnifiedDeviceInfo Record, string RecoveryId)?>
         EnsureSelectedDeviceCloudKeyAsync(
@@ -3429,6 +3456,12 @@ public sealed partial class MainForm
             UiStyle.SetStatus(_unifiedStatus, reason, UiStatusKind.Warning);
             return null;
         }
+
+        // Do not open authorization/JIT dialogs for a source that cannot
+        // produce a key. The existing RBAC, ticket and protected audit
+        // gates are still mandatory once a valid session is connected.
+        if (!EnsureDevicesCloudRecoverySessionReady())
+            return null;
 
         var selectionGeneration = _deviceRecoverySelectionGeneration;
         if (!AuthorizeAction(

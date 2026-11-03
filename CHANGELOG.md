@@ -1,5 +1,7 @@
 ## 0.35.0-rc.4
 
+- Devices Reveal/Copy now verifies its existing Graph recovery session **before** opening RBAC/ticket/JIT dialogs; disconnected or expired sessions show an actionable Connect message, invalidate stale secret display, and never request a ticket or secret. Original authorization and protected audit gates still apply to connected sessions. Expanded offline UI preflight regression.
+
 - Devices recovery keys are now bound to the exact original Graph token. Reconnecting Microsoft 365 immediately masks and discards cached plaintext, invalidates stale Reveal/Copy operations, and refuses cache reuse for expired/different sessions. Added native offline UI test; authorization and MFA behavior unchanged.
 
 - Intune now tries an exact serialNumber filter when a name fragment does not match, and an exact managed-device ID after an Entra GUID lookup; correct OData quote escaping and offline identity-filter tests reduce tenant-wide scan timeouts without treating Graph errors as missing devices.

@@ -11,6 +11,8 @@
 
 ## Changes in RC4
 
+- Devices Reveal/Copy rejects disconnected/expired Graph recovery sessions before any ticket/JIT prompt. The UI immediately offers Connect Microsoft 365 and leaves recovery values masked. Existing RBAC/ticket/audit checks are required when connected, and the offline UI regression validates the denied preflight.
+
 - Switching Microsoft 365 sessions immediately masks/clears cached Devices keys, invalidates pending callbacks, and prevents cached reuse across principals or expired tokens. No secrets used in offline regression.
 
 - For Intune metadata, try exact serialNumber when name search is empty and exact managedDevice ID when Entra GUID search is empty. This avoids unnecessary large-tenant pagination and never retrieves secret values.
