@@ -20,7 +20,7 @@
 - Devices: search a known computer name of at least two characters. Verify independent AD, Intune and Entra status, early read-only preview rows, final source reconciliation and clear 401/403 or timeout diagnostics; don't infer absent backup from unavailable metadata.
 - Test exact computer, serial, UPN and Entra device GUID, with AD-only and cloud-only sessions. Searching must never silently invoke Device Code / MFA: Connect Microsoft 365 is explicit.
 - Verify the query stays editable while a search is in progress; type another name and press Restart Search. Cancel must remain responsive and stale metadata must not replace results.
-- Select a final exact source-qualified device and recovery ID: test authorized Start/Devices BitLocker Reveal/Copy and LAPS Show/Copy; missing permission/ticket/audit or changed session must block secrets with a clear reason.
+- Start: select a computer with unverified BitLocker or disconnected AD/LAPS and click Reveal/Copy. The buttons must respond with an explicit reason; no secret may be read. Then select a final exact source-qualified device and recovery ID: test authorized Start/Devices BitLocker Reveal/Copy and LAPS Show/Copy; missing permission/ticket/audit or changed session must block secrets with a clear reason.
 - Verify Device 360 tabs/Hardware/Identity/Source Health/Report and EN/RU/HE layouts at 100, 125, 150, 175 and 200 percent DPI, including RDP resize. Save sanitized diagnostics only.
 - Confirm BitKeyBridge.exe --version prints 0.35.0-rc.4; run --self-test --no-elevation and --ui-self-test --no-elevation.
 

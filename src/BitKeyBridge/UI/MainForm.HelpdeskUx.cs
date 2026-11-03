@@ -1945,14 +1945,20 @@ public sealed partial class MainForm
         var selected =
             GetSelectedHomeSearchResult();
 
-        if (selected is null ||
-            selected.BitLockerKeyCount <= 0 ||
-            selected.IdentityAmbiguous || selected.IsCloudRecord)
+        if (selected is null || selected.IdentityAmbiguous ||
+            selected.IsCloudRecord || selected.BitLockerKeyCount <= 0)
         {
-            UiStyle.SetStatus(
-                _homeSearchStatus,
-                "Select a computer with BitLocker recovery metadata.",
-                UiStatusKind.Warning);
+            var reason = selected is null
+                ? "Select a computer before BitLocker Reveal or Copy."
+                : selected.IdentityAmbiguous
+                    ? "Multiple AD computers share this name. Select the exact AD object or Recovery ID."
+                : selected.IsCloudRecord
+                    ? "This is a cloud record. Select its exact Entra Recovery ID under Devices."
+                : selected.BitLockerLookupFailed
+                    ? "BitLocker metadata lookup failed; check AD connection, search scope and permissions."
+                : "No verified BitLocker Recovery ID is available for this computer. " +
+                  "Refresh Start or inspect the exact computer in Recovery; unavailable metadata is not proof of no backup.";
+            UiStyle.SetStatus(_homeSearchStatus, reason, UiStatusKind.Warning);
             return null;
         }
 

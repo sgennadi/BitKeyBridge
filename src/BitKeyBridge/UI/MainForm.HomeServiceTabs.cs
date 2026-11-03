@@ -377,8 +377,14 @@ public sealed partial class MainForm
             _directoryConnected && !_directoryConnecting &&
             !selected.IdentityAmbiguous && !selected.IsCloudRecord &&
             !_homeLapsBusy && !_lapsReading;
-        _homeRevealLapsButton.Enabled = canReadLaps;
-        _homeCopyLapsButton.Enabled = canReadLaps;
+        // Explicit Reveal/Copy clicks must explain an unavailable source,
+        // ambiguous AD object or disconnected session instead of doing
+        // nothing. ShowHomeLapsPasswordAsync performs all existing guards.
+        var canExplainLaps = selected is not null &&
+            !_homeLapsBusy && !_lapsReading;
+        _homeRevealLapsButton.Enabled = canExplainLaps;
+        _homeCopyLapsButton.Enabled = canExplainLaps;
+        // History load still requires an eligible active AD session.
         _homeLoadLapsHistoryButton.Enabled = canReadLaps;
     }
 

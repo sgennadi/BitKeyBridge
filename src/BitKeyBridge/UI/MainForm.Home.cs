@@ -709,15 +709,13 @@ public sealed partial class MainForm
         // A source-qualified cloud row may open Devices without any second
         // Graph search or implicit MFA. If the session is disconnected the
         // click gives an explicit Connect instruction, not a silent no-op.
-        var allowAdKey = connected && selected is
-        {
-            IsCloudRecord: false, IdentityAmbiguous: false,
-            BitLockerKeyCount: > 0
-        };
-        var allowCloudKey = HomeCloudRecoverySelectionGuard.CanOfferRecovery(
-            selected);
-        _homeRevealBitLockerButton.Enabled = allowAdKey || allowCloudKey;
-        _homeCopyBitLockerButton.Enabled = allowAdKey || allowCloudKey;
+        // An unverified/denied source must not produce a dead button.
+        // Enable the explicit action for any selected record so its handler
+        // can explain the missing source, ID or rights. The handler still
+        // validates the exact identity, ticket, RBAC and protected audit
+        // BEFORE performing any confidential read or clipboard copy.
+        _homeRevealBitLockerButton.Enabled = selected is not null;
+        _homeCopyBitLockerButton.Enabled = selected is not null;
 
         // Opens the real BitLocker diagnostic-command dialog in-place.
         _homeBitLockerDiagnosticLink.Enabled = selected is not null;
