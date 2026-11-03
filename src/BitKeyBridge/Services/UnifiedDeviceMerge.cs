@@ -68,7 +68,10 @@ public static class UnifiedDeviceMerge
                 row.IdentityStatus = "Intune object";
             row.IdentityKey = key;
             row.FoundInIntune = true;
-            row.FoundInEntra = !string.IsNullOrWhiteSpace(device.EntraDeviceId);
+            // An Entra device ID is a reference supplied by Intune, NOT
+            // proof that Entra returned an independent device/key record.
+            // FoundInEntra is set only on verified Entra recovery metadata.
+            row.FoundInEntra = false;
             row.EntraDeviceId = device.EntraDeviceId;
             row.ManagedDeviceId = device.ManagedDeviceId;
             row.SerialNumber = device.SerialNumber;
@@ -174,6 +177,30 @@ public static class UnifiedDeviceMerge
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Attach supplemental recovery metadata returned from an Entra
+    /// per-device lookup only to an exact, unambiguous Intune identity.
+    /// Validate the returned deviceId even when Graph was filtered by it.
+    /// A common display name cannot authorize any correlation.
+    /// </summary>
+    public static bool TryAttachExactEntraRecoveryMetadata(
+        UnifiedDeviceInfo row, CloudRecoveryMetadata recovery)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(recovery);
+        if (!row.FoundInIntune ||
+            row.IdentityStatus is "Name collision" or "Ambiguous device ID" ||
+            string.IsNullOrWhiteSpace(row.EntraDeviceId) ||
+            string.IsNullOrWhiteSpace(recovery.RecoveryId) ||
+            !string.Equals(row.EntraDeviceId, recovery.DeviceId,
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        AddRecoveryId(row, recovery.RecoveryId);
+        row.FoundInEntra = true;
+        return true;
     }
 
     public static void AddRecoveryId(

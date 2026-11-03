@@ -267,6 +267,82 @@ public static class HelpdeskIntegrationSelfTest
             });
 
         Check(
+            "Intune Entra ID reference is not an independent Entra record",
+            () =>
+            {
+                var managed = new ManagedDeviceInfo
+                {
+                    DeviceName = "UI-INTUNE-REFERENCE",
+                    ManagedDeviceId = "ui-intune-001",
+                    EntraDeviceId = "40404040-4040-4040-4040-404040404040"
+                };
+                var merged = UnifiedDeviceMerge.Merge(
+                    [], [managed], []);
+                var device = merged.Values.Single();
+                var snapshot = Device360Snapshot.FromUnified(device);
+                var home = HomeCloudSearchMapper.Map([device]).Single();
+                var homeSnapshot = Device360Snapshot.FromHome(home);
+                Assert(device.FoundInIntune && !device.FoundInEntra &&
+                       snapshot.InIntune == true &&
+                       snapshot.InEntra is null &&
+                       homeSnapshot.InEntra is null &&
+                       snapshot.IdentityLinkEvidence.Contains(
+                           "references", StringComparison.Ordinal) &&
+                       home.SourceSummary.Contains(
+                           "reference only", StringComparison.Ordinal) &&
+                       home.BitLockerStatus.Contains(
+                           "Not verified", StringComparison.Ordinal),
+                    "A reference carried by Intune was incorrectly shown as an Entra lookup or a missing backup.");
+
+                var forged = new CloudRecoveryMetadata
+                {
+                    RecoveryId = "synthetic-fake-key-id",
+                    DeviceId = "50505050-5050-5050-5050-505050505050"
+                };
+                Assert(!UnifiedDeviceMerge.TryAttachExactEntraRecoveryMetadata(
+                           device, forged) && !device.FoundInEntra &&
+                       device.RecoveryKeyCount == 0,
+                    "An Entra response with the wrong device ID was attached by name.");
+
+                var exact = new CloudRecoveryMetadata
+                {
+                    RecoveryId = "synthetic-matching-key-id",
+                    DeviceId = managed.EntraDeviceId
+                };
+                Assert(UnifiedDeviceMerge.TryAttachExactEntraRecoveryMetadata(
+                           device, exact) && device.FoundInEntra &&
+                       device.RecoveryIds.SequenceEqual(
+                           ["synthetic-matching-key-id"]),
+                    "Exact Entra device ID was not accepted after a trusted metadata response.");
+
+                // An AD-only retry must not discard Entra enrichment already
+                // verified for an immutable managed/Entra device-ID pair.
+                var unavailableAd = new MetadataLookupResult<AdComputerInfo>(
+                    [], "Synthetic unreachable", MetadataFailureKind.SourceOffline);
+                var intune = new MetadataLookupResult<ManagedDeviceInfo>(
+                    [managed], null);
+                var noEntraRecovery = new MetadataLookupResult<CloudRecoveryMetadata>(
+                    [], null);
+                var previous = UnifiedDeviceSearchReport.Combine(
+                    unavailableAd, intune, noEntraRecovery);
+                previous.SourceState = new UnifiedSourceRetryState(
+                    "UI", 250, true, unavailableAd, intune, noEntraRecovery);
+                var priorRow = previous.Rows.Single();
+                Assert(UnifiedDeviceMerge.TryAttachExactEntraRecoveryMetadata(
+                    priorRow, exact), "Synthetic Entra enrichment setup failed.");
+                var recovered = UnifiedSourceRetry.Apply(previous,
+                    UnifiedMetadataSource.Ad,
+                    ad: new MetadataLookupResult<AdComputerInfo>([], null));
+                var after = recovered.Rows.Single();
+                Assert(after.FoundInEntra &&
+                       after.RecoveryIds.SequenceEqual(
+                           ["synthetic-matching-key-id"]) &&
+                       after.ManagedDeviceId == managed.ManagedDeviceId &&
+                       after.EntraDeviceId == managed.EntraDeviceId,
+                    "Retry lost exact-ID verified Entra enrichment from an unchanged source.");
+            });
+
+        Check(
             "AD and Entra same-name records remain distinct",
             () =>
             {

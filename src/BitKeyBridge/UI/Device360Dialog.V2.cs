@@ -369,7 +369,6 @@ internal sealed partial class Device360Dialog
             // and does not prove an independent Entra metadata search.
             var intuneReferencesEntra = snapshot.IdentityVerified &&
                 !snapshot.IdentityAmbiguous && snapshot.InIntune == true &&
-                snapshot.InEntra == true &&
                 !string.IsNullOrWhiteSpace(snapshot.EntraDeviceId) &&
                 !string.IsNullOrWhiteSpace(snapshot.IntuneManagedDeviceId);
             Row(Tr("Device360V2LinkEntraIntune"),

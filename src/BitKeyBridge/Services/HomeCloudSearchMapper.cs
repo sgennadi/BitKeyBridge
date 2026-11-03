@@ -45,9 +45,13 @@ public static class HomeCloudSearchMapper
                             ? "Cloud: Unverified"
                             : row.RecoveryKeyCount > 0
                                 ? $"Entra: {row.RecoveryKeyCount} ID(s)"
-                                : "No Entra IDs reported",
+                                : "Entra recovery backup: Not verified",
                     LapsStatus = "Entra LAPS: Not checked",
-                    SourceSummary = row.FoundInIntune ? "Intune / Entra" : "Entra"
+                    SourceSummary = row.FoundInIntune
+                        ? row.FoundInEntra
+                            ? "Intune / Entra"
+                            : "Intune (Entra ID reference only)"
+                        : "Entra"
                 });
             })
             .ToList();

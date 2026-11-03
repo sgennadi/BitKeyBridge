@@ -84,7 +84,7 @@ internal sealed class Device360Snapshot
             IdentityWarning = row.IdentityAmbiguous
                 ? "Duplicate or conflicting identity. Compare authoritative source IDs; never match by hostname."
                 : string.Empty,
-            IdentityLinkEvidence = inventory is { FoundInIntune: true, FoundInEntra: true } &&
+            IdentityLinkEvidence = inventory is { FoundInIntune: true } &&
                 !string.IsNullOrWhiteSpace(inventory.EntraDeviceId)
                 ? "Intune managed device explicitly references this Entra deviceId; AD relationship is unverified."
                 : "No authoritative cross-source relationship was established.",
@@ -93,8 +93,7 @@ internal sealed class Device360Snapshot
             InAd = cloud ? null : true,
             InEntra = inventory?.FoundInEntra == true ? true :
                 cloud && sourceId.StartsWith("ENTRA:",
-                    StringComparison.OrdinalIgnoreCase) ? true :
-                cloud && Guid.TryParse(row.ComputerId, out _) ? true : null,
+                    StringComparison.OrdinalIgnoreCase) ? true : null,
             InIntune = inventory?.FoundInIntune == true ? true :
                 cloud && sourceId.StartsWith("INTUNE:",
                     StringComparison.OrdinalIgnoreCase) ? true : null,
@@ -142,7 +141,7 @@ internal sealed class Device360Snapshot
                 !string.IsNullOrWhiteSpace(qualifiedId),
             IdentityWarning = row.IdentityWarning,
             IdentityLinkEvidence = !ambiguous && row.FoundInIntune &&
-                row.FoundInEntra && !string.IsNullOrWhiteSpace(row.EntraDeviceId)
+                !string.IsNullOrWhiteSpace(row.EntraDeviceId)
                 ? "Intune managed device explicitly references this Entra deviceId; AD relationship is unverified."
                 : "No authoritative cross-source relationship was established.",
             InAd = row.FoundInAd ? true : null,

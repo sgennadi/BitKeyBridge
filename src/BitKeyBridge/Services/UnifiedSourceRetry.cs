@@ -73,13 +73,16 @@ internal static class UnifiedSourceRetry
             next.RecoveryEnrichmentFailures = previous.RecoveryEnrichmentFailures;
             foreach (var row in next.Rows)
             {
-                if (!row.FoundInEntra || string.IsNullOrWhiteSpace(row.EntraDeviceId) ||
+                if (!row.FoundInIntune ||
+                    string.IsNullOrWhiteSpace(row.EntraDeviceId) ||
                     row.IdentityStatus is "Name collision" or "Ambiguous device ID")
                     continue;
                 var exact = previous.Rows.Where(old =>
-                    old.FoundInEntra &&
+                    old.FoundInIntune && old.FoundInEntra &&
                     old.IdentityStatus is not ("Name collision" or "Ambiguous device ID") &&
                     string.Equals(old.IdentityKey, row.IdentityKey,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(old.ManagedDeviceId, row.ManagedDeviceId,
                         StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(old.EntraDeviceId, row.EntraDeviceId,
                         StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
@@ -87,6 +90,9 @@ internal static class UnifiedSourceRetry
                     continue;
                 foreach (var id in exact[0].RecoveryIds)
                     UnifiedDeviceMerge.AddRecoveryId(row, id);
+                // Prior Entra proof was obtained with this same immutable ID.
+                // Retain it after an unrelated AD/Intune retry, never by name.
+                row.FoundInEntra = true;
                 row.RecoveryMetadataIncomplete |= exact[0].RecoveryMetadataIncomplete;
             }
         }

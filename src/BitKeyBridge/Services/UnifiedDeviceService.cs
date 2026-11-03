@@ -145,7 +145,7 @@ public sealed class UnifiedDeviceService
             var missing = report.Rows
                 .Where(row =>
                     row.FoundInIntune &&
-                    row.IdentityStatus != "Ambiguous device ID" &&
+                    row.IdentityStatus is not ("Name collision" or "Ambiguous device ID") &&
                     !string.IsNullOrWhiteSpace(row.EntraDeviceId) &&
                     row.RecoveryIds.Count == 0)
                 .Take(100)
@@ -159,11 +159,23 @@ public sealed class UnifiedDeviceService
                 {
                     var keys = await graph.GetRecoveryMetadataForDeviceAsync(
                         accessToken, row.EntraDeviceId, row.ComputerName, ct);
+                    var inconsistentDeviceId = false;
                     lock (row.RecoveryIds)
                     {
                         foreach (var key in keys)
-                            UnifiedDeviceMerge.AddRecoveryId(
-                                row, key.RecoveryId);
+                            if (!UnifiedDeviceMerge.TryAttachExactEntraRecoveryMetadata(
+                                    row, key))
+                                inconsistentDeviceId = true;
+                    }
+                    if (inconsistentDeviceId)
+                    {
+                        row.RecoveryMetadataIncomplete = true;
+                        Interlocked.Increment(
+                            ref report.RecoveryEnrichmentFailures);
+                        WindowsEventLogService.TryWrite(
+                            "Unified Devices Entra enrichment returned an " +
+                            "unmatched or invalid device identity.",
+                            EventLogSeverity.Warning, 4578, "Devices");
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
