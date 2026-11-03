@@ -113,12 +113,19 @@ public sealed class UnifiedDeviceService
         }
 
         using var graph = new CloudGraphService();
+        // A filtered/unfiltered Graph query can page through a large tenant.
+        // Bound EACH cloud source independently: a timed-out Intune read
+        // must not hide healthy AD/Entra results or strand the spinner.
+        using var intuneTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var entraTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        intuneTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+        entraTimeout.CancelAfter(TimeSpan.FromSeconds(30));
         var intuneTask = MetadataSourceIsolation.ExecuteWithTransientRetryAsync(
             () => graph.SearchManagedDevicesAsync(
-                accessToken, query, maximumItems, ct),
+                accessToken, query, maximumItems, intuneTimeout.Token),
             ct);
         var entraTask = MetadataSourceIsolation.ExecuteWithTransientRetryAsync(
-            () => graph.SearchAsync(accessToken, query, ct),
+            () => graph.SearchAsync(accessToken, query, entraTimeout.Token),
             ct);
 
         var pending = new List<Task> { intuneTask, entraTask };
@@ -208,13 +215,19 @@ public sealed class UnifiedDeviceService
                     report.Rows));
 
             using var gate = new SemaphoreSlim(6);
+            // Independent optional per-device lookup: never delay the whole
+            // final inventory indefinitely when Graph is slow or throttled.
+            using var enrichmentTimeout =
+                CancellationTokenSource.CreateLinkedTokenSource(ct);
+            enrichmentTimeout.CancelAfter(TimeSpan.FromSeconds(20));
             var tasksToEnrich = missing.Select(async row =>
             {
                 await gate.WaitAsync(ct);
                 try
                 {
                     var keys = await graph.GetRecoveryMetadataForDeviceAsync(
-                        accessToken, row.EntraDeviceId, row.ComputerName, ct);
+                        accessToken, row.EntraDeviceId, row.ComputerName,
+                        enrichmentTimeout.Token);
                     var inconsistentDeviceId = false;
                     lock (row.RecoveryIds)
                     {

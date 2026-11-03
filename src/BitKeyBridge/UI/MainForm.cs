@@ -1938,6 +1938,16 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task SearchUnifiedDevicesAsync()
     {
+        if (_unifiedQuery.Text.Trim().Length <
+            SearchText.MinimumLiveSearchCharacters)
+        {
+            UiStyle.SetStatus(_unifiedStatus,
+                "Enter at least two characters to search Devices. " +
+                "A blank query would scan the entire tenant.",
+                UiStatusKind.Warning);
+            return;
+        }
+
         // Search is deliberately restartable. A second click cancels the
         // stale request and starts a new generation instead of silently
         // ignoring the operator while a slow Graph page is in progress.
