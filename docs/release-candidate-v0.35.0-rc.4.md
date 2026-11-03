@@ -11,6 +11,8 @@
 
 ## Changes in RC4
 
+- Source-local Graph timeout is explicitly classified as Timeout, including base OperationCanceledException. A user pressing Cancel still cancels the whole search; a timed-out single source does not imply missing BitLocker backup.
+
 1. A temporary Windows EXE file lock (for example after a health probe or an endpoint scanner) now gets at most seven short retries for the atomic File.Move replacement step only. Persistent access denial remains fatal, and rollback/backup integrity checks remain mandatory.
 2. Transactional update history records a non-secret stage to help locate a failed backup, replacement or post-install verification.
 3. An offline synthetic locked EXE verifies the new retry behavior; legacy v0.30.1 and v0.30.3 real upgrades and rollbacks must still pass.

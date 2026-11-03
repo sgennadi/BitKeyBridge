@@ -74,7 +74,12 @@ internal static class MetadataFailureGuidance
 
             if (current is UnauthorizedAccessException or SecurityException)
                 return MetadataFailureKind.AccessDenied;
-            if (current is TimeoutException or TaskCanceledException)
+            // A per-source Graph deadline may throw the base
+            // OperationCanceledException (not only TaskCanceledException).
+            // User-requested cancellation is rethrown by ExecuteAsync before
+            // reaching this classifier; only source-local cancellation is
+            // converted to a typed timeout, never to "no record".
+            if (current is TimeoutException or OperationCanceledException)
                 return MetadataFailureKind.Timeout;
             // A certificate/key-store failure is not always a LAPS decrypt
             // failure. Callers must explicitly identify a decrypt operation.
@@ -176,6 +181,8 @@ internal static class MetadataFailureGuidance
         Check(new LdapException(81), MetadataFailureKind.SourceOffline);
         Check(new LdapException(50), MetadataFailureKind.AccessDenied);
         Check(new TimeoutException(), MetadataFailureKind.Timeout);
+        Check(new OperationCanceledException("synthetic per-source deadline"),
+            MetadataFailureKind.Timeout);
         Check(new UnauthorizedAccessException(), MetadataFailureKind.AccessDenied);
         Check(new CryptographicException("synthetic"), MetadataFailureKind.Unknown);
         Check(new CryptographicException("synthetic"),
