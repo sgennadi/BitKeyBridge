@@ -804,6 +804,8 @@ public sealed class UpdateService : IDisposable
         var backups = new List<(string Target, string Backup)>();
         var createdTargets = new List<string>();
         var retainedBackupSnapshots = new List<UpdateBackupSafety.BackupSnapshot>();
+        // Non-secret stage label helps distinguish transient file locks from failed policy.
+        var applyStage = "Validate apply plan";
         try
         {
             // Reject hostile background plans before stopping services or
@@ -831,11 +833,13 @@ public sealed class UpdateService : IDisposable
                 }
             }
 
+            applyStage = "Open verified staged executable";
             using var stagedExecutable =
                 OpenVerifiedStagedExecutable(
                     plan);
 
             // Recheck active signing policy in the elevated apply helper.
+            applyStage = "Enforce update trust and channel";
             var activePolicy = ConfigService.LoadAppConfig();
             if (plan.Automatic &&
                 !UpdateTrustPolicy.CanInstallUnattended(activePolicy))
@@ -874,16 +878,19 @@ public sealed class UpdateService : IDisposable
                 var existed = File.Exists(fullTarget);
                 if (existed)
                 {
+                    applyStage = "Snapshot previous rollback backup";
                     // An existing .bak may be the operator's only previous
                     // rollback image. Snapshot it BEFORE rewriting .bak;
                     // restore it after a failed install, including failures
                     // raised by the post-install health probe.
                     retainedBackupSnapshots.Add(
                         UpdateBackupSafety.Snapshot(backup));
+                    applyStage = "Preserve old executable";
                     File.Copy(fullTarget, backup, true);
                     backups.Add((fullTarget, backup));
                 }
 
+                applyStage = "Write staged executable";
                 var replacement = fullTarget + ".new";
                 stagedExecutable.Position = 0;
 
@@ -900,11 +907,15 @@ public sealed class UpdateService : IDisposable
                         flushToDisk: true);
                 }
 
-                File.Move(replacement, fullTarget, true);
+                // Another process can briefly hold this Windows EXE, even after
+                // WaitForExit. Retry ONLY the file-system swap, not trust or auth.
+                applyStage = "Replace executable";
+                ReplaceExecutableWithBoundedRetry(replacement, fullTarget);
                 if (!existed)
                     createdTargets.Add(fullTarget);
             }
 
+            applyStage = "Persist post-install policy";
             // Persist the intentional downgrade before restarting the GUI.
             // Otherwise the default automatic updater would immediately undo it.
             if (plan.Rollback)
@@ -926,6 +937,7 @@ public sealed class UpdateService : IDisposable
             if (plan.RestartService)
                 WindowsServiceHost.Start();
 
+            applyStage = "Verify installed executable health";
             // A staged self-test is necessary but not sufficient. Verify
             // the installed bytes and execute the ACTUAL replaced program
             // before committing success or allowing future auto-updates.
@@ -963,6 +975,7 @@ public sealed class UpdateService : IDisposable
             // Keep the immediately previous executable as .bak so the
             // operator has a one-click rollback path. A later successful
             // update replaces that retained backup with the then-current build.
+            applyStage = "Record successful update";
             new UpdateHistoryService()
                 .Append(
                     new UpdateHistoryEntry
@@ -993,6 +1006,7 @@ public sealed class UpdateService : IDisposable
             // The freshly replaced .bak now holds the immediately previous
             // executable. Remove any temporary older backup snapshots only
             // once the update has been verified and recorded as successful.
+            applyStage = "Commit rollback snapshots";
             foreach (var snapshot in retainedBackupSnapshots)
             {
                 try { UpdateBackupSafety.Commit(snapshot); }
@@ -1156,6 +1170,7 @@ public sealed class UpdateService : IDisposable
                             plan.AuthenticodePublisher,
                         Details =
                             $"Source={(plan.Rollback ? plan.RollbackSource : "Update")}; " +
+                            $"Stage={applyStage}; " +
                             $"RestoreAttempted={restoreAttempted}; " +
                             $"RestoreSucceeded={restoreSucceeded}; " +
                             $"RestoreFailed={restoreFailed}; " +
@@ -2005,6 +2020,82 @@ public sealed class UpdateService : IDisposable
             !IsReleaseChannelAllowed("0.32.0-rc.3", true, false))
             errors.Add("Revoked prerelease permission was ignored by update apply policy.");
         return errors;
+    }
+
+
+    // A just-exited health probe or endpoint scanner can hold an EXE handle.
+    // The original Windows ACL, signature and hash checks are NOT bypassed.
+    private static void ReplaceExecutableWithBoundedRetry(
+        string replacement, string target)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Move(replacement, target, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (
+                OperatingSystem.IsWindows() &&
+                attempt < 7 &&
+                IsTransientWindowsFileContention(ex))
+            {
+                // At most 3.5 seconds in seven backoffs, then fail and rollback.
+                Thread.Sleep(TimeSpan.FromMilliseconds(125 * (attempt + 1)));
+            }
+        }
+    }
+
+    private static bool IsTransientWindowsFileContention(Exception ex)
+    {
+        if (ex is not IOException && ex is not UnauthorizedAccessException)
+            return false;
+        var win32Code = ex.HResult & 0xFFFF;
+        // Access denied, sharing violation and lock violation. A persistent
+        // ACL/WDAC rejection is still fatal; retries do not elevate access.
+        return win32Code is 5 or 32 or 33;
+    }
+
+    internal static IEnumerable<string> RunFileReplacementOfflineTests(
+        string scratchDirectory)
+    {
+        var failures = new List<string>();
+        if (!OperatingSystem.IsWindows())
+            return failures;
+
+        var folder = Path.Combine(scratchDirectory, "update-atomic-replace");
+        Directory.CreateDirectory(folder);
+        var target = Path.Combine(folder, "BitKeyBridge.exe");
+        var replacement = target + ".new";
+
+        try
+        {
+            File.WriteAllText(target, "synthetic-old-version");
+            File.WriteAllText(replacement, "synthetic-new-version");
+            // Synthetic lock simulates a process still mapping the EXE.
+            using var lockStream = new FileStream(
+                target, FileMode.Open, FileAccess.Read, FileShare.None);
+            var release = Task.Run(async () =>
+            {
+                await Task.Delay(450);
+                lockStream.Dispose();
+            });
+            ReplaceExecutableWithBoundedRetry(replacement, target);
+            release.GetAwaiter().GetResult();
+
+            if (File.ReadAllText(target) != "synthetic-new-version" ||
+                File.Exists(replacement))
+                failures.Add("Transient EXE lock prevented atomic replacement.");
+            if (IsTransientWindowsFileContention(
+                    new InvalidOperationException("synthetic denied")))
+                failures.Add("Updater file retry classifier accepted a non-file error.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Bounded executable replacement: " +
+                DiagnosticRedaction.Sanitize(ex.Message));
+        }
+        return failures;
     }
 
     internal static bool ReleaseVersionsMatch(

@@ -1,3 +1,15 @@
+## 0.35.0-rc.4
+
+**Release candidate only (3 November 2026); UNSIGNED isolated manual QA; not Stable.** Continues in single PR #115 and replaces RC3 only after exact-HEAD CI gates pass.
+
+- The updater now retries transient Windows executable replacement contention only for an atomic same-directory swap, for a maximum of seven bounded backoffs (~3.5 seconds). Persistent access denied still fails and triggers transactional rollback. Security authorization, signing, hash and prerelease checks are unchanged.
+- Sanitize and store the failure phase (e.g. Preserve old executable, Replace executable, Verify installed executable health) in update history without recording secrets or configuration.
+- Add a native Windows synthetic locked-EXE regression. Keep v0.30.1/v0.30.3 real legacy migration, ACL and DPAPI rollback gates mandatory, not skipped.
+- Retain RC3 progressive Devices search, per-source Graph deadlines, exact device identity and no-surprise-MFA guarantees. No changes to BitLocker/LAPS Reveal/Show authorization, ticket/JIT, or protected audit.
+- QA bundle, only if all exact-source checks pass: BitKeyBridge-v0.35.0-rc.4-QA-UNSIGNED. No fleet deployment or Stable release before real Windows 11 acceptance and corporate Authenticode signing.
+
+See docs/release-candidate-v0.35.0-rc.4.md for operator verification.
+
 ## 0.35.0-rc.3
 
 **Release candidate only (3 November 2026), UNSIGNED manual QA, not Stable.** Fixes the reported Devices search that appeared unresponsive or returned an empty grid while waiting on large Entra/Intune tenants. One integration branch and PR #115; replaces RC2 for QA only after exact-head CI passes.
