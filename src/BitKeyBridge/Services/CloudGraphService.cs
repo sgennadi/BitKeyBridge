@@ -182,23 +182,41 @@ public sealed partial class CloudGraphService : IDisposable
     public async Task<int> TestAccessAsync(string accessToken, CancellationToken ct = default)
     {
         using var json = await GetJsonAsync(accessToken,
-            "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys?$top=10", ct);
+            "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys", ct);
         return json.RootElement.TryGetProperty("value", out var value) ? value.GetArrayLength() : 0;
     }
 
     public async Task<List<CloudRecoveryMetadata>> SearchAsync(string accessToken, string query, CancellationToken ct = default)
     {
-        query = query.Trim();
+        query = (query ?? string.Empty).Trim();
         if (Guid.TryParse(query, out var exactId))
         {
-            var meta = await GetRecoveryMetadataByIdAsync(accessToken, exactId.ToString("D"), ct);
-            return meta is null ? [] : [meta];
+            // The search box accepts BOTH a recovery-key ID and an Entra
+            // device ID. Previously every GUID was treated only as a key ID;
+            // a legitimate device GUID returned Graph 404 and the entire
+            // Entra source appeared to have failed.
+            try
+            {
+                var meta = await GetRecoveryMetadataByIdAsync(
+                    accessToken, exactId.ToString("D"), ct);
+                return meta is null ? [] : [meta];
+            }
+            catch (HttpRequestException ex)
+                when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return await GetRecoveryMetadataForDeviceAsync(
+                    accessToken, exactId.ToString("D"),
+                    exactId.ToString("D"), ct);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(query))
         {
+            // Graph recoveryKeys does NOT support $top; use only a local
+            // bound and pagination, never leak key values in metadata search.
             var all = await GetCollectionAsync(accessToken,
-                "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys?$top=100", 100, ct);
+                "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys",
+                100, ct);
             return await ConvertRecoveryMetadataAsync(accessToken, all, ct);
         }
 
@@ -210,27 +228,63 @@ public sealed partial class CloudGraphService : IDisposable
             devices = await GetCollectionAsync(accessToken,
                 $"https://graph.microsoft.com/v1.0/devices?$filter={filter}&$select=id,deviceId,displayName&$top=100", 1000, ct);
         }
-        catch
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            throw;
+        }
+        catch (HttpRequestException ex)
+            when (ex.StatusCode is System.Net.HttpStatusCode.BadRequest or
+                System.Net.HttpStatusCode.NotImplemented)
+        {
+            // Some tenants reject startswith. Fall back to a bounded
+            // metadata-only directory scan, not an unbounded hidden wait.
             var allDevices = await GetCollectionAsync(accessToken,
-                "https://graph.microsoft.com/v1.0/devices?$select=id,deviceId,displayName&$top=999", 50000, ct);
+                "https://graph.microsoft.com/v1.0/devices?$select=id,deviceId,displayName&$top=999", 5000, ct);
             devices = allDevices.Where(x =>
-                GetString(x, "displayName").StartsWith(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                GetString(x, "displayName").StartsWith(query,
+                    StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
-        var result = new List<CloudRecoveryMetadata>();
-        foreach (var device in devices)
+        // A broad query may match hundreds of Entra objects. The old code
+        // fetched recovery metadata SEQUENTIALLY and could look frozen for
+        // minutes. Require a narrower query rather than implying that an
+        // unscanned device has no BitLocker backup.
+        const int maxEntraCandidates = 64;
+        var candidates = devices
+            .Where(x => !string.IsNullOrWhiteSpace(GetString(x, "deviceId")))
+            .GroupBy(x => GetString(x, "deviceId"),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(maxEntraCandidates + 1)
+            .ToList();
+        if (candidates.Count > maxEntraCandidates)
+            throw new InvalidOperationException(
+                "Entra search matches too many devices. Enter more of the exact " +
+                "computer name or device ID; no BitLocker absence was inferred.");
+
+        using var gate = new SemaphoreSlim(6);
+        var tasks = candidates.Select(async device =>
         {
-            var deviceId = GetString(device, "deviceId");
-            var displayName = GetString(device, "displayName");
-            if (string.IsNullOrWhiteSpace(deviceId)) continue;
-            var keyFilter = Uri.EscapeDataString($"deviceId eq '{deviceId.Replace("'", "''")}'");
-            var keys = await GetCollectionAsync(accessToken,
-                $"https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys?$filter={keyFilter}", 5000, ct);
-            foreach (var key in keys)
-                result.Add(ConvertMetadata(key, displayName));
-        }
-        return result;
+            await gate.WaitAsync(ct);
+            try
+            {
+                var deviceId = GetString(device, "deviceId");
+                var displayName = GetString(device, "displayName");
+                var keyFilter = Uri.EscapeDataString(
+                    $"deviceId eq '{deviceId.Replace("'", "''")}'");
+                var keys = await GetCollectionAsync(accessToken,
+                    "https://graph.microsoft.com/v1.0/informationProtection/" +
+                    "bitlocker/recoveryKeys?$filter=" + keyFilter, 5000, ct);
+                return keys.Select(key => ConvertMetadata(key, displayName))
+                    .ToList();
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }).ToList();
+        var results = await Task.WhenAll(tasks);
+        return results.SelectMany(rows => rows).ToList();
     }
 
     public async Task<List<ManagedDeviceInfo>> SearchManagedDevicesAsync(
@@ -239,29 +293,75 @@ public sealed partial class CloudGraphService : IDisposable
         int maximumItems = 500,
         CancellationToken ct = default)
     {
-        var uri =
-            "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices" +
-            "?$select=id,deviceName,azureADDeviceId,serialNumber,userPrincipalName,userDisplayName,manufacturer,model,operatingSystem,osVersion,complianceState,isEncrypted,lastSyncDateTime&$top=999";
-
-        var items = await GetCollectionAsync(accessToken, uri, 50000, ct);
-        var rows = items.Select(ConvertManagedDevice).ToList();
+        const string endpoint =
+            "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices";
+        const string selected =
+            "id,deviceName,azureADDeviceId,serialNumber,userPrincipalName," +
+            "userDisplayName,manufacturer,model,operatingSystem,osVersion," +
+            "complianceState,isEncrypted,lastSyncDateTime";
         query = query?.Trim() ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(query))
+        maximumItems = Math.Clamp(maximumItems, 1, 50000);
+
+        // Prefer a narrow server-side Intune name filter. Otherwise the
+        // original implementation walked up to 50,000 managed devices before
+        // showing a SINGLE result for "clinic". Exact serial/UPN/ID queries
+        // are still supported by the bounded fallback below.
+        if (query.Length >= 2 && query.Length <= 128)
         {
-            rows = rows.Where(x =>
-                    Contains(x.DeviceName, query) ||
-                    Contains(x.SerialNumber, query) ||
-                    Contains(x.UserPrincipalName, query) ||
-                    Contains(x.UserDisplayName, query) ||
-                    Contains(x.EntraDeviceId, query) ||
-                    Contains(x.ManagedDeviceId, query))
-                .ToList();
+            var safe = query.Replace("'", "''");
+            var filter = query.Contains('@')
+                ? "userPrincipalName eq '" + safe + "'"
+                : Guid.TryParse(query, out _)
+                    ? "azureADDeviceId eq '" + safe + "'"
+                    : "contains(deviceName,'" + safe + "')";
+            var filteredUri = endpoint + "?$select=" + selected +
+                "&$filter=" + Uri.EscapeDataString(filter) + "&$top=250";
+            try
+            {
+                var filtered = await GetCollectionAsync(
+                    accessToken, filteredUri, Math.Min(maximumItems, 1000), ct);
+                if (filtered.Count > 0)
+                    return filtered.Select(ConvertManagedDevice)
+                        .Where(x =>
+                            Contains(x.DeviceName, query) ||
+                            Contains(x.SerialNumber, query) ||
+                            Contains(x.UserPrincipalName, query) ||
+                            Contains(x.UserDisplayName, query) ||
+                            Contains(x.EntraDeviceId, query) ||
+                            Contains(x.ManagedDeviceId, query))
+                        .OrderBy(x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
+                        .Take(maximumItems).ToList();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (HttpRequestException ex)
+                when (ex.StatusCode is System.Net.HttpStatusCode.BadRequest or
+                    System.Net.HttpStatusCode.NotImplemented)
+            {
+                // Some tenants/Graph versions reject a filter. Fall back to
+                // the existing client-side multi-field matching, not a
+                // false "not found". 401/403 must remain visible failures.
+            }
         }
 
-        return rows
-            .OrderBy(x => x.DeviceName, StringComparer.OrdinalIgnoreCase)
-            .Take(Math.Clamp(maximumItems, 1, 50000))
-            .ToList();
+        var items = await GetCollectionAsync(
+            accessToken, endpoint + "?$select=" + selected + "&$top=999",
+            50000, ct);
+        var rows = items.Select(ConvertManagedDevice);
+        if (query.Length > 0)
+            rows = rows.Where(x =>
+                Contains(x.DeviceName, query) ||
+                Contains(x.SerialNumber, query) ||
+                Contains(x.UserPrincipalName, query) ||
+                Contains(x.UserDisplayName, query) ||
+                Contains(x.EntraDeviceId, query) ||
+                Contains(x.ManagedDeviceId, query));
+
+        return rows.OrderBy(x => x.DeviceName,
+                StringComparer.OrdinalIgnoreCase)
+            .Take(maximumItems).ToList();
     }
 
     public async Task<List<CloudRecoveryMetadata>> GetAllRecoveryMetadataAsync(
@@ -273,7 +373,7 @@ public sealed partial class CloudGraphService : IDisposable
 
         var keysTask = GetCollectionAsync(
             accessToken,
-            "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys?$select=id,createdDateTime,deviceId,volumeType&$top=999",
+            "https://graph.microsoft.com/v1.0/informationProtection/bitlocker/recoveryKeys",
             maximumItems,
             ct);
 

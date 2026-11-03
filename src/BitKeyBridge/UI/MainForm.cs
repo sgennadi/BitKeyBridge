@@ -1938,16 +1938,23 @@ public sealed partial class MainForm : DpiAwareForm
 
     private async Task SearchUnifiedDevicesAsync()
     {
-        if (_unifiedCancellation is not null)
-            return;
+        // Search is deliberately restartable. A second click cancels the
+        // stale request and starts a new generation instead of silently
+        // ignoring the operator while a slow Graph page is in progress.
+        if (_unifiedCancellation is { } previous)
+        {
+            _unifiedCancellation = null;
+            previous.Cancel();
+        }
 
         using var cancellation =
             new CancellationTokenSource();
         var generation = ++_unifiedSearchGeneration;
         _unifiedCancellation =
             cancellation;
-        _unifiedSearch.Enabled =
-            false;
+        _unifiedSearch.Enabled = true;
+        _unifiedSearch.Text = "Restart Search";
+        _unifiedResults.Enabled = false; // preview is metadata only, not actionable
         _unifiedCancel.Enabled =
             true;
         _unifiedQuery.Enabled =
@@ -1999,6 +2006,30 @@ public sealed partial class MainForm : DpiAwareForm
 
             var adReady =
                 _directoryConnected;
+            // Progress<T> captures the WinForms SynchronizationContext.
+            // A stale generation, cancel or final result cannot be
+            // overwritten by a late provisional row update.
+            var sourceProgress = new Progress<UnifiedDeviceSearchProgress>(stage =>
+            {
+                if (IsDisposed || cancellation.IsCancellationRequested ||
+                    generation != _unifiedSearchGeneration ||
+                    !_unifiedProgress.Visible ||
+                    !ReferenceEquals(_unifiedCancellation, cancellation))
+                    return;
+                _unifiedResults.BeginUpdate();
+                try
+                {
+                    _unifiedResults.Items.Clear();
+                    foreach (var partial in stage.Rows)
+                        AddUnifiedDeviceSearchResultRow(partial);
+                }
+                finally
+                {
+                    _unifiedResults.EndUpdate();
+                }
+                UiStyle.SetStatus(_unifiedStatus, stage.Message,
+                    UiStatusKind.Busy);
+            });
             List<UnifiedDeviceInfo> rows;
             UnifiedDeviceSearchReport? sourceReport = null;
 
@@ -2020,7 +2051,8 @@ public sealed partial class MainForm : DpiAwareForm
                         includeActiveDirectory:
                             adReady,
                         ct:
-                            cancellation.Token);
+                            cancellation.Token,
+                        progress: sourceProgress);
                 rows = sourceReport.Rows;
             }
             else if (adReady)
@@ -2095,8 +2127,18 @@ public sealed partial class MainForm : DpiAwareForm
                 sourceReport?.EntraFailureKind ?? MetadataFailureKind.None,
                 sourceReport?.IntuneFailureKind ?? MetadataFailureKind.None);
 
-            foreach (var row in rows)
-                AddUnifiedDeviceSearchResultRow(row);
+            _unifiedResults.BeginUpdate();
+            try
+            {
+                _unifiedResults.Items.Clear(); // discard provisional rows
+                foreach (var row in rows)
+                    AddUnifiedDeviceSearchResultRow(row);
+            }
+            finally
+            {
+                _unifiedResults.EndUpdate();
+                _unifiedResults.Enabled = true;
+            }
 
             var source =
                 cloudReady
@@ -2114,9 +2156,15 @@ public sealed partial class MainForm : DpiAwareForm
                           : "All requested sources responded; recovery passwords were not requested.")
                     : $"AD search returned {rows.Count} record(s). " +
                       "Cloud is not connected; use Connect Microsoft 365 to include Entra/Intune.",
-                sourceReport?.IsPartial == true || !cloudReady
+                sourceReport?.IsPartial == true || !cloudReady || rows.Count == 0
                     ? UiStatusKind.Warning
                     : UiStatusKind.Success);
+            if (rows.Count == 0 && sourceReport?.IsPartial != true)
+                UiStyle.SetStatus(_unifiedStatus,
+                    "No matching device metadata returned by the connected sources. " +
+                    "Try a shorter computer-name fragment, exact device ID, " +
+                    "serial or UPN; verify the intended AD/Intune source.",
+                    UiStatusKind.Warning);
 
             SetDevicesCloudWarningAction(!cloudReady);
 
@@ -2200,6 +2248,8 @@ public sealed partial class MainForm : DpiAwareForm
                 if (ReferenceEquals(_unifiedCancellation, cancellation))
                     _unifiedCancellation = null;
                 _unifiedSearch.Enabled = true;
+                _unifiedSearch.Text = "Search AD + Cloud";
+                _unifiedResults.Enabled = true;
                 _unifiedCancel.Enabled = false;
                 _unifiedQuery.Enabled = true;
                 _unifiedProgress.Visible = false;
@@ -2231,7 +2281,11 @@ public sealed partial class MainForm : DpiAwareForm
                 _unifiedStatus.Text.Contains("No active cloud session",
                     StringComparison.OrdinalIgnoreCase) &&
                 _devicesCloudConnectButton.Enabled &&
-                _unifiedCancellation is null;
+                _unifiedCancellation is null &&
+                _unifiedSearch.Enabled &&
+                _unifiedSearch.Text == "Search AD + Cloud" &&
+                _unifiedResults.Enabled &&
+                !_unifiedProgress.Visible;
         }
         finally
         {

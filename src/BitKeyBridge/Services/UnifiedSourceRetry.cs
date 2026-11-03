@@ -71,6 +71,7 @@ internal static class UnifiedSourceRetry
         if (source != UnifiedMetadataSource.Entra)
         {
             next.RecoveryEnrichmentFailures = previous.RecoveryEnrichmentFailures;
+            next.RecoveryEnrichmentDeferred = previous.RecoveryEnrichmentDeferred;
             foreach (var row in next.Rows)
             {
                 if (!row.FoundInIntune ||
@@ -97,9 +98,11 @@ internal static class UnifiedSourceRetry
             }
         }
         // A targeted retry never calls per-managed-device Entra enrichment.
-        // Even after a successful bulk Entra lookup, zero recovery IDs on a
-        // managed device cannot prove that no backup exists. Do not present
-        // this gap as a complete inventory or a missing recovery secret.
+        // If it refreshed Entra, record which IDs still require an exact
+        // follow-up; no backup-absence inference is permitted.
+        if (source == UnifiedMetadataSource.Entra)
+            next.RecoveryEnrichmentDeferred = next.Rows.Count(row =>
+                row.FoundInIntune && row.RecoveryIds.Count == 0);
         foreach (var row in next.Rows.Where(row =>
             row.FoundInIntune && row.RecoveryIds.Count == 0))
             row.RecoveryMetadataIncomplete = true;
@@ -157,6 +160,16 @@ internal static class UnifiedSourceRetry
         if (!CanRetry(cloudFailure, UnifiedMetadataSource.Entra) ||
             CanRetry(cloudFailure, UnifiedMetadataSource.Intune))
             failures.Add("Entra 429 selective retry was not available.");
+
+        var retriedEntra = Apply(cloudFailure, UnifiedMetadataSource.Entra,
+            entra: new MetadataLookupResult<CloudRecoveryMetadata>([], null));
+        if (!retriedEntra.IsPartial ||
+            retriedEntra.RecoveryEnrichmentDeferred != 1 ||
+            retriedEntra.Rows.Single(row => row.FoundInIntune)
+                .RecoveryMetadataIncomplete is not true ||
+            !retriedEntra.DiagnosticSummary.Contains(
+                "Search by exact device name", StringComparison.Ordinal))
+            failures.Add("Entra-only retry falsely marked unqueried backups as absent.");
 
         var forbidden = new MetadataLookupResult<ManagedDeviceInfo>(
             [], "Synthetic 403", MetadataFailureKind.AccessDenied);

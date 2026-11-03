@@ -1,3 +1,20 @@
+## 0.35.0-rc.3
+
+**Release candidate only (3 November 2026), UNSIGNED manual QA, not Stable.** Fixes the reported Devices search that appeared unresponsive or returned an empty grid while waiting on large Entra/Intune tenants. One integration branch and PR #115; replaces RC2 for QA only after exact-head CI passes.
+
+- Devices search reports each completed AD, Intune and Entra source progressively. Preliminary, non-secret rows are shown immediately but cannot be used to reveal secrets until all active sources complete. The final source-qualified list replaces the preview; zero results and source failures show actionable diagnostics instead of remaining blank.
+- **Restart Search** explicitly cancels an in-flight search and starts a fresh generation. Late results or errors from the previous generation cannot replace the latest view. Search and list controls return to normal after completion/cancellation.
+- Intune prioritizes a **server-side filtered metadata query** for device names, full UPN or GUID. If a tenant rejects that filter or it finds no names, the existing multi-field client-side search remains available, preserving serial/UPN/substr matching. Graph 401/403 remain typed errors, never silent fallback.
+- Entra BitLocker metadata lookup now validates a GUID as a recovery key ID or an exact Entra device ID rather than assuming every GUID names a recovery key. When name matching returns multiple devices, use bounded concurrent per-device metadata calls. Very broad queries require a narrower name/ID instead of up to hundreds of sequential calls.
+- Remove **unsupported `$top`** from Microsoft Graph BitLocker recoveryKeys list requests. See [Microsoft Graph list recoveryKeys](https://learn.microsoft.com/en-us/graph/api/bitlocker-list-recoverykeys?view=graph-rest-1.0). List metadata only; never fetch secret values during search.
+- Limit optional per-managed-device Entra enrichment to 32 devices per broad search and mark the remainder **deferred / not verified**, never as absent BitLocker backups. Source Health shows the number requiring a narrower query; the targeted source-only retry preserves this incomplete state.
+- Keep RC2 Start/Devices BitLocker Reveal/Show, LAPS guidance, protected audit and AD/Entra/Intune exact-ID requirements unchanged. No automatic MFA, ticket bypass, new write permissions or recovery-key retrieval in inventory search.
+- Candidate version and exact-source unsigned QA package: `0.35.0-rc.3`. The existing workflow derives `BitKeyBridge-v0.35.0-rc.3-QA-UNSIGNED` from the project version.
+
+**Still required before Stable:** exact HEAD x64/x86/ARM64 build, native UI/self-tests, LAPS/Audit Broker/CodeQL, temporary signing/rollback tests, plus actual Windows 11 AD/Entra/Intune/RDP operator acceptance and organization-managed Authenticode signing. Do not deploy unsigned QA to domain controllers or managed fleet.
+
+See `docs/release-candidate-v0.35.0-rc.3.md` for the targeted manual test, including a broad query such as `clinic`.
+
 ## 0.35.0-rc.2
 
 **Release candidate only (3 November 2026); unsigned manual QA, not Stable.** Advances RC1 after its successful source-pinned Windows/CodeQL CI. Continues in the same PR #115 integration branch to avoid stacked PRs; the application SemVer and manifest identify the actual candidate. The earlier RC1 remains available as historical QA, not as the new build.
