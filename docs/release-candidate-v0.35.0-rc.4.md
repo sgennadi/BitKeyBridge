@@ -11,6 +11,8 @@
 
 ## Changes in RC4
 
+- Switching Microsoft 365 sessions immediately masks/clears cached Devices keys, invalidates pending callbacks, and prevents cached reuse across principals or expired tokens. No secrets used in offline regression.
+
 - For Intune metadata, try exact serialNumber when name search is empty and exact managedDevice ID when Entra GUID search is empty. This avoids unnecessary large-tenant pagination and never retrieves secret values.
 
 - Native UI regression checks that selected metadata-only Start records have responsive Reveal/Copy actions, while LAPS history remains gated by a connected AD session. These controls only explain eligibility; they do not authorize a secret read.

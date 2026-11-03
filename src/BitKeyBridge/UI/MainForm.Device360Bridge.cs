@@ -216,6 +216,7 @@ public sealed partial class MainForm
         _unifiedDiagnostics.Clear();
         ++_deviceRecoverySelectionGeneration;
         _deviceCurrentKey = null;
+        _deviceCurrentKeySession = null;
         _deviceRecoveryKey.Clear();
         _deviceRecoveryKey.UseSystemPasswordChar = true;
         _deviceShowKey.Text = "Reveal Key";

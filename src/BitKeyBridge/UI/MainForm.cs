@@ -696,6 +696,7 @@ public sealed partial class MainForm : DpiAwareForm
     {
         try
         {
+            InvalidateDeviceCloudSecretOnSessionChange();
             _cloudDiagnostics.Clear();
             var prerequisite = CloudConnectionPrerequisiteError(
                 _cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text,
@@ -1998,6 +1999,7 @@ public sealed partial class MainForm : DpiAwareForm
             _device360UnifiedFailureKinds = default;
             _deviceRecoveryIds.Items.Clear();
             _deviceCurrentKey = null;
+            _deviceCurrentKeySession = null;
             _deviceRecoveryKey.Clear();
 
             var service =
@@ -4052,6 +4054,7 @@ public sealed partial class MainForm : DpiAwareForm
             ClearTrackedRecoveryClipboard();
             ResetRecoverySearchState();
             _deviceCurrentKey = null;
+            _deviceCurrentKeySession = null;
             _deviceRecoveryKey.Clear();
             _startResults.Rows.Clear();
             _recoveryAccessContexts.Clear();
@@ -6149,6 +6152,7 @@ public sealed partial class MainForm : DpiAwareForm
         _startCurrentKey = null;
         _startKey.Clear();
         _deviceCurrentKey = null;
+        _deviceCurrentKeySession = null;
         _deviceRecoveryKey.Clear();
         _cloudToken = null;
         _cloudTokenContext = string.Empty;

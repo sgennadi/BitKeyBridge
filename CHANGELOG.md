@@ -1,5 +1,7 @@
 ## 0.35.0-rc.4
 
+- Devices recovery keys are now bound to the exact original Graph token. Reconnecting Microsoft 365 immediately masks and discards cached plaintext, invalidates stale Reveal/Copy operations, and refuses cache reuse for expired/different sessions. Added native offline UI test; authorization and MFA behavior unchanged.
+
 - Intune now tries an exact serialNumber filter when a name fragment does not match, and an exact managed-device ID after an Entra GUID lookup; correct OData quote escaping and offline identity-filter tests reduce tenant-wide scan timeouts without treating Graph errors as missing devices.
 
 - Native Start card self-test now expects clickable Reveal/Copy diagnostics for a selected metadata-only record but still requires LAPS history to remain disabled without a connected AD source. It does not treat button Enabled as permission to retrieve secrets.

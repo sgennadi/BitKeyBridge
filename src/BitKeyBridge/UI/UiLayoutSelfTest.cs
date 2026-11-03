@@ -1861,6 +1861,9 @@ public static class UiLayoutSelfTest
             if (!main.PreviewDevicesSearchWithoutImplicitSignInForUiTest())
                 failures.Add("Devices search triggered implicit Microsoft 365 sign-in " +
                     "instead of offering the explicit Connect action.");
+            if (!main.PreviewDeviceCloudSessionInvalidationForUiSelfTest())
+                failures.Add("Devices retained an unmasked cached recovery value " +
+                    "after its Microsoft 365 session changed.");
             if (!main.PreviewDevicesSearchQueryEditableForUiSelfTest())
                 failures.Add("Devices query not editable during restart " +
                     "or provisional device results remained actionable.");

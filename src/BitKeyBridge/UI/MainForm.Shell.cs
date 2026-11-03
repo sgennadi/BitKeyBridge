@@ -86,6 +86,8 @@ public sealed partial class MainForm
     private readonly Button _deviceShowKey = new();
     private readonly Button _deviceCopyKey = new();
     private string? _deviceCurrentKey;
+    // Cached recovery values belong to one exact in-memory Graph token.
+    private GraphToken? _deviceCurrentKeySession;
 
     // A restricted endpoint-management token may fail an identity lookup.
     // Treat that as NOT authorized to administer settings; never let it prevent
@@ -2865,6 +2867,7 @@ public sealed partial class MainForm
             {
                 ++_deviceRecoverySelectionGeneration;
                 _deviceCurrentKey = null;
+                _deviceCurrentKeySession = null;
                 _deviceRecoveryKey.Clear();
                 _deviceRecoveryKey.UseSystemPasswordChar = true;
                 _deviceShowKey.Text = "Reveal Key";
@@ -3293,6 +3296,46 @@ public sealed partial class MainForm
         }
     }
 
+    private void InvalidateDeviceCloudSecretOnSessionChange()
+    {
+        // Reauthentication must revoke old plaintext and any pending reveal.
+        ++_deviceRecoverySelectionGeneration;
+        _deviceCurrentKey = null;
+        _deviceCurrentKeySession = null;
+        _deviceRecoveryKey.Clear();
+        _deviceRecoveryKey.UseSystemPasswordChar = true;
+        _deviceShowKey.Text = "Reveal Key";
+    }
+
+    internal bool PreviewDeviceCloudSessionInvalidationForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        var before = _deviceRecoverySelectionGeneration;
+        try
+        {
+            _deviceCurrentKey = "SYNTHETIC-NONSECRET-PLACEHOLDER";
+            _deviceRecoveryKey.Text = _deviceCurrentKey;
+            _deviceRecoveryKey.UseSystemPasswordChar = false;
+            _deviceShowKey.Text = "Hide Key";
+            InvalidateDeviceCloudSecretOnSessionChange();
+            return _deviceRecoverySelectionGeneration == before + 1 &&
+                _deviceCurrentKey is null &&
+                _deviceCurrentKeySession is null &&
+                _deviceRecoveryKey.Text.Length == 0 &&
+                _deviceRecoveryKey.UseSystemPasswordChar &&
+                _deviceShowKey.Text == "Reveal Key";
+        }
+        finally
+        {
+            _deviceCurrentKey = null;
+            _deviceCurrentKeySession = null;
+            _deviceRecoveryKey.Clear();
+            _deviceRecoveryKey.UseSystemPasswordChar = true;
+            _deviceShowKey.Text = "Reveal Key";
+        }
+    }
+
     private void PopulateDeviceRecoveryIds()
     {
         // Selection changes must revoke an earlier unmasked or pending key.
@@ -3301,6 +3344,7 @@ public sealed partial class MainForm
         ++_deviceRecoverySelectionGeneration;
         _deviceRecoveryIds.Items.Clear();
         _deviceCurrentKey = null;
+        _deviceCurrentKeySession = null;
         _deviceRecoveryKey.Clear();
         _deviceRecoveryKey.UseSystemPasswordChar = true;
         _deviceShowKey.Text = "Reveal Key";
@@ -3430,7 +3474,19 @@ public sealed partial class MainForm
 
         try
         {
-            var key = _deviceCurrentKey;
+            // Even a previously fetched value must not be reused after
+            // the cloud principal, scopes or token lifetime changes.
+            var key = HasCloudSearchSession() &&
+                ReferenceEquals(_deviceCurrentKeySession, _cloudToken)
+                    ? _deviceCurrentKey : null;
+            if (key is null && _deviceCurrentKey is not null)
+            {
+                _deviceCurrentKey = null;
+                _deviceCurrentKeySession = null;
+                _deviceRecoveryKey.Clear();
+                _deviceRecoveryKey.UseSystemPasswordChar = true;
+                _deviceShowKey.Text = "Reveal Key";
+            }
             if (string.IsNullOrWhiteSpace(key))
             {
                 // Reveal/Show must never cause another Device Code MFA
@@ -3474,13 +3530,15 @@ public sealed partial class MainForm
                         UiStatusKind.Warning);
                     return null;
                 }
-                // Store the key only AFTER verifying the exact same row/ID.
+                // Store the key only AFTER verifying row, ID and Graph session.
                 _deviceCurrentKey = key;
+                _deviceCurrentKeySession = originalSession;
             }
             if (!IsCurrentDeviceRecoverySelection(
                     row, recoveryId, selectionGeneration))
             {
                 _deviceCurrentKey = null;
+                _deviceCurrentKeySession = null;
                 return null;
             }
 
