@@ -706,19 +706,18 @@ public sealed partial class MainForm
         _homeRecoveryStepsButton.Enabled = selected is not null;
         _homeDevice360Button.Enabled = selected is not null;
 
-        _homeRevealBitLockerButton.Enabled =
-            connected &&
-            selected is not null &&
-            selected.BitLockerKeyCount > 0 &&
-            !selected.IdentityAmbiguous &&
-            !selected.IsCloudRecord;
-
-        _homeCopyBitLockerButton.Enabled =
-            connected &&
-            selected is not null &&
-            selected.BitLockerKeyCount > 0 &&
-            !selected.IdentityAmbiguous &&
-            !selected.IsCloudRecord;
+        // A source-qualified cloud row may open Devices without any second
+        // Graph search or implicit MFA. If the session is disconnected the
+        // click gives an explicit Connect instruction, not a silent no-op.
+        var allowAdKey = connected && selected is
+        {
+            IsCloudRecord: false, IdentityAmbiguous: false,
+            BitLockerKeyCount: > 0
+        };
+        var allowCloudKey = HomeCloudRecoverySelectionGuard.CanOfferRecovery(
+            selected);
+        _homeRevealBitLockerButton.Enabled = allowAdKey || allowCloudKey;
+        _homeCopyBitLockerButton.Enabled = allowAdKey || allowCloudKey;
 
         // Opens the real BitLocker diagnostic-command dialog in-place.
         _homeBitLockerDiagnosticLink.Enabled = selected is not null;

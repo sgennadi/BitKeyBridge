@@ -39,6 +39,36 @@ internal static class HomeRecoverySelectionGuard
         return true;
     }
 
+    /// <summary>
+    /// Resolve only the exact Recovery ID and AD computer DN selected during
+    /// Start search. A second lookup can return a different "latest" key or
+    /// rows from a different OU; neither is a safe substitute.
+    /// </summary>
+    internal static RecoverySearchResult? SelectExactMetadata(
+        HomeSearchResult selected, IEnumerable<RecoverySearchResult> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(selected);
+        ArgumentNullException.ThrowIfNull(candidates);
+        if (string.IsNullOrWhiteSpace(selected.AdComputerDistinguishedName) ||
+            string.IsNullOrWhiteSpace(
+                SearchText.NormalizeIdentifierFragment(selected.LatestRecoveryId)))
+            return null;
+
+        var exact = candidates.Where(row => IsCurrent(selected, selected, row))
+            .GroupBy(row =>
+                string.IsNullOrWhiteSpace(row.RecoveryDistinguishedName)
+                    ? row.ComputerDistinguishedName + "|" +
+                        SearchText.NormalizeIdentifierFragment(row.RecoveryId)
+                    : row.RecoveryDistinguishedName,
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(2)
+            .ToList();
+        // An ID associated with two different recovery objects is ambiguous;
+        // fail closed rather than showing the password for an arbitrary row.
+        return exact.Count == 1 ? exact[0] : null;
+    }
+
     internal static bool IsSelectedStartRow(
         RecoverySearchResult? original, RecoverySearchResult? current) =>
         original is not null && ReferenceEquals(original, current);
@@ -92,8 +122,46 @@ internal static class HomeRecoverySelectionGuard
         if (IsCurrent(selected, selected, row))
             errors.Add("New or unrelated Recovery ID was accepted after an async lookup.");
         row.RecoveryId = guid;
+        selected.LatestRecoveryId = guid;
+        var other = new RecoverySearchResult
+        {
+            ComputerName = selected.ComputerName,
+            ComputerDistinguishedName = selected.AdComputerDistinguishedName,
+            RecoveryId = "abababab-abab-abab-abab-abababababab",
+            IsLatest = true
+        };
+        if (!ReferenceEquals(SelectExactMetadata(selected, [other, row]), row))
+            errors.Add("Start Reveal selected a different latest Recovery ID.");
+        if (SelectExactMetadata(selected, [other]) is not null)
+            errors.Add("Start Reveal accepted a stale/missing exact Recovery ID.");
+        var otherOu = new RecoverySearchResult
+        {
+            ComputerName = selected.ComputerName,
+            ComputerDistinguishedName =
+                "CN=PC-TEST,OU=Foreign,DC=example,DC=com",
+            RecoveryId = guid
+        };
+        if (SelectExactMetadata(selected, [otherOu]) is not null)
+            errors.Add("Start Reveal accepted the same Recovery ID from a different AD object.");
+        var duplicateObject = new RecoverySearchResult
+        {
+            ComputerName = selected.ComputerName,
+            ComputerDistinguishedName = selected.AdComputerDistinguishedName,
+            RecoveryId = guid,
+            RecoveryDistinguishedName =
+                "CN=recovery-2,CN=PC-TEST,OU=Workstations,DC=example,DC=com"
+        };
+        row.RecoveryDistinguishedName =
+            "CN=recovery-1,CN=PC-TEST,OU=Workstations,DC=example,DC=com";
+        if (SelectExactMetadata(selected, [row, duplicateObject]) is not null)
+            errors.Add("Start Reveal accepted duplicate distinct recovery objects.");
+        selected.AdComputerDistinguishedName = string.Empty;
+        if (SelectExactMetadata(selected, [row]) is not null)
+            errors.Add("Start Reveal allowed hostname-only identity matching.");
+        selected.AdComputerDistinguishedName = row.ComputerDistinguishedName;
         selected.LatestRecoveryId = string.Empty;
-        if (IsCurrent(selected, selected, row))
+        if (IsCurrent(selected, selected, row) ||
+            SelectExactMetadata(selected, [row]) is not null)
             errors.Add("BitLocker secret was allowed without a verified metadata Recovery ID.");
 
         var sameMetadataDifferentRow = new RecoverySearchResult

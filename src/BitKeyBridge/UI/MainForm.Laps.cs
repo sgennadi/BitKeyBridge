@@ -1820,6 +1820,13 @@ public sealed partial class MainForm
                         LapsPasswordStatus.Available
                 } row)
         {
+            var selected = GetSelectedLapsEntry();
+            UiStyle.SetStatus(_lapsStatus,
+                selected is null
+                    ? "Select and read a LAPS record first; Reveal cannot display a password from metadata alone."
+                    : "The selected LAPS record has no readable password. Check Access Health and LAPS diagnostics: " +
+                      HelpdeskStatus.LapsEntry(selected),
+                UiStatusKind.Warning);
             return;
         }
         var action = copy ? "CopyLapsPassword" : "RevealLapsPassword";

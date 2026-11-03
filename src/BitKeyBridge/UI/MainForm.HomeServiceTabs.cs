@@ -540,7 +540,16 @@ public sealed partial class MainForm
         if (selected is null || selected.IdentityAmbiguous ||
             selected.IsCloudRecord || !_directoryConnected ||
             _directoryConnecting || _homeLapsBusy || _lapsReading)
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                selected is null ? "Select a computer before LAPS Reveal."
+                    : selected.IdentityAmbiguous ? "AD identity is ambiguous; choose an exact computer before LAPS Reveal."
+                    : selected.IsCloudRecord ? "This is a cloud-only record; select an AD computer for LAPS Reveal."
+                    : !_directoryConnected ? "Active Directory is disconnected. Connect before LAPS Reveal."
+                    : "LAPS lookup is busy. Finish or cancel the current operation.",
+                UiStatusKind.Warning);
             return;
+        }
 
         var computer = selected.ComputerName;
         _homeLapsBusy = true;

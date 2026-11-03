@@ -80,6 +80,9 @@ public sealed partial class MainForm
 
     private readonly ComboBox _deviceRecoveryIds = new();
     private readonly TextBox _deviceRecoveryKey = new();
+    // Increment on every Devices/recovery selection change. A late Graph
+    // response from an earlier Show/Copy must never repopulate a new row.
+    private int _deviceRecoverySelectionGeneration;
     private readonly Button _deviceShowKey = new();
     private readonly Button _deviceCopyKey = new();
     private string? _deviceCurrentKey;
@@ -2851,6 +2854,7 @@ public sealed partial class MainForm
         _unifiedResults.SelectedIndexChanged +=
             (_, _) =>
             {
+                ++_deviceRecoverySelectionGeneration;
                 ShowUnifiedDeviceDetails();
                 PopulateDeviceRecoveryIds();
             };
@@ -2859,6 +2863,7 @@ public sealed partial class MainForm
         _deviceRecoveryIds.SelectedIndexChanged +=
             (_, _) =>
             {
+                ++_deviceRecoverySelectionGeneration;
                 _deviceCurrentKey = null;
                 _deviceRecoveryKey.Clear();
                 _deviceRecoveryKey.UseSystemPasswordChar = true;
@@ -3344,7 +3349,15 @@ public sealed partial class MainForm
         return true;
     }
 
-    private async Task<(string Key, RecoveryAccessContext Context)?>
+    private bool IsCurrentDeviceRecoverySelection(
+        UnifiedDeviceInfo row, string recoveryId, int generation) =>
+        generation == _deviceRecoverySelectionGeneration &&
+        TryGetSelectedDeviceRecovery(out var selected, out var selectedId) &&
+        ReferenceEquals(selected, row) &&
+        string.Equals(selectedId, recoveryId, StringComparison.OrdinalIgnoreCase);
+
+    private async Task<(string Key, RecoveryAccessContext Context,
+        UnifiedDeviceInfo Record, string RecoveryId)?>
         EnsureSelectedDeviceCloudKeyAsync(
             string action)
     {
@@ -3353,13 +3366,21 @@ public sealed partial class MainForm
                 out var recoveryId) ||
             row is null)
         {
-            UiStyle.SetStatus(
-                _unifiedStatus,
-                "Select a device and an Entra Recovery ID first.",
-                UiStatusKind.Warning);
+            var selected = _unifiedResults.SelectedItems.Count == 1
+                ? _unifiedResults.SelectedItems[0].Tag as UnifiedDeviceInfo : null;
+            var reason = selected is null
+                ? "Select a device in Devices before pressing Reveal or Copy."
+                : selected.IdentityStatus == "Ambiguous device ID"
+                    ? "Conflicting Entra device IDs. Recovery is blocked until identity is verified."
+                    : selected.RecoveryIds.Count == 0
+                        ? "No verified Entra Recovery ID was returned. This does not prove " +
+                          "the backup is absent; check Source Health, permissions and Graph."
+                        : "Select the exact Entra Recovery ID before Reveal or Copy.";
+            UiStyle.SetStatus(_unifiedStatus, reason, UiStatusKind.Warning);
             return null;
         }
 
+        var selectionGeneration = _deviceRecoverySelectionGeneration;
         if (!AuthorizeAction(
                 BitKeyBridgePermission.RecoveryRead,
                 action,
@@ -3380,6 +3401,17 @@ public sealed partial class MainForm
         if (context is null)
             return null;
 
+        // Authorization/ticket dialogs can outlive a UI selection change.
+        // Never write a protected audit approval for the wrong selected row.
+        if (!IsCurrentDeviceRecoverySelection(
+                row, recoveryId, selectionGeneration))
+        {
+            UiStyle.SetStatus(_unifiedStatus,
+                "Device or Recovery ID changed during authorization. Re-select the exact record.",
+                UiStatusKind.Warning);
+            return null;
+        }
+
         if (!AuthorizePrivilegedRecoveryAccess(
                 context,
                 action,
@@ -3392,28 +3424,58 @@ public sealed partial class MainForm
 
         try
         {
-            if (string.IsNullOrWhiteSpace(
-                    _deviceCurrentKey))
+            var key = _deviceCurrentKey;
+            if (string.IsNullOrWhiteSpace(key))
             {
                 if (!await EnsureCloudTokenAsync())
+                {
+                    UiStyle.SetStatus(_unifiedStatus,
+                        "Microsoft 365 authentication was canceled or is unavailable.",
+                        UiStatusKind.Warning);
                     return null;
+                }
+                if (!IsCurrentDeviceRecoverySelection(
+                        row, recoveryId, selectionGeneration))
+                {
+                    UiStyle.SetStatus(_unifiedStatus,
+                        "Device or Recovery ID changed during connection. No key was displayed.",
+                        UiStatusKind.Warning);
+                    return null;
+                }
 
-                using var graph =
-                    new CloudGraphService();
-
-                _deviceCurrentKey =
-                    await graph.GetRecoveryKeyValueAsync(
-                        _cloudToken!.AccessToken,
-                        recoveryId);
+                var originalSession = _cloudToken;
+                using var graph = new CloudGraphService();
+                key = await graph.GetRecoveryKeyValueAsync(
+                    originalSession!.AccessToken, recoveryId);
+                if (!IsCurrentDeviceRecoverySelection(
+                        row, recoveryId, selectionGeneration) ||
+                    !ReferenceEquals(originalSession, _cloudToken))
+                {
+                    UiStyle.SetStatus(_unifiedStatus,
+                        "Selection or Microsoft 365 session changed while reading. Stale key discarded.",
+                        UiStatusKind.Warning);
+                    return null;
+                }
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    UiStyle.SetStatus(_unifiedStatus,
+                        "The selected recovery object returned no key. Check Graph permissions.",
+                        UiStatusKind.Warning);
+                    return null;
+                }
+                // Store the key only AFTER verifying the exact same row/ID.
+                _deviceCurrentKey = key;
             }
-            _deviceRecoveryKey.Text =
-                _deviceCurrentKey;
-            _deviceRecoveryKey.UseSystemPasswordChar =
-                true;
+            if (!IsCurrentDeviceRecoverySelection(
+                    row, recoveryId, selectionGeneration))
+            {
+                _deviceCurrentKey = null;
+                return null;
+            }
 
-            return (
-                _deviceCurrentKey!,
-                context);
+            _deviceRecoveryKey.Text = key!;
+            _deviceRecoveryKey.UseSystemPasswordChar = true;
+            return (key!, context, row, recoveryId);
         }
         catch (Exception ex)
         {
@@ -3460,15 +3522,11 @@ public sealed partial class MainForm
             await EnsureSelectedDeviceCloudKeyAsync(
                 "RevealUnifiedCloudRecoveryKey");
 
-        if (access is null ||
-            !TryGetSelectedDeviceRecovery(
-                out var row,
-                out var recoveryId) ||
-            row is null)
-        {
+        if (access is null)
             return;
-        }
 
+        var row = access.Value.Record;
+        var recoveryId = access.Value.RecoveryId;
         _deviceRecoveryKey.Text =
             access.Value.Key;
         _deviceRecoveryKey.UseSystemPasswordChar =
@@ -3500,15 +3558,11 @@ public sealed partial class MainForm
             await EnsureSelectedDeviceCloudKeyAsync(
                 "CopyUnifiedCloudRecoveryKey");
 
-        if (access is null ||
-            !TryGetSelectedDeviceRecovery(
-                out var row,
-                out var recoveryId) ||
-            row is null)
-        {
+        if (access is null)
             return;
-        }
 
+        var row = access.Value.Record;
+        var recoveryId = access.Value.RecoveryId;
         WriteRecoveryAudit(
             "CopyUnifiedCloudRecoveryKey",
             access.Value.Context,

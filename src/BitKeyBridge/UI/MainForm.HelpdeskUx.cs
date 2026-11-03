@@ -1870,38 +1870,72 @@ public sealed partial class MainForm
     }
 
     private async Task<RecoverySearchResult?>
-        GetLatestHomeRecoveryRowAsync(
-            HomeSearchResult selected)
+        GetLatestHomeRecoveryRowAsync(HomeSearchResult selected)
     {
-        if (!_directoryConnected ||
-            _startScope is null)
+        if (!_directoryConnected || _directoryConnecting)
         {
-            UiStyle.SetStatus(
-                _homeSearchStatus,
+            UiStyle.SetStatus(_homeSearchStatus,
                 "Connect to Active Directory before reading a BitLocker recovery key.",
                 UiStatusKind.Warning);
             return null;
         }
 
-        var rows =
-            await SearchLiveAdRecoveryMetadataAsync(
-                selected.ComputerName,
-                _startScope,
-                CancellationToken.None);
+        // Start can find this recovery object outside the currently selected
+        // OU. Query ONLY the authoritative computer DN from the Start row;
+        // no name-only lookup, second search, or implicit sign-in.
+        if (string.IsNullOrWhiteSpace(selected.AdComputerDistinguishedName) ||
+            string.IsNullOrWhiteSpace(
+                SearchText.NormalizeIdentifierFragment(selected.LatestRecoveryId)))
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "The selected AD computer DN or BitLocker Recovery ID is missing. " +
+                "Refresh Start or inspect the exact record in Recovery.",
+                UiStatusKind.Warning);
+            return null;
+        }
+        try
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "Checking the selected BitLocker Recovery ID on its exact AD object...",
+                UiStatusKind.Busy);
+            var rows = await Task.Run(() =>
+            {
+                var service = new ActiveDirectoryService(_config);
+                var dc = service.GetPreferredWritableDc();
+                return service.GetRecoveryMetadataForComputer(
+                    dc, selected.AdComputerDistinguishedName);
+            });
 
-        return rows
-            .Where(
-                row =>
-                    row.ComputerName.Equals(
-                        selected.ComputerName,
-                        StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(
-                row =>
-                    row.IsLatest == true)
-            .ThenByDescending(
-                row =>
-                    row.KeyDate)
-            .FirstOrDefault();
+            if (!ReferenceEquals(selected, GetSelectedHomeSearchResult()))
+            {
+                UiStyle.SetStatus(_homeSearchStatus,
+                    "Computer selection changed during the metadata check. No key was read.",
+                    UiStatusKind.Warning);
+                return null;
+            }
+
+            var exact = HomeRecoverySelectionGuard.SelectExactMetadata(selected, rows);
+            if (exact is not null)
+                return exact;
+
+            UiStyle.SetStatus(_homeSearchStatus,
+                "The exact Recovery ID is not present for the selected AD computer DN. " +
+                "Refresh Start or inspect the recovery history; another latest key " +
+                "must not be substituted automatically.",
+                UiStatusKind.Warning);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "BitLocker metadata lookup failed. Check AD connectivity, " +
+                "read permissions and the selected computer DN.",
+                UiStatusKind.Error);
+            _appDiagnostics.ShowError(
+                "Exact AD recovery metadata lookup failed.",
+                "HomeBitLockerMetadata", ex);
+            return null;
+        }
     }
 
     private async Task<(string Key, RecoverySearchResult Row, RecoveryAccessContext Context, HomeSearchResult Selected)?>
@@ -1925,6 +1959,8 @@ public sealed partial class MainForm
         var row =
             await GetLatestHomeRecoveryRowAsync(
                 selected);
+        if (row is null)
+            return null; // The lookup already displayed a precise reason.
 
         if (!HomeRecoverySelectionGuard.IsCurrent(
                 selected, GetSelectedHomeSearchResult(), row))
@@ -2005,8 +2041,69 @@ public sealed partial class MainForm
             selected);
     }
 
+    private bool TryPrepareHomeCloudRecovery(HomeSearchResult selected)
+    {
+        if (!HomeCloudRecoverySelectionGuard.CanOfferRecovery(selected) ||
+            !ReferenceEquals(selected, GetSelectedHomeSearchResult()))
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "The Start cloud record has no verified matching source ID / Recovery ID. " +
+                "Select the exact device in Devices.",
+                UiStatusKind.Warning);
+            return false;
+        }
+        if (!HasCloudSearchSession())
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "Microsoft 365 is not connected. Click Connect Microsoft 365 " +
+                "and retry; Reveal will not start a sign-in automatically.",
+                UiStatusKind.Warning);
+            return false;
+        }
+        if (!TryReuseHomeInventoryInDevices(selected))
+        {
+            UiStyle.SetStatus(_homeSearchStatus,
+                "The source-qualified device could not be transferred to Devices. " +
+                "Select the exact Entra Recovery ID and inspect Source Health.",
+                UiStatusKind.Warning);
+            return false;
+        }
+
+        OpenHomeDeviceDetails();
+        PopulateDeviceRecoveryIds();
+        if (!HomeCloudRecoverySelectionGuard.CanRevealOne(selected))
+        {
+            _deviceRecoveryIds.SelectedIndex = -1;
+            UiStyle.SetStatus(_unifiedStatus,
+                "Multiple Entra Recovery IDs found. Select the exact ID " +
+                "in Devices before pressing Reveal or Copy.",
+                UiStatusKind.Warning);
+            return false;
+        }
+        if (!TryGetSelectedDeviceRecovery(out var device, out var recoveryId) ||
+            !ReferenceEquals(device, selected.InventoryMetadata) ||
+            !string.Equals(recoveryId, selected.LatestRecoveryId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            UiStyle.SetStatus(_unifiedStatus,
+                "Exact Entra Recovery ID selection is missing. " +
+                "Choose the ID in Devices; no secret was read.",
+                UiStatusKind.Warning);
+            return false;
+        }
+        return true;
+    }
+
     private async Task RevealHomeBitLockerAsync()
     {
+        var selectedHome = GetSelectedHomeSearchResult();
+        if (selectedHome?.IsCloudRecord == true)
+        {
+            if (TryPrepareHomeCloudRecovery(selectedHome))
+                await RevealSelectedDeviceCloudKeyAsync();
+            return;
+        }
+
         var access =
             await GetHomeBitLockerSecretAsync(
                 "RevealHomeRecoveryKey");
@@ -2060,6 +2157,14 @@ public sealed partial class MainForm
 
     private async Task CopyHomeBitLockerAsync()
     {
+        var selectedHome = GetSelectedHomeSearchResult();
+        if (selectedHome?.IsCloudRecord == true)
+        {
+            if (TryPrepareHomeCloudRecovery(selectedHome))
+                await CopySelectedDeviceCloudKeyAsync();
+            return;
+        }
+
         var access =
             await GetHomeBitLockerSecretAsync(
                 "CopyHomeRecoveryKey");

@@ -1933,6 +1933,7 @@ internal static class Program
             failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
             failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
             failures.AddRange(HomeRecoverySelectionGuard.RunOfflineTests());
+            failures.AddRange(HomeCloudRecoverySelectionGuard.RunOfflineTests());
             failures.AddRange(ProtectedAuditArchiveService.RunOfflineTests(tempDirectory));
             failures.AddRange(InstalledUpdateHealthService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateBackupSafety.RunOfflineTests(tempDirectory));
