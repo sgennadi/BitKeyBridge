@@ -117,7 +117,19 @@ public sealed partial class MainForm
             _unifiedQuery.Enabled = false;
             _unifiedProgress.Visible = true;
             var previousGeneration = _unifiedSearchGeneration;
+            var previousRecoveryGeneration = _deviceRecoverySelectionGeneration;
+            // A prior view could have displayed a sensitive value. A new
+            // source-qualified Start selection must re-mask and clear it.
+            _deviceRecoveryKey.Text = "SYNTHETIC-NONSECRET-PLACEHOLDER";
+            _deviceCurrentKey = "SYNTHETIC-NONSECRET-PLACEHOLDER";
+            _deviceRecoveryKey.UseSystemPasswordChar = false;
+            _deviceShowKey.Text = "Hide Key";
             if (!TryReuseHomeInventoryInDevices(adHome) ||
+                _deviceRecoverySelectionGeneration <= previousRecoveryGeneration ||
+                _deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar ||
+                _deviceShowKey.Text != "Reveal Key" ||
                 !staleSearch.IsCancellationRequested ||
                 _unifiedCancellation is not null ||
                 _unifiedSearchGeneration != previousGeneration + 1 ||
@@ -202,8 +214,11 @@ public sealed partial class MainForm
         // Clear previous confidential recovery results before changing device
         // context. No previous secret is retained or displayed in Devices.
         _unifiedDiagnostics.Clear();
+        ++_deviceRecoverySelectionGeneration;
         _deviceCurrentKey = null;
         _deviceRecoveryKey.Clear();
+        _deviceRecoveryKey.UseSystemPasswordChar = true;
+        _deviceShowKey.Text = "Reveal Key";
         _deviceRecoveryIds.Items.Clear();
 
         _unifiedQuery.Text = selected.ComputerName;

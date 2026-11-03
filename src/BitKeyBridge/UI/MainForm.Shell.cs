@@ -3295,9 +3295,15 @@ public sealed partial class MainForm
 
     private void PopulateDeviceRecoveryIds()
     {
+        // Selection changes must revoke an earlier unmasked or pending key.
+        // No stale Hide label, plaintext field or late Graph response is
+        // allowed to survive changing to another device / recovery ID.
+        ++_deviceRecoverySelectionGeneration;
         _deviceRecoveryIds.Items.Clear();
         _deviceCurrentKey = null;
         _deviceRecoveryKey.Clear();
+        _deviceRecoveryKey.UseSystemPasswordChar = true;
+        _deviceShowKey.Text = "Reveal Key";
 
         if (_unifiedResults.SelectedItems.Count == 0 ||
             _unifiedResults.SelectedItems[0].Tag is not
@@ -3427,10 +3433,15 @@ public sealed partial class MainForm
             var key = _deviceCurrentKey;
             if (string.IsNullOrWhiteSpace(key))
             {
-                if (!await EnsureCloudTokenAsync())
+                // Reveal/Show must never cause another Device Code MFA
+                // prompt. Require the already active RecoveryRead session,
+                // or ask the operator to connect explicitly first.
+                if (!HasCloudSearchSession())
                 {
                     UiStyle.SetStatus(_unifiedStatus,
-                        "Microsoft 365 authentication was canceled or is unavailable.",
+                        "Microsoft 365 Recovery session expired or lacks Graph " +
+                        "recovery permissions. Click Connect Microsoft 365 " +
+                        "explicitly, then retry Reveal; no key was read.",
                         UiStatusKind.Warning);
                     return null;
                 }
@@ -3438,7 +3449,7 @@ public sealed partial class MainForm
                         row, recoveryId, selectionGeneration))
                 {
                     UiStyle.SetStatus(_unifiedStatus,
-                        "Device or Recovery ID changed during connection. No key was displayed.",
+                        "Device or Recovery ID changed before key retrieval. No key was read.",
                         UiStatusKind.Warning);
                     return null;
                 }
