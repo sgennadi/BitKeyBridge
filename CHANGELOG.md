@@ -1,3 +1,18 @@
+## 0.35.0-rc.2
+
+**Release candidate only (3 November 2026); unsigned manual QA, not Stable.** Advances RC1 after its successful source-pinned Windows/CodeQL CI. Continues in the same PR #115 integration branch to avoid stacked PRs; the application SemVer and manifest identify the actual candidate. The earlier RC1 remains available as historical QA, not as the new build.
+
+- Repair **Start → BitLocker Reveal/Copy** by revalidating the exact AD computer distinguished name and original Recovery ID, even when Start found the computer outside the chosen OU. Reject a different latest ID, mismatched DN and ambiguous recovery records with actionable status.
+- Enable source-qualified **Start cloud → Devices Reveal/Copy** through the existing Microsoft 365 session. Do not start another Device Code/MFA request automatically; multiple recovery IDs require explicit selection and all existing authorization/ticket/protected-audit checks remain active.
+- Fix **Devices Show/Reveal** after selection changes: invalidate asynchronous lookups, discard a stale key on device/ID/token changes, clear and re-mask the previous secret, and restore the Reveal button text. Show meaningful status for missing/expired sessions and missing verified IDs.
+- Improve **LAPS Show/Reveal** status when no readable password is selected; do not treat the absence of metadata or authorization as a password-retrieval success.
+- Include **Device 360 v2** with Overview, Hardware, Security, Identity, Audit and Diagnostics; Hardware Inventory, Device Health, targeted Source Health retry for AD/Entra/Intune, exact-ID Identity Matching and secret-free Helpdesk Report. AD, Entra and Intune metadata presence must not be mistaken for effective permissions.
+- Publish versioned QA artifacts named `BitKeyBridge-v0.35.0-rc.N-QA-UNSIGNED` directly from the exact candidate SemVer; require a matching per-candidate document and changelog. Retain numeric Windows Assembly/FileVersion `0.35.0.0` while ProductVersion/InformationalVersion and `--version` use `0.35.0-rc.2`.
+
+**Release gates:** Exact-head x64/x86/ARM64 build, native UI and offline tests, LAPS, CodeQL, protected Audit Broker, ephemeral signing, legacy rollback and generated SHA256 QA archive. Real Windows 11 AD/Intune/LAPS operator acceptance, EN/RU/HE at 100–200% DPI/RDP, organization-signed Authenticode and approved signed-only canary remain mandatory before Stable. Do not auto-deploy unsigned packages.
+
+See `docs/release-candidate-v0.35.0-rc.2.md` for current testing instructions. RC1 historical notes remain below.
+
 ## 0.35.0-rc.1
 
 **Release candidate only (31 October 2026); unsigned and not deployed.** This single integration candidate includes the complete 0.34 localization/layout branch and the 0.35 Device 360 branch, reconciled with the NuGet 10.0.14 maintenance updates. It does not replace published Stable v0.33.1.

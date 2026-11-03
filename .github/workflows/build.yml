@@ -1163,6 +1163,7 @@ jobs:
           path: device360-qa
 
       - name: Validate source and package three architectures
+        id: validate_candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -1193,8 +1194,12 @@ jobs:
           PY
           )"
           if [[ "$GITHUB_HEAD_REF" == "release/v0.35.0-rc.1" ]]; then
-            [[ "$version" == "0.35.0-rc.1" ]] || {
-              echo 'Integrated RC must have exact version 0.35.0-rc.1.'
+            [[ "$version" =~ ^0[.]35[.]0-rc[.][1-9][0-9]*$ ]] || {
+              echo 'Integrated RC must use 0.35.0-rc.N with a positive integer N.'
+              exit 1
+            }
+            test -s "docs/release-candidate-v$version.md" || {
+              echo "Missing per-candidate release notes: docs/release-candidate-v$version.md"
               exit 1
             }
           else
@@ -1203,6 +1208,7 @@ jobs:
               exit 1
             }
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           for arch in win-x64 win-x86 win-arm64; do
             archive="device360-qa/BitKeyBridge-$arch.zip"
             test -s "$archive"
@@ -1249,7 +1255,7 @@ jobs:
       - name: Upload one unsigned source-pinned QA archive
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.event.pull_request.number == 115 && 'BitKeyBridge-v0.35.0-rc.1-QA-UNSIGNED' || 'BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED' }}
+          name: ${{ github.event.pull_request.number == 115 && format('BitKeyBridge-v{0}-QA-UNSIGNED', steps.validate_candidate.outputs.version) || 'BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED' }}
           path: device360-qa/
           if-no-files-found: error
           retention-days: 14
