@@ -1956,6 +1956,7 @@ public sealed partial class MainForm : DpiAwareForm
             true;
         _unifiedDiagnostics.Clear();
         _unifiedSourceReport = null;
+        _unifiedSourceCloudSession = null;
         RefreshUnifiedSourceRetryButton();
         SetDevicesCloudWarningAction(false);
 
@@ -1991,6 +1992,7 @@ public sealed partial class MainForm : DpiAwareForm
             // or unconfigured sessions stay AD-only until the user clicks
             // the explicit Connect Microsoft 365 action.
             var cloudReady = cloudConfigured && HasCloudSearchSession();
+            var originalCloudSession = cloudReady ? _cloudToken : null;
 
             cancellation.Token
                 .ThrowIfCancellationRequested();
@@ -2066,10 +2068,19 @@ public sealed partial class MainForm : DpiAwareForm
                 .ThrowIfCancellationRequested();
             if (generation != _unifiedSearchGeneration)
                 return; // Start selected a different exact source object.
+            if (cloudReady && (!HasCloudSearchSession() ||
+                !ReferenceEquals(originalCloudSession, _cloudToken)))
+            {
+                UiStyle.SetStatus(_unifiedStatus,
+                    "Microsoft 365 session changed during search. Run Search again.",
+                    UiStatusKind.Warning);
+                return;
+            }
 
             // Only this generation owns the current source snapshot.
             // Retry never replays a successful metadata request.
             _unifiedSourceReport = sourceReport;
+            _unifiedSourceCloudSession = originalCloudSession;
             RefreshUnifiedSourceRetryButton();
 
             // Only a completed metadata search can set this status.

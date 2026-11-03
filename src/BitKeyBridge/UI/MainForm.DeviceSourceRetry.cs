@@ -8,6 +8,9 @@ public sealed partial class MainForm
 {
     private readonly Button _unifiedRetryButton = new();
     private UnifiedDeviceSearchReport? _unifiedSourceReport;
+    // Bound to the ORIGINAL Graph token object of the completed search.
+    // A reconnect (even to the same tenant) invalidates source reuse.
+    private GraphToken? _unifiedSourceCloudSession;
     private DateTime _unifiedLastSourceRetryUtc = DateTime.MinValue;
 
     private static string RetrySourceLabel(UnifiedMetadataSource source) =>
@@ -23,7 +26,8 @@ public sealed partial class MainForm
         UnifiedSourceRetry.CanRetry(_unifiedSourceReport, source) &&
         (source == UnifiedMetadataSource.Ad
             ? _directoryConnected
-            : HasCloudSearchSession());
+            : HasCloudSearchSession() &&
+              ReferenceEquals(_unifiedSourceCloudSession, _cloudToken));
 
     private void RefreshUnifiedSourceRetryButton()
     {
@@ -114,6 +118,7 @@ public sealed partial class MainForm
             return;
         }
         var state = previous.SourceState!;
+        var originalCloudSession = _unifiedSourceCloudSession;
         if (!string.Equals(_unifiedQuery.Text.Trim(), state.Query,
                 StringComparison.Ordinal))
         {
@@ -164,7 +169,9 @@ public sealed partial class MainForm
                 return;
             if (!string.Equals(_unifiedQuery.Text.Trim(), state.Query,
                     StringComparison.Ordinal) ||
-                (source != UnifiedMetadataSource.Ad && !HasCloudSearchSession()) ||
+                (source != UnifiedMetadataSource.Ad &&
+                    (!HasCloudSearchSession() ||
+                     !ReferenceEquals(originalCloudSession, _cloudToken))) ||
                 (source == UnifiedMetadataSource.Ad && !_directoryConnected))
             {
                 UiStyle.SetStatus(_unifiedStatus,

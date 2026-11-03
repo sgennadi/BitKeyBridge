@@ -219,6 +219,7 @@ public sealed partial class MainForm
         // The Start object is a new exact source context. Do not leave a
         // retry menu pointing at a previous Devices search or stale token.
         _unifiedSourceReport = null;
+        _unifiedSourceCloudSession = null;
         RefreshUnifiedSourceRetryButton();
         SetDevicesCloudWarningAction(!HasCloudSearchSession());
 

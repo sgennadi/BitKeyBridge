@@ -90,10 +90,13 @@ internal static class UnifiedSourceRetry
                 row.RecoveryMetadataIncomplete |= exact[0].RecoveryMetadataIncomplete;
             }
         }
-        if (next.RecoveryEnrichmentFailures > 0)
-            foreach (var row in next.Rows.Where(row =>
-                row.FoundInIntune && row.RecoveryIds.Count == 0))
-                row.RecoveryMetadataIncomplete = true;
+        // A targeted retry never calls per-managed-device Entra enrichment.
+        // Even after a successful bulk Entra lookup, zero recovery IDs on a
+        // managed device cannot prove that no backup exists. Do not present
+        // this gap as a complete inventory or a missing recovery secret.
+        foreach (var row in next.Rows.Where(row =>
+            row.FoundInIntune && row.RecoveryIds.Count == 0))
+            row.RecoveryMetadataIncomplete = true;
         return next;
     }
 
@@ -134,8 +137,11 @@ internal static class UnifiedSourceRetry
             restored.Rows.Count(row => row.FoundInIntune &&
                 row.Model == "Synthetic model") != 1 ||
             !ReferenceEquals(restored.SourceState!.Intune, healthyIntune) ||
-            !ReferenceEquals(restored.SourceState.Entra, emptyEntra))
-            failures.Add("AD-only retry dropped an unchanged healthy source.");
+            !ReferenceEquals(restored.SourceState.Entra, emptyEntra) ||
+            restored.Rows.Any(row => row.FoundInIntune &&
+                row.RecoveryIds.Count == 0 &&
+                !row.RecoveryMetadataIncomplete))
+            failures.Add("AD-only retry dropped source evidence or implied a missing backup.");
 
         var throttled = new MetadataLookupResult<CloudRecoveryMetadata>(
             [], "Synthetic 429", MetadataFailureKind.RateLimited);
