@@ -13,6 +13,7 @@ public sealed partial class MainForm
     private ToolStripMenuItem? _recoveryStepsMenu;
     private ToolStripMenuItem? _accessHealthMenu;
     private ToolStripMenuItem? _languageTopMenu;
+    private ToolStripMenuItem? _supportTopMenu;
     private ToolStripMenuItem? _sectionExplanationsMenuItem;
     private readonly List<ToolStripMenuItem> _languageChoices = [];
     private string _uiLanguageCode = "en";
@@ -510,6 +511,38 @@ public sealed partial class MainForm
         }
         menu.Items.Add(languages);
         menu.Items.Add(BuildUiDisplayMenu());
+
+        // Available without administrator rights from every workspace.
+        // Mailto launches only after the operator clicks; it does not send
+        // diagnostics, recovery IDs, passwords or Graph session information.
+        var supportMenu = new ToolStripMenuItem("Support")
+        {
+            Name = "SupportTopMenu",
+            AutoSize = true,
+            Padding = new Padding(10, 0, 10, 0)
+        };
+        var emailSupport = new ToolStripMenuItem("Email support")
+        {
+            Name = "SupportEmailMenuItem"
+        };
+        emailSupport.Click += (_, _) => OpenSupportEmail();
+        supportMenu.DropDownItems.Add(emailSupport);
+
+        var copySupportEmail = new ToolStripMenuItem("Copy support email")
+        {
+            Name = "SupportCopyEmailMenuItem"
+        };
+        copySupportEmail.Click += (_, _) => CopySupportEmail();
+        supportMenu.DropDownItems.Add(copySupportEmail);
+        supportMenu.DropDownItems.Add(new ToolStripSeparator());
+        supportMenu.DropDownItems.Add(new ToolStripMenuItem(SupportEmailAddress)
+        {
+            Name = "SupportEmailAddressMenuItem",
+            Enabled = false,
+            RightToLeft = RightToLeft.No
+        });
+        _supportTopMenu = supportMenu;
+        menu.Items.Add(supportMenu);
         return menu;
     }
 
@@ -629,6 +662,12 @@ public sealed partial class MainForm
                 var caption = UiLanguageService.Translate(_uiLanguageCode, "Language");
                 if (_languageTopMenu.Text != caption)
                     _languageTopMenu.Text = caption;
+            }
+            if (_supportTopMenu is not null)
+            {
+                var caption = UiLanguageService.Translate(_uiLanguageCode, "Support");
+                if (_supportTopMenu.Text != caption)
+                    _supportTopMenu.Text = caption;
             }
             foreach (var choice in _languageChoices)
             {

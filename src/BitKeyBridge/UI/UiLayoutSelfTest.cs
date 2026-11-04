@@ -3661,6 +3661,33 @@ public static class UiLayoutSelfTest
                     latestReleaseItem?.Text != expectedLatestRelease)
                     failures.Add("Nested or top Tools menu caption not translated: " +
                         language);
+
+                // The support menu is always available without an admin
+                // tab. Address is immutable LTR; only fixed labels translate.
+                var supportMenu = form.MainMenuStrip?.Items.Find(
+                    "SupportTopMenu", false).FirstOrDefault();
+                var emailMenu = form.MainMenuStrip?.Items.Find(
+                    "SupportEmailMenuItem", true).FirstOrDefault();
+                var copyMail = form.MainMenuStrip?.Items.Find(
+                    "SupportCopyEmailMenuItem", true).FirstOrDefault();
+                if (supportMenu?.Text != UiLanguageService.Translate(language, "Support") ||
+                    emailMenu?.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Email support") ||
+                    copyMail?.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Copy support email") ||
+                    FindByName(form, "HelpdeskEmailSupportButton") is not Button helpdeskEmail ||
+                    helpdeskEmail.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Email support") ||
+                    FindByName(form, "HelpdeskSupportEmailCaption") is not Label contactLabel ||
+                    contactLabel.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Support email:") ||
+                    FindByName(form, "HelpdeskSupportEmailLink") is not LinkLabel supportLink ||
+                    supportLink.Text != MainForm.SupportEmailAddress ||
+                    supportLink.RightToLeft != RightToLeft.No ||
+                    MainForm.BuildSupportEmailUri() !=
+                        "mailto:sgennadi@hotmail.com?subject=BitKeyBridge%20Support")
+                    failures.Add("Support contact or mailto action missing from EN/RU/HE: " +
+                        language);
                 if (copyItemBeforeTranslation is not null &&
                     !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
                     failures.Add("Language switch overwrote ToolStrip command Tag: " +

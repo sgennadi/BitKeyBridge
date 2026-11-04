@@ -30,8 +30,44 @@ public sealed partial class MainForm
         access.Name = "HelpdeskAccessHealthButton";
         var support = NewActionButton("Support Bundle");
         support.Name = "HelpdeskSupportBundleButton";
-        actions.Controls.AddRange([search, prepare, access, support]);
+        var emailSupport = NewActionButton("Email support");
+        emailSupport.Name = "HelpdeskEmailSupportButton";
+        emailSupport.AccessibleName =
+            "Compose a new email to BitKeyBridge support; nothing is sent automatically";
+        actions.Controls.AddRange([search, prepare, access, support, emailSupport]);
         root.Controls.Add(actions);
+
+        // Show the actual address even if no default mail client exists.
+        // Keep Latin email characters LTR under Hebrew navigation.
+        var contact = new FlowLayoutPanel
+        {
+            Name = "HelpdeskSupportContact",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = true,
+            Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap)
+        };
+        contact.Controls.Add(new Label
+        {
+            Name = "HelpdeskSupportEmailCaption",
+            Text = "Support email:",
+            AutoSize = true,
+            Margin = new Padding(0, 4, UiStyle.ControlGap, 4)
+        });
+        var emailLink = new LinkLabel
+        {
+            Name = "HelpdeskSupportEmailLink",
+            Text = SupportEmailAddress,
+            AccessibleName = "Email BitKeyBridge support",
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            AutoSize = true,
+            RightToLeft = RightToLeft.No,
+            Margin = new Padding(0, 4, 0, 4)
+        };
+        emailLink.LinkClicked += (_, _) => OpenSupportEmail();
+        contact.Controls.Add(emailLink);
+        root.Controls.Add(contact);
 
         _helpdeskSelectedDeviceSummary = new UiStatusLabel
         {
@@ -124,6 +160,7 @@ public sealed partial class MainForm
             if (!_layoutSelfTest)
                 CreateQuickDiagnosticsBundleGui();
         };
+        emailSupport.Click += (_, _) => OpenSupportEmail();
         refresh.Click += (_, _) => UpdateStatus();
         setup.Click += (_, _) => OpenHelpdeskSetup();
         checklist.Click += (_, _) => ShowHelpdeskDeploymentChecklist();

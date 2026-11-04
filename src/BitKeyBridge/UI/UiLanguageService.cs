@@ -143,6 +143,7 @@ internal static class UiLanguageService
             ["Device360V2HealthPartial"] = ["Partially verified", "Проверено частично", "אומת חלקית"],
             ["Device360V2HealthObserved"] = ["Metadata observed (not an access grant)", "Метаданные получены (без предоставления прав)", "נתוני מקור נצפו (ללא מתן הרשאה)"],
             ["Helpdesk"] = ["Helpdesk", "Поддержка", "תמיכה"],
+            ["Support"] = ["Support", "Связь", "יצירת קשר"],
             ["Diagnostics"] = ["Diagnostics", "Диагностика", "אבחון"],
             ["Settings"] = ["Settings", "Настройки", "הגדרות"],
             ["Tools"] = ["Tools", "Инструменты", "כלים"],
@@ -467,7 +468,7 @@ internal static class UiLanguageService
                 foreach (var key in new[]
                 {
                     "Start", "BitLocker", "LAPS", "Devices",
-                    "Helpdesk", "Diagnostics", "Settings", "Tools",
+                    "Helpdesk", "Diagnostics", "Settings", "Tools", "Support",
                     "Language", "Search", "Cancel", "ConnectionSettings",
                     "UpdateCenterTitle", "UpdateCenterSubtitle", "UpdateCenterRefresh",
                     "UpdateCenterRetry", "UpdateCenterPause", "UpdateCenterEnable",

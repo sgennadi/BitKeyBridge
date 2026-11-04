@@ -800,6 +800,8 @@ public sealed partial class MainForm
         // independently of Tag and update known nested entries as well.
         if (_toolsTopMenu is not null)
             ApplyKnownMenuCaptions(_toolsTopMenu.DropDownItems);
+        if (_supportTopMenu is not null)
+            ApplyKnownMenuCaptions(_supportTopMenu.DropDownItems);
         ApplyKnownMenuCaptions(_homeConnectionToolsMenu.Items);
 
         SetCloudCaption(_cloudSaveButton, "MainSaveConfig", direction);
