@@ -11,8 +11,6 @@
 
 ## Changes in RC4
 
-- Support contact: Helpdesk shows `sgennadi@hotmail.com` and an **Email support** action; the global **Support** menu provides compose/copy commands. No email is sent by the application and no keys, logs, tokens or device information are attached. EN/RU/HE and LTR email address are checked in UI regression.
-
 - Devices Reveal/Copy rejects disconnected/expired Graph recovery sessions before any ticket/JIT prompt. The UI immediately offers Connect Microsoft 365 and leaves recovery values masked. Existing RBAC/ticket/audit checks are required when connected, and the offline UI regression validates the denied preflight.
 
 - Switching Microsoft 365 sessions immediately masks/clears cached Devices keys, invalidates pending callbacks, and prevents cached reuse across principals or expired tokens. No secrets used in offline regression.

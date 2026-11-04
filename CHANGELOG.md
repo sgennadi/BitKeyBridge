@@ -1,6 +1,15 @@
-## 0.35.0-rc.4
+## 0.35.0-rc.5
 
-- Support contact in the native main menu and Helpdesk page: visible sgennadi@hotmail.com address, mailto compose action and Copy support email command. All fixed labels localize EN/RU/HE; the email stays LTR in Hebrew. No automatic sending, diagnostics or secret attachments. UI self-tests cover contact visibility, menu actions and localization. Version remains 0.35.0-rc.4.
+**4 November 2026 — unsigned manual QA candidate; not Stable.** Supersedes RC4 for support-contact testing while keeping the same single PR #115 and all existing recovery/identity/signing safeguards.
+
+- Add a persistent Support menu with **Email support** and **Copy support email**, and a visible `sgennadi@hotmail.com` contact link/button on Helpdesk for non-admin operators. The compose action is explicit, uses Windows `mailto:` and never sends or attaches credentials, recovery keys, tokens, tickets, device data or diagnostics automatically.
+- Localize the menu, actions and caption in EN/RU/HE while rendering the Latin email address LTR. Native UI tests verify the actual menu and Helpdesk controls through repeated language switches, plus a deterministic mailto target.
+- Keep RC4's fully successful Windows x64/x86/ARM64, LAPS, legacy upgrade/rollback, protected audit, signing-test and CodeQL baseline at commit `b64b38fdad3aea10aa6d5c71bb8ff67a23152568`. RC5's own exact-HEAD CI is mandatory before distributing its unsigned QA ZIP; previous RC4 archive **does not contain Support**.
+- Version and InformationalVersion are `0.35.0-rc.5`; numeric FileVersion remains `0.35.0.0`. No Stable release or automatic installation.
+
+See `docs/release-candidate-v0.35.0-rc.5.md` for acceptance criteria.
+
+## 0.35.0-rc.4
 
 - Devices Reveal/Copy now verifies its existing Graph recovery session **before** opening RBAC/ticket/JIT dialogs; disconnected or expired sessions show an actionable Connect message, invalidate stale secret display, and never request a ticket or secret. Original authorization and protected audit gates still apply to connected sessions. Expanded offline UI preflight regression.
 
