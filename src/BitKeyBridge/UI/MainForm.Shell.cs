@@ -534,6 +534,12 @@ public sealed partial class MainForm
         };
         copySupportEmail.Click += (_, _) => CopySupportEmail();
         supportMenu.DropDownItems.Add(copySupportEmail);
+        var githubReports = new ToolStripMenuItem("GitHub diagnostics...")
+        {
+            Name = "SupportGitHubReportsMenuItem"
+        };
+        githubReports.Click += (_, _) => OpenGitHubReportsWorkspace();
+        supportMenu.DropDownItems.Add(githubReports);
         supportMenu.DropDownItems.Add(new ToolStripSeparator());
         supportMenu.DropDownItems.Add(new ToolStripMenuItem(SupportEmailAddress)
         {

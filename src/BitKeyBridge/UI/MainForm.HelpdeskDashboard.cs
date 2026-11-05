@@ -69,6 +69,35 @@ public sealed partial class MainForm
         contact.Controls.Add(emailLink);
         root.Controls.Add(contact);
 
+        // GitHub Issues can be PUBLIC: consent defaults to off and no
+        // raw support ZIP, logs, device data or secrets can be submitted.
+        var githubPrivacy = new Label
+        {
+            Name = "HelpdeskGitHubPrivacyNotice",
+            Text = "Public GitHub Issues: error codes only, never logs or secrets. Requires signed-in gh.",
+            AutoSize = true,
+            MaximumSize = new Size(900, 0),
+            Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap)
+        };
+        root.Controls.Add(githubPrivacy);
+        var githubAuto = new CheckBox
+        {
+            Name = "HelpdeskGitHubAutoReport",
+            Text = "Automatic GitHub error reports (opt-in)",
+            AutoSize = true,
+            MaximumSize = new Size(900, 0),
+            Checked = !_layoutSelfTest && GitHubDiagnosticReporter.OptedIn,
+            AccessibleName = "Consent to anonymous GitHub error reports"
+        };
+        root.Controls.Add(githubAuto);
+        var githubActions = CreateActionFlow();
+        var githubPreview = NewActionButton("Preview anonymous diagnostics");
+        githubPreview.Name = "HelpdeskGitHubPreviewButton";
+        var githubSend = NewActionButton("Send anonymous report");
+        githubSend.Name = "HelpdeskGitHubSendButton";
+        githubActions.Controls.AddRange([githubPreview, githubSend]);
+        root.Controls.Add(githubActions);
+
         _helpdeskSelectedDeviceSummary = new UiStatusLabel
         {
             Name = "HelpdeskSelectedDeviceSummary",
@@ -161,6 +190,46 @@ public sealed partial class MainForm
                 CreateQuickDiagnosticsBundleGui();
         };
         emailSupport.Click += (_, _) => OpenSupportEmail();
+
+        var revertingGitHubPreference = false;
+        githubAuto.CheckedChanged += (_, _) =>
+        {
+            if (_layoutSelfTest || revertingGitHubPreference)
+                return;
+            if (GitHubDiagnosticReporter.SetOptIn(githubAuto.Checked))
+                return;
+            revertingGitHubPreference = true;
+            githubAuto.Checked = !githubAuto.Checked;
+            revertingGitHubPreference = false;
+            _appDiagnostics.ShowMessage(
+                "Cannot save GitHub diagnostic consent.",
+                "Check user-profile write permissions; no report was sent.");
+        };
+        githubPreview.Click += (_, _) =>
+        {
+            if (!_layoutSelfTest)
+                _appDiagnostics.ShowMessage(
+                    "Anonymous GitHub diagnostics preview",
+                    GitHubDiagnosticReporter.Preview());
+        };
+        githubSend.Click += async (_, _) =>
+        {
+            if (_layoutSelfTest || !githubSend.Enabled)
+                return;
+            githubSend.Enabled = false;
+            try
+            {
+                var status = await GitHubDiagnosticReporter.SendAsync(
+                    automatic: false);
+                if (!IsDisposed)
+                    _appDiagnostics.ShowMessage("GitHub diagnostics", status);
+            }
+            finally
+            {
+                if (!IsDisposed)
+                    githubSend.Enabled = true;
+            }
+        };
         refresh.Click += (_, _) => UpdateStatus();
         setup.Click += (_, _) => OpenHelpdeskSetup();
         checklist.Click += (_, _) => ShowHelpdeskDeploymentChecklist();

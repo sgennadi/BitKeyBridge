@@ -39,6 +39,19 @@ public sealed partial class MainForm
         }
     }
 
+    private void OpenGitHubReportsWorkspace()
+    {
+        // Reuse Helpdesk; no second collection or implicit network request.
+        var tab = _mainTabs.TabPages.Cast<TabPage>()
+            .FirstOrDefault(page => page.Name == "HelpdeskDashboardTab");
+        if (tab is not null)
+            _mainTabs.SelectedTab = tab;
+        if (!_layoutSelfTest)
+            _appDiagnostics.ShowMessage(
+                "Anonymous GitHub diagnostics preview",
+                GitHubDiagnosticReporter.Preview());
+    }
+
     private void CopySupportEmail()
     {
         if (_layoutSelfTest)

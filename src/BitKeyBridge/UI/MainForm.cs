@@ -255,6 +255,9 @@ public sealed partial class MainForm : DpiAwareForm
             // Local update status is loaded on a worker, never blocking the
             // source chooser or the WinForms message loop.
             RefreshUpdateCenter();
+            // Previously consented diagnostics may send a pending batch
+            // off-thread; never block Start or open a GitHub sign-in UI.
+            GitHubDiagnosticReporter.TryAutomaticSend();
             // Show the source chooser promptly. Network update checks must not
             // hold the connection wizard hostage while GitHub is unavailable.
             await ShowStartupConnectionWizardAsync();
