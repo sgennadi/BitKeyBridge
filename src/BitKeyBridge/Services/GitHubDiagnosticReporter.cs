@@ -69,12 +69,29 @@ internal static class GitHubDiagnosticReporter
         public List<Bucket> Buckets { get; set; } = [];
     }
 
+    private static bool ManagedAutomaticReports()
+    {
+        try
+        {
+            return DiagnosticRelayTransport.IsManaged(ConfigService.LoadAppConfig());
+        }
+        catch (Exception)
+        {
+            // Optional telemetry cannot affect a recovery workflow.
+            return false;
+        }
+    }
+
+    internal static bool ManagedByOrganization => ManagedAutomaticReports();
+
     internal static bool OptedIn
     {
         get
         {
+            bool consent;
             lock (Sync)
-                return Load().OptIn;
+                consent = Load().OptIn;
+            return consent || ManagedAutomaticReports();
         }
     }
 
@@ -146,7 +163,7 @@ internal static class GitHubDiagnosticReporter
                 enabled = store.OptIn;
                 waiting = store.Buckets.Sum(b => b.Count);
             }
-            if (enabled && waiting >= 3)
+            if ((enabled || ManagedAutomaticReports()) && waiting >= 3)
                 TryAutomaticSend();
         }
         catch (Exception ex)
@@ -321,7 +338,9 @@ internal static class GitHubDiagnosticReporter
                 "Full logs, exception messages, stack traces, filenames, computer/user names, " +
                 "BitLocker/LAPS secrets, Graph tokens and support bundles are NEVER included." +
                 Environment.NewLine +
-                "Automatic submission: " + (state.OptIn ? "ON" : "OFF") +
+                "Automatic submission: " +
+                (state.OptIn || ManagedAutomaticReports() ? "ON" : "OFF") +
+                (ManagedAutomaticReports() ? " (organization-managed)" : "") +
                 Environment.NewLine +
                 "Pending occurrences: " + state.Buckets.Sum(b => b.Count) +
                 Environment.NewLine + Environment.NewLine;
@@ -348,8 +367,8 @@ internal static class GitHubDiagnosticReporter
             lock (Sync)
             {
                 snapshot = Load();
-                if (!snapshot.OptIn)
-                    return "GitHub diagnostics are disabled. Explicitly enable anonymous error reports first.";
+                if (!snapshot.OptIn && !ManagedAutomaticReports())
+                    return "GitHub diagnostics are disabled. Enable anonymous error reports or ask IT to configure managed reporting.";
                 batch = snapshot.Buckets.Where(Valid).Take(20).ToArray();
                 if (batch.Length == 0)
                     return "There are no pending anonymous error summaries.";
@@ -357,6 +376,19 @@ internal static class GitHubDiagnosticReporter
                     (batch.Sum(b => b.Count) < 3 ||
                      DateTimeOffset.UtcNow - snapshot.LastSubmissionUtc < AutomaticInterval))
                     return "Automatic reporting is waiting for the next eligible batch.";
+            }
+
+            // Production path: workers do NOT need GitHub, gh, PAT or MFA.
+            // The managed relay authenticates requests and creates GitHub
+            // issues only after receiving strictly allowlisted counters.
+            var managedResult = await DiagnosticRelayTransport.SubmitAsync(
+                PayloadText(batch)).ConfigureAwait(false);
+            if (managedResult is not null)
+            {
+                if (!managedResult.Accepted)
+                    return managedResult.Message;
+                ConfirmSubmission(batch);
+                return managedResult.Message + " " + managedResult.IssueUrl;
             }
 
             // gh must be installed and already authenticated by the operator.
@@ -411,22 +443,7 @@ internal static class GitHubDiagnosticReporter
                     Repository + ". Anonymous counters were retained locally.";
 
             var matched = SafeGitHubIssueUrl.Match(output);
-            lock (Sync)
-            {
-                var current = Load();
-                foreach (var sent in batch)
-                {
-                    var pending = current.Buckets.FirstOrDefault(
-                        b => b.Fingerprint == sent.Fingerprint);
-                    if (pending is null)
-                        continue;
-                    pending.Count -= sent.Count;
-                    if (pending.Count <= 0)
-                        current.Buckets.Remove(pending);
-                }
-                current.LastSubmissionUtc = DateTimeOffset.UtcNow;
-                Save(current);
-            }
+            ConfirmSubmission(batch);
             return matched.Success ?
                 "Anonymous error counters submitted: " + matched.Value :
                 "GitHub accepted the diagnostic Issue. Anonymous counters were cleared locally.";
@@ -460,6 +477,26 @@ internal static class GitHubDiagnosticReporter
         }
     }
 
+    private static void ConfirmSubmission(IReadOnlyList<Bucket> batch)
+    {
+        lock (Sync)
+        {
+            var current = Load();
+            foreach (var sent in batch)
+            {
+                var pending = current.Buckets.FirstOrDefault(
+                    b => b.Fingerprint == sent.Fingerprint);
+                if (pending is null)
+                    continue;
+                pending.Count -= sent.Count;
+                if (pending.Count <= 0)
+                    current.Buckets.Remove(pending);
+            }
+            current.LastSubmissionUtc = DateTimeOffset.UtcNow;
+            Save(current);
+        }
+    }
+
     internal static IEnumerable<string> RunOfflineTests()
     {
         var errors = new List<string>();
@@ -484,6 +521,7 @@ internal static class GitHubDiagnosticReporter
             errors.Add("GitHub diagnostic automatic upload must default to opt-out.");
         if (Classify("ServiceLog", new Exception("DO_NOT_UPLOAD")).Component != "Service")
             errors.Add("Service logger safe error-only classification failed.");
+        errors.AddRange(DiagnosticRelayTransport.RunOfflineTests());
         return errors;
     }
 }
