@@ -11,6 +11,15 @@ internal static class UiStaticCaptionCatalog
     private static readonly IReadOnlyDictionary<string, string[]> Captions =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
+            ["Production HTTPS relay → GitHub Issues: anonymous error codes only. No GitHub account or gh required. Reports may be public."] =
+                ["Рабочий HTTPS-приёмник → GitHub Issues: только анонимные коды ошибок. GitHub и gh не требуются. Отчёты могут быть публичными.",
+                 "שער HTTPS ארגוני ← GitHub Issues: קודי שגיאה אנונימיים בלבד. לא נדרש חשבון GitHub או gh. הדיווחים עשויים להיות ציבוריים."],
+            ["Public GitHub Issues: error codes only, never logs or secrets. Without an IT-managed relay, manual reporting requires signed-in gh."] =
+                ["Публичные GitHub Issues: только коды ошибок, без журналов и секретов. Без корпоративного приёмника требуется вход в gh для ручной отправки.",
+                 "GitHub Issues ציבורי: קודי שגיאה בלבד, ללא יומנים או סודות. ללא שער ארגוני, שליחה ידנית דורשת כניסה ל-gh."],
+            ["Automatic anonymous error reports (managed by your organization)"] =
+                ["Автоматические анонимные отчёты об ошибках (управляются организацией)",
+                 "דיווח אוטומטי ואנונימי על שגיאות (מנוהל על ידי הארגון)"],
             ["Connect"] = ["Подключиться", "התחברות"],
             ["BitKeyBridge - Connect"] = ["BitKeyBridge — Подключение", "BitKeyBridge — התחברות"],
             ["Choose a connection"] = ["Выберите подключение", "בחירת חיבור"],
