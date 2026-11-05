@@ -13,6 +13,7 @@ on:
 # credentials. Only the explicitly gated release job may publish or attest.
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   # Bind concurrency to the exact commit. GitHub can deliver rapid PR
@@ -22,6 +23,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  diagnostics-prebuild:
+    name: Anonymous diagnostic analysis before build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Reject unsafe diagnostic inputs (offline regression)
+        run: python3 .github/scripts/diagnostic_triage.py --self-test
+      - name: Analyze accumulated sanitized GitHub Issues (read-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/diagnostic_triage.py
+          --repo "$GITHUB_REPOSITORY"
+          --summary "$GITHUB_STEP_SUMMARY"
   laps-regression:
     runs-on: ubuntu-24.04
     steps:
@@ -54,6 +72,7 @@ jobs:
         run: dotnet run --project tests/LapsRegression -c Release
 
   build:
+    needs: [diagnostics-prebuild]
     runs-on: windows-latest
     strategy:
       fail-fast: false
