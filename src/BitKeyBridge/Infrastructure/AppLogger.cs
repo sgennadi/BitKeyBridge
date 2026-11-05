@@ -27,7 +27,13 @@ public sealed class AppLogger
 
     public void Info(string message) => Write("INFO", message);
     public void Warning(string message) => Write("WARNING", message);
-    public void Error(string message) => Write("ERROR", message);
+    public void Error(string message)
+    {
+        Write("ERROR", message);
+        // The GitHub queue receives only an aggregate "Service/Unexpected"
+        // count. No free-form log line or message is copied to an Issue.
+        GitHubDiagnosticReporter.RecordServiceLogError();
+    }
 
     private void Write(string level, string message)
     {

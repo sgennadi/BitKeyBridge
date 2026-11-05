@@ -17,7 +17,7 @@ import urllib.request
 
 PREFIX = "[BKB-DIAG/v1]"
 SCHEMA = "BKB-DIAG/v1"
-COMPONENTS = frozenset(("Startup", "Devices", "Graph", "BitLocker", "LAPS", "Update", "UI", "Helpdesk", "Other"))
+COMPONENTS = frozenset(("Startup", "Devices", "Graph", "BitLocker", "LAPS", "Update", "UI", "Helpdesk", "Service", "Other"))
 FAILURES = frozenset(("AccessDenied", "Timeout", "Network", "NotFound", "InvalidConfig", "Unexpected", "IO"))
 EXCEPTIONS = frozenset(("UnauthorizedAccessException", "SecurityException", "TimeoutException",
     "HttpRequestException", "IOException", "FileNotFoundException", "DirectoryNotFoundException",

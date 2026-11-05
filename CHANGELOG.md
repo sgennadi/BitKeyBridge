@@ -2,6 +2,7 @@
 
 **5 November 2026 — UNSIGNED manual QA only, not Stable.** One PR #115; supersedes RC5 only after exact-head CI and managed Windows 11 acceptance.
 
+- Include service AppLogger ERROR events as a fixed Service/Unexpected count, without opening or transmitting any log line. The local support ZIP and full Windows event details remain private.
 - Capture only local, structured error counters: fixed component and failure classes, exception type, HRESULT, UTC day and SHA-256 fingerprint of these allowlisted values. No free-form exception messages, paths, usernames, devices, tenant IDs, support ZIPs, passwords, BitLocker/LAPS recovery secrets, tokens or stack traces are stored in this queue.
 - In Helpdesk add an explicit, per-user opt-in (default OFF), a preview, manual Send button and public GitHub privacy explanation. The Support menu links to the same controls; EN/RU/HE captions and responsive DPI layout have native UI regression checks.
 - Issue submission uses already-authenticated GitHub CLI (`gh`) and never embeds a PAT or starts a login. Three occurrences trigger background auto-send when opted in; successful automatic submissions are separated by at least six hours. Failures leave local counters available for retry; closing the app stops further sends.

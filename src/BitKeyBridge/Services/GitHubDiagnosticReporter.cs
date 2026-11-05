@@ -31,7 +31,7 @@ internal static class GitHubDiagnosticReporter
 
     private static readonly HashSet<string> AllowedComponents = new(StringComparer.Ordinal)
     {
-        "Startup", "Devices", "Graph", "BitLocker", "LAPS", "Update", "UI", "Helpdesk", "Other"
+        "Startup", "Devices", "Graph", "BitLocker", "LAPS", "Update", "UI", "Helpdesk", "Service", "Other"
     };
     private static readonly HashSet<string> AllowedFailures = new(StringComparer.Ordinal)
     {
@@ -108,6 +108,13 @@ internal static class GitHubDiagnosticReporter
             a.Equals("--ui-self-test", StringComparison.OrdinalIgnoreCase));
     }
 
+    internal static void RecordServiceLogError()
+    {
+        // Service logs may contain tenant, machine or AD details. Never
+        // inspect or forward message text: count an unclassified error only.
+        Record("Service", new Exception());
+    }
+
     internal static void Record(string? operation, Exception exception)
     {
         if (exception is OperationCanceledException || IsTestProcess())
@@ -170,7 +177,9 @@ internal static class GitHubDiagnosticReporter
             name.Contains("window", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("ui", StringComparison.OrdinalIgnoreCase) ? "UI" :
             name.Contains("helpdesk", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("support", StringComparison.OrdinalIgnoreCase) ? "Helpdesk" : "Other";
+            name.Contains("support", StringComparison.OrdinalIgnoreCase) ? "Helpdesk" :
+            name.Contains("service", StringComparison.OrdinalIgnoreCase) ? "Service" :
+            "Other";
 
         string failure = exception switch
         {
@@ -473,6 +482,8 @@ internal static class GitHubDiagnosticReporter
             errors.Add("Diagnostic AccessDenied categorization failed.");
         if (new Store().OptIn)
             errors.Add("GitHub diagnostic automatic upload must default to opt-out.");
+        if (Classify("ServiceLog", new Exception("DO_NOT_UPLOAD")).Component != "Service")
+            errors.Add("Service logger safe error-only classification failed.");
         return errors;
     }
 }
