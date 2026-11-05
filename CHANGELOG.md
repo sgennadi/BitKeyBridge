@@ -1,3 +1,16 @@
+## 0.35.0-rc.7
+
+**5 November 2026 — Production diagnostic transport implementation; UNSIGNED QA candidate, not Stable.** Continues on the single integration PR #115. No real-user collection can occur until IT deploys and approves the HTTPS relay and a signed production build passes acceptance.
+
+- **End-user support diagnostics without GitHub credentials:** an administrator-managed HTTPS relay receives the existing anonymous BKB-DIAG/v1 error buckets. Windows users do not need GitHub CLI, a GitHub account or PAT. A restricted GitHub Issues token stays exclusively on the server.
+- Add machine policy for relay activation, URL, upload-only ingest key and organizational automatic reporting. Reporting remains disabled by default without IT policy or the user's opt-in. Helpdesk shows the managed state and English/Russian/Hebrew privacy explanations.
+- Harden data flow: reject non-HTTPS endpoints, require strictly enumerated error categories and a matching fingerprint on the worker, reject extra JSON fields and large request bodies, keep failed batches queued, require verified GitHub Issue acknowledgement, coalesce concurrent background sends.
+- Keep raw logs, user/device/tenant IDs, recovery keys, LAPS passwords and authentication tokens out of public Issues. Sanitize relay ingest credentials from diagnostics and exclude them from support ZIPs. The upload key is not a per-device identity token; production requires WAF/rate limits and ideally stronger access authentication.
+- Add Cloudflare Worker deployment manifest, offline Node privacy/security tests in the prebuild gate, and operator setup instructions in docs/production-diagnostics-relay.md. The existing six-hour read-only Actions triage remains unchanged.
+- **Release gates remain:** exact-head Windows x64/x86/ARM64 build and native UI/LAPS/audit/rollback regression, CodeQL, real Windows/AD/Graph validation, managed relay acceptance, organizational code signing and controlled canary before Stable or fleet rollout.
+
+See docs/release-candidate-v0.35.0-rc.7.md and docs/production-diagnostics-relay.md.
+
 ## 0.35.0-rc.6
 
 **5 November 2026 — UNSIGNED manual QA only, not Stable.** One PR #115; supersedes RC5 only after exact-head CI and managed Windows 11 acceptance.
