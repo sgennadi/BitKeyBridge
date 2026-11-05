@@ -356,7 +356,7 @@ internal static class GitHubDiagnosticReporter
                 "BKB-diagnostic-" + Guid.NewGuid().ToString("N") + ".json");
             File.WriteAllText(temporary,
                 "```json\n" + PayloadText(batch) + "\n```",
-                Encoding.UTF8);
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             var title = "[BKB-DIAG/v1] " +
                 DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
                 " " + Guid.NewGuid().ToString("N")[..12];
