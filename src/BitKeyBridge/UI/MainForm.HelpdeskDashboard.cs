@@ -69,12 +69,16 @@ public sealed partial class MainForm
         contact.Controls.Add(emailLink);
         root.Controls.Add(contact);
 
-        // GitHub Issues can be PUBLIC: consent defaults to off and no
-        // raw support ZIP, logs, device data or secrets can be submitted.
+        // The HTTPS relay is configured once by IT, not by each Windows user.
+        // GitHub Issues can be PUBLIC: never send raw logs or identities.
+        var centrallyManaged = _config.DiagnosticRelayEnabled &&
+            _config.DiagnosticRelayManagedAutoSend;
         var githubPrivacy = new Label
         {
             Name = "HelpdeskGitHubPrivacyNotice",
-            Text = "Public GitHub Issues: error codes only, never logs or secrets. Requires signed-in gh.",
+            Text = _config.DiagnosticRelayEnabled
+                ? "Production HTTPS relay → GitHub Issues: anonymous error codes only. No GitHub account or gh required. Reports may be public."
+                : "Public GitHub Issues: error codes only, never logs or secrets. Without an IT-managed relay, manual reporting requires signed-in gh.",
             AutoSize = true,
             MaximumSize = new Size(900, 0),
             Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap)
@@ -83,11 +87,17 @@ public sealed partial class MainForm
         var githubAuto = new CheckBox
         {
             Name = "HelpdeskGitHubAutoReport",
-            Text = "Automatic GitHub error reports (opt-in)",
+            Text = centrallyManaged
+                ? "Automatic anonymous error reports (managed by your organization)"
+                : "Automatic GitHub error reports (opt-in)",
             AutoSize = true,
             MaximumSize = new Size(900, 0),
-            Checked = !_layoutSelfTest && GitHubDiagnosticReporter.OptedIn,
-            AccessibleName = "Consent to anonymous GitHub error reports"
+            Checked = !_layoutSelfTest &&
+                (centrallyManaged || GitHubDiagnosticReporter.OptedIn),
+            Enabled = !centrallyManaged,
+            AccessibleName = centrallyManaged
+                ? "Managed organizational anonymous diagnostic reporting policy"
+                : "Consent to anonymous GitHub error reports"
         };
         root.Controls.Add(githubAuto);
         var githubActions = CreateActionFlow();
