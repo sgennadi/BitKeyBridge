@@ -3704,7 +3704,7 @@ public static class UiLayoutSelfTest
                     FindByName(form, "HelpdeskGitHubPrivacyNotice") is not Label githubNotice ||
                     githubNotice.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language,
-                        "Public GitHub Issues: error codes only, never logs or secrets. Requires signed-in gh."))
+                        "Public GitHub Issues: error codes only, never logs or secrets. Without an IT-managed relay, manual reporting requires signed-in gh."))
                     failures.Add("GitHub anonymous diagnostics UI not localized in " + language);
                 if (copyItemBeforeTranslation is not null &&
                     !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
