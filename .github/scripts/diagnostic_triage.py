@@ -30,7 +30,7 @@ FINGERPRINT_RE = re.compile(r"^[0-9a-f]{16}$")
 HRESULT_RE = re.compile(r"^0x[0-9A-F]{8}$")
 VERSION_RE = re.compile(r"^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}(?:-rc[.][0-9]{1,3})?$")
 DAY_RE = re.compile(r"^20[0-9]{2}-[01][0-9]-[0-3][0-9]$")
-TITLE_RE = re.compile(r"^\\[BKB-DIAG/v1\\] 20[0-9]{2}-[01][0-9]-[0-3][0-9] [0-9a-f]{12}$")
+TITLE_RE = re.compile(r"^\[BKB-DIAG/v1\] 20[0-9]{2}-[01][0-9]-[0-3][0-9] [0-9a-f]{12}$")
 
 GUIDANCE = {
     "AccessDenied": "Check approved RBAC, Graph consent and protected audit policy. Do not bypass authorization.",
@@ -66,7 +66,7 @@ def strict_issue(issue):
         return None
     if not isinstance(document.get("version"), str) or not VERSION_RE.fullmatch(document["version"]):
         return None
-    if document.get("architecture") not in ARCHES:
+    if not isinstance(document.get("architecture"), str) or document["architecture"] not in ARCHES:
         return None
     buckets = document.get("buckets")
     if not isinstance(buckets, list) or not 1 <= len(buckets) <= 20:
@@ -75,8 +75,9 @@ def strict_issue(issue):
     for item in buckets:
         if not isinstance(item, dict) or set(item) != SAFE_KEYS:
             return None
-        if (item["component"] not in COMPONENTS or item["failure"] not in FAILURES or
-                item["exceptionType"] not in EXCEPTIONS or
+        if (not isinstance(item["component"], str) or item["component"] not in COMPONENTS or
+                not isinstance(item["failure"], str) or item["failure"] not in FAILURES or
+                not isinstance(item["exceptionType"], str) or item["exceptionType"] not in EXCEPTIONS or
                 not isinstance(item["hresult"], str) or not HRESULT_RE.fullmatch(item["hresult"]) or
                 type(item["count"]) is not int or not 1 <= item["count"] <= 10000 or
                 not isinstance(item["fingerprint"], str) or
