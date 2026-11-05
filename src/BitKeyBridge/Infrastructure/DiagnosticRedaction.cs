@@ -20,13 +20,13 @@ public static class DiagnosticRedaction
 
     private static readonly Regex JsonSecretRegex =
         new(
-            @"(?i)(""(?:(?:remoteapi(?:read|coveragerun|export)?tokensha256)|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|account[_-]?key|shared[_-]?access[_-]?signature|sig|signature)""\s*:\s*"")[^""]*("")",
+            @"(?i)(""(?:(?:remoteapi(?:read|coveragerun|export)?tokensha256)|diagnosticrelayingesttoken|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization|account[_-]?key|shared[_-]?access[_-]?signature|sig|signature)""\s*:\s*"")[^""]*("")",
             RegexOptions.Compiled |
             RegexOptions.CultureInvariant);
 
     private static readonly Regex KeyValueSecretRegex =
         new(
-            @"(?i)\b(password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?signature|sig|signature)\b(\s*[=:]\s*)(?:""[^""]*""|'[^']*'|[^\s;,\r\n]+)",
+            @"(?i)\b(diagnosticrelayingesttoken|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?signature|sig|signature)\b(\s*[=:]\s*)(?:""[^""]*""|'[^']*'|[^\s;,\r\n]+)",
             RegexOptions.Compiled |
             RegexOptions.CultureInvariant);
 
