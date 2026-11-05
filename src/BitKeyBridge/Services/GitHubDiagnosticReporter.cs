@@ -24,6 +24,8 @@ internal static class GitHubDiagnosticReporter
     private const int MaxBuckets = 64;
     private static readonly object Sync = new();
     private static readonly SemaphoreSlim Sending = new(1, 1);
+    // Many failures during an outage must not queue unbounded Tasks.
+    private static int _automaticSendScheduled;
     private static readonly TimeSpan AutomaticInterval = TimeSpan.FromHours(6);
     private static readonly string StorePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -350,10 +352,22 @@ internal static class GitHubDiagnosticReporter
 
     internal static void TryAutomaticSend()
     {
-        if (!OptedIn || IsTestProcess())
+        if (!OptedIn || IsTestProcess() ||
+            Interlocked.Exchange(ref _automaticSendScheduled, 1) != 0)
             return;
-        // Worker cannot prevent normal GUI painting, sign-in or recovery.
-        _ = Task.Run(async () => await SendAsync(automatic: true));
+
+        // Coalesce bursty errors into one background network attempt.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendAsync(automatic: true).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _automaticSendScheduled, 0);
+            }
+        });
     }
 
     internal static async Task<string> SendAsync(bool automatic)
