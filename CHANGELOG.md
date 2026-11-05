@@ -1,3 +1,15 @@
+## 0.35.0-rc.6
+
+**5 November 2026 — UNSIGNED manual QA only, not Stable.** One PR #115; supersedes RC5 only after exact-head CI and managed Windows 11 acceptance.
+
+- Capture only local, structured error counters: fixed component and failure classes, exception type, HRESULT, UTC day and SHA-256 fingerprint of these allowlisted values. No free-form exception messages, paths, usernames, devices, tenant IDs, support ZIPs, passwords, BitLocker/LAPS recovery secrets, tokens or stack traces are stored in this queue.
+- In Helpdesk add an explicit, per-user opt-in (default OFF), a preview, manual Send button and public GitHub privacy explanation. The Support menu links to the same controls; EN/RU/HE captions and responsive DPI layout have native UI regression checks.
+- Issue submission uses already-authenticated GitHub CLI (`gh`) and never embeds a PAT or starts a login. Three occurrences trigger background auto-send when opted in; successful automatic submissions are separated by at least six hours. Failures leave local counters available for retry; closing the app stops further sends.
+- Add strict `BKB-DIAG/v1` allowlist validation and offline privacy tests. GitHub Actions analyzes previous sanitized reports before compiling Windows builds and, when the workflow reaches the default branch, every six hours or after a matching Issue is opened/edited. Outputs contain safe counts, priority and static remediation guidance; analysis does not modify code, users, issues, authorization policy or release gates.
+- Prior RC5 LAPS/BitLocker/Device 360, CodeQL, signing and real update/rollback security controls remain mandatory. No fleet rollout or Stable release without corporate signing and operator approval.
+
+See `docs/github-anonymous-diagnostics.md` and `docs/release-candidate-v0.35.0-rc.6.md`.
+
 ## 0.35.0-rc.5
 
 **4 November 2026 — unsigned manual QA candidate; not Stable.** Supersedes RC4 for support-contact testing while keeping the same single PR #115 and all existing recovery/identity/signing safeguards.
