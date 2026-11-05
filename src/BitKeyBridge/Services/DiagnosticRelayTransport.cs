@@ -105,6 +105,7 @@ internal static class DiagnosticRelayTransport
             var root = reply.RootElement;
             if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
                 !root.TryGetProperty("status", out var status) ||
+                status.ValueKind != System.Text.Json.JsonValueKind.String ||
                 status.GetString() != "accepted" ||
                 !root.TryGetProperty("issueUrl", out var issue) ||
                 issue.ValueKind != System.Text.Json.JsonValueKind.String)
