@@ -31,6 +31,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Validate production relay authorization, data minimization and failures
+        run: node --test tools/github-diagnostic-relay/index.test.mjs
       - name: Reject unsafe diagnostic inputs (offline regression)
         run: python3 .github/scripts/diagnostic_triage.py --self-test
       - name: Analyze accumulated sanitized GitHub Issues (read-only)
