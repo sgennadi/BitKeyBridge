@@ -52,6 +52,32 @@ public sealed partial class MainForm
                 UniversalDiagnosticService.Preview());
     }
 
+    private void OpenUniversalDiagnosticsFolder()
+    {
+        if (_layoutSelfTest)
+            return;
+        try
+        {
+            // Only the current user's local UDX queue. No upload or recovery
+            // secret collection; Explorer is launched on explicit click.
+            var directory = UniversalDiagnosticService.LocalQueueDirectory;
+            Directory.CreateDirectory(directory);
+            using var opened = Process.Start(new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = true,
+                ArgumentList = { directory }
+            });
+            if (opened is null)
+                throw new InvalidOperationException("Windows Explorer did not start.");
+        }
+        catch (Exception ex)
+        {
+            _appDiagnostics.ShowMessage(
+                "Cannot open local diagnostic folder.",
+                "Local reports remain unchanged (" + ex.GetType().Name + ").");
+        }
+    }
+
     private void CopySupportEmail()
     {
         if (_layoutSelfTest)

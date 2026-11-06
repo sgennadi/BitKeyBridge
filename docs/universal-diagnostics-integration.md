@@ -36,7 +36,8 @@
   The setting affects future errors only. It does not sign in to GitHub.
 - **Save local diagnostic report** is a direct operator action which creates
   a non-secret manual UDX event. **Preview local diagnostics** shows limited
-  category/count summaries without dumping raw records.
+  category/count summaries without dumping raw records. **Open local reports
+  folder** opens the per-user queue in Explorer without uploading anything.
 - **Support → Universal diagnostics...** selects Helpdesk and shows the
   same local preview. EN/RU/HE translations use the existing WinForms
   static-caption localization system.
@@ -66,8 +67,9 @@ to public Issues automatically.
    `PYTHONPATH=.github python3 -m unittest discover -s .github/universal_diagnostics/tests -v`.
    The standard `build.yml` automatically executes this offline stage.
 2. On Windows run `BitKeyBridge.exe --self-test --no-elevation`;
-   this exercises a temporary isolated UDX queue and verifies event
-   fingerprint, schema, pending state, and omission of secret-bearing fields.
+   this exercises a temporary isolated UDX queue and verifies the exact
+   cross-language SHA-256 fingerprint, schema, pending state, and that
+   synthetic bearer tokens / recovery passwords never reach the queue.
 3. Run `BitKeyBridge.exe --ui-self-test --no-elevation`, including native
    Helpdesk EN/RU/HE controls at 100/125/150/175/200% and compact/RDP
    layouts. Verify right-to-left Hebrew and no clipped buttons.

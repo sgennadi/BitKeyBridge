@@ -96,7 +96,9 @@ public sealed partial class MainForm
         localPreview.Name = "HelpdeskUniversalPreviewButton";
         var localSave = NewActionButton("Save local diagnostic report");
         localSave.Name = "HelpdeskUniversalSaveButton";
-        localActions.Controls.AddRange([localPreview, localSave]);
+        var localOpen = NewActionButton("Open local reports folder");
+        localOpen.Name = "HelpdeskUniversalOpenFolderButton";
+        localActions.Controls.AddRange([localPreview, localSave, localOpen]);
         root.Controls.Add(localActions);
 
         _helpdeskSelectedDeviceSummary = new UiStatusLabel
@@ -206,6 +208,7 @@ public sealed partial class MainForm
                 "Cannot save local diagnostic preference.",
                 "Check user-profile write permissions; nothing was uploaded.");
         };
+        localOpen.Click += (_, _) => OpenUniversalDiagnosticsFolder();
         localPreview.Click += (_, _) =>
         {
             if (!_layoutSelfTest)

@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Security;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace BitKeyBridge;
@@ -322,6 +324,14 @@ internal static class UniversalDiagnosticService
             using var doc = JsonDocument.Parse(File.ReadAllText(receipt.Path));
             var ev = doc.RootElement.GetProperty("event");
             var delivery = doc.RootElement.GetProperty("delivery");
+            // Cross-language SHA-256 contract must be identical to the
+            // canonical Python implementation in the shared repository.
+            var signature = string.Join("|", Project.ToLowerInvariant(),
+                "ui", "timeoutexception", "0x80131505");
+            var expectedFingerprint = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(signature))).ToLowerInvariant();
+            if (ev.GetProperty("fingerprint").GetString() != expectedFingerprint)
+                errors.Add("UniversalDiagnostics .NET/Python fingerprint mismatch.");
             if (ev.GetProperty("schema").GetString() != "universal-diagnostics/v1" ||
                 ev.GetProperty("project").GetString() != Project ||
                 ev.GetProperty("component").GetString() != "UI" ||
@@ -333,6 +343,17 @@ internal static class UniversalDiagnosticService
                 Component("Get-LAPS Password") != "LAPS" ||
                 Component("ConnectMicrosoftGraph") != "Graph")
                 errors.Add("UniversalDiagnostics operation classifier is unsafe.");
+            // Exercise the canonical embedded redactor with a deliberately
+            // hostile sample; it must not survive on disk.
+            const string fakeRecovery = "001122-334455-667788-990011-223344-556677-889900-112233";
+            const string fakeToken = "TEST_ONLY_SECRET_BEARER_0123456789";
+            var probe = UniversalDiagnostics.UniversalDiagnosticsEmbedded.Capture(
+                JsonSerializer.Serialize(Event("UI", "Other", "0x80000000",
+                    "Authorization: Bearer " + fakeToken + "\n" + fakeRecovery)));
+            var probeJson = File.ReadAllText(probe.Path);
+            if (probeJson.Contains(fakeRecovery, StringComparison.Ordinal) ||
+                probeJson.Contains(fakeToken, StringComparison.Ordinal))
+                errors.Add("UniversalDiagnostics embedded redactor wrote a secret to disk.");
             var sensitive = File.ReadAllText(receipt.Path);
             foreach (var forbidden in new[] { "recovery_password", "access_token",
                 "computer_name", "tenant_id", "raw_exception", "hostname" })

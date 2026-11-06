@@ -3701,6 +3701,9 @@ public static class UiLayoutSelfTest
                     FindByName(form, "HelpdeskUniversalSaveButton") is not Button localSave ||
                     localSave.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language, "Save local diagnostic report") ||
+                    FindByName(form, "HelpdeskUniversalOpenFolderButton") is not Button localOpen ||
+                    localOpen.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Open local reports folder") ||
                     FindByName(form, "HelpdeskUniversalPrivacyNotice") is not Label localNotice ||
                     localNotice.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language,
