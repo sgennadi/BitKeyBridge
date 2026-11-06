@@ -14,6 +14,7 @@ on:
 permissions:
   contents: read
   issues: read
+  actions: read
 
 concurrency:
   # Bind concurrency to the exact commit. GitHub can deliver rapid PR
@@ -24,24 +25,24 @@ concurrency:
 
 jobs:
   diagnostics-prebuild:
-    name: Anonymous diagnostic analysis before build
+    name: UniversalDiagnostics shared CI checks
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Validate production relay authorization, data minimization and failures
-        run: node --test tools/github-diagnostic-relay/index.test.mjs
-      - name: Reject unsafe diagnostic inputs (offline regression)
-        run: python3 .github/scripts/diagnostic_triage.py --self-test
-      - name: Analyze accumulated sanitized GitHub Issues (read-only)
+      - name: Run shared UniversalDiagnostics privacy and queue tests
         env:
+          PYTHONPATH: .github
+        run: python3 -m unittest discover -s .github/universal_diagnostics/tests -v
+      - name: Review recent CI failure categories without raw logs
+        continue-on-error: true
+        env:
+          PYTHONPATH: .github
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          python3 .github/scripts/diagnostic_triage.py
-          --repo "$GITHUB_REPOSITORY"
-          --summary "$GITHUB_STEP_SUMMARY"
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 -m universal_diagnostics.ci_review --mode prebuild --workflow build.yml
   laps-regression:
     runs-on: ubuntu-24.04
     steps:
