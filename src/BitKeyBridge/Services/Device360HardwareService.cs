@@ -14,6 +14,15 @@ internal sealed record Device360HardwareInventory
     internal string Source { get; init; } = "Remote WMI (Windows integrated)";
     internal string Manufacturer { get; init; } = string.Empty;
     internal string Model { get; init; } = string.Empty;
+    internal string SerialNumber { get; init; } = string.Empty;
+    internal string CpuName { get; init; } = string.Empty;
+    internal int CpuLogicalProcessors { get; init; }
+    internal decimal MemoryGiB { get; init; }
+    internal int PhysicalDiskCount { get; init; }
+    internal decimal PhysicalStorageGiB { get; init; }
+    internal int PhysicalNetworkAdapterCount { get; init; }
+    // Safe typed status only, no raw provider exceptions or addresses.
+    internal string ExtendedDiagnostic { get; init; } = string.Empty;
     internal string BiosVersion { get; init; } = string.Empty;
     internal string BiosManufacturer { get; init; } = string.Empty;
     internal string BiosReleaseDate { get; init; } = string.Empty;
@@ -27,7 +36,10 @@ internal sealed record Device360HardwareInventory
 
 internal sealed record Device360HardwareOutcome(
     bool Succeeded, Device360HardwareInventory? Inventory,
-    string Explanation);
+    string Explanation)
+{
+    internal string FailureCategory { get; init; } = string.Empty;
+}
 
 internal static class Device360HardwareService
 {
@@ -88,6 +100,12 @@ internal static class Device360HardwareService
         return Task.Run(() => QueryWindows(dns, ct), ct);
     }
 
+    internal static string FormatGiB(decimal size) =>
+        size <= 0 ? "Not verified" :
+        size.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " GiB";
+
+    private static decimal GiB(decimal bytes) => bytes / 1073741824m;
+
     private static Device360HardwareOutcome QueryWindows(
         string dnsHost, CancellationToken ct)
     {
@@ -103,9 +121,11 @@ internal static class Device360HardwareService
             var biosVersion = string.Empty;
             var biosManufacturer = string.Empty;
             var biosDate = string.Empty;
+            var serialNumber = string.Empty;
+            decimal memoryGiB = 0m;
 
             using (var searcher = NewSearcher(scope,
-                "SELECT Manufacturer,Model FROM Win32_ComputerSystem"))
+                "SELECT Manufacturer,Model,TotalPhysicalMemory FROM Win32_ComputerSystem"))
             using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
@@ -114,6 +134,11 @@ internal static class Device360HardwareService
                     {
                         manufacturer = Read(row, "Manufacturer");
                         model = Read(row, "Model");
+                        if (ulong.TryParse(Read(row, "TotalPhysicalMemory"),
+                                System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out var memoryBytes) && memoryBytes > 0)
+                            memoryGiB = GiB(memoryBytes);
                     }
                     break;
                 }
@@ -121,7 +146,7 @@ internal static class Device360HardwareService
             ct.ThrowIfCancellationRequested();
 
             using (var searcher = NewSearcher(scope,
-                "SELECT Manufacturer,SMBIOSBIOSVersion,ReleaseDate FROM Win32_BIOS"))
+                "SELECT Manufacturer,SMBIOSBIOSVersion,ReleaseDate,SerialNumber FROM Win32_BIOS"))
             using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
@@ -130,6 +155,7 @@ internal static class Device360HardwareService
                     {
                         biosManufacturer = Read(row, "Manufacturer");
                         biosVersion = Read(row, "SMBIOSBIOSVersion");
+                        serialNumber = Read(row, "SerialNumber");
                         var rawDate = Read(row, "ReleaseDate");
                         if (rawDate.Length >= 8 &&
                             DateTime.TryParseExact(rawDate[..8], "yyyyMMdd",
@@ -185,12 +211,100 @@ internal static class Device360HardwareService
                 tpmDiagnostic = "TPM not verified: " +
                     ErrorCategory(ex) + ". BIOS/computer inventory is still available.";
             }
+            // Optional read-only providers. A provider failure must never
+            // suppress earlier BIOS/TPM evidence or trigger permission changes.
+            var partial = new List<string>();
+            var cpuName = string.Empty;
+            var logicalProcessors = 0;
+            var diskCount = 0;
+            decimal diskGiB = 0m;
+            var adapterCount = 0;
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                using var searcher = NewSearcher(scope,
+                    "SELECT Name,NumberOfLogicalProcessors FROM Win32_Processor");
+                using var rows = searcher.Get();
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        if (cpuName.Length == 0) cpuName = Read(row, "Name");
+                        if (int.TryParse(Read(row, "NumberOfLogicalProcessors"),
+                                out var count) && count > 0 &&
+                            logicalProcessors <= int.MaxValue - count)
+                            logicalProcessors += count;
+                    }
+                }
+                if (cpuName.Length == 0) partial.Add("CPU: NoRecord");
+            }
+            catch (Exception ex) when (IsExpectedWmiFailure(ex))
+            {
+                partial.Add("CPU: " + ErrorCategory(ex));
+            }
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                using var searcher = NewSearcher(scope,
+                    "SELECT Size FROM Win32_DiskDrive");
+                using var rows = searcher.Get();
+                decimal totalBytes = 0m;
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        ++diskCount;
+                        if (ulong.TryParse(Read(row, "Size"),
+                                System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out var size))
+                            totalBytes += size;
+                    }
+                }
+                diskGiB = GiB(totalBytes);
+                if (diskCount == 0) partial.Add("Disk: NoRecord");
+            }
+            catch (Exception ex) when (IsExpectedWmiFailure(ex))
+            {
+                partial.Add("Disk: " + ErrorCategory(ex));
+            }
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                using var searcher = NewSearcher(scope,
+                    "SELECT PhysicalAdapter FROM Win32_NetworkAdapter");
+                using var rows = searcher.Get();
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        if (row["PhysicalAdapter"] is bool physical && physical)
+                            ++adapterCount;
+                    }
+                }
+                if (adapterCount == 0)
+                    partial.Add("Network: NoRecord");
+            }
+            catch (Exception ex) when (IsExpectedWmiFailure(ex))
+            {
+                partial.Add("Network: " + ErrorCategory(ex));
+            }
+            if (memoryGiB <= 0) partial.Add("Memory: NoRecord");
+
             ct.ThrowIfCancellationRequested();
             return new Device360HardwareOutcome(true,
                 new Device360HardwareInventory
                 {
                     Manufacturer = manufacturer,
                     Model = model,
+                    SerialNumber = serialNumber,
+                    CpuName = cpuName,
+                    CpuLogicalProcessors = logicalProcessors,
+                    MemoryGiB = memoryGiB,
+                    PhysicalDiskCount = diskCount,
+                    PhysicalStorageGiB = diskGiB,
+                    PhysicalNetworkAdapterCount = adapterCount,
+                    ExtendedDiagnostic = string.Join("; ", partial),
                     BiosVersion = biosVersion,
                     BiosManufacturer = biosManufacturer,
                     BiosReleaseDate = biosDate,
@@ -211,7 +325,10 @@ internal static class Device360HardwareService
             var category = ErrorCategory(ex);
             return new Device360HardwareOutcome(false, null,
                 "Remote WMI not available (" + category + "). " +
-                FailureGuidance(category) + " Nothing was modified.");
+                FailureGuidance(category) + " Nothing was modified.")
+            {
+                FailureCategory = category
+            };
         }
     }
 
