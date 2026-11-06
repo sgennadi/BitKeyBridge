@@ -560,6 +560,26 @@ public static class UiLayoutSelfTest
             !report.Contains("NON-SECRET HELPDESK REPORT", StringComparison.Ordinal))
             failures.Add("Device 360 Helpdesk report leaked a recovery ID or omitted its safety scope.");
 
+        // Remote WMI observations must carry an explicit collection time,
+        // never be mistaken for permanent or freshly revalidated inventory.
+        var hardwareTime = new DateTime(2026, 11, 4, 12, 30, 0,
+            DateTimeKind.Utc);
+        var hardwareReport = Device360ReportService.Build(cloud, reportSource,
+            new Device360HardwareInventory
+            {
+                Source = "Synthetic WMI (offline test)",
+                Model = "Synthetic model",
+                CollectedUtc = hardwareTime
+            });
+        if (!hardwareReport.Contains(
+                "Remote hardware checked UTC: 2026-11-04 12:30:00 UTC",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Hardware evidence source: Synthetic WMI",
+                StringComparison.Ordinal) ||
+            hardwareReport.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal))
+            failures.Add("Device 360 hardware provenance or timestamp was lost.");
+
         var unknown = Device360HealthService.Evaluate(new Device360Snapshot(),
             Device360OperationalStatus.Capture(new Device360Snapshot(),
                 adConnected: false, cloudSessionPresent: false,

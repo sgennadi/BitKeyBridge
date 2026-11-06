@@ -280,6 +280,16 @@ internal sealed partial class Device360Dialog
                 if (!IsDisposed && !Disposing)
                     hardwareStatus.Text = Tr("Device360V2HardwareCancelled");
             }
+            catch (Exception ex)
+            {
+                // Unexpected WMI/provider failures must not escape an async
+                // WinForms click handler and terminate the Helpdesk client.
+                // Never show exception messages containing remote host data.
+                UniversalDiagnosticService.TryCapture("Devices", ex);
+                if (!IsDisposed && !Disposing)
+                    hardwareStatus.Text = Tr("Device360V2NoRemote") +
+                        " (" + ex.GetType().Name + ")";
+            }
             finally
             {
                 if (ReferenceEquals(_device360HardwareCancellation, cancellation))

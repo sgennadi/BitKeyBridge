@@ -61,6 +61,8 @@ internal static class Device360ReportService
         Field("TPM owned", hardware?.TpmOwned ?? string.Empty);
         Field("TPM diagnostic", hardware?.TpmDiagnostic ?? string.Empty);
         Field("Hardware evidence source", hardware?.Source ?? "Not queried");
+        Field("Remote hardware checked UTC", hardware is null
+            ? "Not queried" : Date(hardware.CollectedUtc));
         Line("");
 
         Line("RECOVERY METADATA AND POLICY");
