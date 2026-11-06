@@ -4,7 +4,7 @@ on:
   push:
     # This temporary RC staging branch publishes only on an explicit final
     # commit, and only after x64/x86/ARM64 and LAPS regression checks pass.
-    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0", "release/v0.32.1", "release/v0.32.2", "release/v0.32.3", "release/v0.32.4", "release/v0.32.5", "release/v0.33.0", "release/v0.33.1" ]
+    branches: [ "main", "master", "improve/nonadmin-audit-ui-20261014", "release/v0.30.3", "release/v0.30.4", "release/v0.30.5", "release/v0.32.0", "release/v0.32.1", "release/v0.32.2", "release/v0.32.3", "release/v0.32.4", "release/v0.32.5", "release/v0.33.0", "release/v0.33.1", "release/v0.35.0" ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
@@ -763,7 +763,8 @@ jobs:
         github.ref == 'refs/heads/release/v0.32.4' ||
          github.ref == 'refs/heads/release/v0.32.5' ||
          github.ref == 'refs/heads/release/v0.33.0' ||
-         github.ref == 'refs/heads/release/v0.33.1'))
+         github.ref == 'refs/heads/release/v0.33.1' ||
+         github.ref == 'refs/heads/release/v0.35.0'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 30
@@ -818,7 +819,8 @@ jobs:
         github.ref == 'refs/heads/release/v0.32.4' ||
          github.ref == 'refs/heads/release/v0.32.5' ||
          github.ref == 'refs/heads/release/v0.33.0' ||
-         github.ref == 'refs/heads/release/v0.33.1'))
+         github.ref == 'refs/heads/release/v0.33.1' ||
+         github.ref == 'refs/heads/release/v0.35.0'))
     needs: [build]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -1123,7 +1125,8 @@ jobs:
        github.ref == 'refs/heads/release/v0.32.4' ||
        github.ref == 'refs/heads/release/v0.32.5' ||
        github.ref == 'refs/heads/release/v0.33.0' ||
-       github.ref == 'refs/heads/release/v0.33.1')
+       github.ref == 'refs/heads/release/v0.33.1' ||
+       github.ref == 'refs/heads/release/v0.35.0')
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
@@ -1320,6 +1323,9 @@ jobs:
            needs['codeql-stable-release'].result == 'success') ||
           (github.ref == 'refs/heads/release/v0.33.1' &&
            github.event.head_commit.message == 'Release v0.33.1' &&
+           needs['codeql-stable-release'].result == 'success') ||
+          (github.ref == 'refs/heads/release/v0.35.0' &&
+           github.event.head_commit.message == 'Release v0.35.0' &&
            needs['codeql-stable-release'].result == 'success')) &&
          needs['audit-broker-integration'].result == 'success' &&
          needs['legacy-upgrade-regression'].result == 'success') ||
@@ -1334,6 +1340,8 @@ jobs:
          github.ref != 'refs/heads/release/v0.32.5' &&
          github.ref != 'refs/heads/release/v0.33.0' &&
          github.ref != 'refs/heads/release/v0.33.1' &&
+         github.ref != 'refs/heads/release/v0.35.0' &&
+         github.ref != 'refs/tags/v0.35.0' &&
          github.ref != 'refs/tags/v0.33.0' &&
          github.ref != 'refs/tags/v0.33.1' &&
          (startsWith(github.ref, 'refs/tags/v') ||
@@ -1428,6 +1436,9 @@ jobs:
           }
           if ("${{ github.ref }}" -eq "refs/heads/release/v0.33.1" -and $tag -ne "v0.33.1") {
             throw "The dedicated release branch is authorized only for v0.33.1."
+          }
+          if ("${{ github.ref }}" -eq "refs/heads/release/v0.35.0" -and $tag -ne "v0.35.0") {
+            throw "The dedicated release branch is authorized only for v0.35.0."
           }
 
           $exists = $false
@@ -1527,6 +1538,13 @@ jobs:
             }
             Write-Host 'UNSIGNED v0.33.1 Stable: on-SHA security gates mandatory; managed fleet deployment NOT approved.'
           }
+          elseif ($tag -eq 'v0.35.0' -and "${{ github.ref }}" -eq 'refs/heads/release/v0.35.0') {
+            if (-not (Test-Path 'docs/release-authorization-v0.35.0.md') -or
+                -not (Test-Path 'docs/release-notes-v0.35.0.md')) {
+              throw 'Missing v0.35.0 release authorization or notes.'
+            }
+            Write-Host 'Owner-authorized public UNSIGNED v0.35.0, manual distribution only.'
+          }
           elseif ($tag.StartsWith("v0.30.", [StringComparison]::OrdinalIgnoreCase) -and
                   $tag -ne "v0.30.0-rc.1") {
             if ($env:PROTECTED_AUDIT_APPROVED -ne 'true') {
@@ -1611,11 +1629,15 @@ jobs:
            github.ref == 'refs/heads/release/v0.32.4' ||
            github.ref == 'refs/heads/release/v0.32.5' ||
            github.ref == 'refs/heads/release/v0.33.0' ||
-           github.ref == 'refs/heads/release/v0.33.1')
+           github.ref == 'refs/heads/release/v0.33.1' ||
+           github.ref == 'refs/heads/release/v0.35.0')
         shell: pwsh
         run: |
           $tag = "${{ steps.release_meta.outputs.tag }}"
-          if ($tag -eq 'v0.33.1') {
+          if ($tag -eq 'v0.35.0') {
+            Copy-Item docs/release-notes-v0.35.0.md release/RELEASE-NOTES.md
+          }
+          elseif ($tag -eq 'v0.33.1') {
             Copy-Item docs/release-notes-v0.33.1.md release/RELEASE-NOTES.md
           }
           elseif ($tag -eq 'v0.33.0') {
@@ -2209,6 +2231,86 @@ jobs:
           $global:LASTEXITCODE = 0
           Write-Host 'All three architecture hashes and negative tamper test passed. No installation performed.'
 
+      - name: Generate v0.35.0 canary installer pinned to actual built ZIPs
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          github.ref == 'refs/heads/release/v0.35.0'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $template = Get-Content 'deployment/intune/Install-BitKeyBridgeStable.ps1' -Raw -Encoding UTF8
+          $sourceSha = '09cb98c7983de3a8339bf4802918bbdb378a1be8'
+          if (($template.Split(@($sourceSha), [StringSplitOptions]::None).Length - 1) -ne 1) {
+            throw 'Pinned installer source SHA placeholder is missing or duplicated.'
+          }
+          $template = $template.Replace($sourceSha, '${{ github.sha }}')
+          $template = $template.Replace('v0.32.0', 'v0.35.0')
+          $template = $template.Replace('0.32.0', '0.35.0')
+
+          $oldPins = @{
+            'win-x64' = '1cecd4940e50b26f9c09823a9372a04f9aa3c01780702b66d6f615aa81da7a55'
+            'win-x86' = '97b0d8f3737ae22c99fb41567783ff390a17f3fdddd67da1918130e4e4d5cbcd'
+            'win-arm64' = '8a1db7457d4765be1622de028aaed78916f4bd4f4fbb35334a4183183e1585ed'
+          }
+          foreach ($rid in @('win-x64', 'win-x86', 'win-arm64')) {
+            $path = "release/BitKeyBridge-$rid.zip"
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Missing verified architecture release package: $rid"
+            }
+            $old = $oldPins[$rid]
+            if (($template.Split(@($old), [StringSplitOptions]::None).Length - 1) -ne 1) {
+              throw "Pinned installer template hash missing or duplicated: $rid"
+            }
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            $template = $template.Replace($old, $hash)
+          }
+          if ($template.Contains('0.32.0') -or $template.Contains($sourceSha) -or
+              $template.Contains('1cecd4940e50b26f') -or
+              $template.Contains('97b0d8f3737ae22c') -or
+              $template.Contains('8a1db7457d4765be')) {
+            throw 'Generated v0.35.0 installer contains stale release information.'
+          }
+          $result = Join-Path $PWD 'release/Install-BitKeyBridge-v0.35.0.ps1'
+          [IO.File]::WriteAllText($result, $template, [Text.UTF8Encoding]::new($false))
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            $result, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            throw "Installer PowerShell syntax is invalid: $($errors[0].Message)"
+          }
+          Write-Host 'Generated exact-source, exact-hash v0.35.0 installer.'
+
+      - name: Verify v0.35.0 canary installer and reject tampered ZIP
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          github.ref == 'refs/heads/release/v0.35.0'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path 'release/Install-BitKeyBridge-v0.35.0.ps1').Path
+          foreach ($rid in @('win-x64', 'win-x86', 'win-arm64')) {
+            $file = (Resolve-Path "release/BitKeyBridge-$rid.zip").Path
+            & powershell.exe -NoProfile -NonInteractive -File $installer -Mode Validate -Architecture $rid -PackagePath $file
+            if ($LASTEXITCODE -ne 0) {
+              throw "PowerShell 5.1 validation failed for $rid."
+            }
+          }
+          $tampered = Join-Path $env:RUNNER_TEMP 'BitKeyBridge-win-x64-tampered.zip'
+          Copy-Item 'release/BitKeyBridge-win-x64.zip' $tampered -Force
+          [IO.File]::AppendAllText($tampered, 'tampered')
+          & powershell.exe -NoProfile -NonInteractive -File $installer -Mode Validate -Architecture win-x64 -PackagePath $tampered 2>&1 | Out-String | Write-Host
+          $tamperExit = $LASTEXITCODE
+          Remove-Item -LiteralPath $tampered -Force
+          if ($tamperExit -eq 0) {
+            throw 'SECURITY: Tampered release ZIP was accepted by the canary installer.'
+          }
+          # The rejection is expected. A pwsh Actions step otherwise exits
+          # nonzero due to the LASTEXITCODE left by powershell.exe even when
+          # its explicitly asserted failure was correctly handled.
+          $global:LASTEXITCODE = 0
+          Write-Host 'All three architecture hashes and negative tamper test passed. No installation performed.'
+
       - name: Generate SHA256SUMS
         if: steps.release_meta.outputs.exists != 'true'
         shell: bash
@@ -2238,6 +2340,9 @@ jobs:
           fi
           if [[ -f Install-BitKeyBridge-v0.33.1.ps1 ]]; then
             files+=(Install-BitKeyBridge-v0.33.1.ps1)
+          fi
+          if [[ -f Install-BitKeyBridge-v0.35.0.ps1 ]]; then
+            files+=(Install-BitKeyBridge-v0.35.0.ps1)
           fi
           sha256sum "${files[@]}" > SHA256SUMS.txt
 
@@ -2309,6 +2414,14 @@ jobs:
         uses: actions/attest@v4
         with:
           subject-path: release/Install-BitKeyBridge-v0.33.1.ps1
+
+      - name: Attest v0.35.0 pinned canary installer
+        if: >-
+          steps.release_meta.outputs.exists != 'true' &&
+          github.ref == 'refs/heads/release/v0.35.0'
+        uses: actions/attest@v4
+        with:
+          subject-path: release/Install-BitKeyBridge-v0.35.0.ps1
 
       - name: Attest protected audit signature verification evidence
         if: >-
@@ -2467,12 +2580,18 @@ jobs:
             }
             $assets += 'release/Install-BitKeyBridge-v0.33.1.ps1'
           }
+          if ($tag -eq 'v0.35.0') {
+            if (-not (Test-Path 'release/Install-BitKeyBridge-v0.35.0.ps1')) {
+              throw 'Missing the verified v0.35.0 canary installer.'
+            }
+            $assets += 'release/Install-BitKeyBridge-v0.35.0.ps1'
+          }
           $args = @('release', 'create', $tag) + $assets + @(
             '--repo', '${{ github.repository }}',
             '--target', '${{ github.sha }}',
             '--title', "BitKeyBridge $tag"
           )
-          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5', 'v0.32.0', 'v0.32.1', 'v0.32.2', 'v0.32.3', 'v0.32.4', 'v0.32.5', 'v0.33.0', 'v0.33.1') -and
+          if ($tag -in @('v0.30.3', 'v0.30.4', 'v0.30.5', 'v0.32.0', 'v0.32.1', 'v0.32.2', 'v0.32.3', 'v0.32.4', 'v0.32.5', 'v0.33.0', 'v0.33.1', 'v0.35.0') -and
               (Test-Path 'release/RELEASE-NOTES.md')) {
             $args += @('--notes-file', 'release/RELEASE-NOTES.md')
           }
