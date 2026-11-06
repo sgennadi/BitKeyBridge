@@ -995,9 +995,18 @@ public static class UiLayoutSelfTest
                         StringComparison.Ordinal) ||
                     FindByName(dialog, "Device360V2HealthSummary")
                         is not Label successHealth ||
-                    !successHealth.Text.Contains("%", StringComparison.Ordinal))
-                    failures.Add("Device 360 synthetic WMI result was not painted (" +
-                        language + ").");
+                    !successHealth.Text.Contains("%", StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label completedStatus ||
+                    !completedStatus.Text.Contains(
+                        UiLanguageService.Translate(language,
+                            "Device360V36WmiSuccess"), StringComparison.Ordinal) ||
+                    !completedStatus.Text.Contains("UTC", StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V36Extended")
+                        is not TextBox optionalStatus ||
+                    !optionalStatus.Multiline)
+                    failures.Add("Device 360 synthetic WMI result or localized " +
+                        "multiline status was not painted (" + language + ").");
 
                 // Retry failure must clear EVERY previous hardware field,
                 // and refresh both metadata coverage and recommendations.
@@ -1021,9 +1030,13 @@ public static class UiLayoutSelfTest
                     FindByName(dialog, "Device360V2HealthSummary")
                         is not Label failedHealth ||
                     failedHealth.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
-                        StringComparison.Ordinal))
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label deniedStatus ||
+                    deniedStatus.Text != UiLanguageService.Translate(language,
+                        "Device360V36WmiDenied"))
                     failures.Add("Device 360 failed retry preserved stale WMI " +
-                        "hardware or diagnostics (" + language + ").");
+                        "hardware or localized diagnostics (" + language + ").");
 
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");

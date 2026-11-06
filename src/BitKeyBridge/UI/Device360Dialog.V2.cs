@@ -374,11 +374,32 @@ internal sealed partial class Device360Dialog
 
         FormClosing += (_, _) => _device360HardwareCancellation?.Cancel();
 
+        string HardwareStatusText(Device360HardwareOutcome result)
+        {
+            var message = result.Succeeded ? Tr("Device360V36WmiSuccess") :
+                result.FailureCategory switch
+                {
+                    "NoRecord" => Tr("Device360V36WmiNoRecord"),
+                    "AccessDenied" => Tr("Device360V36WmiDenied"),
+                    "Timeout" => Tr("Device360V36WmiTimeout"),
+                    "DCOM/RPCUnavailable" => Tr("Device360V36WmiRpc"),
+                    "WmiError" => Tr("Device360V36WmiProvider"),
+                    _ => Tr("Device360V36WmiUnavailable")
+                };
+            if (result.Succeeded && result.Inventory is { } collected)
+                message += " · " + Tr("Device360V36WmiCheckedUtc") + ": " +
+                    collected.CollectedUtc.ToUniversalTime().ToString(
+                        "yyyy-MM-dd HH:mm 'UTC'",
+                        System.Globalization.CultureInfo.InvariantCulture);
+            return message;
+        }
+
         void ApplyHardwareOutcome(Device360HardwareOutcome result)
         {
             _device360RemoteHardware = result.Inventory;
             _device360HardwareFailureCategory = result.FailureCategory;
-            hardwareStatus.Text = result.Explanation;
+            // Never render untrusted remote provider messages.
+            hardwareStatus.Text = HardwareStatusText(result);
             if (result.Inventory is { } inventory)
             {
                 SetHardware("Device360V2RemoteManufacturer",
@@ -424,7 +445,8 @@ internal sealed partial class Device360Dialog
                 SetHardware("Device360V36Extended",
                     inventory.ExtendedDiagnostic.Length > 0 ?
                         Device360HardwareService.SafeOptionalStatus(
-                            inventory.ExtendedDiagnostic) :
+                            inventory.ExtendedDiagnostic).Replace("; ",
+                                Environment.NewLine, StringComparison.Ordinal) :
                         Tr("Device360V36NoPartialErrors"));
             }
             RefreshDiagnosticsAndHealth();
@@ -665,13 +687,18 @@ internal sealed partial class Device360Dialog
                     Dock = DockStyle.Fill,
                     Margin = new Padding(3, 5, 6, 5)
                 }, rtl ? 1 : 0, index);
+                var isStatus = name == "Device360V36Extended";
                 grid.Controls.Add(new TextBox
                 {
                     Name = name,
                     Text = Tr("Device360NotVerified"),
                     ReadOnly = true,
+                    Multiline = isStatus,
+                    WordWrap = isStatus,
+                    ScrollBars = isStatus ? ScrollBars.Vertical : ScrollBars.None,
                     Dock = DockStyle.Fill,
-                    MinimumSize = new Size(0, 26),
+                    MinimumSize = new Size(0, UiStyle.ScaleLogicalPixels(
+                        isStatus ? 64 : 26, DeviceDpi)),
                     BorderStyle = BorderStyle.FixedSingle,
                     RightToLeft = RightToLeft.No
                 }, rtl ? 0 : 1, index);
