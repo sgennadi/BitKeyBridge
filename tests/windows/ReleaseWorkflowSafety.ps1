@@ -282,6 +282,34 @@ if ($release.IndexOf('Generate v0.33.1 canary installer pinned to actual built Z
     throw 'v0.33.1 canary hash and tamper checks must precede publication.'
 }
 
+# v0.35.0 must use an exact release branch and all existing required
+# Windows, CodeQL, protected audit and rollback gates, plus a pinned canary.
+if (-not $pushBranches[0].Contains('"release/v0.35.0"') -or
+    -not $release.Contains("github.ref == 'refs/heads/release/v0.35.0' &&") -or
+    -not $release.Contains("github.event.head_commit.message == 'Release v0.35.0'") -or
+    -not $release.Contains("github.ref != 'refs/heads/release/v0.35.0'") -or
+    -not $release.Contains("github.ref != 'refs/tags/v0.35.0'") -or
+    -not $release.Contains("needs['codeql-stable-release'].result == 'success'") -or
+    -not $release.Contains("needs['audit-broker-integration'].result == 'success'") -or
+    -not $release.Contains("needs['legacy-upgrade-regression'].result == 'success'") -or
+    -not $release.Contains('docs/release-authorization-v0.35.0.md') -or
+    -not $release.Contains('docs/release-notes-v0.35.0.md') -or
+    -not $release.Contains('Generate v0.35.0 canary installer pinned to actual built ZIPs') -or
+    -not $release.Contains('Verify v0.35.0 canary installer and reject tampered ZIP') -or
+    -not $release.Contains('Attest v0.35.0 pinned canary installer') -or
+    -not $release.Contains("files+=(Install-BitKeyBridge-v0.35.0.ps1)") -or
+    -not $release.Contains("Missing the verified v0.35.0 canary installer.")) {
+    throw 'Missing v0.35.0 release or unsigned canary safety checks.'
+}
+if ($release.IndexOf('Generate v0.35.0 canary installer pinned to actual built ZIPs') -ge
+    $release.IndexOf('Verify v0.35.0 canary installer and reject tampered ZIP') -or
+    $release.IndexOf('Verify v0.35.0 canary installer and reject tampered ZIP') -ge
+    $release.IndexOf('Generate SHA256SUMS') -or
+    $release.IndexOf('Generate SHA256SUMS') -ge
+    $release.IndexOf('Create GitHub Release')) {
+    throw 'v0.35.0 release integrity checks must precede publication.'
+}
+
 # PR provenance checks must examine the published main BASE, not a future
 # version proposed by a pull request. Direct pushes remain strictly gated.
 $stableWorkflowPath = Join-Path $PSScriptRoot '../../.github/workflows/main-stable-provenance.yml'

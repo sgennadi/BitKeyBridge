@@ -1,0 +1,7 @@
+# BitKeyBridge v0.35.0 — conditional authorization for UNSIGNED public Stable
+
+6 November 2026: the maintainer explicitly requested publication. Permission extends to a public GitHub Stable release of portable x64/x86/ARM64 ZIPs for manual installation, **NOT** to managed-fleet deployment or automatic privilege changes.
+
+Release only commit `Release v0.35.0` on `release/v0.35.0` with consistent product/informational version 0.35.0 and file/assembly version 0.35.0.0. All x64/x86/ARM64 builds, WinForms/UDX/LAPS self-tests, protected audit integration, legacy upgrade/rollback, same-SHA CodeQL, SHA-pinned Canary integrity/tamper tests, SBOM and provenance must succeed on the exact final commit. Publish the tag once; do not force or replace existing tags/assets. After a successful release, fast-forward `main` to identical released source.
+
+**Limitations:** No organizational Authenticode signing has been verified; successful ephemeral-signing tests are not organization certificates. No real approved/denied BitLocker/LAPS operations, managed AD/Graph/Intune permission, Hebrew DPI/RDP or endpoint-security pilot has been independently completed. A public Stable will be discoverable by update-check clients; existing explicit unsigned-update consent and updater trust restrictions must stay enforced. No mass deployment via GPO/Intune, CyberArk EPM policy changes, domain-controller installation or unattended auto-install. Organizational signing and a signed-only canary are required before broad rollout. Keep v0.33.1 for rollback.

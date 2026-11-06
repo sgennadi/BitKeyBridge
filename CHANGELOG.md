@@ -1,3 +1,16 @@
+## 0.35.0 — Stable (public UNSIGNED; manual distribution only)
+
+**6 November 2026 — owner-requested exact-source release.**
+
+- One Search/One Session between Start, Devices and Device 360; verified AD, Entra and Intune identities, partial source health, BIOS/TPM metadata when authorized.
+- BitLocker and LAPS maintain exact recovery IDs, RBAC, ticket/JIT, protected audit and token/selection-bound secret access. No implicit repeated MFA or late key reuse.
+- EN/RU/HE and Hebrew RTL, compact DPI/RDP-safe WinForms, application icon, version in title and persistent workspace geometry.
+- UniversalDiagnostics embedded local-only categorized errors with explicit opt-in, preview and consent-revocation safety; no GitHub credential or automatic diagnostic transmission.
+- Same-commit x64/x86/ARM64, native UI/UDX/LAPS, protected audit, legacy update/rollback, CodeQL, SHA-pinned Canary installer tamper rejection, checksums, SBOM and provenance required before public release.
+- **UNSIGNED public GitHub Stable only.** Real managed Windows/AD/Graph acceptance, corporate Authenticode signing and production fleet deployment are not claimed or authorized.
+
+See docs/release-notes-v0.35.0.md and docs/release-authorization-v0.35.0.md.
+
 ## 0.35.0-rc.10
 
 **6 November 2026 — full version in title and local diagnostic consent revocation (UNSIGNED QA).** Same integration PR #115; Stable unchanged.
