@@ -1,3 +1,17 @@
+## 0.35.0-rc.9
+
+**6 November 2026 — Device recovery context, unified Graph session and Device 360 hardening (UNSIGNED QA).** Continues in single integration PR #115. Stable remains unchanged.
+
+- Device recovery keys are now immediately invalidated and masked when the technician edits the Devices search query. Old recovery ID selections cannot remain actionable; pending asynchronous reveals are invalidated by the selection generation.
+- A targeted AD/Entra/Intune metadata retry clears cached BitLocker keys before the query, disables selection and Reveal/Copy for the retry's duration, re-masks after results, and restores the UI only for the owning search generation. No additional Graph login or privileged secret read is triggered.
+- Optional delegated Entra LAPS consent can be included in the initial Device Code session for BitLocker and Devices, allowing Entra LAPS to reuse the same active token with no second MFA. This is only requested when the operator explicitly enables LAPS permissions. Normal read-only BitLocker sign-in and dedicated LAPS-only scope behavior remain unchanged; tenant consent/RBAC are still required.
+- Include optional LAPS consent in the Graph token-context fingerprint so a changed permission setting invalidates the previously scoped session instead of reusing a token with insufficient scopes.
+- Device 360 catches unexpected remote WMI failures in its asynchronous GUI event without leaking raw exception text or terminating the Helpdesk window. The non-secret report records remote hardware observation timestamp and provenance.
+- Add offline security regression for query invalidation, delegated-scope composition, default non-elevation and WMI report provenance. UniversalDiagnostics shared local queue remains opt-in; no automatic uploads or credentials.
+- Version and InformationalVersion now 0.35.0-rc.9; numeric file versions stay 0.35.0.0. No signed Stable or unattended installation is authorized. Real managed Windows 11, AD/Graph/Intune, RBAC/delegated recovery, Hebrew RTL/DPI/RDP and rollback acceptance remain mandatory.
+
+See docs/release-candidate-v0.35.0-rc.9.md.
+
 ## 0.35.0-rc.8
 
 **6 November 2026 — UniversalDiagnostics local embedded integration (UNSIGNED QA candidate).** Follows the same integration PR #115; not a Stable release.
