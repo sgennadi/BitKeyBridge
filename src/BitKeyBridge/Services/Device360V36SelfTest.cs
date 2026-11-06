@@ -94,6 +94,15 @@ internal static class Device360V36SelfTest
                     Device360HealthAssessmentService.Summary(urgent, lang)),
                 "missing language summary for " + lang);
         }
+        var russian = Device360SmartDiagnosticsService.Format(findings, "ru");
+        var hebrew = Device360SmartDiagnosticsService.Format(findings, "he");
+        Check(russian.Contains("Проверьте", StringComparison.Ordinal) &&
+              russian.Contains("не", StringComparison.OrdinalIgnoreCase) &&
+              hebrew.Contains("בדקו", StringComparison.Ordinal),
+            "Smart Diagnostics reasons/actions were not localized to RU/HE");
+        Check(russian.Contains("SOURCE.AD.ACCESS_DENIED", StringComparison.Ordinal) &&
+              hebrew.Contains("WMI.RPC_UNAVAILABLE", StringComparison.Ordinal),
+            "stable technical reason codes lost in localized diagnostics");
 
         return failures;
     }
