@@ -1,3 +1,16 @@
+## 0.35.0-rc.8
+
+**6 November 2026 — UniversalDiagnostics local embedded integration (UNSIGNED QA candidate).** Follows the same integration PR #115; not a Stable release.
+
+- Compile the canonical UniversalDiagnostics 0.1.0-rc.1 VB.NET implementation into the published single-file BitKeyBridge app using a local project reference. No helper executable, runtime downloader or GitHub credential is required.
+- Replace BKB-DIAG/v1 background counters and GitHub CLI/HTTPS relay transport with the shared `universal-diagnostics/v1` per-project local event queue. All network uploads remain OFF; local automatic error classification requires an explicit operator opt-in, and manual safe capture remains available.
+- Retain existing AppLogger logs, DiagnosticRedaction, in-app error panels, support bundles, protected audit, permissions, identity matching, BitLocker/LAPS reveal and session behavior. Never include free-form exception messages, recovery keys, LAPS secrets, devices, users or paths in the new queue.
+- Helpdesk/Support use EN/RU/HE local preview, save event, and local-capture preference. Existing legacy JSON queue is neither migrated blindly nor deleted.
+- Vendor canonical Python UDX CI analysis and offline regressions, replacing the former BKB-specific issue triage and relay tests. Prebuild CI stays read-only; scheduled CI reviewer writes a single deduplicated summary only after merging to the default branch.
+- Exact-HEAD x64/x86/ARM64 + native RTL/DPI UI, security, protected Audit Broker, legacy rollback and CodeQL gates **must** pass before QA is accepted. Managed Windows and real authorized/denied AD/Graph/BitLocker/LAPS acceptance, signing and canary remain required before Stable.
+
+See docs/universal-diagnostics-integration.md.
+
 ## 0.35.0-rc.7
 
 **5 November 2026 — Production diagnostic transport implementation; UNSIGNED QA candidate, not Stable.** Continues on the single integration PR #115. No real-user collection can occur until IT deploys and approves the HTTPS relay and a signed production build passes acceptance.

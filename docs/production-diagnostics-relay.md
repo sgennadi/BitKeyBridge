@@ -1,3 +1,5 @@
+> **RETIRED in 0.35.0-rc.8:** This RC6/RC7 GitHub submission design is no longer used. BitKeyBridge now embeds [UniversalDiagnostics](universal-diagnostics-integration.md) as a local-only queue, with no automatic GitHub transmission. Historical information below is retained for audit; do not deploy these steps.
+
 # Production diagnostics: managed HTTPS relay
 
 ## Goal
