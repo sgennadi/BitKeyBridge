@@ -2243,6 +2243,7 @@ public sealed partial class MainForm
                 UiStatusKind.Busy);
 
             LapsAccessCheckResult result;
+            GraphToken? accessCloudSession = null;
 
             if (cloud)
             {
@@ -2253,12 +2254,16 @@ public sealed partial class MainForm
                     return;
                 }
 
+                accessCloudSession = _cloudToken;
+                if (!IsCurrentLapsCloudSession(accessCloudSession))
+                    return;
+
                 using var graph =
                     new CloudGraphService();
 
                 result =
                     await graph.CheckLapsAccessAsync(
-                        _cloudToken!.AccessToken,
+                        accessCloudSession!.AccessToken,
                         query,
                         cancellation.Token);
             }
@@ -2325,6 +2330,14 @@ public sealed partial class MainForm
                 cancellation.IsCancellationRequested ||
                 generation != _lapsGeneration)
             {
+                return;
+            }
+            if (cloud && !IsCurrentLapsCloudSession(accessCloudSession))
+            {
+                UiStyle.SetStatus(_lapsStatus,
+                    "Microsoft 365 session changed while checking LAPS access. " +
+                    "Results from the previous session were discarded.",
+                    UiStatusKind.Warning);
                 return;
             }
 

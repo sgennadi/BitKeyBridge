@@ -20,6 +20,9 @@
 - Offline WinForms tests exercise the real Start reuse path with a synthetic
   non-secret token; no login or privileged network request runs.
 
+- Entra LAPS access checks also verify the exact cloud session before
+  presenting diagnostic readiness; a previous tenant's result cannot
+  masquerade as the current account's permissions.
 - Entra LAPS metadata searches and password reads now capture the
   original Graph token object; responses are discarded if the user,
   permission context or token lifetime changes while awaiting Graph.
