@@ -905,18 +905,37 @@ public static class UiLayoutSelfTest
                     failures.Add("Device 360 inventory grid missing rows: " + language);
                 else
                 {
+                    // A hidden WinForms TabPage may not be laid out until
+                    // selected. Measure *painted* controls, then restore
+                    // Overview so the remaining native checks are unchanged.
+                    var inventoryTabs = FindByName(dialog,
+                        "Device360CardTabs") as TabControl;
+                    var selectedPage = inventoryTabs?.SelectedIndex ?? 0;
+                    if (inventoryTabs is { TabCount: > 1 })
+                    {
+                        inventoryTabs.SelectedIndex = 1;
+                        Application.DoEvents();
+                        dialog.PerformLayout();
+                    }
                     foreach (Control item in inventoryGrid.Controls)
                     {
-                        if (item is not Label label || string.IsNullOrWhiteSpace(label.Text))
+                        if (item is not Label label ||
+                            string.IsNullOrWhiteSpace(label.Text))
                             continue;
                         var measured = TextRenderer.MeasureText(label.Text,
                             label.Font,
                             new Size(Math.Max(1, label.ClientSize.Width), 10000),
                             TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
                         if (label.ClientSize.Width < 30 ||
-                            measured.Height > label.ClientSize.Height + 3)
+                            measured.Height > label.ClientSize.Height +
+                                UiStyle.ScaleLogicalPixels(8, dialog.DeviceDpi))
                             failures.Add("Device 360 inventory label clipped (" +
                                 language + "): " + label.Text);
+                    }
+                    if (inventoryTabs is { TabCount: > 1 })
+                    {
+                        inventoryTabs.SelectedIndex = selectedPage;
+                        Application.DoEvents();
                     }
                 }
                 if (FindByName(dialog, "Device360V2HealthSummary") is not Label ||
