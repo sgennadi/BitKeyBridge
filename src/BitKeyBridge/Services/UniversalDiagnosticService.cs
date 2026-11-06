@@ -1,8 +1,5 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace BitKeyBridge;
@@ -158,8 +155,10 @@ internal static class UniversalDiagnosticService
         {
             project = Project,
             component,
-            version = typeof(UniversalDiagnosticService).Assembly.GetName().Version?.ToString(3)
-                ?? "0.35.0",
+            version = typeof(UniversalDiagnosticService).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "0.35.0",
             error_type = errorType,
             code,
             summary,
@@ -260,9 +259,14 @@ internal static class UniversalDiagnosticService
                         var component = ev.GetProperty("component").GetString() ?? "Other";
                         var errorType = ev.GetProperty("error_type").GetString() ?? "Other";
                         var code = ev.GetProperty("code").GetString() ?? "unknown";
-                        if (!Components.Contains(component) ||
-                            !(ErrorClasses.Contains(errorType) || errorType == "Other") ||
-                            code.Length > 60)
+                        if (!root.TryGetProperty("delivery", out var delivery) ||
+                            delivery.GetProperty("status").GetString() != "pending" ||
+                            !Components.Contains(component) ||
+                            !ErrorClasses.Contains(errorType) ||
+                            (code != "MANUAL" &&
+                             !System.Text.RegularExpressions.Regex.IsMatch(
+                                 code, @"^(?:0x[0-9A-Fa-f]{8}|[0-9]{1,6})$",
+                                 System.Text.RegularExpressions.RegexOptions.CultureInvariant)))
                             continue;
                         items.Add((component, errorType, code));
                     }
