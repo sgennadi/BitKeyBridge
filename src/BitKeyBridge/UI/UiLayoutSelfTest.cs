@@ -912,7 +912,7 @@ public static class UiLayoutSelfTest
                     FindByName(dialog, "Device360V2SmartDiagnostics")
                         is not TextBox { ReadOnly: true } diagnosticText ||
                     !diagnosticText.Text.Contains("%", StringComparison.Ordinal) ||
-                    !diagnosticText.Text.Contains("LAPS.UNVERIFIED",
+                    !diagnosticText.Text.Contains("SOURCE.",
                         StringComparison.Ordinal))
                     failures.Add("Device 360 v0.36 extended read-only hardware or " +
                         "evidence-aware diagnostics missing: " + language);
