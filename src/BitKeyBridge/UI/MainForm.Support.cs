@@ -39,7 +39,7 @@ public sealed partial class MainForm
         }
     }
 
-    private void OpenGitHubReportsWorkspace()
+    private void OpenUniversalDiagnosticsWorkspace()
     {
         // Reuse Helpdesk; no second collection or implicit network request.
         var tab = _mainTabs.TabPages.Cast<TabPage>()
@@ -48,8 +48,8 @@ public sealed partial class MainForm
             _mainTabs.SelectedTab = tab;
         if (!_layoutSelfTest)
             _appDiagnostics.ShowMessage(
-                "Anonymous GitHub diagnostics preview",
-                GitHubDiagnosticReporter.Preview());
+                "Universal Diagnostics local preview",
+                UniversalDiagnosticService.Preview());
     }
 
     private void CopySupportEmail()

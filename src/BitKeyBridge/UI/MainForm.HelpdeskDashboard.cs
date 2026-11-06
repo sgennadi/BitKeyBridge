@@ -69,44 +69,35 @@ public sealed partial class MainForm
         contact.Controls.Add(emailLink);
         root.Controls.Add(contact);
 
-        // The HTTPS relay is configured once by IT, not by each Windows user.
-        // GitHub Issues can be PUBLIC: never send raw logs or identities.
-        var centrallyManaged = _config.DiagnosticRelayEnabled &&
-            _config.DiagnosticRelayManagedAutoSend;
-        var githubPrivacy = new Label
+        // UniversalDiagnostics v1: in-process local queue, not a GitHub uploader.
+        // Opt-in controls only future classified error captures. The operator
+        // can always explicitly save one non-secret manual record.
+        var localPrivacy = new Label
         {
-            Name = "HelpdeskGitHubPrivacyNotice",
-            Text = _config.DiagnosticRelayEnabled
-                ? "Production HTTPS relay → GitHub Issues: anonymous error codes only. No GitHub account or gh required. Reports may be public."
-                : "Public GitHub Issues: error codes only, never logs or secrets. Without an IT-managed relay, manual reporting requires signed-in gh.",
+            Name = "HelpdeskUniversalPrivacyNotice",
+            Text = "Local diagnostics only. Reports remain on this computer; nothing is uploaded.",
             AutoSize = true,
             MaximumSize = new Size(900, 0),
             Margin = new Padding(0, UiStyle.ControlGap, 0, UiStyle.ControlGap)
         };
-        root.Controls.Add(githubPrivacy);
-        var githubAuto = new CheckBox
+        root.Controls.Add(localPrivacy);
+        var localCapture = new CheckBox
         {
-            Name = "HelpdeskGitHubAutoReport",
-            Text = centrallyManaged
-                ? "Automatic anonymous error reports (managed by your organization)"
-                : "Automatic GitHub error reports (opt-in)",
+            Name = "HelpdeskUniversalLocalCapture",
+            Text = "Capture diagnostic error categories locally (opt-in)",
             AutoSize = true,
             MaximumSize = new Size(900, 0),
-            Checked = !_layoutSelfTest &&
-                (centrallyManaged || GitHubDiagnosticReporter.OptedIn),
-            Enabled = !centrallyManaged,
-            AccessibleName = centrallyManaged
-                ? "Managed organizational anonymous diagnostic reporting policy"
-                : "Consent to anonymous GitHub error reports"
+            Checked = !_layoutSelfTest && UniversalDiagnosticService.LocalCaptureEnabled,
+            AccessibleName = "Consent to collect classified error metadata on this computer"
         };
-        root.Controls.Add(githubAuto);
-        var githubActions = CreateActionFlow();
-        var githubPreview = NewActionButton("Preview anonymous diagnostics");
-        githubPreview.Name = "HelpdeskGitHubPreviewButton";
-        var githubSend = NewActionButton("Send anonymous report");
-        githubSend.Name = "HelpdeskGitHubSendButton";
-        githubActions.Controls.AddRange([githubPreview, githubSend]);
-        root.Controls.Add(githubActions);
+        root.Controls.Add(localCapture);
+        var localActions = CreateActionFlow();
+        var localPreview = NewActionButton("Preview local diagnostics");
+        localPreview.Name = "HelpdeskUniversalPreviewButton";
+        var localSave = NewActionButton("Save local diagnostic report");
+        localSave.Name = "HelpdeskUniversalSaveButton";
+        localActions.Controls.AddRange([localPreview, localSave]);
+        root.Controls.Add(localActions);
 
         _helpdeskSelectedDeviceSummary = new UiStatusLabel
         {
@@ -201,43 +192,42 @@ public sealed partial class MainForm
         };
         emailSupport.Click += (_, _) => OpenSupportEmail();
 
-        var revertingGitHubPreference = false;
-        githubAuto.CheckedChanged += (_, _) =>
+        var restoringLocalConsent = false;
+        localCapture.CheckedChanged += (_, _) =>
         {
-            if (_layoutSelfTest || revertingGitHubPreference)
+            if (_layoutSelfTest || restoringLocalConsent)
                 return;
-            if (GitHubDiagnosticReporter.SetOptIn(githubAuto.Checked))
+            if (UniversalDiagnosticService.SetLocalCapture(localCapture.Checked))
                 return;
-            revertingGitHubPreference = true;
-            githubAuto.Checked = !githubAuto.Checked;
-            revertingGitHubPreference = false;
+            restoringLocalConsent = true;
+            localCapture.Checked = !localCapture.Checked;
+            restoringLocalConsent = false;
             _appDiagnostics.ShowMessage(
-                "Cannot save GitHub diagnostic consent.",
-                "Check user-profile write permissions; no report was sent.");
+                "Cannot save local diagnostic preference.",
+                "Check user-profile write permissions; nothing was uploaded.");
         };
-        githubPreview.Click += (_, _) =>
+        localPreview.Click += (_, _) =>
         {
             if (!_layoutSelfTest)
                 _appDiagnostics.ShowMessage(
-                    "Anonymous GitHub diagnostics preview",
-                    GitHubDiagnosticReporter.Preview());
+                    "Universal Diagnostics local preview",
+                    UniversalDiagnosticService.Preview());
         };
-        githubSend.Click += async (_, _) =>
+        localSave.Click += async (_, _) =>
         {
-            if (_layoutSelfTest || !githubSend.Enabled)
+            if (_layoutSelfTest || !localSave.Enabled)
                 return;
-            githubSend.Enabled = false;
+            localSave.Enabled = false;
             try
             {
-                var status = await GitHubDiagnosticReporter.SendAsync(
-                    automatic: false);
+                var result = await UniversalDiagnosticService.CaptureManualSnapshotAsync();
                 if (!IsDisposed)
-                    _appDiagnostics.ShowMessage("GitHub diagnostics", status);
+                    _appDiagnostics.ShowMessage("Universal Diagnostics", result);
             }
             finally
             {
                 if (!IsDisposed)
-                    githubSend.Enabled = true;
+                    localSave.Enabled = true;
             }
         };
         refresh.Click += (_, _) => UpdateStatus();

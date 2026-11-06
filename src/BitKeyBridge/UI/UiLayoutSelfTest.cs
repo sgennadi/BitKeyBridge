@@ -3688,24 +3688,24 @@ public static class UiLayoutSelfTest
                         "mailto:sgennadi@hotmail.com?subject=BitKeyBridge%20Support")
                     failures.Add("Support contact or mailto action missing from EN/RU/HE: " +
                         language);
-                var githubMenu = form.MainMenuStrip?.Items.Find(
-                    "SupportGitHubReportsMenuItem", true).FirstOrDefault();
-                if (githubMenu?.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
-                        language, "GitHub diagnostics...") ||
-                    FindByName(form, "HelpdeskGitHubAutoReport") is not CheckBox githubAuto ||
-                    githubAuto.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
-                        language, "Automatic GitHub error reports (opt-in)") ||
-                    FindByName(form, "HelpdeskGitHubPreviewButton") is not Button githubPreview ||
-                    githubPreview.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
-                        language, "Preview anonymous diagnostics") ||
-                    FindByName(form, "HelpdeskGitHubSendButton") is not Button githubSend ||
-                    githubSend.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
-                        language, "Send anonymous report") ||
-                    FindByName(form, "HelpdeskGitHubPrivacyNotice") is not Label githubNotice ||
-                    githubNotice.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                var diagnosticMenu = form.MainMenuStrip?.Items.Find(
+                    "SupportUniversalDiagnosticsMenuItem", true).FirstOrDefault();
+                if (diagnosticMenu?.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Universal diagnostics...") ||
+                    FindByName(form, "HelpdeskUniversalLocalCapture") is not CheckBox localCapture ||
+                    localCapture.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Capture diagnostic error categories locally (opt-in)") ||
+                    FindByName(form, "HelpdeskUniversalPreviewButton") is not Button localPreview ||
+                    localPreview.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Preview local diagnostics") ||
+                    FindByName(form, "HelpdeskUniversalSaveButton") is not Button localSave ||
+                    localSave.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Save local diagnostic report") ||
+                    FindByName(form, "HelpdeskUniversalPrivacyNotice") is not Label localNotice ||
+                    localNotice.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language,
-                        "Public GitHub Issues: error codes only, never logs or secrets. Without an IT-managed relay, manual reporting requires signed-in gh."))
-                    failures.Add("GitHub anonymous diagnostics UI not localized in " + language);
+                        "Local diagnostics only. Reports remain on this computer; nothing is uploaded."))
+                    failures.Add("UniversalDiagnostics local-only UI not localized in " + language);
                 if (copyItemBeforeTranslation is not null &&
                     !ReferenceEquals(copyItemBeforeTranslation.Tag, protectedMenuTag))
                     failures.Add("Language switch overwrote ToolStrip command Tag: " +

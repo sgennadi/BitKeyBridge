@@ -534,12 +534,12 @@ public sealed partial class MainForm
         };
         copySupportEmail.Click += (_, _) => CopySupportEmail();
         supportMenu.DropDownItems.Add(copySupportEmail);
-        var githubReports = new ToolStripMenuItem("GitHub diagnostics...")
+        var universalReports = new ToolStripMenuItem("Universal diagnostics...")
         {
-            Name = "SupportGitHubReportsMenuItem"
+            Name = "SupportUniversalDiagnosticsMenuItem"
         };
-        githubReports.Click += (_, _) => OpenGitHubReportsWorkspace();
-        supportMenu.DropDownItems.Add(githubReports);
+        universalReports.Click += (_, _) => OpenUniversalDiagnosticsWorkspace();
+        supportMenu.DropDownItems.Add(universalReports);
         supportMenu.DropDownItems.Add(new ToolStripSeparator());
         supportMenu.DropDownItems.Add(new ToolStripMenuItem(SupportEmailAddress)
         {

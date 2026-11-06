@@ -11,15 +11,18 @@ internal static class UiStaticCaptionCatalog
     private static readonly IReadOnlyDictionary<string, string[]> Captions =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["Production HTTPS relay → GitHub Issues: anonymous error codes only. No GitHub account or gh required. Reports may be public."] =
-                ["Рабочий HTTPS-приёмник → GitHub Issues: только анонимные коды ошибок. GitHub и gh не требуются. Отчёты могут быть публичными.",
-                 "שער HTTPS ארגוני ← GitHub Issues: קודי שגיאה אנונימיים בלבד. לא נדרש חשבון GitHub או gh. הדיווחים עשויים להיות ציבוריים."],
-            ["Public GitHub Issues: error codes only, never logs or secrets. Without an IT-managed relay, manual reporting requires signed-in gh."] =
-                ["Публичные GitHub Issues: только коды ошибок, без журналов и секретов. Без корпоративного приёмника требуется вход в gh для ручной отправки.",
-                 "GitHub Issues ציבורי: קודי שגיאה בלבד, ללא יומנים או סודות. ללא שער ארגוני, שליחה ידנית דורשת כניסה ל-gh."],
-            ["Automatic anonymous error reports (managed by your organization)"] =
-                ["Автоматические анонимные отчёты об ошибках (управляются организацией)",
-                 "דיווח אוטומטי ואנונימי על שגיאות (מנוהל על ידי הארגון)"],
+            ["Local diagnostics only. Reports remain on this computer; nothing is uploaded."] =
+                ["Только локальная диагностика: отчёты остаются на этом компьютере. Ничего не отправляется.",
+                 "אבחון מקומי בלבד. הדוחות נשמרים במחשב זה, ולא נשלחים לשום מקום."],
+            ["Capture diagnostic error categories locally (opt-in)"] =
+                ["Сохранять категории ошибок локально (по согласию)",
+                 "שמירת קטגוריות שגיאה במחשב (בהסכמה)"],
+            ["Preview local diagnostics"] =
+                ["Просмотр локальной диагностики", "תצוגה מקדימה של אבחון מקומי"],
+            ["Save local diagnostic report"] =
+                ["Сохранить локальный диагностический отчёт", "שמירת דוח אבחון מקומי"],
+            ["Universal diagnostics..."] =
+                ["Универсальная диагностика...", "אבחון אוניברסלי..."],
             ["Connect"] = ["Подключиться", "התחברות"],
             ["BitKeyBridge - Connect"] = ["BitKeyBridge — Подключение", "BitKeyBridge — התחברות"],
             ["Choose a connection"] = ["Выберите подключение", "בחירת חיבור"],
@@ -254,11 +257,6 @@ internal static class UiStaticCaptionCatalog
             ["Email support"] = ["Написать в поддержку", "שליחת הודעה לתמיכה"],
             ["Copy support email"] = ["Копировать адрес поддержки", "העתקת כתובת הדוא״ל לתמיכה"],
             ["Support email:"] = ["Email поддержки:", "דוא״ל לתמיכה:"],
-            ["GitHub diagnostics..."] = ["Диагностика GitHub...", "אבחון GitHub..."],
-            ["Automatic GitHub error reports (opt-in)"] = ["Автоотправка обезличенных ошибок в GitHub (по согласию)", "דיווח שגיאות אנונימי אוטומטי ל-GitHub (בהסכמה)"],
-            ["Preview anonymous diagnostics"] = ["Просмотр обезличенного отчёта", "תצוגה מקדימה של דוח אנונימי"],
-            ["Send anonymous report"] = ["Отправить обезличенный отчёт", "שליחת דוח אנונימי"],
-            ["Public GitHub Issues: error codes only, never logs or secrets. Requires signed-in gh."] = ["Публичный GitHub: только коды ошибок, без журналов и секретов. Требуется вход в gh.", "GitHub ציבורי: קודי שגיאה בלבד, ללא יומנים או סודות. נדרשת כניסה ל-gh."],
             ["Open Support Bundles"] = ["Открыть пакеты поддержки", "פתיחת חבילות תמיכה"],
             ["Reset Visual Layout..."] = ["Сбросить оформление...", "איפוס פריסת הממשק..."],
             ["Show environment profiles..."] = ["Показать профили окружения...", "הצגת פרופילי סביבה..."],
