@@ -57,9 +57,30 @@ internal static class Device360HealthAssessmentService
             "he" => "לא דירוג אבטחה; הרשאות שחזור לא נבדקו",
             _ => "not a security rating; recovery access not tested"
         };
+        var readiness = value.Readiness switch
+        {
+            Device360Readiness.ActionNeeded => code switch
+            {
+                "ru" => "требует внимания",
+                "he" => "נדרשת בדיקה",
+                _ => "action needed"
+            },
+            Device360Readiness.Incomplete => code switch
+            {
+                "ru" => "данные неполные",
+                "he" => "נתונים חסרים",
+                _ => "incomplete"
+            },
+            _ => code switch
+            {
+                "ru" => "данные получены",
+                "he" => "נאספו נתונים",
+                _ => "evidence observed"
+            }
+        };
         return heading + ": " +
             value.EvidenceCoveragePercent.ToString(
                 System.Globalization.CultureInfo.InvariantCulture) +
-            "% (" + note + ")";
+            "% — " + readiness + " (" + note + ")";
     }
 }

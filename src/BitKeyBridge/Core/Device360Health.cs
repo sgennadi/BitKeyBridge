@@ -18,7 +18,9 @@ internal static class Device360HealthService
 {
     internal static IReadOnlyList<Device360Check> Evaluate(
         Device360Snapshot device, Device360OperationalStatus sources,
-        DateTime? nowUtc = null)
+        DateTime? nowUtc = null,
+        Device360HardwareInventory? hardware = null,
+        string? hardwareFailureCategory = null)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(sources);
@@ -76,7 +78,7 @@ internal static class Device360HealthService
                     ? "Intune reports noncompliant. Inspect the Intune compliance policy."
                     : string.IsNullOrWhiteSpace(compliant)
                         ? "No Intune compliance value was returned or matched by exact identity."
-                        : "Intune state '" + Short(compliant) + "' is not sufficient to confirm compliance."));
+                        : "Intune returned an unrecognized compliance state. Do not infer compliance."));
 
         items.Add(new Device360Check("Disk encryption",
             device.Encrypted == true ? Device360CheckState.Observed :
@@ -107,6 +109,59 @@ internal static class Device360HealthService
             items.Add(new Device360Check("Search completeness",
                 Device360CheckState.Attention,
                 "At least one metadata source or enrichment query was incomplete. Treat missing fields as unverified."));
+
+        // WMI checks exist only after an explicit technician action.
+        // Unknown providers never count as healthy or authorize recovery.
+        if (hardware is not null)
+        {
+            var coreObserved = !string.IsNullOrWhiteSpace(hardware.Manufacturer) ||
+                !string.IsNullOrWhiteSpace(hardware.Model) ||
+                !string.IsNullOrWhiteSpace(hardware.BiosVersion);
+            items.Add(new Device360Check("Remote WMI inventory",
+                coreObserved ? Device360CheckState.Observed :
+                    Device360CheckState.NotVerified,
+                coreObserved
+                    ? "Read-only WMI returned computer or BIOS metadata. It does not verify recovery access."
+                    : "Remote WMI returned no confirmed core computer or BIOS metadata."));
+
+            var tpmState = hardware.TpmEnabled switch
+            {
+                "Yes" => Device360CheckState.Observed,
+                "No" => Device360CheckState.Attention,
+                _ => Device360CheckState.NotVerified
+            };
+            items.Add(new Device360Check("Remote TPM status", tpmState,
+                tpmState == Device360CheckState.Observed
+                    ? "WMI reported TPM enabled at collection time; no TPM keys or attestation were retrieved."
+                    : tpmState == Device360CheckState.Attention
+                        ? "WMI reported TPM disabled. Verify the actual endpoint state using approved tools."
+                        : "TPM status not verified; an unavailable provider does not prove TPM is absent."));
+
+            var optionalComplete = hardware.ExtendedDiagnostic.Length == 0 &&
+                !string.IsNullOrWhiteSpace(hardware.CpuName) &&
+                hardware.CpuLogicalProcessors > 0 &&
+                hardware.MemoryGiB > 0m &&
+                hardware.PhysicalDiskCount > 0 &&
+                hardware.PhysicalStorageGiB > 0m &&
+                hardware.PhysicalNetworkAdapterCount > 0;
+            items.Add(new Device360Check("Optional WMI inventory",
+                optionalComplete ? Device360CheckState.Observed :
+                    Device360CheckState.NotVerified,
+                optionalComplete
+                    ? "CPU, memory, disk aggregates and physical adapter counts were observed by read-only WMI."
+                    : "At least one optional hardware class was not verified. Confirmed inventory remains available."));
+        }
+        else if (hardwareFailureCategory is "AccessDenied" or "Timeout" or
+                 "DCOM/RPCUnavailable" or "WmiError" or "Unavailable")
+        {
+            // Only locally classified reason codes are included, never the
+            // raw exception message or remote provider payload.
+            items.Add(new Device360Check("Remote WMI inventory",
+                Device360CheckState.Attention,
+                "The explicit WMI inventory request failed (" +
+                hardwareFailureCategory +
+                "). Check existing connectivity and WMI read permissions."));
+        }
 
         return items;
 
@@ -151,6 +206,4 @@ internal static class Device360HealthService
                 : $"{observed} metadata observations; recovery rights not tested";
     }
 
-    private static string Short(string value) =>
-        value.Length <= 80 ? value : value[..80];
 }
