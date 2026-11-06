@@ -363,7 +363,8 @@ internal sealed partial class Device360Dialog
                             string.Empty);
                     SetHardware("Device360V36Extended",
                         inventory.ExtendedDiagnostic.Length > 0 ?
-                            inventory.ExtendedDiagnostic :
+                            Device360HardwareService.SafeOptionalStatus(
+                                inventory.ExtendedDiagnostic) :
                             Tr("Device360V36NoPartialErrors"));
                 }
                 RefreshDiagnosticsAndHealth();

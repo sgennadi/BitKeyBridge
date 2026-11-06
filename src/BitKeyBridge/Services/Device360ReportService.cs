@@ -72,7 +72,9 @@ internal static class Device360ReportService
                 : "Not verified");
         Field("Optional WMI inventory", hardware is null ? "Not queried" :
             hardware.ExtendedDiagnostic.Length == 0 ?
-                "No optional WMI failures" : hardware.ExtendedDiagnostic);
+                "No optional WMI failures" :
+                Device360HardwareService.SafeOptionalStatus(
+                    hardware.ExtendedDiagnostic));
         Field("BIOS version", hardware?.BiosVersion ?? string.Empty);
         Field("BIOS manufacturer", hardware?.BiosManufacturer ?? string.Empty);
         Field("BIOS release date", hardware?.BiosReleaseDate ?? string.Empty);

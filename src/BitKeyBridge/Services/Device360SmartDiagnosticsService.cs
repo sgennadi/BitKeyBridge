@@ -125,9 +125,33 @@ internal static class Device360SmartDiagnosticsService
                     "Hardware", "TPM status was not verified by remote WMI.",
                     "Check the WMI TPM namespace and existing read permissions.");
             if (hardware.ExtendedDiagnostic.Length > 0)
+            {
                 Add("WMI.PARTIAL_INVENTORY", Device360FindingPriority.Verify,
                     "Hardware", "At least one optional hardware class was unavailable.",
                     "Review the typed read-only WMI status; existing inventory remains valid.");
+                foreach (var failure in Device360HardwareService.OptionalFailures(
+                             hardware.ExtendedDiagnostic))
+                {
+                    var reason = failure.Category switch
+                    {
+                        "NoRecord" => "NO_RECORD",
+                        "AccessDenied" => "ACCESS_DENIED",
+                        "Timeout" => "TIMEOUT",
+                        "DCOM/RPCUnavailable" => "RPC_UNAVAILABLE",
+                        "WmiError" => "PROVIDER_ERROR",
+                        _ => "UNAVAILABLE"
+                    };
+                    Add("WMI." + failure.Component.ToUpperInvariant() + "." +
+                            reason, failure.Category == "NoRecord"
+                            ? Device360FindingPriority.Verify
+                            : Device360FindingPriority.Action,
+                        "Hardware",
+                        failure.Component + ": read-only WMI " + reason,
+                        "Verify the existing WMI class and the operator's read " +
+                        "permissions. Retry only by an explicit user action; " +
+                        "do not relax security policies.");
+                }
+            }
         }
 
         return issues.OrderBy(x => x.Priority).ThenBy(x => x.Code,
@@ -230,6 +254,39 @@ internal static class Device360SmartDiagnosticsService
             StringComparison.Ordinal)
             ? "SOURCE." + finding.Code[(finding.Code.LastIndexOf('.') + 1)..]
             : finding.Code;
+        if (code.StartsWith("WMI.CPU.", StringComparison.Ordinal) ||
+            code.StartsWith("WMI.DISK.", StringComparison.Ordinal) ||
+            code.StartsWith("WMI.NETWORK.", StringComparison.Ordinal) ||
+            code.StartsWith("WMI.MEMORY.", StringComparison.Ordinal))
+        {
+            var component = code.Split('.')[1];
+            if (language == "ru")
+            {
+                var label = component switch
+                {
+                    "CPU" => "процессора",
+                    "DISK" => "физических дисков",
+                    "NETWORK" => "сетевых адаптеров",
+                    _ => "оперативной памяти"
+                };
+                return ("Данные " + label + " по WMI получены не полностью.",
+                    "Проверьте существующие права на чтение и WMI-поставщик " +
+                    label + ". Повторите проверку вручную.");
+            }
+            if (language == "he")
+            {
+                var label = component switch
+                {
+                    "CPU" => "המעבד",
+                    "DISK" => "הדיסקים",
+                    "NETWORK" => "מתאמי הרשת",
+                    _ => "הזיכרון"
+                };
+                return ("נתוני WMI של " + label + " אינם מלאים.",
+                    "בדקו הרשאות קריאה קיימות וספק WMI של " +
+                    label + ". יש לנסות שוב ידנית בלבד.");
+            }
+        }
         if (language == "ru")
             return code switch
             {

@@ -81,10 +81,38 @@ internal static class Device360V36SelfTest
         var hardwareFindings = Device360SmartDiagnosticsService.Evaluate(
             unknown, empty, partial);
         Check(hardwareFindings.Any(x => x.Code == "WMI.PARTIAL_INVENTORY") &&
+              hardwareFindings.Any(x => x.Code == "WMI.DISK.PROVIDER_ERROR") &&
               hardwareFindings.Any(x => x.Code == "WMI.TPM_UNVERIFIED"),
             "partial WMI did not retain unknown TPM and incomplete evidence");
         Check(Device360HardwareService.FormatGiB(16m) == "16.0 GiB",
             "memory units formatted incorrectly");
+        var mixedWmi = partial with
+        {
+            ExtendedDiagnostic = "Disk: WmiError; Network: AccessDenied; " +
+                "Network: token=NOT_FOR_REPORT; User: DO_NOT_INCLUDE"
+        };
+        var safe = Device360HardwareService.SafeOptionalStatus(
+            mixedWmi.ExtendedDiagnostic);
+        Check(safe.Contains("Disk: WmiError", StringComparison.Ordinal) &&
+              safe.Contains("Network: AccessDenied", StringComparison.Ordinal) &&
+              safe.Contains("Other: Unverified", StringComparison.Ordinal) &&
+              !safe.Contains("NOT_FOR_REPORT", StringComparison.Ordinal) &&
+              !safe.Contains("DO_NOT_INCLUDE", StringComparison.Ordinal),
+            "untrusted optional WMI provider output appeared in UI status");
+        var detailed = Device360SmartDiagnosticsService.Evaluate(
+            unknown, empty, mixedWmi);
+        Check(detailed.Any(x => x.Code == "WMI.DISK.PROVIDER_ERROR") &&
+              detailed.Any(x => x.Code == "WMI.NETWORK.ACCESS_DENIED") &&
+              !Device360SmartDiagnosticsService.Format(detailed, "ru")
+                  .Contains("NOT_FOR_REPORT", StringComparison.Ordinal) &&
+              !Device360SmartDiagnosticsService.Format(detailed, "he")
+                  .Contains("DO_NOT_INCLUDE", StringComparison.Ordinal),
+            "typed WMI detail code or privacy regression");
+        var safeReport = Device360ReportService.Build(unknown, empty, mixedWmi);
+        Check(safeReport.Contains("WMI.DISK.PROVIDER_ERROR", StringComparison.Ordinal) &&
+              !safeReport.Contains("NOT_FOR_REPORT", StringComparison.Ordinal) &&
+              !safeReport.Contains("DO_NOT_INCLUDE", StringComparison.Ordinal),
+            "explicit Helpdesk export contained untrusted WMI text");
 
         // WMI must never affect health/coverage before an operator requests
         // it. After a successful probe, a failed retry cannot preserve the

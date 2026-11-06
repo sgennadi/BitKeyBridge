@@ -1,5 +1,6 @@
 ## 0.36.0-preview.1
 
+- Add per-provider typed Smart Diagnostics for CPU, Disk, Network and Memory with strictly allowlisted WMI error text in the UI and explicit Helpdesk reports.
 - Recompute Device Health and evidence coverage from the latest explicitly requested WMI result; clear old WMI fields before each retry, classify failure without displaying stale hardware, and keep Health/Diagnostics/Helpdesk export consistent.
 
 **Development QA only — public Stable 0.35.0 remains unchanged.**

@@ -41,8 +41,48 @@ internal sealed record Device360HardwareOutcome(
     internal string FailureCategory { get; init; } = string.Empty;
 }
 
+internal sealed record Device360OptionalWmiFailure(string Component, string Category);
+
 internal static class Device360HardwareService
 {
+    // Only locally classified failures are eligible for display or export.
+    // Never surface arbitrary WMI exceptions, paths, hostnames or tokens.
+    internal static IReadOnlyList<Device360OptionalWmiFailure> OptionalFailures(
+        string? status)
+    {
+        var failures = new List<Device360OptionalWmiFailure>();
+        if (string.IsNullOrWhiteSpace(status)) return failures;
+        foreach (var segment in status.Split(';',
+                     StringSplitOptions.RemoveEmptyEntries |
+                     StringSplitOptions.TrimEntries).Take(8))
+        {
+            var colon = segment.IndexOf(": ", StringComparison.Ordinal);
+            if (colon < 1) continue;
+            var component = segment[..colon];
+            var category = segment[(colon + 2)..];
+            if (component is not ("CPU" or "Disk" or "Network" or "Memory") ||
+                category is not ("NoRecord" or "AccessDenied" or "Timeout" or
+                    "DCOM/RPCUnavailable" or "WmiError" or "Unavailable") ||
+                failures.Any(x => x.Component == component))
+                continue;
+            failures.Add(new Device360OptionalWmiFailure(component, category));
+        }
+        return failures;
+    }
+
+    internal static string SafeOptionalStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return string.Empty;
+        var known = OptionalFailures(status);
+        if (known.Count == 0) return "Unknown optional WMI status";
+        var safe = string.Join("; ", known.Select(x =>
+            x.Component + ": " + x.Category));
+        var count = status.Split(';',
+            StringSplitOptions.RemoveEmptyEntries |
+            StringSplitOptions.TrimEntries).Length;
+        return count > known.Count ? safe + "; Other: Unverified" : safe;
+    }
+
     // A verified AD DNS host is required: NO discovery by display name,
     // unqualified NetBIOS alias, IP, UPN, serial or Intune-only identity.
     internal static bool CanQuery(Device360Snapshot snapshot)
