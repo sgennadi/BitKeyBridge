@@ -1,5 +1,7 @@
 ## 0.36.0-preview.1
 
+- Recompute Device Health and evidence coverage from the latest explicitly requested WMI result; clear old WMI fields before each retry, classify failure without displaying stale hardware, and keep Health/Diagnostics/Helpdesk export consistent.
+
 **Development QA only — public Stable 0.35.0 remains unchanged.**
 
 - Expand explicit, read-only remote WMI inventory for exact AD-verified hosts: BIOS serial, CPU model/logical processors, physical RAM, raw disk count/capacity and physical network adapter count. Individual optional provider errors are typed; no MAC/IP addresses, disk serials, recovery data or credentials are queried or exported.

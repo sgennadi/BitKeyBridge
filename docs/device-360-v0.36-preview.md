@@ -23,3 +23,7 @@ Diagnostics shows stable classified codes, source, finding and specific next act
 - Try an authorized WMI host, denied WMI account, offline workstation, unavailable TPM class, disk WMI failure, ambiguous AD/Entra ID, stale/absent Intune data. Partial inventory must remain visible without false healthy status.
 - Review manual Helpdesk report to confirm no recovery key, LAPS password, Graph token, stack trace, remote exception message, IP/MAC address or disk serial.
 - Do not push unsigned previews through GPO/Intune. The generic updater and centralized diagnostic transport remain out of scope by prior decision.
+
+## WMI retry and evidence consistency
+
+The UI discards the previous WMI sample, clears read-only hardware fields and restores the original directory-sourced hardware label whenever the operator starts a new WMI probe. On success it recomputes both Health and Diagnostics; on classified error it shows Attention without stale TPM/CPU/disk evidence. Helpdesk exports use the same latest read-only sample and classified failure. This is not a background monitoring service.

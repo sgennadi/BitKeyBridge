@@ -86,6 +86,54 @@ internal static class Device360V36SelfTest
         Check(Device360HardwareService.FormatGiB(16m) == "16.0 GiB",
             "memory units formatted incorrectly");
 
+        // WMI must never affect health/coverage before an operator requests
+        // it. After a successful probe, a failed retry cannot preserve the
+        // previous TPM/hardware observation or mark the machine healthy.
+        Check(!unverifiedChecks.Any(x => x.Area.StartsWith("Remote WMI",
+                  StringComparison.Ordinal)),
+            "unrequested WMI was counted as device evidence");
+        var withHardware = Device360HealthService.Evaluate(unknown, empty,
+            hardware: partial);
+        Check(withHardware.Any(x => x.Area == "Remote TPM status" &&
+                  x.State == Device360CheckState.NotVerified) &&
+              withHardware.Any(x => x.Area == "Optional WMI inventory" &&
+                  x.State == Device360CheckState.NotVerified),
+            "unknown TPM/partial hardware was called healthy");
+        var disabledTpm = partial with
+        {
+            Manufacturer = "Example", TpmEnabled = "No",
+            ExtendedDiagnostic = string.Empty
+        };
+        var disabledChecks = Device360HealthService.Evaluate(unknown,
+            empty, hardware: disabledTpm);
+        Check(disabledChecks.Any(x => x.Area == "Remote TPM status" &&
+                  x.State == Device360CheckState.Attention) &&
+              Device360HealthAssessmentService.Assess(disabledChecks)
+                  .Readiness == Device360Readiness.ActionNeeded,
+            "disabled TPM did not trigger Attention");
+        var failedAfterSuccess = Device360HealthService.Evaluate(unknown,
+            empty, hardwareFailureCategory: "AccessDenied");
+        Check(failedAfterSuccess.Any(x => x.Area == "Remote WMI inventory" &&
+                  x.State == Device360CheckState.Attention) &&
+              !failedAfterSuccess.Any(x => x.Area == "Remote TPM status") &&
+              Device360HealthAssessmentService.Assess(failedAfterSuccess)
+                  .Readiness == Device360Readiness.ActionNeeded,
+            "stale WMI success leaked into failed retry health");
+        var untrustedFailure = Device360HealthService.Evaluate(unknown, empty,
+            hardwareFailureCategory: "secret=DO_NOT_INCLUDE");
+        Check(!untrustedFailure.Any(x => x.Explanation.Contains(
+                  "DO_NOT_INCLUDE", StringComparison.Ordinal)),
+            "untrusted WMI failure text leaked into health checks");
+        var reportedAfterFailure = Device360ReportService.Build(unknown, empty,
+            hardwareFailureCategory: "AccessDenied");
+        Check(reportedAfterFailure.Contains("WMI.ACCESS_DENIED",
+                  StringComparison.Ordinal) &&
+              reportedAfterFailure.Contains(
+                  "Remote WMI inventory: Attention", StringComparison.Ordinal) &&
+              !reportedAfterFailure.Contains("Remote TPM status:",
+                  StringComparison.Ordinal),
+            "report health and diagnostics disagree after failed WMI retry");
+
         foreach (var lang in new[] { "en", "ru", "he" })
         {
             Check(!string.IsNullOrWhiteSpace(

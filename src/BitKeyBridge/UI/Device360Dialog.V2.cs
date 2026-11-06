@@ -22,21 +22,42 @@ internal sealed partial class Device360Dialog
     {
         string Tr(string key) => UiLanguageService.Translate(language, key);
         var rtl = UiLanguageService.IsRightToLeft(language);
-        var observations = Device360HealthService.Evaluate(snapshot, operational);
-        var assessment = Device360HealthAssessmentService.Assess(observations);
-        string DiagnosticText() =>
-            Device360HealthAssessmentService.Summary(assessment, language) +
-            Environment.NewLine + Environment.NewLine +
-            Device360HealthUiFormatter.Summary(observations, language) +
-            Environment.NewLine + Environment.NewLine +
-            string.Join(Environment.NewLine + Environment.NewLine,
-                observations.Select(item =>
-                    Device360HealthUiFormatter.Format(item, language))) +
-            Environment.NewLine + Environment.NewLine +
-            Device360SmartDiagnosticsService.Format(
-                Device360SmartDiagnosticsService.Evaluate(snapshot,
-                    operational, _device360RemoteHardware,
-                    _device360HardwareFailureCategory), language);
+        // Read-only evidence is recomputed after an explicit WMI action.
+        // This ensures Health, Diagnostics and Helpdesk Report agree.
+        IReadOnlyList<Device360Check> CurrentObservations() =>
+            Device360HealthService.Evaluate(snapshot, operational,
+                hardware: _device360RemoteHardware,
+                hardwareFailureCategory: _device360HardwareFailureCategory);
+
+        string HealthSummaryText()
+        {
+            var observations = CurrentObservations();
+            return Tr("Device360V2HealthTitle") + Environment.NewLine +
+                Device360HealthUiFormatter.Summary(observations, language) +
+                Environment.NewLine +
+                Device360HealthAssessmentService.Summary(
+                    Device360HealthAssessmentService.Assess(observations),
+                    language);
+        }
+
+        string DiagnosticText()
+        {
+            var observations = CurrentObservations();
+            return Device360HealthAssessmentService.Summary(
+                    Device360HealthAssessmentService.Assess(observations),
+                    language) +
+                Environment.NewLine + Environment.NewLine +
+                Device360HealthUiFormatter.Summary(observations, language) +
+                Environment.NewLine + Environment.NewLine +
+                string.Join(Environment.NewLine + Environment.NewLine,
+                    observations.Select(item =>
+                        Device360HealthUiFormatter.Format(item, language))) +
+                Environment.NewLine + Environment.NewLine +
+                Device360SmartDiagnosticsService.Format(
+                    Device360SmartDiagnosticsService.Evaluate(snapshot,
+                        operational, _device360RemoteHardware,
+                        _device360HardwareFailureCategory), language);
+        }
 
         var tabs = new TabControl
         {
@@ -149,20 +170,26 @@ internal sealed partial class Device360Dialog
         var healthLabel = new Label
         {
             Name = "Device360V2HealthSummary",
-            Text = Tr("Device360V2HealthTitle") + Environment.NewLine +
-                Device360HealthUiFormatter.Summary(observations, language) +
-                Environment.NewLine +
-                Device360HealthAssessmentService.Summary(assessment, language),
+            Text = HealthSummaryText(),
             Font = UiStyle.CreateEmphasisFont(11),
             AutoSize = true,
             Dock = DockStyle.Top,
-            ForeColor = observations.Any(x =>
+            ForeColor = CurrentObservations().Any(x =>
                     x.State == Device360CheckState.Attention)
                 ? UiStyle.ModernMuted : UiStyle.ModernForeground,
             RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
             Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
         };
         UiStyle.ConfigureWrappingLabel(healthLabel);
+        void RefreshDiagnosticsAndHealth()
+        {
+            if (IsDisposed || Disposing) return;
+            diagnostics.Text = DiagnosticText();
+            healthLabel.Text = HealthSummaryText();
+            healthLabel.ForeColor = CurrentObservations().Any(x =>
+                x.State == Device360CheckState.Attention)
+                    ? UiStyle.ModernMuted : UiStyle.ModernForeground;
+        }
         // Dock order: last added docks first.
         summary.Controls.Add(reportStatus);
         summary.Controls.Add(reportButtons);
@@ -246,6 +273,29 @@ internal sealed partial class Device360Dialog
         UiStyle.ConfigureWrappingLabel(hardwareStatus);
         hardwareDetails.Controls.Add(hardwareStatus);
         hardwareDetails.Controls.Add(probe);
+        // Restore the original AD/Intune hardware value when an earlier WMI
+        // enrichment is superseded. Never show a stale successful result.
+        var originalPostureHardware = FindIn(posture, "Device360Hardware")
+            is TextBox originalField ? originalField.Text : null;
+        void ResetHardwareDetails()
+        {
+            foreach (var name in new[]
+            {
+                "Device360V2RemoteManufacturer", "Device360V2RemoteModel",
+                "Device360V2BiosVersion", "Device360V2BiosManufacturer",
+                "Device360V2BiosReleaseDate", "Device360V2TpmVersion",
+                "Device360V2TpmEnabled", "Device360V2TpmActivated",
+                "Device360V2TpmOwned", "Device360V2TpmDetail",
+                "Device360V36SerialNumber", "Device360V36CpuName",
+                "Device360V36CpuCores", "Device360V36Memory",
+                "Device360V36DiskCount", "Device360V36Storage",
+                "Device360V36NetworkAdapters", "Device360V36Extended"
+            })
+                SetHardware(name, null);
+            if (originalPostureHardware is not null &&
+                FindIn(posture, "Device360Hardware") is TextBox field)
+                field.Text = originalPostureHardware;
+        }
 
         probe.Click += async (_, _) =>
         {
@@ -255,6 +305,10 @@ internal sealed partial class Device360Dialog
             using var cancellation = new CancellationTokenSource();
             _device360HardwareCancellation = cancellation;
             probe.Enabled = false;
+            ResetHardwareDetails();
+            _device360RemoteHardware = null;
+            _device360HardwareFailureCategory = null;
+            RefreshDiagnosticsAndHealth();
             hardwareStatus.Text = Tr("Device360V2Querying");
             try
             {
@@ -265,7 +319,6 @@ internal sealed partial class Device360Dialog
                 _device360RemoteHardware = result.Inventory;
                 _device360HardwareFailureCategory = result.FailureCategory;
                 hardwareStatus.Text = result.Explanation;
-                diagnostics.Text = DiagnosticText();
                 if (result.Inventory is { } inventory)
                 {
                     SetHardware("Device360V2RemoteManufacturer",
@@ -313,6 +366,7 @@ internal sealed partial class Device360Dialog
                             inventory.ExtendedDiagnostic :
                             Tr("Device360V36NoPartialErrors"));
                 }
+                RefreshDiagnosticsAndHealth();
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
@@ -325,9 +379,13 @@ internal sealed partial class Device360Dialog
                 // WinForms click handler and terminate the Helpdesk client.
                 // Never show exception messages containing remote host data.
                 UniversalDiagnosticService.TryCapture("Devices", ex);
+                _device360HardwareFailureCategory = "Unavailable";
                 if (!IsDisposed && !Disposing)
+                {
                     hardwareStatus.Text = Tr("Device360V2NoRemote") +
                         " (" + ex.GetType().Name + ")";
+                    RefreshDiagnosticsAndHealth();
+                }
             }
             finally
             {

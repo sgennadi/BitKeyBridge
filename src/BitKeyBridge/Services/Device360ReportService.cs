@@ -19,7 +19,7 @@ internal static class Device360ReportService
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(status);
         var checks = Device360HealthService.Evaluate(snapshot, status,
-            createdUtc ?? DateTime.UtcNow);
+            createdUtc ?? DateTime.UtcNow, hardware, hardwareFailureCategory);
         var sb = new StringBuilder(2600);
         Line("BITKEYBRIDGE DEVICE 360 - NON-SECRET HELPDESK REPORT");
         Field("Created UTC", (createdUtc ?? DateTime.UtcNow).ToUniversalTime()

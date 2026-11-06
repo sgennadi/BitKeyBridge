@@ -42,6 +42,9 @@ internal static class Device360HealthUiFormatter
             "Disk encryption" => "Device360V2CheckEncryption",
             "Intune last sync" => "Device360V2CheckSync",
             "Search completeness" => "Device360V2CheckCompleteness",
+            "Remote WMI inventory" => "Device360V36CheckWmi",
+            "Remote TPM status" => "Device360V36CheckTpm",
+            "Optional WMI inventory" => "Device360V36CheckOptional",
             _ => string.Empty
         };
         var stateKey = check.State switch
