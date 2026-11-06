@@ -5,6 +5,7 @@ namespace BitKeyBridge;
 internal sealed partial class Device360Dialog
 {
     private Device360HardwareInventory? _device360RemoteHardware;
+    private string? _device360HardwareFailureCategory;
     private CancellationTokenSource? _device360HardwareCancellation;
 
     /// <summary>
@@ -22,6 +23,20 @@ internal sealed partial class Device360Dialog
         string Tr(string key) => UiLanguageService.Translate(language, key);
         var rtl = UiLanguageService.IsRightToLeft(language);
         var observations = Device360HealthService.Evaluate(snapshot, operational);
+        var assessment = Device360HealthAssessmentService.Assess(observations);
+        string DiagnosticText() =>
+            Device360HealthAssessmentService.Summary(assessment, language) +
+            Environment.NewLine + Environment.NewLine +
+            Device360HealthUiFormatter.Summary(observations, language) +
+            Environment.NewLine + Environment.NewLine +
+            string.Join(Environment.NewLine + Environment.NewLine,
+                observations.Select(item =>
+                    Device360HealthUiFormatter.Format(item, language))) +
+            Environment.NewLine + Environment.NewLine +
+            Device360SmartDiagnosticsService.Format(
+                Device360SmartDiagnosticsService.Evaluate(snapshot,
+                    operational, _device360RemoteHardware,
+                    _device360HardwareFailureCategory), language);
 
         var tabs = new TabControl
         {
@@ -90,11 +105,7 @@ internal sealed partial class Device360Dialog
             BackColor = UiStyle.ModernSurface,
             ForeColor = UiStyle.ModernForeground,
             Font = UiStyle.BodyFont,
-            Text = Device360HealthUiFormatter.Summary(observations, language) +
-                Environment.NewLine + Environment.NewLine +
-                string.Join(Environment.NewLine + Environment.NewLine,
-                    observations.Select(item =>
-                        Device360HealthUiFormatter.Format(item, language)))
+            Text = DiagnosticText()
         };
         diagnosticsPage.Container.Controls.Add(diagnostics);
         tabs.TabPages.Add(diagnosticsPage.Tab);
@@ -139,7 +150,9 @@ internal sealed partial class Device360Dialog
         {
             Name = "Device360V2HealthSummary",
             Text = Tr("Device360V2HealthTitle") + Environment.NewLine +
-                Device360HealthUiFormatter.Summary(observations, language),
+                Device360HealthUiFormatter.Summary(observations, language) +
+                Environment.NewLine +
+                Device360HealthAssessmentService.Summary(assessment, language),
             Font = UiStyle.CreateEmphasisFont(11),
             AutoSize = true,
             Dock = DockStyle.Top,
@@ -247,7 +260,9 @@ internal sealed partial class Device360Dialog
                 if (IsDisposed || Disposing || cancellation.IsCancellationRequested)
                     return;
                 _device360RemoteHardware = result.Inventory;
+                _device360HardwareFailureCategory = result.FailureCategory;
                 hardwareStatus.Text = result.Explanation;
+                diagnostics.Text = DiagnosticText();
                 if (result.Inventory is { } inventory)
                 {
                     SetHardware("Device360V2RemoteManufacturer",
@@ -273,6 +288,27 @@ internal sealed partial class Device360Dialog
                     SetHardware("Device360V2TpmActivated", inventory.TpmActivated);
                     SetHardware("Device360V2TpmOwned", inventory.TpmOwned);
                     SetHardware("Device360V2TpmDetail", inventory.TpmDiagnostic);
+                    SetHardware("Device360V36SerialNumber", inventory.SerialNumber);
+                    SetHardware("Device360V36CpuName", inventory.CpuName);
+                    SetHardware("Device360V36CpuCores",
+                        inventory.CpuLogicalProcessors > 0 ?
+                            inventory.CpuLogicalProcessors.ToString() : string.Empty);
+                    SetHardware("Device360V36Memory",
+                        Device360HardwareService.FormatGiB(inventory.MemoryGiB));
+                    SetHardware("Device360V36DiskCount",
+                        inventory.PhysicalDiskCount > 0 ?
+                            inventory.PhysicalDiskCount.ToString() : string.Empty);
+                    SetHardware("Device360V36Storage",
+                        Device360HardwareService.FormatGiB(
+                            inventory.PhysicalStorageGiB));
+                    SetHardware("Device360V36NetworkAdapters",
+                        inventory.PhysicalNetworkAdapterCount > 0 ?
+                            inventory.PhysicalNetworkAdapterCount.ToString() :
+                            string.Empty);
+                    SetHardware("Device360V36Extended",
+                        inventory.ExtendedDiagnostic.Length > 0 ?
+                            inventory.ExtendedDiagnostic :
+                            Tr("Device360V36NoPartialErrors"));
                 }
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
@@ -512,6 +548,14 @@ internal sealed partial class Device360Dialog
             Add("Device360V2TpmActivated", Tr("Device360V2TpmActivated"));
             Add("Device360V2TpmOwned", Tr("Device360V2TpmOwned"));
             Add("Device360V2TpmDetail", Tr("Device360V2TpmStatus"));
+            Add("Device360V36SerialNumber", Tr("Device360V36SerialNumber"));
+            Add("Device360V36CpuName", Tr("Device360V36CpuName"));
+            Add("Device360V36CpuCores", Tr("Device360V36CpuCores"));
+            Add("Device360V36Memory", Tr("Device360V36Memory"));
+            Add("Device360V36DiskCount", Tr("Device360V36DiskCount"));
+            Add("Device360V36Storage", Tr("Device360V36Storage"));
+            Add("Device360V36NetworkAdapters", Tr("Device360V36NetworkAdapters"));
+            Add("Device360V36Extended", Tr("Device360V36Extended"));
             card.Controls.Add(grid);
             return card;
 
