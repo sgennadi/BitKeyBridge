@@ -2897,6 +2897,16 @@ public sealed partial class MainForm
                 if (e.KeyCode == Keys.Enter)
                     await SearchUnifiedDevicesAsync();
             };
+        _unifiedQuery.TextChanged += (_, _) =>
+        {
+            // Editing a previous search is not selecting that old device.
+            // Revoke Reveal/Copy context immediately, before pressing Search.
+            InvalidateDeviceCloudSecretOnSessionChange();
+            _deviceRecoveryIds.Items.Clear();
+            foreach (ListViewItem selected in
+                _unifiedResults.SelectedItems.Cast<ListViewItem>().ToArray())
+                selected.Selected = false;
+        };
 
         _unifiedResults.SelectedIndexChanged +=
             (_, _) =>
@@ -3350,6 +3360,35 @@ public sealed partial class MainForm
         _deviceRecoveryKey.Clear();
         _deviceRecoveryKey.UseSystemPasswordChar = true;
         _deviceShowKey.Text = "Reveal Key";
+    }
+
+    internal bool PreviewDeviceQueryInvalidatesRecoveryForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+        var oldQuery = _unifiedQuery.Text;
+        try
+        {
+            _deviceCurrentKey = "SYNTHETIC-NONSECRET-PLACEHOLDER";
+            _deviceRecoveryKey.Text = _deviceCurrentKey;
+            _deviceRecoveryKey.UseSystemPasswordChar = false;
+            _deviceShowKey.Text = "Hide Key";
+            var generation = _deviceRecoverySelectionGeneration;
+            _unifiedQuery.Text = oldQuery + "UI-EDITED";
+            return _deviceRecoverySelectionGeneration > generation &&
+                _deviceCurrentKey is null &&
+                _deviceCurrentKeySession is null &&
+                _deviceRecoveryKey.Text.Length == 0 &&
+                _deviceRecoveryKey.UseSystemPasswordChar &&
+                _deviceShowKey.Text == "Reveal Key" &&
+                _deviceRecoveryIds.Items.Count == 0 &&
+                _unifiedResults.SelectedItems.Count == 0;
+        }
+        finally
+        {
+            _unifiedQuery.Text = oldQuery;
+            InvalidateDeviceCloudSecretOnSessionChange();
+        }
     }
 
     internal bool PreviewDeviceCloudSessionInvalidationForUiSelfTest()

@@ -140,6 +140,10 @@ public sealed partial class MainForm
         }
         _unifiedLastSourceRetryUtc = DateTime.UtcNow;
 
+        // A metadata retry can change the authoritative source identity.
+        // Revoke any pending/unmasked key BEFORE awaiting AD or Graph.
+        InvalidateDeviceCloudSecretOnSessionChange();
+
         // Only the exact selected source and the same current session are
         // queried; an expired Graph token requires an explicit user login.
         var selected = _unifiedResults.SelectedItems.Count == 1
@@ -148,9 +152,15 @@ public sealed partial class MainForm
         using var cancellation = new CancellationTokenSource();
         var generation = ++_unifiedSearchGeneration;
         _unifiedCancellation = cancellation;
+        var oldResultsEnabled = _unifiedResults.Enabled;
+        var oldRevealEnabled = _deviceShowKey.Enabled;
+        var oldCopyEnabled = _deviceCopyKey.Enabled;
         _unifiedSearch.Enabled = false;
         _unifiedCancel.Enabled = true;
         _unifiedQuery.Enabled = false;
+        _unifiedResults.Enabled = false;
+        _deviceShowKey.Enabled = false;
+        _deviceCopyKey.Enabled = false;
         _unifiedProgress.Visible = true;
         _unifiedRetryButton.Enabled = false;
         SetDevicesCloudWarningAction(false);
@@ -184,8 +194,8 @@ public sealed partial class MainForm
             // Replace only after completed validation. Never leave a
             // recovered password or an Entra recovery ID selected across
             // a changed source identity.
-            _deviceCurrentKey = null;
-            _deviceRecoveryKey.Clear();
+            // UI remains in masked state after metadata replacement.
+            InvalidateDeviceCloudSecretOnSessionChange();
             _deviceRecoveryIds.Items.Clear();
             _unifiedDetails.Clear();
             _unifiedResults.BeginUpdate();
@@ -269,6 +279,9 @@ public sealed partial class MainForm
                 _unifiedSearch.Enabled = true;
                 _unifiedCancel.Enabled = false;
                 _unifiedQuery.Enabled = true;
+                _unifiedResults.Enabled = oldResultsEnabled;
+                _deviceShowKey.Enabled = oldRevealEnabled;
+                _deviceCopyKey.Enabled = oldCopyEnabled;
                 _unifiedProgress.Visible = false;
                 SetDevicesCloudWarningAction(!HasCloudSearchSession());
                 RefreshUnifiedSourceRetryButton();

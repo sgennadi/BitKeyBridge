@@ -1999,10 +1999,10 @@ public sealed partial class MainForm : DpiAwareForm
             _device360LastUnifiedPartial = false;
             _device360UnifiedLookupFailed = default;
             _device360UnifiedFailureKinds = default;
+            // A new search invalidates pending Reveal/Copy and always
+            // re-masks the previous device key, even if Graph is slow.
+            InvalidateDeviceCloudSecretOnSessionChange();
             _deviceRecoveryIds.Items.Clear();
-            _deviceCurrentKey = null;
-            _deviceCurrentKeySession = null;
-            _deviceRecoveryKey.Clear();
 
             var service =
                 new UnifiedDeviceService(

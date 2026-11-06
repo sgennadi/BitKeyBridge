@@ -1864,6 +1864,9 @@ public static class UiLayoutSelfTest
             if (!main.PreviewDeviceCloudSessionInvalidationForUiSelfTest())
                 failures.Add("Devices retained an unmasked cached recovery value " +
                     "after its Microsoft 365 session changed.");
+            if (!main.PreviewDeviceQueryInvalidatesRecoveryForUiSelfTest())
+                failures.Add("Changing Devices search query left stale Reveal/Copy " +
+                    "state or did not invalidate pending recovery reads.");
             if (!main.PreviewDevicesSearchQueryEditableForUiSelfTest())
                 failures.Add("Devices query not editable during restart " +
                     "or provisional device results remained actionable.");
