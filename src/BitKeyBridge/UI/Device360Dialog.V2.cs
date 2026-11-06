@@ -320,7 +320,7 @@ internal sealed partial class Device360Dialog
 
         // No synthetic WMI probe can contact a host. This exercises the
         // *same presenter* as the real async response but only for fixtures.
-        if (snapshot.Computer.StartsWith("UI-TEST-", StringComparison.Ordinal))
+        if (_v36SyntheticHardwareTestMode)
             _v36SyntheticHardwareRetry = outcome =>
             {
                 BeginHardwareAttempt();

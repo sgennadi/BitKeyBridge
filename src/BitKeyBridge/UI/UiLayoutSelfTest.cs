@@ -874,7 +874,7 @@ public static class UiLayoutSelfTest
                     intuneLookupFailed: language == "ru",
                     entraLookupFailed: language == "he");
                 using var dialog = new Device360Dialog(snapshot, language,
-                    operational: tileStatus);
+                    operational: tileStatus, syntheticHardwareUiTest: true);
                 dialog.Show();
                 dialog.ClientSize = new Size(980, 700);
                 Application.DoEvents();
@@ -894,6 +894,31 @@ public static class UiLayoutSelfTest
                         "Device360TabAudit", "Device360TabDiagnostics"
                     }))
                     failures.Add("Device 360 v2 tab order changed: " + language);
+                // At compact sizes all localized hardware captions should
+                // wrap within their allocated grid rows. Scrollable content
+                // must not clip or overlap the read-only inventory fields.
+                if (FindByName(dialog, "Device360V2RemoteHardware")
+                    is not UiRecoveryCard hardwareCard ||
+                    hardwareCard.Controls.OfType<TableLayoutPanel>()
+                        .FirstOrDefault() is not TableLayoutPanel inventoryGrid ||
+                    inventoryGrid.RowCount < 18)
+                    failures.Add("Device 360 inventory grid missing rows: " + language);
+                else
+                {
+                    foreach (Control item in inventoryGrid.Controls)
+                    {
+                        if (item is not Label label || string.IsNullOrWhiteSpace(label.Text))
+                            continue;
+                        var measured = TextRenderer.MeasureText(label.Text,
+                            label.Font,
+                            new Size(Math.Max(1, label.ClientSize.Width), 10000),
+                            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                        if (label.ClientSize.Width < 30 ||
+                            measured.Height > label.ClientSize.Height + 3)
+                            failures.Add("Device 360 inventory label clipped (" +
+                                language + "): " + label.Text);
+                    }
+                }
                 if (FindByName(dialog, "Device360V2HealthSummary") is not Label ||
                     FindByName(dialog, "Device360V2CopyReport") is not Button ||
                     FindByName(dialog, "Device360V2SaveReport") is not Button ||
