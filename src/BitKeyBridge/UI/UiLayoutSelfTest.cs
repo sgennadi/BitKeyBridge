@@ -569,6 +569,13 @@ public static class UiLayoutSelfTest
             {
                 Source = "Synthetic WMI (offline test)",
                 Model = "Synthetic model",
+                SerialNumber = "SYNTHETIC-SERIAL",
+                CpuName = "Synthetic CPU",
+                CpuLogicalProcessors = 8,
+                MemoryGiB = 16m,
+                PhysicalDiskCount = 2,
+                PhysicalStorageGiB = 512m,
+                PhysicalNetworkAdapterCount = 1,
                 CollectedUtc = hardwareTime
             });
         if (!hardwareReport.Contains(
@@ -577,8 +584,18 @@ public static class UiLayoutSelfTest
             !hardwareReport.Contains("Hardware evidence source: Synthetic WMI",
                 StringComparison.Ordinal) ||
             hardwareReport.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("CPU model: Synthetic CPU",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Physical RAM: 16.0 GiB",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Raw disk capacity: 512.0 GiB",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Evidence coverage:",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Smart Diagnostics",
                 StringComparison.Ordinal))
-            failures.Add("Device 360 hardware provenance or timestamp was lost.");
+            failures.Add("Device 360 hardware, health or diagnostics report regression.");
 
         var unknown = Device360HealthService.Evaluate(new Device360Snapshot(),
             Device360OperationalStatus.Capture(new Device360Snapshot(),
@@ -880,6 +897,25 @@ public static class UiLayoutSelfTest
                     hardwareProbe.Enabled)
                     failures.Add("Device 360 v2 missing read-only health/report/diagnostic tabs " +
                         "or enabled WMI on a device without exact AD DNS: " + language);
+
+                // All new 0.36 inventory fields are read-only, initially
+                // unverified and present in compact EN/RU/HE/RTL dialogs.
+                var extendedFields = new[]
+                {
+                    "Device360V36SerialNumber", "Device360V36CpuName",
+                    "Device360V36CpuCores", "Device360V36Memory",
+                    "Device360V36DiskCount", "Device360V36Storage",
+                    "Device360V36NetworkAdapters", "Device360V36Extended"
+                };
+                if (extendedFields.Any(name =>
+                        FindByName(dialog, name) is not TextBox { ReadOnly: true }) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox { ReadOnly: true } diagnosticText ||
+                    !diagnosticText.Text.Contains("%", StringComparison.Ordinal) ||
+                    !diagnosticText.Text.Contains("LAPS.UNVERIFIED",
+                        StringComparison.Ordinal))
+                    failures.Add("Device 360 v0.36 extended read-only hardware or " +
+                        "evidence-aware diagnostics missing: " + language);
 
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");
