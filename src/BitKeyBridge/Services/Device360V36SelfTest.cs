@@ -139,6 +139,24 @@ internal static class Device360V36SelfTest
               Device360HealthAssessmentService.Assess(disabledChecks)
                   .Readiness == Device360Readiness.ActionNeeded,
             "disabled TPM did not trigger Attention");
+        var failedProviderChecks = Device360HealthService.Evaluate(unknown,
+            empty, hardware: mixedWmi);
+        Check(failedProviderChecks.Any(x =>
+                  x.Area == "Optional WMI inventory" &&
+                  x.State == Device360CheckState.Attention) &&
+              Device360HealthAssessmentService.Assess(failedProviderChecks)
+                  .Readiness == Device360Readiness.ActionNeeded,
+            "provider error did not produce same actionable severity as diagnostics");
+        var onlyNoRecord = mixedWmi with
+        {
+            ExtendedDiagnostic = "Disk: NoRecord"
+        };
+        var missingHardwareChecks = Device360HealthService.Evaluate(unknown,
+            empty, hardware: onlyNoRecord);
+        Check(missingHardwareChecks.Any(x =>
+                  x.Area == "Optional WMI inventory" &&
+                  x.State == Device360CheckState.NotVerified),
+            "missing provider record was incorrectly escalated to an error");
         var failedAfterSuccess = Device360HealthService.Evaluate(unknown,
             empty, hardwareFailureCategory: "AccessDenied");
         Check(failedAfterSuccess.Any(x => x.Area == "Remote WMI inventory" &&

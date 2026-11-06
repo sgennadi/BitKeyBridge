@@ -27,3 +27,7 @@ Diagnostics shows stable classified codes, source, finding and specific next act
 ## WMI retry and evidence consistency
 
 The UI discards the previous WMI sample, clears read-only hardware fields and restores the original directory-sourced hardware label whenever the operator starts a new WMI probe. On success it recomputes both Health and Diagnostics; on classified error it shows Attention without stale TPM/CPU/disk evidence. Helpdesk exports use the same latest read-only sample and classified failure. This is not a background monitoring service.
+
+## Native UI regression
+
+The Windows UI self-test now injects a **synthetic-only** WMI success followed by a failed retry, using the same presenter as the real user-initiated WMI result. It verifies that stale CPU/RAM fields and previous WMI error codes disappear, the new typed error appears in Diagnostics, and the Health header refreshes in EN/RU/HE. Actual AD/WMI authorization and remote provider calls remain separate manual acceptance gates.

@@ -1,5 +1,6 @@
 ## 0.36.0-preview.1
 
+- Fix Health/Smart Diagnostics severity mismatches for typed WMI provider failures, and exercise real WinForms fields under synthetic success-to-failed-retry transitions (EN/RU/HE) without network calls.
 - Add per-provider typed Smart Diagnostics for CPU, Disk, Network and Memory with strictly allowlisted WMI error text in the UI and explicit Helpdesk reports.
 - Recompute Device Health and evidence coverage from the latest explicitly requested WMI result; clear old WMI fields before each retry, classify failure without displaying stale hardware, and keep Health/Diagnostics/Helpdesk export consistent.
 

@@ -144,12 +144,21 @@ internal static class Device360HealthService
                 hardware.PhysicalDiskCount > 0 &&
                 hardware.PhysicalStorageGiB > 0m &&
                 hardware.PhysicalNetworkAdapterCount > 0;
+            // An explicit provider ACCESS_DENIED/TIMEOUT/etc is actionable,
+            // while a no-record or missing metric is merely unverified.
+            // This matches Smart Diagnostics priority for the same evidence.
+            var optionalActionNeeded =
+                Device360HardwareService.OptionalFailures(hardware.ExtendedDiagnostic)
+                    .Any(failure => failure.Category != "NoRecord");
             items.Add(new Device360Check("Optional WMI inventory",
                 optionalComplete ? Device360CheckState.Observed :
+                optionalActionNeeded ? Device360CheckState.Attention :
                     Device360CheckState.NotVerified,
                 optionalComplete
                     ? "CPU, memory, disk aggregates and physical adapter counts were observed by read-only WMI."
-                    : "At least one optional hardware class was not verified. Confirmed inventory remains available."));
+                    : optionalActionNeeded
+                        ? "An optional WMI provider returned a classified failure. Inspect the relevant class and existing read permissions."
+                        : "At least one optional hardware class was not verified. Confirmed inventory remains available."));
         }
         else if (hardwareFailureCategory is "AccessDenied" or "Timeout" or
                  "DCOM/RPCUnavailable" or "WmiError" or "Unavailable")

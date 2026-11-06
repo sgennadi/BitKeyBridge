@@ -7,6 +7,18 @@ internal sealed partial class Device360Dialog
     private Device360HardwareInventory? _device360RemoteHardware;
     private string? _device360HardwareFailureCategory;
     private CancellationTokenSource? _device360HardwareCancellation;
+    // Synthetic UI transition hook. Set only for UI-TEST-* fixture
+    // identities; never starts WMI or overrides production authorization.
+    private Action<Device360HardwareOutcome>? _v36SyntheticHardwareRetry;
+
+    internal bool PreviewHardwareOutcomeForUiTest(Device360HardwareOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+        if (IsDisposed || Disposing || _v36SyntheticHardwareRetry is null)
+            return false;
+        _v36SyntheticHardwareRetry(outcome);
+        return true;
+    }
 
     /// <summary>
     /// Reuse the original, fully localized source, recovery and policy
@@ -297,6 +309,24 @@ internal sealed partial class Device360Dialog
                 field.Text = originalPostureHardware;
         }
 
+        void BeginHardwareAttempt()
+        {
+            ResetHardwareDetails();
+            _device360RemoteHardware = null;
+            _device360HardwareFailureCategory = null;
+            RefreshDiagnosticsAndHealth();
+            hardwareStatus.Text = Tr("Device360V2Querying");
+        }
+
+        // No synthetic WMI probe can contact a host. This exercises the
+        // *same presenter* as the real async response but only for fixtures.
+        if (snapshot.Computer.StartsWith("UI-TEST-", StringComparison.Ordinal))
+            _v36SyntheticHardwareRetry = outcome =>
+            {
+                BeginHardwareAttempt();
+                ApplyHardwareOutcome(outcome);
+            };
+
         probe.Click += async (_, _) =>
         {
             if (_device360HardwareCancellation is not null ||
@@ -305,69 +335,14 @@ internal sealed partial class Device360Dialog
             using var cancellation = new CancellationTokenSource();
             _device360HardwareCancellation = cancellation;
             probe.Enabled = false;
-            ResetHardwareDetails();
-            _device360RemoteHardware = null;
-            _device360HardwareFailureCategory = null;
-            RefreshDiagnosticsAndHealth();
-            hardwareStatus.Text = Tr("Device360V2Querying");
+            BeginHardwareAttempt();
             try
             {
                 var result = await Device360HardwareService.QueryAsync(
                     snapshot, cancellation.Token);
                 if (IsDisposed || Disposing || cancellation.IsCancellationRequested)
                     return;
-                _device360RemoteHardware = result.Inventory;
-                _device360HardwareFailureCategory = result.FailureCategory;
-                hardwareStatus.Text = result.Explanation;
-                if (result.Inventory is { } inventory)
-                {
-                    SetHardware("Device360V2RemoteManufacturer",
-                        inventory.Manufacturer);
-                    SetHardware("Device360V2RemoteModel", inventory.Model);
-                    if (FindIn(posture, "Device360Hardware") is TextBox original &&
-                        (original.Text == Tr("Device360NotVerified") ||
-                         string.IsNullOrWhiteSpace(snapshot.Hardware)))
-                    {
-                        var text = (inventory.Manufacturer + " " +
-                            inventory.Model).Trim();
-                        if (!string.IsNullOrWhiteSpace(text))
-                            original.Text = "WMI: " + text;
-                    }
-                    SetHardware("Device360V2BiosVersion", inventory.BiosVersion);
-                    SetHardware("Device360V2BiosManufacturer",
-                        inventory.BiosManufacturer);
-                    SetHardware("Device360V2BiosReleaseDate",
-                        inventory.BiosReleaseDate);
-                    SetHardware("Device360V2TpmVersion",
-                        inventory.TpmSpecification);
-                    SetHardware("Device360V2TpmEnabled", inventory.TpmEnabled);
-                    SetHardware("Device360V2TpmActivated", inventory.TpmActivated);
-                    SetHardware("Device360V2TpmOwned", inventory.TpmOwned);
-                    SetHardware("Device360V2TpmDetail", inventory.TpmDiagnostic);
-                    SetHardware("Device360V36SerialNumber", inventory.SerialNumber);
-                    SetHardware("Device360V36CpuName", inventory.CpuName);
-                    SetHardware("Device360V36CpuCores",
-                        inventory.CpuLogicalProcessors > 0 ?
-                            inventory.CpuLogicalProcessors.ToString() : string.Empty);
-                    SetHardware("Device360V36Memory",
-                        Device360HardwareService.FormatGiB(inventory.MemoryGiB));
-                    SetHardware("Device360V36DiskCount",
-                        inventory.PhysicalDiskCount > 0 ?
-                            inventory.PhysicalDiskCount.ToString() : string.Empty);
-                    SetHardware("Device360V36Storage",
-                        Device360HardwareService.FormatGiB(
-                            inventory.PhysicalStorageGiB));
-                    SetHardware("Device360V36NetworkAdapters",
-                        inventory.PhysicalNetworkAdapterCount > 0 ?
-                            inventory.PhysicalNetworkAdapterCount.ToString() :
-                            string.Empty);
-                    SetHardware("Device360V36Extended",
-                        inventory.ExtendedDiagnostic.Length > 0 ?
-                            Device360HardwareService.SafeOptionalStatus(
-                                inventory.ExtendedDiagnostic) :
-                            Tr("Device360V36NoPartialErrors"));
-                }
-                RefreshDiagnosticsAndHealth();
+                ApplyHardwareOutcome(result);
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
@@ -398,6 +373,62 @@ internal sealed partial class Device360Dialog
         };
 
         FormClosing += (_, _) => _device360HardwareCancellation?.Cancel();
+
+        void ApplyHardwareOutcome(Device360HardwareOutcome result)
+        {
+            _device360RemoteHardware = result.Inventory;
+            _device360HardwareFailureCategory = result.FailureCategory;
+            hardwareStatus.Text = result.Explanation;
+            if (result.Inventory is { } inventory)
+            {
+                SetHardware("Device360V2RemoteManufacturer",
+                    inventory.Manufacturer);
+                SetHardware("Device360V2RemoteModel", inventory.Model);
+                if (FindIn(posture, "Device360Hardware") is TextBox original &&
+                    (original.Text == Tr("Device360NotVerified") ||
+                     string.IsNullOrWhiteSpace(snapshot.Hardware)))
+                {
+                    var text = (inventory.Manufacturer + " " +
+                        inventory.Model).Trim();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        original.Text = "WMI: " + text;
+                }
+                SetHardware("Device360V2BiosVersion", inventory.BiosVersion);
+                SetHardware("Device360V2BiosManufacturer",
+                    inventory.BiosManufacturer);
+                SetHardware("Device360V2BiosReleaseDate",
+                    inventory.BiosReleaseDate);
+                SetHardware("Device360V2TpmVersion",
+                    inventory.TpmSpecification);
+                SetHardware("Device360V2TpmEnabled", inventory.TpmEnabled);
+                SetHardware("Device360V2TpmActivated", inventory.TpmActivated);
+                SetHardware("Device360V2TpmOwned", inventory.TpmOwned);
+                SetHardware("Device360V2TpmDetail", inventory.TpmDiagnostic);
+                SetHardware("Device360V36SerialNumber", inventory.SerialNumber);
+                SetHardware("Device360V36CpuName", inventory.CpuName);
+                SetHardware("Device360V36CpuCores",
+                    inventory.CpuLogicalProcessors > 0 ?
+                        inventory.CpuLogicalProcessors.ToString() : string.Empty);
+                SetHardware("Device360V36Memory",
+                    Device360HardwareService.FormatGiB(inventory.MemoryGiB));
+                SetHardware("Device360V36DiskCount",
+                    inventory.PhysicalDiskCount > 0 ?
+                        inventory.PhysicalDiskCount.ToString() : string.Empty);
+                SetHardware("Device360V36Storage",
+                    Device360HardwareService.FormatGiB(
+                        inventory.PhysicalStorageGiB));
+                SetHardware("Device360V36NetworkAdapters",
+                    inventory.PhysicalNetworkAdapterCount > 0 ?
+                        inventory.PhysicalNetworkAdapterCount.ToString() :
+                        string.Empty);
+                SetHardware("Device360V36Extended",
+                    inventory.ExtendedDiagnostic.Length > 0 ?
+                        Device360HardwareService.SafeOptionalStatus(
+                            inventory.ExtendedDiagnostic) :
+                        Tr("Device360V36NoPartialErrors"));
+            }
+            RefreshDiagnosticsAndHealth();
+        }
 
         void SetHardware(string name, string? text)
         {

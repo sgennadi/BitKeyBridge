@@ -925,6 +925,62 @@ public static class UiLayoutSelfTest
                     failures.Add("Device 360 v0.36 extended read-only hardware or " +
                         "evidence-aware diagnostics missing: " + language);
 
+                // Exercise the actual WinForms fields using synthetic data;
+                // never connect AD, Graph or WMI during --ui-self-test.
+                var syntheticHardware = new Device360HardwareOutcome(true,
+                    new Device360HardwareInventory
+                    {
+                        Manufacturer = "Example", Model = "Synthetic model",
+                        CpuName = "SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        MemoryGiB = 16m, PhysicalDiskCount = 1,
+                        PhysicalStorageGiB = 256m,
+                        PhysicalNetworkAdapterCount = 1,
+                        TpmEnabled = "No",
+                        ExtendedDiagnostic = "Disk: WmiError"
+                    }, "Synthetic, no network");
+                if (!dialog.PreviewHardwareOutcomeForUiTest(syntheticHardware) ||
+                    FindByName(dialog, "Device360V36CpuName") is not TextBox cpu ||
+                    cpu.Text != "SYNTHETIC-CPU-NOT-FOR-FAILURE" ||
+                    FindByName(dialog, "Device360V36Memory") is not TextBox ram ||
+                    ram.Text != "16.0 GiB" ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox successDiagnostics ||
+                    !successDiagnostics.Text.Contains("WMI.TPM_DISABLED",
+                        StringComparison.Ordinal) ||
+                    !successDiagnostics.Text.Contains("WMI.DISK.PROVIDER_ERROR",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HealthSummary")
+                        is not Label successHealth ||
+                    !successHealth.Text.Contains("%", StringComparison.Ordinal))
+                    failures.Add("Device 360 synthetic WMI result was not painted (" +
+                        language + ").");
+
+                // Retry failure must clear EVERY previous hardware field,
+                // and refresh both metadata coverage and recommendations.
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(false, null,
+                            "Synthetic AccessDenied (no connection)")
+                        {
+                            FailureCategory = "AccessDenied"
+                        }) ||
+                    FindByName(dialog, "Device360V36CpuName") is not TextBox failedCpu ||
+                    failedCpu.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V36Memory") is not TextBox failedRam ||
+                    failedRam.Text.Contains("16.0 GiB", StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox failedDiagnostics ||
+                    !failedDiagnostics.Text.Contains("WMI.ACCESS_DENIED",
+                        StringComparison.Ordinal) ||
+                    failedDiagnostics.Text.Contains("WMI.DISK.PROVIDER_ERROR",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HealthSummary")
+                        is not Label failedHealth ||
+                    failedHealth.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal))
+                    failures.Add("Device 360 failed retry preserved stale WMI " +
+                        "hardware or diagnostics (" + language + ").");
+
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");
                 var entraSource = FindByName(dialog, "Device360SourceEntra");
