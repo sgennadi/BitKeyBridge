@@ -20,6 +20,12 @@
 - Offline WinForms tests exercise the real Start reuse path with a synthetic
   non-secret token; no login or privileged network request runs.
 
+- Entra LAPS metadata searches and password reads now capture the
+  original Graph token object; responses are discarded if the user,
+  permission context or token lifetime changes while awaiting Graph.
+  A discarded password result is disposed without showing or copying it.
+  Native synthetic tests cover token replacement and revoked LAPS scope.
+
 ## Automated release gates
 
 1. Windows 11 x64/x86/ARM64 .NET 10 compile/publish on exact candidate HEAD.

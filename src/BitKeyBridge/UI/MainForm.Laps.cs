@@ -1049,6 +1049,67 @@ public sealed partial class MainForm
             UiStatusKind.Neutral);
     }
 
+
+    // A result from a previous Entra principal/permission context must
+    // never repopulate LAPS metadata or plaintext after a reconnect.
+    // LAPS-only sessions are valid here even when they have no BitLocker
+    // scopes, so this guard deliberately does not use HasCloudSearchSession.
+    private bool IsCurrentLapsCloudSession(GraphToken? captured) =>
+        captured is not null &&
+        ReferenceEquals(captured, _cloudToken) &&
+        _cloudTokenHasLaps &&
+        captured.ExpiresAt > DateTime.Now.AddMinutes(1) &&
+        string.Equals(_cloudTokenContext, BuildCloudTokenContext(),
+            StringComparison.Ordinal);
+
+    internal bool PreviewLapsCloudSessionGuardForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI tests only.");
+
+        var oldToken = _cloudToken;
+        var oldContext = _cloudTokenContext;
+        var oldLaps = _cloudTokenHasLaps;
+        try
+        {
+            var original = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-LAPS-NO-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(25)
+            };
+            _cloudToken = original;
+            _cloudTokenHasLaps = true;
+            _cloudTokenContext = BuildCloudTokenContext();
+            if (!IsCurrentLapsCloudSession(original))
+                return false;
+
+            _cloudToken = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-REPLACEMENT",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(25)
+            };
+            if (IsCurrentLapsCloudSession(original))
+                return false;
+
+            _cloudToken = original;
+            _cloudTokenContext = "SYNTHETIC-DIFFERENT-CONTEXT";
+            if (IsCurrentLapsCloudSession(original))
+                return false;
+
+            _cloudTokenContext = BuildCloudTokenContext();
+            _cloudTokenHasLaps = false;
+            return !IsCurrentLapsCloudSession(original);
+        }
+        finally
+        {
+            _cloudToken = oldToken;
+            _cloudTokenContext = oldContext;
+            _cloudTokenHasLaps = oldLaps;
+        }
+    }
+
     private async Task SearchLapsCandidatesAsync(
         bool allowInteractiveAuth,
         bool readExactMatch = false)
@@ -1123,6 +1184,7 @@ public sealed partial class MainForm
                 UiStatusKind.Busy);
 
             List<LapsSearchResult> rows;
+            GraphToken? searchCloudSession = null;
 
             if (cloud)
             {
@@ -1134,12 +1196,17 @@ public sealed partial class MainForm
                     return;
                 }
 
+                // Freeze the exact session before awaiting Graph, then
+                // reject results if a different principal was connected.
+                searchCloudSession = _cloudToken;
+                if (!IsCurrentLapsCloudSession(searchCloudSession))
+                    return;
                 using var graph =
                     new CloudGraphService();
 
                 rows =
                     await graph.SearchLapsDevicesAsync(
-                        _cloudToken!.AccessToken,
+                        searchCloudSession!.AccessToken,
                         query,
                         100,
                         cancellation.Token);
@@ -1185,6 +1252,14 @@ public sealed partial class MainForm
             if (generation !=
                 _lapsSearchGeneration)
             {
+                return;
+            }
+            if (cloud && !IsCurrentLapsCloudSession(searchCloudSession))
+            {
+                UiStyle.SetStatus(_lapsStatus,
+                    "Microsoft 365 session changed during LAPS search. " +
+                    "Previous-session metadata was discarded.",
+                    UiStatusKind.Warning);
                 return;
             }
 
@@ -1383,6 +1458,7 @@ public sealed partial class MainForm
         _lapsQuery.Enabled = false;
         _lapsHistory.Enabled = false;
         LapsReadResult? pending = null;
+        GraphToken? readCloudSession = null;
         try
         {
             UiStyle.SetStatus(_lapsStatus, "Reading LAPS passwords and history...", UiStatusKind.Busy);
@@ -1393,8 +1469,17 @@ public sealed partial class MainForm
                     UiStyle.SetStatus(_lapsStatus, "Entra authentication was not completed. Configure the cloud connection and try again.", UiStatusKind.Warning);
                     return;
                 }
+                readCloudSession = _cloudToken;
+                if (!IsCurrentLapsCloudSession(readCloudSession))
+                {
+                    UiStyle.SetStatus(_lapsStatus,
+                        "Microsoft 365 LAPS session changed. Reconnect explicitly before reading.",
+                        UiStatusKind.Warning);
+                    return;
+                }
                 using var graph = new CloudGraphService();
-                pending = await graph.ReadLapsPasswordsAsync(_cloudToken!.AccessToken, query, history, cancellation.Token);
+                pending = await graph.ReadLapsPasswordsAsync(
+                    readCloudSession!.AccessToken, query, history, cancellation.Token);
             }
             else
             {
@@ -1443,6 +1528,16 @@ public sealed partial class MainForm
                     await readTask;
             }
             if (IsDisposed || cancellation.IsCancellationRequested || generation != _lapsGeneration) return;
+            if (cloud && !IsCurrentLapsCloudSession(readCloudSession))
+            {
+                // pending is disposed in finally. No old-tenant LAPS
+                // secret may be copied into the current UI/session.
+                UiStyle.SetStatus(_lapsStatus,
+                    "Microsoft 365 session changed while reading LAPS. " +
+                    "The previous-session password response was discarded.",
+                    UiStatusKind.Warning);
+                return;
+            }
             _lapsResult = pending;
             pending = null;
             RememberComputerQuery(_lapsResult.ComputerName);

@@ -1,5 +1,11 @@
 ## 0.35.0-rc.9
 
+- Reject stale Entra LAPS metadata/password responses if Microsoft 365
+  reconnects, LAPS scopes change, or the token expires during the
+  asynchronous Graph request. A pending password result is disposed
+  without being attached to the current device, UI or clipboard;
+  native offline tests verify session identity checks.
+
 - Start Connect now reuses an existing validated shared Microsoft Graph
   session instead of prompting for Device Code/MFA again. Explicit account
   changes still reauthenticate. New Graph connections revoke the prior

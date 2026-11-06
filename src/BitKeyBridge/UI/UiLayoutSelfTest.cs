@@ -1874,6 +1874,9 @@ public static class UiLayoutSelfTest
             if (!main.PreviewStartCloudSessionReuseForUiSelfTest())
                 failures.Add("Start requested a second Device Code/MFA despite " +
                     "a valid shared cloud session or ignored forced reconnect.");
+            if (!main.PreviewLapsCloudSessionGuardForUiSelfTest())
+                failures.Add("An old Microsoft 365 LAPS session was accepted after " +
+                    "a token or permission context change.");
             if (!main.PreviewTargetedSourceRetryForUiTest() ||
                 FindByName(main, "DevicesRetryFailedSourceButton") is not Button)
                 failures.Add("Source retry action missing, enabled on a denied source, " +
