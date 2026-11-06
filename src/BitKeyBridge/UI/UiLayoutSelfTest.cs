@@ -597,6 +597,14 @@ public static class UiLayoutSelfTest
                 StringComparison.Ordinal))
             failures.Add("Device 360 hardware, health or diagnostics report regression.");
 
+        var failedWmiReport = Device360ReportService.Build(cloud,
+            reportSource, hardwareFailureCategory: "DCOM/RPCUnavailable");
+        if (!failedWmiReport.Contains("WMI.RPC_UNAVAILABLE",
+                StringComparison.Ordinal) ||
+            failedWmiReport.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal))
+            failures.Add("Device 360 report lost a typed WMI error or leaked a recovery ID.");
+
         var unknown = Device360HealthService.Evaluate(new Device360Snapshot(),
             Device360OperationalStatus.Capture(new Device360Snapshot(),
                 adConnected: false, cloudSessionPresent: false,

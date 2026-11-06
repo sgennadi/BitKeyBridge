@@ -174,7 +174,8 @@ internal sealed partial class Device360Dialog
             try
             {
                 Clipboard.SetText(Device360ReportService.Build(
-                    snapshot, operational, _device360RemoteHardware));
+                    snapshot, operational, _device360RemoteHardware,
+                    hardwareFailureCategory: _device360HardwareFailureCategory));
                 reportStatus.Text = Tr("Device360V2ReportCopied");
             }
             catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException
@@ -207,7 +208,9 @@ internal sealed partial class Device360Dialog
             {
                 File.WriteAllText(dialog.FileName,
                     Device360ReportService.Build(snapshot, operational,
-                        _device360RemoteHardware), new UTF8Encoding(false));
+                        _device360RemoteHardware,
+                        hardwareFailureCategory: _device360HardwareFailureCategory),
+                    new UTF8Encoding(false));
                 reportStatus.Text = Tr("Device360V2ReportSaved");
             }
             catch (Exception ex) when (ex is IOException or

@@ -13,7 +13,8 @@ internal static class Device360ReportService
         Device360Snapshot snapshot,
         Device360OperationalStatus status,
         Device360HardwareInventory? hardware = null,
-        DateTime? createdUtc = null)
+        DateTime? createdUtc = null,
+        string? hardwareFailureCategory = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(status);
@@ -69,8 +70,9 @@ internal static class Device360ReportService
                 ? hardware.PhysicalNetworkAdapterCount.ToString(
                     System.Globalization.CultureInfo.InvariantCulture)
                 : "Not verified");
-        Field("Optional WMI inventory", hardware?.ExtendedDiagnostic
-            ?? "Not queried");
+        Field("Optional WMI inventory", hardware is null ? "Not queried" :
+            hardware.ExtendedDiagnostic.Length == 0 ?
+                "No optional WMI failures" : hardware.ExtendedDiagnostic);
         Field("BIOS version", hardware?.BiosVersion ?? string.Empty);
         Field("BIOS manufacturer", hardware?.BiosManufacturer ?? string.Empty);
         Field("BIOS release date", hardware?.BiosReleaseDate ?? string.Empty);
@@ -116,7 +118,8 @@ internal static class Device360ReportService
         Line("");
         Line(Device360SmartDiagnosticsService.Format(
             Device360SmartDiagnosticsService.Evaluate(snapshot, status,
-                hardware, nowUtc: createdUtc), "en"));
+                hardware, hardwareFailureCategory,
+                nowUtc: createdUtc), "en"));
         Line("");
         Line("Security: no recovery password, recovery ID, LAPS secret, token, " +
              "certificate private key or credential was retrieved or included.");
