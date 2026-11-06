@@ -1,4 +1,6 @@
-## 0.35.0 — Stable (public UNSIGNED; manual distribution only)
+## 0.35.0
+
+**Stable (public UNSIGNED; manual distribution only)**
 
 **6 November 2026 — owner-requested exact-source release.**
 
