@@ -50,6 +50,27 @@ internal static class Device360ReportService
         Field("Encryption reported", snapshot.Encrypted?.ToString() ?? "Not verified");
         Field("Last Intune sync UTC", Date(snapshot.LastSyncUtc));
         Field("AD last logon UTC", Date(snapshot.AdLastLogonUtc));
+        Field("Remote serial number", hardware?.SerialNumber ?? string.Empty);
+        Field("CPU model", hardware?.CpuName ?? string.Empty);
+        Field("Logical processors", hardware is { CpuLogicalProcessors: > 0 }
+            ? hardware.CpuLogicalProcessors.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)
+            : "Not verified");
+        Field("Physical RAM", hardware is null ? "Not verified" :
+            Device360HardwareService.FormatGiB(hardware.MemoryGiB));
+        Field("Physical disk count", hardware is { PhysicalDiskCount: > 0 }
+            ? hardware.PhysicalDiskCount.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)
+            : "Not verified");
+        Field("Raw disk capacity", hardware is null ? "Not verified" :
+            Device360HardwareService.FormatGiB(hardware.PhysicalStorageGiB));
+        Field("Physical network adapters",
+            hardware is { PhysicalNetworkAdapterCount: > 0 }
+                ? hardware.PhysicalNetworkAdapterCount.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)
+                : "Not verified");
+        Field("Optional WMI inventory", hardware?.ExtendedDiagnostic
+            ?? "Not queried");
         Field("BIOS version", hardware?.BiosVersion ?? string.Empty);
         Field("BIOS manufacturer", hardware?.BiosManufacturer ?? string.Empty);
         Field("BIOS release date", hardware?.BiosReleaseDate ?? string.Empty);
@@ -87,9 +108,15 @@ internal static class Device360ReportService
 
         Line("DEVICE HEALTH / SMART DIAGNOSTICS");
         Line(Device360HealthService.Summary(checks));
+        Line(Device360HealthAssessmentService.Summary(
+            Device360HealthAssessmentService.Assess(checks), "en"));
         foreach (var check in checks)
             Line(Flat(check.Area) + ": " + check.State + " | " +
                 Flat(check.Explanation));
+        Line("");
+        Line(Device360SmartDiagnosticsService.Format(
+            Device360SmartDiagnosticsService.Evaluate(snapshot, status,
+                hardware, nowUtc: createdUtc), "en"));
         Line("");
         Line("Security: no recovery password, recovery ID, LAPS secret, token, " +
              "certificate private key or credential was retrieved or included.");

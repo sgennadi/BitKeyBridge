@@ -1,3 +1,13 @@
+## 0.36.0-preview.1
+
+**Development QA only — public Stable 0.35.0 remains unchanged.**
+
+- Expand explicit, read-only remote WMI inventory for exact AD-verified hosts: BIOS serial, CPU model/logical processors, physical RAM, raw disk count/capacity and physical network adapter count. Individual optional provider errors are typed; no MAC/IP addresses, disk serials, recovery data or credentials are queried or exported.
+- Add **evidence coverage** percentage and conservative Device Health 2.0 readiness. Coverage measures completeness, NOT security, health or authorization; missing metadata never makes a device safe.
+- Add Smart Diagnostics 2.0: stable reason codes and next actions for identity ambiguity, AD/Entra/Intune failures, BitLocker/LAPS metadata gaps, encryption/compliance/stale sync and read-only WMI failures. No new background work or permission escalation.
+- Update Device 360 tabs, report, EN/RU/HE labels and synthetic offline regression tests. Preserve all existing RBAC, protected audit, session, reveal and updater trust policies.
+- Exact-head native Windows CI plus real domain/tenant and RTL/DPI acceptance required before any signed/Stable release.
+
 ## 0.35.0
 
 **Stable (public UNSIGNED; manual distribution only)**
