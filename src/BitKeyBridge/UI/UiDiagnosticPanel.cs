@@ -259,9 +259,9 @@ public sealed class UiDiagnosticPanel : Panel
             lines.Add($"{item.Name}: {item.Value}");
         }
 
-        // Record ONLY typed error counters. Full messages, stack traces,
-        // device names, account names and configuration never enter GitHub.
-        GitHubDiagnosticReporter.Record(operation, exception);
+        // UDX records allowlisted error class + HRESULT locally only,
+        // with no exception text, credentials or network submission.
+        UniversalDiagnosticService.TryCapture(operation, exception);
         _summary.Text = DiagnosticRedaction.Sanitize(summary);
         _diagnostics = DiagnosticRedaction.Sanitize(string.Join(Environment.NewLine, lines));
         _copyStatus.Text = string.Empty;

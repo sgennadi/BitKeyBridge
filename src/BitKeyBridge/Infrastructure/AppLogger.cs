@@ -30,9 +30,9 @@ public sealed class AppLogger
     public void Error(string message)
     {
         Write("ERROR", message);
-        // The GitHub queue receives only an aggregate "Service/Unexpected"
-        // count. No free-form log line or message is copied to an Issue.
-        GitHubDiagnosticReporter.RecordServiceLogError();
+        // UDX optionally stores only a fixed local error category,
+        // never this arbitrary service log text.
+        UniversalDiagnosticService.TryCaptureServiceError();
     }
 
     private void Write(string level, string message)

@@ -201,9 +201,6 @@ public sealed class ConfigurationMaintenanceService
                 string.Empty;
             appConfig.RemoteApiExportTokenSha256 =
                 string.Empty;
-            // Never include the production ingress credential in a support ZIP.
-            appConfig.DiagnosticRelayIngestToken =
-                string.Empty;
             appConfig.SiemWebhookUrl =
                 DiagnosticRedaction.SanitizeUriForDiagnostics(
                     appConfig.SiemWebhookUrl);

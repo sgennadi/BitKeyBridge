@@ -52,14 +52,6 @@ public sealed class AppConfig
     public string ServiceIdentityMode { get; set; } = "LocalSystem";
     public string ServiceIdentityAccount { get; set; } = string.Empty;
 
-    // Organization-managed production diagnostics; disabled unless explicitly
-    // provisioned by IT. No GitHub credential is ever placed on the client.
-    // The relay ingest key is upload-only and MUST be edge-rate-limited.
-    public bool DiagnosticRelayEnabled { get; set; } = false;
-    public bool DiagnosticRelayManagedAutoSend { get; set; } = false;
-    public string DiagnosticRelayUrl { get; set; } = string.Empty;
-    public string DiagnosticRelayIngestToken { get; set; } = string.Empty;
-
     public string UpdateRepository { get; set; } = "sgennadi/BitKeyBridge";
     public bool CheckForUpdatesOnStart { get; set; } = true;
     // Only check for updates on first launch; never auto-install by default.

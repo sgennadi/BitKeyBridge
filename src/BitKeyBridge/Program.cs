@@ -1192,7 +1192,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            GitHubDiagnosticReporter.Record("Startup", ex);
+            UniversalDiagnosticService.TryCapture("Startup", ex);
             // GUI failures must never terminate silently for standard users.
             // Include code locations only: no stack arguments, file paths,
             // configuration values, credentials or recovery passwords.
@@ -1932,7 +1932,7 @@ internal static class Program
             failures.AddRange(UpdateService.RunReleaseChannelOfflineTests());
             failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
             failures.AddRange(CloudGraphService.RunManagedDeviceFilterOfflineTests());
-            failures.AddRange(GitHubDiagnosticReporter.RunOfflineTests());
+            failures.AddRange(UniversalDiagnosticService.RunOfflineTests(tempDirectory));
             failures.AddRange(RecoveryWorkflowReadinessService.RunOfflineTests());
             failures.AddRange(RecoveryWorkflowNavigationPolicy.RunOfflineTests());
             failures.AddRange(HomeRecoverySelectionGuard.RunOfflineTests());
