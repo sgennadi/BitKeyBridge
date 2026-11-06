@@ -699,6 +699,12 @@ public sealed partial class MainForm : DpiAwareForm
         try
         {
             InvalidateDeviceCloudSecretOnSessionChange();
+            // A new login immediately revokes the old in-memory principal.
+            // Do not serve old token data while Device Code/MFA is pending.
+            _cloudToken = null;
+            _cloudTokenContext = string.Empty;
+            _cloudTokenHasLaps = false;
+            _cloudTokenHasRecovery = false;
             _cloudDiagnostics.Clear();
             var prerequisite = CloudConnectionPrerequisiteError(
                 _cloudTenant.Text, _cloudClient.Text, _cloudThumbprint.Text,
@@ -742,7 +748,7 @@ public sealed partial class MainForm : DpiAwareForm
                 _cloudAuthMode.SelectedIndex == 0 &&
                 _cloudLapsPermissions.Checked;
 
-            _cloudToken =
+            var acquiredToken =
                 _cloudAuthMode.SelectedIndex switch
                 {
                     1 =>
@@ -765,8 +771,12 @@ public sealed partial class MainForm : DpiAwareForm
                 };
 
             var count = forLaps ? 0 :
-                await graph.TestAccessAsync(_cloudToken.AccessToken, ct);
+                await graph.TestAccessAsync(acquiredToken.AccessToken, ct);
+            ct.ThrowIfCancellationRequested();
 
+            // Only make a new token available after Graph access validation
+            // and cancellation checks, never during an in-flight sign-in.
+            _cloudToken = acquiredToken;
             _cloudTokenHasLaps = forLaps || combineLapsDelegated;
             _cloudTokenHasRecovery = !forLaps;
 
@@ -949,6 +959,9 @@ public sealed partial class MainForm : DpiAwareForm
             !running;
         _cloudLapsPermissions.Enabled =
             !running;
+        // These scopes belong to the exact Graph session; prevent a
+        // permission toggle halfway through acquiring that token.
+        _cloudRotationPermissions.Enabled = !running;
 
         if (running)
         {

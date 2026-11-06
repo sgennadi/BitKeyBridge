@@ -1871,6 +1871,9 @@ public static class UiLayoutSelfTest
                 layoutSelfTest: true);
             if (!main.PreviewDevicesCloudShortcutForUiTest())
                 failures.Add("Devices missing-Cloud action failed to open Settings > Cloud.");
+            if (!main.PreviewStartCloudSessionReuseForUiSelfTest())
+                failures.Add("Start requested a second Device Code/MFA despite " +
+                    "a valid shared cloud session or ignored forced reconnect.");
             if (!main.PreviewTargetedSourceRetryForUiTest() ||
                 FindByName(main, "DevicesRetryFailedSourceButton") is not Button)
                 failures.Add("Source retry action missing, enabled on a denied source, " +

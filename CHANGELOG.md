@@ -1,5 +1,12 @@
 ## 0.35.0-rc.9
 
+- Start Connect now reuses an existing validated shared Microsoft Graph
+  session instead of prompting for Device Code/MFA again. Explicit account
+  changes still reauthenticate. New Graph connections revoke the prior
+  principal before network I/O, verify the replacement before publishing,
+  and lock rotation scope options during sign-in; native synthetic UI
+  regression protects this behavior.
+
 **6 November 2026 — Device recovery context, unified Graph session and Device 360 hardening (UNSIGNED QA).** Continues in single integration PR #115. Stable remains unchanged.
 
 - Device recovery keys are now immediately invalidated and masked when the technician edits the Devices search query. Old recovery ID selections cannot remain actionable; pending asynchronous reveals are invalidated by the selection generation.

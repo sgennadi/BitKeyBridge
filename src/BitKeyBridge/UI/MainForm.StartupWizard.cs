@@ -93,7 +93,8 @@ public sealed partial class MainForm
                     openCloudWizardIfNeeded: false);
             }
 
-            await ConnectSelectedSourceAsync(source, anotherAccount);
+            await ConnectSelectedSourceAsync(source, anotherAccount,
+                forceCloudReconnect: !automaticallyUseRemembered);
         }
         catch (Exception ex) when (automaticallyUseRemembered)
         {
@@ -125,7 +126,8 @@ public sealed partial class MainForm
         }
     }
 
-    private async Task ConnectSelectedSourceAsync(string source, bool anotherAccount)
+    private async Task ConnectSelectedSourceAsync(
+        string source, bool anotherAccount, bool forceCloudReconnect)
     {
         if (source == StartConnectionPolicy.Choose || IsDisposed)
         {
@@ -159,7 +161,7 @@ public sealed partial class MainForm
         {
             // Delegated Device Code + MFA and existing Graph RBAC/consent,
             // not a silent tenant-admin or application-only login.
-            await ConnectStartCloudAsync();
+            await ConnectStartCloudAsync(forceReconnect: forceCloudReconnect);
         }
     }
 

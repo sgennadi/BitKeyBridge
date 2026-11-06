@@ -11,6 +11,15 @@
 - Device 360 surfaces a safe local error when unexpected WMI exceptions occur, and exports the collection timestamp for read-only BIOS/TPM/hardware observations.
 - UniversalDiagnostics 0.1.0-rc.1 remains embedded and **local only**; no GitHub uploads, relay, PAT or external EXE. The Helpdesk adds an explicit safe summary export (classified categories/counts only, no JSON event bodies or log files).
 
+- A repeated Start Connect reuses the exact valid delegated Graph session
+  without another Device Code/MFA request. Explicit Change Connection
+  or Cloud Setup still forces an operator-requested reauthentication.
+- A fresh Graph login revokes the old in-memory token immediately and
+  does not publish a replacement until access verification and cancellation
+  checks finish. Rotation permission controls are locked during login.
+- Offline WinForms tests exercise the real Start reuse path with a synthetic
+  non-secret token; no login or privileged network request runs.
+
 ## Automated release gates
 
 1. Windows 11 x64/x86/ARM64 .NET 10 compile/publish on exact candidate HEAD.

@@ -486,7 +486,7 @@ public sealed partial class MainForm
             UpdateStartConnectionSourceControls();
 
             if (connectAfterSave)
-                await ConnectStartCloudAsync();
+                await ConnectStartCloudAsync(forceReconnect: true);
 
             return true;
         }
@@ -497,7 +497,10 @@ public sealed partial class MainForm
         }
     }
 
-    private async Task ConnectStartCloudAsync()
+    private bool CanReuseStartCloudSession(bool forceReconnect) =>
+        !forceReconnect && HasCloudSearchSession();
+
+    private async Task ConnectStartCloudAsync(bool forceReconnect = false)
     {
         if (_cloudConnecting)
             return;
@@ -515,7 +518,16 @@ public sealed partial class MainForm
         // elevate a Start session to that application identity.
         _cloudAuthMode.SelectedIndex = 0; // delegated Device Code + MFA
 
-        await ConnectCloudFromUiAsync();
+        // Reuse the validated memory-only Graph token instead of opening a
+        // second Device Code/MFA flow on an ordinary Start connection.
+        // Explicit account changes and Cloud Setup can force a fresh login.
+        if (!CanReuseStartCloudSession(forceReconnect))
+        {
+            if (_layoutSelfTest)
+                throw new InvalidOperationException(
+                    "Offline UI test attempted Microsoft 365 authentication.");
+            await ConnectCloudFromUiAsync();
+        }
         UpdateStartConnectionSourceControls();
         RefreshHomeConnectionUi();
         // Start and Devices share the same memory-only Graph session.
@@ -532,6 +544,64 @@ public sealed partial class MainForm
                 "Cloud sign-in did not complete. Review Microsoft Graph diagnostics " +
                 "in Administration if permitted, or ask IT to verify app consent and user RBAC.",
                 UiStatusKind.Warning);
+        }
+    }
+
+    // Validates the real Start connection flow using synthetic token data;
+    // never performs a tenant request or runs an MFA prompt.
+    internal bool PreviewStartCloudSessionReuseForUiSelfTest()
+    {
+        if (!_layoutSelfTest || _cloudConnecting)
+            return false;
+
+        var oldToken = _cloudToken;
+        var oldContext = _cloudTokenContext;
+        var oldRecovery = _cloudTokenHasRecovery;
+        var oldLaps = _cloudTokenHasLaps;
+        var oldTenant = _cloudTenant.Text;
+        var oldClient = _cloudClient.Text;
+        var oldAuthMode = _cloudAuthMode.SelectedIndex;
+        var oldConfiguredTenant = _cloudConfig.TenantId;
+        var oldConfiguredClient = _cloudConfig.ClientId;
+        try
+        {
+            _cloudConfig.TenantId = "example.onmicrosoft.com";
+            _cloudConfig.ClientId = "b4d08925-e729-44c4-a7a1-2be98b5d3730";
+            _cloudTenant.Text = _cloudConfig.TenantId;
+            _cloudClient.Text = _cloudConfig.ClientId;
+            _cloudAuthMode.SelectedIndex = 0;
+            var original = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-NO-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(30)
+            };
+            _cloudToken = original;
+            _cloudTokenHasRecovery = true;
+            _cloudTokenHasLaps = false;
+            _cloudTokenContext = BuildCloudTokenContext();
+            if (!StartCloudAppConfigured() || !HasCloudSearchSession() ||
+                !CanReuseStartCloudSession(forceReconnect: false) ||
+                CanReuseStartCloudSession(forceReconnect: true))
+                return false;
+
+            ConnectStartCloudAsync().GetAwaiter().GetResult();
+            return ReferenceEquals(original, _cloudToken) &&
+                HasCloudSearchSession() && !_cloudConnecting;
+        }
+        finally
+        {
+            _cloudToken = oldToken;
+            _cloudTokenContext = oldContext;
+            _cloudTokenHasRecovery = oldRecovery;
+            _cloudTokenHasLaps = oldLaps;
+            _cloudConfig.TenantId = oldConfiguredTenant;
+            _cloudConfig.ClientId = oldConfiguredClient;
+            _cloudTenant.Text = oldTenant;
+            _cloudClient.Text = oldClient;
+            _cloudAuthMode.SelectedIndex = oldAuthMode;
+            RefreshHomeConnectionUi();
+            SetDevicesCloudWarningAction(!HasCloudSearchSession());
         }
     }
 }
