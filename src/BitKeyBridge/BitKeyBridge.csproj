@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <!-- Also embed the same icon for WinForms Form.Icon on dialogs and RDP. -->
+    <ProjectReference Include="../UniversalDiagnostics.Embedded/UniversalDiagnostics.Embedded.vbproj" />
     <EmbeddedResource Include="Assets/BitKeyBridge.ico" LogicalName="BitKeyBridge.BrandIcon" />
     <PackageReference Include="System.DirectoryServices.Protocols" Version="10.0.14" />
     <PackageReference Include="System.Management" Version="10.0.14" />
