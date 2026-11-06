@@ -170,6 +170,21 @@ internal static class Device360V36SelfTest
         Check(!untrustedFailure.Any(x => x.Explanation.Contains(
                   "DO_NOT_INCLUDE", StringComparison.Ordinal)),
             "untrusted WMI failure text leaked into health checks");
+        var noRecord = Device360SmartDiagnosticsService.Evaluate(unknown,
+            empty, hardwareFailureCategory: "NoRecord");
+        var noRecordChecks = Device360HealthService.Evaluate(unknown, empty,
+            hardwareFailureCategory: "NoRecord");
+        Check(noRecord.Any(x => x.Code == "WMI.NO_RECORD" &&
+                  x.Priority == Device360FindingPriority.Verify) &&
+              noRecordChecks.Any(x => x.Area == "Remote WMI inventory" &&
+                  x.State == Device360CheckState.NotVerified),
+            "no core WMI records should be unverified, not actionable");
+        var reportedNoRecord = Device360ReportService.Build(unknown, empty,
+            hardwareFailureCategory: "NoRecord");
+        Check(reportedNoRecord.Contains("WMI.NO_RECORD", StringComparison.Ordinal) &&
+              !reportedNoRecord.Contains("Remote WMI inventory: Attention",
+                  StringComparison.Ordinal),
+            "no core WMI records lost classified report state");
         var reportedAfterFailure = Device360ReportService.Build(unknown, empty,
             hardwareFailureCategory: "AccessDenied");
         Check(reportedAfterFailure.Contains("WMI.ACCESS_DENIED",

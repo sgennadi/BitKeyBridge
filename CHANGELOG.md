@@ -1,5 +1,6 @@
 ## 0.36.0-preview.1
 
+- Preserve typed `WMI.NO_RECORD` when the core computer/BIOS WMI classes return no records; show NotVerified instead of an unauthorized or healthy state, with EN/RU/HE guidance and report regression tests.
 - Restrict the synthetic WMI presenter hook to an explicitly opted-in UI-test dialog using a synthetic device identity; add native inventory label wrapping/layout regression checks.
 - Fix Health/Smart Diagnostics severity mismatches for typed WMI provider failures, and exercise real WinForms fields under synthetic success-to-failed-retry transitions (EN/RU/HE) without network calls.
 - Add per-provider typed Smart Diagnostics for CPU, Disk, Network and Memory with strictly allowlisted WMI error text in the UI and explicit Helpdesk reports.

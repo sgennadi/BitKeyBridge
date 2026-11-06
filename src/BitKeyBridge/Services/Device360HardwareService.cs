@@ -213,7 +213,10 @@ internal static class Device360HardwareService
                 string.IsNullOrWhiteSpace(model) &&
                 string.IsNullOrWhiteSpace(biosVersion))
                 return new Device360HardwareOutcome(false, null,
-                    "Remote WMI returned no computer-system or BIOS inventory. Check WMI service and read permissions.");
+                    "Remote WMI returned no verified computer-system or BIOS record.")
+                {
+                    FailureCategory = "NoRecord"
+                };
 
             var tpmSpec = string.Empty;
             var enabled = string.Empty;

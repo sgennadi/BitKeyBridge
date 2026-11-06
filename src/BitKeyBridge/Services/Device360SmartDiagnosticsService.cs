@@ -88,6 +88,7 @@ internal static class Device360SmartDiagnosticsService
         // mapper. Unknown or external strings cannot become user-visible codes.
         var wmiCode = hardwareFailureCategory switch
         {
+            "NoRecord" => "NO_RECORD",
             "AccessDenied" => "ACCESS_DENIED",
             "Timeout" => "TIMEOUT",
             "DCOM/RPCUnavailable" => "RPC_UNAVAILABLE",
@@ -99,6 +100,8 @@ internal static class Device360SmartDiagnosticsService
         {
             var action = wmiCode switch
             {
+                "NO_RECORD" =>
+                    "Verify the WMI namespace and core provider for this exact AD host. A missing record does not establish device health.",
                 "ACCESS_DENIED" =>
                     "Verify the existing operator DCOM/WMI read permissions; do not grant new rights automatically.",
                 "TIMEOUT" =>
@@ -109,7 +112,9 @@ internal static class Device360SmartDiagnosticsService
                     "Inspect the remote WMI service, namespace and provider using approved tools.",
                 _ => "Confirm the endpoint is reachable and WMI inventory is permitted."
             };
-            Add("WMI." + wmiCode, Device360FindingPriority.Action,
+            Add("WMI." + wmiCode,
+                wmiCode == "NO_RECORD" ? Device360FindingPriority.Verify :
+                    Device360FindingPriority.Action,
                 "Hardware", "Explicit remote hardware inventory did not complete.",
                 action);
         }
@@ -344,6 +349,9 @@ internal static class Device360SmartDiagnosticsService
                 "INTUNE.CLOCK_UNVERIFIED" =>
                     ("Дата синхронизации Intune находится в будущем.",
                      "Проверьте время устройства и достоверность данных источника."),
+                "WMI.NO_RECORD" =>
+                    ("Основные записи компьютера или BIOS не подтверждены через WMI.",
+                     "Проверьте пространство имён и поставщик WMI выбранного компьютера; это не доказательство отсутствия устройства."),
                 "WMI.ACCESS_DENIED" =>
                     ("У текущего пользователя недостаточно прав WMI.",
                      "Проверьте существующие DCOM/WMI-права на чтение без обхода безопасности."),
@@ -427,6 +435,9 @@ internal static class Device360SmartDiagnosticsService
                 "INTUNE.CLOCK_UNVERIFIED" =>
                     ("זמן הסנכרון המדווח נמצא בעתיד.",
                      "בדקו שעון ונתוני מקור לפני הסקת מסקנות."),
+                "WMI.NO_RECORD" =>
+                    ("רשומות מערכת או BIOS לא אומתו ב-WMI.",
+                     "בדקו מרחב שמות וספק WMI של המכשיר המדויק; אין זו הוכחה שהמכשיר חסר."),
                 "WMI.ACCESS_DENIED" =>
                     ("לחשבון הנוכחי אין הרשאת WMI מתאימה.",
                      "בדקו הרשאות קריאה קיימות של DCOM/WMI ללא עקיפת אבטחה."),
