@@ -1,3 +1,14 @@
+## 0.35.0-rc.10
+
+**6 November 2026 — full version in title and local diagnostic consent revocation (UNSIGNED QA).** Same integration PR #115; Stable unchanged.
+
+- Display `0.35.0-rc.10` in the WinForms title using InformationalVersion; keep numeric Assembly/FileVersion `0.35.0.0` for Windows compatibility.
+- Bind each background UniversalDiagnostics capture to the current consent revision and serialize opt-out with the queue write. Queued events from earlier consent cannot be written after OFF or revived by OFF/ON. Clear the old cooldown on consent change.
+- Add native full-version title assertion and isolated OFF/ON race regression. No raw messages, identifiers, BitLocker/LAPS secrets or automatic GitHub uploads.
+- Existing Graph one-session authentication, Device 360, EN/RU/HE, RBAC, protected audit and updater trust gates are unchanged. This is QA-only, pending exact-HEAD CI, live managed Windows tests and corporate signing.
+
+See docs/release-candidate-v0.35.0-rc.10.md.
+
 ## 0.35.0-rc.9
 
 - Reject stale Entra LAPS metadata/password responses if Microsoft 365

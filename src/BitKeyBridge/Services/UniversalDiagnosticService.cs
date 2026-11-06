@@ -19,6 +19,8 @@ internal static class UniversalDiagnosticService
     private static readonly TimeSpan CaptureCooldown = TimeSpan.FromMinutes(10);
     private static readonly Dictionary<string, DateTime> LastCaptured = new(StringComparer.Ordinal);
     private static bool? _captureEnabled;
+    // Revocation generation: scheduled background writes cannot outlive consent.
+    private static long _captureConsentRevision;
 
     private static readonly HashSet<string> Components = new(StringComparer.Ordinal)
     {
@@ -89,6 +91,8 @@ internal static class UniversalDiagnosticService
                         JsonSerializer.Serialize(new Preferences { CaptureLocally = enabled }));
                     File.Move(temporary, path, true);
                     _captureEnabled = enabled;
+                    ++_captureConsentRevision;
+                    LastCaptured.Clear();
                     return true;
                 }
                 finally
@@ -175,6 +179,22 @@ internal static class UniversalDiagnosticService
         _ = UniversalDiagnostics.UniversalDiagnosticsEmbedded.Capture(payload);
     }
 
+    private static bool WriteCaptureIfConsented(long expectedRevision,
+        string component, string errorType, string code, string summary)
+    {
+        // Consent changes and the actual disk write share this lock.
+        // Disabling local collection revokes pending worker tasks; subsequent
+        // opt-in cannot revive work scheduled under an older permission.
+        lock (Sync)
+        {
+            if (_captureEnabled != true ||
+                _captureConsentRevision != expectedRevision)
+                return false;
+            WriteEvent(component, errorType, code, summary);
+            return true;
+        }
+    }
+
     internal static void TryCapture(string? operation, Exception ex)
     {
         ArgumentNullException.ThrowIfNull(ex);
@@ -184,8 +204,11 @@ internal static class UniversalDiagnosticService
         var errorType = ErrorType(ex);
         var code = "0x" + unchecked((uint)ex.HResult).ToString("X8");
         var key = component + "|" + errorType + "|" + code;
+        long consentRevision;
         lock (Sync)
         {
+            if (_captureEnabled != true)
+                return;
             var now = DateTime.UtcNow;
             if (LastCaptured.TryGetValue(key, out var last) &&
                 now - last < CaptureCooldown)
@@ -193,14 +216,15 @@ internal static class UniversalDiagnosticService
             if (LastCaptured.Count >= 256)
                 LastCaptured.Clear();
             LastCaptured[key] = now;
+            consentRevision = _captureConsentRevision;
         }
         // Optional local capture never blocks recovery, sign-in or WinForms painting.
         _ = Task.Run(() =>
         {
             try
             {
-                WriteEvent(component, errorType, code,
-                    "Classified local application error; no exception text retained.");
+                _ = WriteCaptureIfConsented(consentRevision, component, errorType,
+                    code, "Classified local application error; no exception text retained.");
             }
             catch (Exception writeError)
             {
@@ -359,6 +383,47 @@ internal static class UniversalDiagnosticService
                 "computer_name", "tenant_id", "raw_exception", "hostname" })
                 if (sensitive.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
                     errors.Add("UniversalDiagnostics emitted a forbidden field: " + forbidden);
+
+            // No real user preferences or queue are touched in --self-test.
+            // Both OFF and subsequent ON must reject writes queued under
+            // the prior consent revision.
+            bool? priorConsent;
+            long queuedRevision;
+            lock (Sync)
+            {
+                priorConsent = _captureEnabled;
+                _captureEnabled = true;
+                queuedRevision = ++_captureConsentRevision;
+                _captureEnabled = false;
+                ++_captureConsentRevision;
+            }
+            try
+            {
+                var countBefore = Directory.EnumerateFiles(
+                    LocalQueueDirectory, "*.json").Count();
+                if (WriteCaptureIfConsented(queuedRevision, "UI", "Other",
+                    "0x80000001", "Synthetic stale consent"))
+                    errors.Add("UniversalDiagnostics accepted a capture after opt-out.");
+                lock (Sync)
+                {
+                    _captureEnabled = true;
+                    ++_captureConsentRevision;
+                }
+                if (WriteCaptureIfConsented(queuedRevision, "UI", "Other",
+                    "0x80000001", "Synthetic stale consent"))
+                    errors.Add("UniversalDiagnostics accepted a capture after re-consent.");
+                if (Directory.EnumerateFiles(
+                    LocalQueueDirectory, "*.json").Count() != countBefore)
+                    errors.Add("UniversalDiagnostics persisted a stale queued error.");
+            }
+            finally
+            {
+                lock (Sync)
+                {
+                    _captureEnabled = priorConsent;
+                    ++_captureConsentRevision;
+                }
+            }
         }
         catch (Exception ex)
         {

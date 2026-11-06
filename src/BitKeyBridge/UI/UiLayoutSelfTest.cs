@@ -1869,6 +1869,16 @@ public static class UiLayoutSelfTest
                     HealthEndpointEnabled = false
                 },
                 layoutSelfTest: true);
+            var informationalVersion = typeof(MainForm).Assembly
+                .GetCustomAttributes(
+                    typeof(System.Reflection.AssemblyInformationalVersionAttribute),
+                    false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion;
+            if (string.IsNullOrWhiteSpace(informationalVersion) ||
+                main.Text != "BitKeyBridge " +
+                    informationalVersion.Split('+')[0] + " (.NET)")
+                failures.Add("Main window title did not show the exact RC SemVer.");
             if (!main.PreviewDevicesCloudShortcutForUiTest())
                 failures.Add("Devices missing-Cloud action failed to open Settings > Cloud.");
             if (!main.PreviewStartCloudSessionReuseForUiSelfTest())

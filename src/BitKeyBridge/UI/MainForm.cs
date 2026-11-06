@@ -199,8 +199,18 @@ public sealed partial class MainForm : DpiAwareForm
 
         var assemblyVersion =
             GetType().Assembly.GetName().Version;
-        Text =
-            $"BitKeyBridge {assemblyVersion?.ToString(3) ?? "unknown"} (.NET)";
+        // Numeric PE versions omit release-candidate suffixes. Show the
+        // actual build's SemVer without changing Windows file compatibility.
+        var informationalVersion = GetType().Assembly
+            .GetCustomAttributes(
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute),
+                false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+        var displayVersion = string.IsNullOrWhiteSpace(informationalVersion)
+            ? assemblyVersion?.ToString(3) ?? "unknown"
+            : informationalVersion.Split('+')[0];
+        Text = $"BitKeyBridge {displayVersion} (.NET)";
         StartPosition =
             FormStartPosition.CenterScreen;
         // Global Ctrl+1..7 workspace navigation without stealing text input.
