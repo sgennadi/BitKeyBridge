@@ -1,0 +1,45 @@
+name: UniversalDiagnostics CI Review
+
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+  schedule:
+    - cron: '27 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: udx-ci-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify shared diagnostics tests and privacy checks
+        env:
+          PYTHONPATH: .github
+        run: python3 -m unittest discover -s .github/universal_diagnostics/tests -v
+      - name: Summarize repeated build failures without raw logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PYTHONPATH: .github
+        run: python3 -m universal_diagnostics.ci_review --mode review --workflow build.yml
+      - name: Summarize manually published UDX diagnostic Issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PYTHONPATH: .github
+        run: python3 -m universal_diagnostics.issue_review --mode review --days 30
