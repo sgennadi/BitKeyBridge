@@ -199,9 +199,199 @@ internal static class Device360SmartDiagnosticsService
         };
         return title + Environment.NewLine + Environment.NewLine +
             string.Join(Environment.NewLine + Environment.NewLine,
-                findings.Select(x => "[" + x.Code + "] " + x.Source +
-                    " (" + x.Priority + ")" + Environment.NewLine +
-                    x.Explanation + Environment.NewLine +
-                    actionTitle + ": " + x.NextAction));
+                findings.Select(x =>
+                {
+                    var detail = LocalizeFinding(x, code);
+                    var priority = code switch
+                    {
+                        "ru" => x.Priority == Device360FindingPriority.Action ?
+                            "Требует действия" : "Проверить",
+                        "he" => x.Priority == Device360FindingPriority.Action ?
+                            "נדרשת פעולה" : "לאמת",
+                        _ => x.Priority.ToString()
+                    };
+                    return "[" + x.Code + "] " + x.Source +
+                        " (" + priority + ")" + Environment.NewLine +
+                        detail.Explanation + Environment.NewLine +
+                        actionTitle + ": " + detail.NextAction;
+                }));
+    }
+
+    private static (string Explanation, string NextAction) LocalizeFinding(
+        Device360DiagnosticFinding finding, string language)
+    {
+        // Source-specific reason codes share one safe translation per reason.
+        // Neither device identifiers nor raw server exceptions are interpolated.
+        var code = finding.Code.StartsWith("SOURCE.",
+            StringComparison.Ordinal)
+            ? "SOURCE." + finding.Code[(finding.Code.LastIndexOf('.') + 1)..]
+            : finding.Code;
+        if (language == "ru")
+            return code switch
+            {
+                "IDENTITY.CONFLICT" =>
+                    ("Обнаружены дублирующиеся или конфликтующие идентификаторы.",
+                     "Сверьте точные GUID AD, Entra Device ID и Intune Managed Device ID, не связывайте объекты по имени."),
+                "IDENTITY.UNVERIFIED" =>
+                    ("Точный идентификатор компьютера не подтверждён.",
+                     "Выберите запись из авторитетного источника, прежде чем открывать восстановление."),
+                "SOURCE.UNVERIFIED" =>
+                    ("Этот компьютер не подтверждён в указанном источнике.",
+                     "Выполните явный поиск метаданных; отсутствие записи ещё не доказано."),
+                "SOURCE.NO_RECORD" =>
+                    ("Запись не найдена в доступной области поиска.",
+                     "Проверьте точный ID и область поиска; это не означает отсутствия резервного ключа."),
+                "SOURCE.ACCESS_DENIED" =>
+                    ("Недостаточно разрешений для чтения метаданных.",
+                     "Проверьте делегированные права AD или Graph/Intune RBAC; не повышайте привилегии автоматически."),
+                "SOURCE.SIGN_IN_REQUIRED" =>
+                    ("Для источника требуется подтверждённое подключение.",
+                     "Явно подключите нужную учётную запись, соблюдая MFA и политику доступа."),
+                "SOURCE.SOURCE_OFFLINE" =>
+                    ("Источник временно недоступен.",
+                     "Проверьте DNS, сеть, TLS и доступность сервиса, затем повторите запрос метаданных."),
+                "SOURCE.TIMEOUT" =>
+                    ("Источник не ответил в заданное время.",
+                     "Проверьте соединение и повторите только чтение метаданных."),
+                "SOURCE.RATE_LIMITED" =>
+                    ("Источник ограничил частоту запросов.",
+                     "Соблюдайте Retry-After; не повторяйте чтение секретов."),
+                "SOURCE.DECRYPTION_FAILED" =>
+                    ("Проверенная операция расшифровки завершилась ошибкой.",
+                     "Проверьте разрешённые права LAPS и доступность GKDI, не записывайте содержимое пароля."),
+                "SOURCE.UNKNOWN" =>
+                    ("Причина ошибки источника не определена.",
+                     "Откройте обезличенную диагностику и проверьте подключение и права."),
+                "BITLOCKER.METADATA_INCOMPLETE" =>
+                    ("Метаданные резервной копии BitLocker неполные.",
+                     "Проверьте точный ID устройства и источник хранения; наличие ключа и права чтения не подтверждены."),
+                "LAPS.EXPIRED" =>
+                    ("Источник сообщает об истечении срока действия LAPS.",
+                     "Проверьте состояние и политику через авторизованную диагностику LAPS."),
+                "LAPS.UNVERIFIED" =>
+                    ("Наличие резервной копии LAPS не подтверждено.",
+                     "Проверьте информацию в разделе LAPS, не считайте пароль отсутствующим."),
+                "INTUNE.NONCOMPLIANT" =>
+                    ("Intune сообщает о несоответствии требованиям.",
+                     "Проверьте назначенные политики соответствия в разрешённом сеансе Intune."),
+                "INTUNE.ENCRYPTION_REPORTED_OFF" =>
+                    ("Intune сообщает, что шифрование отключено.",
+                     "Проверьте реальное состояние BitLocker разрешёнными средствами."),
+                "INTUNE.STALE_SYNC" =>
+                    ("С последней синхронизации Intune прошло более 14 дней.",
+                     "Проверьте доступность, регистрацию и состояние управления устройством."),
+                "INTUNE.CLOCK_UNVERIFIED" =>
+                    ("Дата синхронизации Intune находится в будущем.",
+                     "Проверьте время устройства и достоверность данных источника."),
+                "WMI.ACCESS_DENIED" =>
+                    ("У текущего пользователя недостаточно прав WMI.",
+                     "Проверьте существующие DCOM/WMI-права на чтение без обхода безопасности."),
+                "WMI.TIMEOUT" =>
+                    ("Удалённый WMI не ответил вовремя.",
+                     "Проверьте доступность узла; повторите запрос только по кнопке."),
+                "WMI.RPC_UNAVAILABLE" =>
+                    ("Подключение DCOM/RPC к компьютеру недоступно.",
+                     "Проверьте DNS, TCP 135, динамические RPC-порты и действующие правила межсетевого экрана."),
+                "WMI.PROVIDER_ERROR" =>
+                    ("Провайдер WMI вернул ошибку.",
+                     "Проверьте службу, пространство имён и поставщик WMI."),
+                "WMI.UNAVAILABLE" =>
+                    ("Не удалось выполнить удалённую проверку WMI.",
+                     "Проверьте доступность компьютера и разрешения WMI на чтение."),
+                "WMI.TPM_DISABLED" =>
+                    ("WMI сообщает, что TPM отключён.",
+                     "Проверьте TPM разрешённым инструментом управления компьютером."),
+                "WMI.TPM_UNVERIFIED" =>
+                    ("Статус TPM не подтверждён.",
+                     "Проверьте пространство имён TPM и права WMI на чтение."),
+                "WMI.PARTIAL_INVENTORY" =>
+                    ("Часть аппаратных данных недоступна.",
+                     "Проверьте отмеченные классы WMI; успешно полученные данные сохранены."),
+                _ => (finding.Explanation, finding.NextAction)
+            };
+        if (language == "he")
+            return code switch
+            {
+                "IDENTITY.CONFLICT" =>
+                    ("זוהו מזהי מכשיר כפולים או סותרים.",
+                     "השוו GUID של AD, מזהה מכשיר Entra ומזהה Intune מדויקים. אין לקשר לפי שם."),
+                "IDENTITY.UNVERIFIED" =>
+                    ("זהות המכשיר לא אומתה באופן חד-משמעי.",
+                     "בחרו רשומה מוסמכת לפני פתיחת תהליך שחזור."),
+                "SOURCE.UNVERIFIED" =>
+                    ("המכשיר לא אומת במקור זה.",
+                     "בצעו חיפוש נתונים מפורש. לא הוכח שהרשומה חסרה."),
+                "SOURCE.NO_RECORD" =>
+                    ("לא נמצאה רשומה בתחום החיפוש הזמין.",
+                     "בדקו מזהה והיקף חיפוש מדויקים; אין זו הוכחה להיעדר מפתח גיבוי."),
+                "SOURCE.ACCESS_DENIED" =>
+                    ("אין הרשאת קריאה מספקת למקור הנתונים.",
+                     "בדקו הרשאות AD או Graph/Intune הקיימות ללא הרחבת הרשאות אוטומטית."),
+                "SOURCE.SIGN_IN_REQUIRED" =>
+                    ("נדרש חיבור מאומת למקור הנתונים.",
+                     "התחברו באופן מפורש באמצעות החשבון המתאים ותהליך MFA מאושר."),
+                "SOURCE.SOURCE_OFFLINE" =>
+                    ("מקור הנתונים אינו זמין כעת.",
+                     "בדקו DNS, רשת, TLS וזמינות השירות לפני ניסיון קריאת נתונים נוסף."),
+                "SOURCE.TIMEOUT" =>
+                    ("המקור לא הגיב בזמן.",
+                     "בדקו חיבור ונסו שוב קריאת נתונים בלבד."),
+                "SOURCE.RATE_LIMITED" =>
+                    ("המקור הגביל את קצב הבקשות.",
+                     "כבדו Retry-After ואל תחזרו על קריאת סודות."),
+                "SOURCE.DECRYPTION_FAILED" =>
+                    ("פעולת פענוח מורשית נכשלה.",
+                     "בדקו הרשאות LAPS ותקשורת GKDI ללא חשיפת הסוד."),
+                "SOURCE.UNKNOWN" =>
+                    ("סיבת כשל המקור אינה ידועה.",
+                     "עיינו באבחון ללא פרטים מזהים ובדקו תקשורת והרשאות."),
+                "BITLOCKER.METADATA_INCOMPLETE" =>
+                    ("נתוני הגיבוי של BitLocker אינם מלאים.",
+                     "בדקו מזהה מדויק ומקור גיבוי; זמינות המפתח והרשאות הקריאה לא אומתו."),
+                "LAPS.EXPIRED" =>
+                    ("תוקף נתוני LAPS המדווחים פג.",
+                     "בדקו מדיניות וגיבוי דרך אבחון LAPS מורשה."),
+                "LAPS.UNVERIFIED" =>
+                    ("גיבוי LAPS לא אומת בחיפוש זה.",
+                     "בדקו בכרטיסיית LAPS. אין להניח שהסיסמה חסרה."),
+                "INTUNE.NONCOMPLIANT" =>
+                    ("Intune מדווח על אי-תאימות למדיניות.",
+                     "בדקו את מדיניות התאימות בחיבור Intune מורשה."),
+                "INTUNE.ENCRYPTION_REPORTED_OFF" =>
+                    ("Intune מדווח שההצפנה כבויה.",
+                     "אמתו את מצב BitLocker בפועל בתהליך מורשה."),
+                "INTUNE.STALE_SYNC" =>
+                    ("חלפו יותר מ-14 יום מאז סנכרון Intune.",
+                     "בדקו קישוריות, רישום וניהול המכשיר."),
+                "INTUNE.CLOCK_UNVERIFIED" =>
+                    ("זמן הסנכרון המדווח נמצא בעתיד.",
+                     "בדקו שעון ונתוני מקור לפני הסקת מסקנות."),
+                "WMI.ACCESS_DENIED" =>
+                    ("לחשבון הנוכחי אין הרשאת WMI מתאימה.",
+                     "בדקו הרשאות קריאה קיימות של DCOM/WMI ללא עקיפת אבטחה."),
+                "WMI.TIMEOUT" =>
+                    ("שאילתת WMI מרוחקת חרגה מזמן ההמתנה.",
+                     "בדקו קישוריות ונסו שוב רק בפעולה מפורשת."),
+                "WMI.RPC_UNAVAILABLE" =>
+                    ("קישור DCOM/RPC למכשיר אינו זמין.",
+                     "בדקו DNS, TCP 135, פורטי RPC דינמיים וכללי חומת אש קיימים."),
+                "WMI.PROVIDER_ERROR" =>
+                    ("ספק WMI החזיר שגיאה.",
+                     "בדקו שירות WMI, מרחב שמות וספק."),
+                "WMI.UNAVAILABLE" =>
+                    ("בדיקת WMI מרוחקת אינה זמינה.",
+                     "בדקו זמינות המכשיר והרשאות קריאה של WMI."),
+                "WMI.TPM_DISABLED" =>
+                    ("WMI מדווח שה-TPM כבוי.",
+                     "בדקו מצב TPM בכלי ניהול מורשה."),
+                "WMI.TPM_UNVERIFIED" =>
+                    ("מצב TPM לא אומת.",
+                     "בדקו מרחב שמות TPM והרשאות קריאה ב-WMI."),
+                "WMI.PARTIAL_INVENTORY" =>
+                    ("חלק מנתוני החומרה אינם זמינים.",
+                     "בדקו מחלקות WMI שדווחו; נתונים שנאספו בהצלחה נשמרו."),
+                _ => (finding.Explanation, finding.NextAction)
+            };
+        return (finding.Explanation, finding.NextAction);
     }
 }
