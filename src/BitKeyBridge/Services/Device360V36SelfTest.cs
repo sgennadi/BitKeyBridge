@@ -125,8 +125,10 @@ internal static class Device360V36SelfTest
         Check(withHardware.Any(x => x.Area == "Remote TPM status" &&
                   x.State == Device360CheckState.NotVerified) &&
               withHardware.Any(x => x.Area == "Optional WMI inventory" &&
-                  x.State == Device360CheckState.NotVerified),
-            "unknown TPM/partial hardware was called healthy");
+                  x.State == Device360CheckState.Attention) &&
+              Device360HealthAssessmentService.Assess(withHardware)
+                  .Readiness == Device360Readiness.ActionNeeded,
+            "optional WMI provider error or unknown TPM had an incorrect health severity");
         var disabledTpm = partial with
         {
             Manufacturer = "Example", TpmEnabled = "No",
