@@ -9,7 +9,7 @@
 - The initial interactive Device Code sign-in can include `DeviceLocalCredential.Read.All` with the existing BitLocker, Device and Intune scopes **only** if optional LAPS permissions are explicitly enabled. A single valid session can then serve Start, Devices and Entra LAPS. Disabled LAPS permission does not request a new scope; a dedicated LAPS-only sign-in still requests only LAPS-related scopes. This does not grant recovery or tenant permission automatically.
 - A LAPS permission setting change modifies the Graph session context; old token permissions cannot be assumed to cover a newly enabled scope.
 - Device 360 surfaces a safe local error when unexpected WMI exceptions occur, and exports the collection timestamp for read-only BIOS/TPM/hardware observations.
-- UniversalDiagnostics 0.1.0-rc.1 remains embedded and **local only**; no GitHub uploads, relay, PAT or external EXE.
+- UniversalDiagnostics 0.1.0-rc.1 remains embedded and **local only**; no GitHub uploads, relay, PAT or external EXE. The Helpdesk adds an explicit safe summary export (classified categories/counts only, no JSON event bodies or log files).
 
 ## Automated release gates
 

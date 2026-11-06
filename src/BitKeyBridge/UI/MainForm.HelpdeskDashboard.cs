@@ -98,7 +98,9 @@ public sealed partial class MainForm
         localSave.Name = "HelpdeskUniversalSaveButton";
         var localOpen = NewActionButton("Open local reports folder");
         localOpen.Name = "HelpdeskUniversalOpenFolderButton";
-        localActions.Controls.AddRange([localPreview, localSave, localOpen]);
+        var localExport = NewActionButton("Export safe diagnostic summary");
+        localExport.Name = "HelpdeskUniversalExportButton";
+        localActions.Controls.AddRange([localPreview, localSave, localOpen, localExport]);
         root.Controls.Add(localActions);
 
         _helpdeskSelectedDeviceSummary = new UiStatusLabel
@@ -209,6 +211,7 @@ public sealed partial class MainForm
                 "Check user-profile write permissions; nothing was uploaded.");
         };
         localOpen.Click += (_, _) => OpenUniversalDiagnosticsFolder();
+        localExport.Click += (_, _) => SaveSafeUniversalDiagnosticsSummary();
         localPreview.Click += (_, _) =>
         {
             if (!_layoutSelfTest)

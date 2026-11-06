@@ -3727,6 +3727,9 @@ public static class UiLayoutSelfTest
                     FindByName(form, "HelpdeskUniversalOpenFolderButton") is not Button localOpen ||
                     localOpen.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language, "Open local reports folder") ||
+                    FindByName(form, "HelpdeskUniversalExportButton") is not Button localExport ||
+                    localExport.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
+                        language, "Export safe diagnostic summary") ||
                     FindByName(form, "HelpdeskUniversalPrivacyNotice") is not Label localNotice ||
                     localNotice.Text != UiStaticCaptionCatalog.TranslateOrOriginal(
                         language,

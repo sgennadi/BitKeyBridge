@@ -7,6 +7,7 @@
 - Optional delegated Entra LAPS consent can be included in the initial Device Code session for BitLocker and Devices, allowing Entra LAPS to reuse the same active token with no second MFA. This is only requested when the operator explicitly enables LAPS permissions. Normal read-only BitLocker sign-in and dedicated LAPS-only scope behavior remain unchanged; tenant consent/RBAC are still required.
 - Include optional LAPS consent in the Graph token-context fingerprint so a changed permission setting invalidates the previously scoped session instead of reusing a token with insufficient scopes.
 - Device 360 catches unexpected remote WMI failures in its asynchronous GUI event without leaking raw exception text or terminating the Helpdesk window. The non-secret report records remote hardware observation timestamp and provenance.
+- UniversalDiagnostics Helpdesk can explicitly export a categorized, secret-free local summary with an EN/RU/HE button. Neither raw event JSON nor application logs are included in this export, and nothing is uploaded.
 - Add offline security regression for query invalidation, delegated-scope composition, default non-elevation and WMI report provenance. UniversalDiagnostics shared local queue remains opt-in; no automatic uploads or credentials.
 - Version and InformationalVersion now 0.35.0-rc.9; numeric file versions stay 0.35.0.0. No signed Stable or unattended installation is authorized. Real managed Windows 11, AD/Graph/Intune, RBAC/delegated recovery, Hebrew RTL/DPI/RDP and rollback acceptance remain mandatory.
 

@@ -52,6 +52,44 @@ public sealed partial class MainForm
                 UniversalDiagnosticService.Preview());
     }
 
+    private void SaveSafeUniversalDiagnosticsSummary()
+    {
+        if (_layoutSelfTest)
+            return;
+
+        // Preview() returns only an allowlisted category/count summary, not
+        // the original JSON, event descriptions or device identity. Export
+        // is operator-initiated, never sent to GitHub or attached to email.
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Save safe diagnostic summary",
+            Filter = "Text files (*.txt)|*.txt",
+            FileName = "BitKeyBridge-UniversalDiagnostics-" +
+                DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt",
+            AddExtension = true,
+            DefaultExt = "txt",
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+        try
+        {
+            var summary = UniversalDiagnosticService.Preview();
+            File.WriteAllText(dialog.FileName, summary,
+                new System.Text.UTF8Encoding(false));
+            _appDiagnostics.ShowMessage(
+                "Local diagnostic summary saved.",
+                "Only classified error categories and counts were exported. " +
+                "No report was uploaded.");
+        }
+        catch (Exception ex)
+        {
+            _appDiagnostics.ShowMessage(
+                "Cannot save safe diagnostic summary.",
+                "No upload was attempted (" + ex.GetType().Name + ").");
+        }
+    }
+
     private void OpenUniversalDiagnosticsFolder()
     {
         if (_layoutSelfTest)
