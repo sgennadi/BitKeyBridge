@@ -735,6 +735,12 @@ public sealed partial class MainForm : DpiAwareForm
 
             using var graph =
                 new CloudGraphService();
+            // Never ask for Entra LAPS scopes unless the administrator/user
+            // explicitly enabled the optional LAPS permission. This allows
+            // the normal Start session to serve LAPS with no second MFA.
+            var combineLapsDelegated = !forLaps &&
+                _cloudAuthMode.SelectedIndex == 0 &&
+                _cloudLapsPermissions.Checked;
 
             _cloudToken =
                 _cloudAuthMode.SelectedIndex switch
@@ -754,13 +760,14 @@ public sealed partial class MainForm : DpiAwareForm
                                 ShowDeviceCodeAsync,
                                 ct,
                                 lapsOnly: forLaps,
-                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions)
+                                allowIntuneRotation: _cloudConfig.EnableIntuneRotationPermissions,
+                                includeLapsInPrimarySession: combineLapsDelegated)
                 };
 
             var count = forLaps ? 0 :
                 await graph.TestAccessAsync(_cloudToken.AccessToken, ct);
 
-            _cloudTokenHasLaps = forLaps;
+            _cloudTokenHasLaps = forLaps || combineLapsDelegated;
             _cloudTokenHasRecovery = !forLaps;
 
             _cloudTokenContext =
@@ -992,7 +999,8 @@ public sealed partial class MainForm : DpiAwareForm
             _cloudClient.Text.Trim().ToUpperInvariant(),
             certificate ? "Certificate" : "DeviceCode",
             identity,
-            _cloudRotationPermissions.Checked ? "ROTATION" : "READ-ONLY");
+            _cloudRotationPermissions.Checked ? "ROTATION" : "READ-ONLY",
+            _cloudLapsPermissions.Checked ? "LAPS-ON" : "LAPS-OFF");
     }
 
     private async Task RunNativeAutoSetupAsync()

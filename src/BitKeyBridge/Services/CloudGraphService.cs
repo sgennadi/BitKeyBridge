@@ -50,23 +50,80 @@ public sealed partial class CloudGraphService : IDisposable
             version);
     }
 
+    /// <summary>
+    /// A standard recovery session may also request delegated Entra LAPS
+    /// consent, but ONLY when the operator enabled LAPS permissions.
+    /// In that case one Device Code + MFA session serves Start, Devices and
+    /// Entra LAPS. A dedicated LAPS session retains its original least-
+    /// privilege scopes; no background authentication is introduced.
+    /// </summary>
+    internal static string BuildDelegatedScopes(
+        bool lapsOnly, bool allowIntuneRotation,
+        bool includeLapsInPrimarySession)
+    {
+        if (lapsOnly)
+            return LapsDelegatedScopes + " offline_access";
+
+        var scopes = new List<string>
+        {
+            "https://graph.microsoft.com/BitlockerKey.Read.All",
+            "https://graph.microsoft.com/Device.Read.All",
+            ManagedPermissionPolicy.DelegatedScope(allowIntuneRotation)
+        };
+        if (includeLapsInPrimarySession)
+        {
+            scopes.Add("https://graph.microsoft.com/DeviceLocalCredential.Read.All");
+        }
+        scopes.Add("offline_access");
+        return string.Join(" ", scopes);
+    }
+
+    internal static IEnumerable<string> RunDelegatedScopesOfflineTests()
+    {
+        var failures = new List<string>();
+        var standard = BuildDelegatedScopes(false, false, false);
+        var combined = BuildDelegatedScopes(false, false, true);
+        var dedicatedLaps = BuildDelegatedScopes(true, false, false);
+        var rotatable = BuildDelegatedScopes(false, true, true);
+
+        if (standard.Contains("DeviceLocalCredential.", StringComparison.Ordinal) ||
+            standard.Contains("ReadWrite.All", StringComparison.Ordinal) ||
+            !standard.Contains("BitlockerKey.Read.All", StringComparison.Ordinal))
+            failures.Add("Default Graph session requested extra LAPS or write scopes.");
+        if (!combined.Contains("DeviceLocalCredential.Read.All", StringComparison.Ordinal) ||
+            !combined.Contains("BitlockerKey.Read.All", StringComparison.Ordinal) ||
+            !combined.Contains(ManagedPermissionPolicy.IntuneRead, StringComparison.Ordinal) ||
+            combined.Contains(ManagedPermissionPolicy.IntuneRotation, StringComparison.Ordinal))
+            failures.Add("Operator-approved combined BitLocker/LAPS scopes are incorrect.");
+        if (!dedicatedLaps.Contains("DeviceLocalCredential.Read.All", StringComparison.Ordinal) ||
+            dedicatedLaps.Contains("BitlockerKey.Read.All", StringComparison.Ordinal) ||
+            dedicatedLaps.Contains(ManagedPermissionPolicy.IntuneRead, StringComparison.Ordinal))
+            failures.Add("LAPS-only least-privilege scopes were changed.");
+        if (!rotatable.Contains(ManagedPermissionPolicy.IntuneRotation, StringComparison.Ordinal) ||
+            standard.Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().Count() !=
+                standard.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ||
+            combined.Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().Count() !=
+                combined.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length)
+            failures.Add("Graph delegated scope deduplication or rotation policy failed.");
+        return failures;
+    }
+
     public async Task<GraphToken> AcquireDeviceCodeTokenAsync(
         string tenantId,
         string clientId,
         Func<DeviceCodeInfo, Task> showDeviceCode,
         CancellationToken ct = default,
         bool lapsOnly = false,
-        bool allowIntuneRotation = false)
+        bool allowIntuneRotation = false,
+        bool includeLapsInPrimarySession = false)
     {
         Require(tenantId, nameof(tenantId));
         Require(clientId, nameof(clientId));
 
         var tenant = Uri.EscapeDataString(tenantId.Trim());
         var deviceUri = $"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/devicecode";
-        var scopes = lapsOnly ? LapsDelegatedScopes + " offline_access" :
-            "https://graph.microsoft.com/BitlockerKey.Read.All " +
-            "https://graph.microsoft.com/Device.Read.All " +
-            ManagedPermissionPolicy.DelegatedScope(allowIntuneRotation) + " offline_access";
+        var scopes = BuildDelegatedScopes(
+            lapsOnly, allowIntuneRotation, includeLapsInPrimarySession);
 
         using var deviceResponse = await _http.PostAsync(
             deviceUri,
