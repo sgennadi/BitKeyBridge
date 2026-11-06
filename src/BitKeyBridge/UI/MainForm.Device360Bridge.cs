@@ -115,6 +115,9 @@ public sealed partial class MainForm
             _unifiedSearch.Enabled = false;
             _unifiedCancel.Enabled = true;
             _unifiedQuery.Enabled = false;
+            _unifiedResults.Enabled = false;
+            _deviceShowKey.Enabled = false;
+            _deviceCopyKey.Enabled = false;
             _unifiedProgress.Visible = true;
             var previousGeneration = _unifiedSearchGeneration;
             var previousRecoveryGeneration = _deviceRecoverySelectionGeneration;
@@ -134,7 +137,9 @@ public sealed partial class MainForm
                 _unifiedCancellation is not null ||
                 _unifiedSearchGeneration != previousGeneration + 1 ||
                 !_unifiedSearch.Enabled || _unifiedCancel.Enabled ||
-                !_unifiedQuery.Enabled || _unifiedProgress.Visible ||
+                !_unifiedQuery.Enabled || !_unifiedResults.Enabled ||
+                !_deviceShowKey.Enabled || !_deviceCopyKey.Enabled ||
+                _unifiedProgress.Visible ||
                 _unifiedResults.Items.Count != 1 ||
                 !ReferenceEquals(_unifiedResults.Items[0].Tag, adRecord) ||
                 _cloudToken is not null)
@@ -168,6 +173,9 @@ public sealed partial class MainForm
             _unifiedSearch.Enabled = true;
             _unifiedCancel.Enabled = false;
             _unifiedQuery.Enabled = true;
+            _unifiedResults.Enabled = true;
+            _deviceShowKey.Enabled = true;
+            _deviceCopyKey.Enabled = true;
             _unifiedProgress.Visible = false;
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
@@ -208,6 +216,13 @@ public sealed partial class MainForm
             _unifiedSearch.Enabled = true;
             _unifiedCancel.Enabled = false;
             _unifiedQuery.Enabled = true;
+            // A targeted source retry may have disabled metadata/secret
+            // controls. This new exact Start selection now owns the view;
+            // restore only these controls, while authorization still gates
+            // every Reveal/Copy action separately.
+            _unifiedResults.Enabled = true;
+            _deviceShowKey.Enabled = true;
+            _deviceCopyKey.Enabled = true;
             _unifiedProgress.Visible = false;
         }
 
