@@ -210,7 +210,11 @@ internal static class Device360SmartDiagnosticsService
                             "נדרשת פעולה" : "לאמת",
                         _ => x.Priority.ToString()
                     };
-                    return "[" + x.Code + "] " + x.Source +
+                    // Keep stable dotted reason codes left-to-right inside
+                    // a Hebrew RightToLeft WinForms TextBox.
+                    var stableCode = code == "he" ?
+                        "\u200E[" + x.Code + "]\u200E" : "[" + x.Code + "]";
+                    return stableCode + " " + x.Source +
                         " (" + priority + ")" + Environment.NewLine +
                         detail.Explanation + Environment.NewLine +
                         actionTitle + ": " + detail.NextAction;
