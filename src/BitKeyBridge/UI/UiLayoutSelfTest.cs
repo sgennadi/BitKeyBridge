@@ -52,6 +52,29 @@ public static class UiLayoutSelfTest
             Path.Combine(
                 AppContext.BaseDirectory,
                 "ui-self-test.log");
+        var progressPath = Path.Combine(
+            AppContext.BaseDirectory, "ui-self-test-progress.log");
+
+        // Offline synthetic checkpoints only: test phase and form-factory
+        // names, never device details, exceptions, tokens or recovery IDs.
+        // This lets CI locate the last completed phase if WinForms stalls.
+        void MarkPhase(string phase)
+        {
+            try
+            {
+                File.AppendAllText(progressPath,
+                    DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    " " + phase + Environment.NewLine);
+            }
+            catch (Exception ex) when (ex is IOException or
+                                       UnauthorizedAccessException or
+                                       System.Security.SecurityException)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "UI progress log unavailable: " + ex.GetType().Name);
+            }
+        }
 
         try
         {
@@ -61,6 +84,8 @@ public static class UiLayoutSelfTest
                 File.Delete(
                     reportPath);
             }
+            if (File.Exists(progressPath))
+                File.Delete(progressPath);
         }
         catch (Exception ex)
         {
@@ -71,6 +96,7 @@ public static class UiLayoutSelfTest
 
         var failures =
             new List<string>();
+        MarkPhase("BEGIN");
 
         // Runtime check: a native Explorer icon is insufficient if WinForms
         // modal windows still use the default framework title-bar icon.
@@ -80,6 +106,7 @@ public static class UiLayoutSelfTest
                 failures.Add("BitKeyBridge branded icon is not assigned to WinForms dialogs.");
         }
 
+        MarkPhase("VISUAL_FOUNDATION");
         VerifyNipkgBrandBanner(failures);
         VerifyModernAccentAndDynamicTheme(failures);
 
@@ -111,6 +138,7 @@ public static class UiLayoutSelfTest
         VerifyHelpdeskChecklistLocalization(
             failures);
 
+        MarkPhase("CONNECTION_CONTROLS");
         VerifyIntuneSetupWizardNavigation(failures);
         VerifyDeviceCodeCancellation(failures);
         VerifyDevicesCloudShortcut(failures);
@@ -139,10 +167,13 @@ public static class UiLayoutSelfTest
             if (!performanceReport.Contains(expected, StringComparison.Ordinal))
                 failures.Add("Missing DPI timing phase: " + expected);
 
+        MarkPhase("STARTUP_AND_MODAL_DIALOGS");
         VerifyStartupWizardTextWrapping(failures);
         VerifyModalDialogLocalization(failures);
+        MarkPhase("DEVICE360");
         VerifyDevice360CardIsolation(failures);
 
+        MarkPhase("START_SOURCE_POLICIES");
         VerifyStartSourcePolicies(failures);
 
         var factories =
@@ -161,6 +192,7 @@ public static class UiLayoutSelfTest
 
                 try
                 {
+                    MarkPhase("LAYOUT " + scenario.Name + " " + factory.Name);
                     form =
                         factory.Factory();
 
@@ -216,6 +248,7 @@ public static class UiLayoutSelfTest
             }
         }
 
+        MarkPhase("COMPLETE " + (failures.Count == 0 ? "PASS" : "FAIL"));
         var reportLines =
             failures.Count == 0
                 ? new[]

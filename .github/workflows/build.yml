@@ -419,7 +419,29 @@ jobs:
         run: |
           $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
           $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
-          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -Wait -PassThru
+          $progress = "artifacts\${{ matrix.rid }}\ui-self-test-progress.log"
+          # The native 100-200% DPI matrix has previously taken ~10 minutes.
+          # Keep sufficient headroom, but never block CI indefinitely.
+          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -PassThru
+          $finished = $process.WaitForExit(20 * 60 * 1000)
+          if (-not $finished) {
+            if (Test-Path $progress) {
+              Write-Host "Last synthetic UI test phases:"
+              Get-Content $progress -Tail 50
+            }
+            if (Test-Path $report) {
+              Get-Content $report -Tail 50
+            }
+            try {
+              $process.Kill($true)
+            } catch {
+              Write-Warning "UI self-test process cleanup failed."
+            }
+            throw "Runtime UI layout self-test exceeded the 20-minute safety limit. Inspect the last synthetic phase above."
+          }
+          if (Test-Path $progress) {
+            Get-Content $progress -Tail 50
+          }
           if (Test-Path $report) {
             Get-Content $report
           }
@@ -435,6 +457,7 @@ jobs:
           path: |
             artifacts/win-x64/ui-start-1080p-*.png
             artifacts/win-x64/ui-device-360-*.png
+            artifacts/win-x64/ui-self-test-progress.log
           if-no-files-found: warn
           compression-level: 0
           retention-days: 30
