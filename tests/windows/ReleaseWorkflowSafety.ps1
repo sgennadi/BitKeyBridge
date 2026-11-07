@@ -363,7 +363,7 @@ if ($afterPublish -match '(?m)^\s*- name:') {
 Write-Host 'Release workflow order, signing, approval and branch safety passed.'
 ) -or
     -not $qa.Contains('docs/device-360-v0.36-preview.md') -or
-    -not $qa.Contains('github.event.pull_request.head.sha') -or
+    -not $qa.Contains("['pull_request']['head']['sha']") -or
     -not $qa.Contains('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"') -or
     -not $qa.Contains('needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]') -or
     -not $qa.Contains('SHA256SUMS.txt') -or
