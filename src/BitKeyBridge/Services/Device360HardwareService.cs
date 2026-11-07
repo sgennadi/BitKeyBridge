@@ -89,6 +89,8 @@ internal static class Device360HardwareService
         => snapshot.IdentityVerified && !snapshot.IdentityAmbiguous &&
            snapshot.InAd == true && IsStrictDnsHost(snapshot.AdDnsHostName) &&
            HasSameAdDomainSuffix(snapshot.AdDnsHostName,
+               snapshot.AdDistinguishedName) &&
+           HasSameAdComputerName(snapshot.AdDnsHostName,
                snapshot.AdDistinguishedName);
 
     // Restrict Windows integrated authentication to the AD DNS domain
@@ -121,6 +123,25 @@ internal static class Device360HardwareService
     }
 
     /// <summary>
+    /// Require the selected AD computer RDN and its DNS hostname to agree
+    /// *before* any WMI connection. Reject malformed/escaped computer RDNs,
+    /// stale DNS attributes and misleading aliases.
+    /// </summary>
+    internal static bool HasSameAdComputerName(
+        string? dnsHost, string? selectedAdDn)
+    {
+        if (!IsStrictDnsHost(dnsHost) ||
+            string.IsNullOrWhiteSpace(selectedAdDn))
+            return false;
+        var adCn = Regex.Match(selectedAdDn,
+            @"\A\s*CN=([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\s*,",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return adCn.Success &&
+            string.Equals(dnsHost!.Split('.')[0], adCn.Groups[1].Value,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Consistency check for a remote Windows computer, not independent
     /// cryptographic host authentication. Fail closed for stale DNS/aliases.
     /// </summary>
@@ -134,19 +155,9 @@ internal static class Device360HardwareService
         var domain = AdDnsDomain(selectedAdDn);
         if (string.IsNullOrEmpty(domain) || string.IsNullOrWhiteSpace(remoteName) ||
             string.IsNullOrWhiteSpace(remoteDomain) ||
-            string.IsNullOrWhiteSpace(selectedAdDn))
+            !HasSameAdComputerName(dnsHost, selectedAdDn))
             return false;
-        // An AD DNS attribute can be stale or point to another in-domain PC.
-        // Bind the contacted computer to the *selected AD object's* first
-        // RDN as well. Unsupported/escaped CN formats fail closed.
-        var adCn = Regex.Match(selectedAdDn,
-            @"\A\s*CN=([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\s*,",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (!adCn.Success) return false;
-        var shortName = dnsHost!.Split('.')[0];
-        return string.Equals(shortName, adCn.Groups[1].Value,
-                   StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(shortName, remoteName.Trim(),
+        return string.Equals(dnsHost!.Split('.')[0], remoteName.Trim(),
                    StringComparison.OrdinalIgnoreCase) &&
                string.Equals(domain, remoteDomain.Trim().TrimEnd('.'),
                    StringComparison.OrdinalIgnoreCase);
