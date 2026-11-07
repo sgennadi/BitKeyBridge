@@ -310,6 +310,86 @@ if ($release.IndexOf('Generate v0.35.0 canary installer pinned to actual built Z
     throw 'v0.35.0 release integrity checks must precede publication.'
 }
 
+# PR #117 is preview-only. The downloadable QA bundle must be conditioned
+# on the exact branch, number, version and all same-run security integration
+# gates. This does NOT authorize publishing a Stable release.
+$qaStart = $workflow.IndexOf("  device360-qa-bundle:", [StringComparison]::Ordinal)
+$qaEnd = $workflow.IndexOf("  release:", [StringComparison]::Ordinal)
+if ($qaStart -lt 0 -or $qaEnd -le $qaStart) {
+    throw 'Missing or misplaced development QA bundle job.'
+}
+$qa = $workflow.Substring($qaStart, $qaEnd - $qaStart)
+$qaMarker = "github.event.pull_request.number == 117"
+if (-not $qa.Contains($qaMarker) -or
+    -not $qa.Contains("github.head_ref == 'feature/v0.36.0-device-health-diagnostics'") -or
+    -not $qa.Contains('"117:feature/v0.36.0-device-health-diagnostics"') -or
+    -not $qa.Contains('^0[.]36[.]0-preview[.][1-9][0-9]*
+# version proposed by a pull request. Direct pushes remain strictly gated.
+$stableWorkflowPath = Join-Path $PSScriptRoot '../../.github/workflows/main-stable-provenance.yml'
+$stableWorkflow = Get-Content -LiteralPath $stableWorkflowPath -Raw
+$expectedCheckout = 'ref: ${{ github.event_name == ''pull_request'' && github.event.pull_request.base.sha || github.sha }}'
+if (-not $stableWorkflow.Contains($expectedCheckout) -or
+    -not $stableWorkflow.Contains('branches: [main]') -or
+    -not $stableWorkflow.Contains('gh api "repos/$GITHUB_REPOSITORY/releases/latest"') -or
+    -not $stableWorkflow.Contains('git merge-base --is-ancestor "$tag_commit" HEAD') -or
+    $stableWorkflow.Contains('continue-on-error: true')) {
+    throw 'PR provenance must test published main base; pushes to main remain strict.'
+}
+
+# The v0.30.4 reliability PR must run the TWO-identity protected audit
+# broker integration test, not just compile the broker code.
+if ($workflow -notmatch
+    "github\.head_ref == 'feature/v0\.30\.4-reliability-20261017'") {
+    throw 'Reliability PR must execute the protected audit broker integration.'
+}
+# Never delete operator release branches or install online updates from CI.
+$forbidden = @(
+    '(?im)^\s*gh\s+api\s+--method\s+DELETE\b',
+    '(?im)^\s*git\s+push\b[^\r\n]*:refs/heads/',
+    '(?im)^\s*- name:\s*Archive and remove stale release branches\b',
+    '(?im)^\s*\$updateOutput\s*=\s*&\s*\$exe\s+--update\b',
+    '(?im)^\s*gh\s+release\s+delete\b'
+)
+foreach ($pattern in $forbidden) {
+    if ($release -match $pattern) {
+        throw "Forbidden release workflow operation: $pattern"
+    }
+}
+
+$afterPublish = $release.Substring($publishIndex + $publishName.Length)
+if ($afterPublish -match '(?m)^\s*- name:') {
+    throw 'GitHub Release creation must be the FINAL workflow step.'
+}
+Write-Host 'Release workflow order, signing, approval and branch safety passed.'
+) -or
+    -not $qa.Contains('docs/device-360-v0.36-preview.md') -or
+    -not $qa.Contains('github.event.pull_request.head.sha') -or
+    -not $qa.Contains('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"') -or
+    -not $qa.Contains('needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]') -or
+    -not $qa.Contains('SHA256SUMS.txt') -or
+    -not $qa.Contains('DEVICE-360-QA-NOTES.md') -or
+    -not $qa.Contains('UNSIGNED MANUAL QA')) {
+    throw 'v0.36 preview QA requires exact PR provenance and security gates.'
+}
+foreach ($job in @('legacy-upgrade-regression', 'audit-broker-integration',
+                   'release-signing-positive')) {
+    $jobMatch = [regex]::Match(
+        $workflow,
+        '(?ms)^  ' + [regex]::Escape($job) +
+            ':\r?\n(?<body>.*?)(?=^  [a-zA-Z0-9_-]+:|\z)')
+    if (-not $jobMatch.Success -or
+        -not $jobMatch.Groups['body'].Value.Contains($qaMarker) -or
+        -not $jobMatch.Groups['body'].Value.Contains(
+            "github.head_ref == 'feature/v0.36.0-device-health-diagnostics'")) {
+        throw "PR #117 may not bypass hosted integration job $job."
+    }
+}
+if ($release.Contains("github.ref == 'refs/heads/release/v0.36.0'") -or
+    $release.Contains("github.event.head_commit.message == 'Release v0.36.0'") -or
+    $workflow.Contains('"release/v0.36.0"')) {
+    throw 'Preview 0.36 must not be permitted to publish Stable.'
+}
+
 # PR provenance checks must examine the published main BASE, not a future
 # version proposed by a pull request. Direct pushes remain strictly gated.
 $stableWorkflowPath = Join-Path $PSScriptRoot '../../.github/workflows/main-stable-provenance.yml'
