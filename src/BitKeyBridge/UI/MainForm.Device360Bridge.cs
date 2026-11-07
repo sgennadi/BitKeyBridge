@@ -269,27 +269,33 @@ public sealed partial class MainForm
                 _deviceRecoveryIds.Items.Count != 0)
                 return false;
 
-            // A token is also invalid once its expiry crosses the required
-            // margin, even if its reference and context did not change.
+            // GraphToken is immutable: use separate synthetic instances
+            // to exercise the time margin rather than changing ExpiresAt.
+            // A token nearing expiry is not an active RecoveryRead session.
             _cloudTokenContext = BuildCloudTokenContext();
-            token.ExpiresAt = DateTime.Now.AddSeconds(20);
-            if (HasCloudSearchSession() ||
-                IsCurrentDeviceCloudRecoverySession(token))
-                return false;
-
-            token.ExpiresAt = DateTime.Now.AddMinutes(30);
-            if (!IsCurrentDeviceCloudRecoverySession(token))
-                return false;
-
-            var swapped = new GraphToken
+            var expiring = new GraphToken
             {
-                AccessToken = "SYNTHETIC-DIFFERENT-TOKEN-NOT-A-CREDENTIAL",
+                AccessToken = "SYNTHETIC-EXPIRING-NOT-A-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddSeconds(20)
+            };
+            _cloudToken = expiring;
+            if (HasCloudSearchSession() ||
+                IsCurrentDeviceCloudRecoverySession(expiring))
+                return false;
+
+            // A fresh valid session is accepted, but neither the previous
+            // valid object nor the near-expired object can be reused.
+            var refreshed = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-REFRESHED-NOT-A-CREDENTIAL",
                 AuthMode = "DeviceCode",
                 ExpiresAt = DateTime.Now.AddMinutes(30)
             };
-            _cloudToken = swapped;
-            if (IsCurrentDeviceCloudRecoverySession(token) ||
-                !IsCurrentDeviceCloudRecoverySession(swapped))
+            _cloudToken = refreshed;
+            if (!IsCurrentDeviceCloudRecoverySession(refreshed) ||
+                IsCurrentDeviceCloudRecoverySession(expiring) ||
+                IsCurrentDeviceCloudRecoverySession(token))
                 return false;
 
             return true;
