@@ -3456,14 +3456,15 @@ public sealed partial class MainForm
         foreach (var id in row.RecoveryIds)
             _deviceRecoveryIds.Items.Add(id);
 
-        // Only a single unambiguous Recovery ID may be preselected.
-        // If there are multiple IDs, the operator must explicitly choose
-        // the exact entry before Reveal/Copy. No secret is read here.
+        // A WinForms ComboBox can implicitly select its first entry when
+        // items are added to an initialized DropDownList. Explicitly clear
+        // selection unless there is exactly one verified Recovery ID.
+        // Neither path reads a secret, opens Graph or grants permissions.
         if (_deviceRecoveryIds.Items.Count == 1 &&
             row.IdentityStatus != "Name collision")
-        {
             _deviceRecoveryIds.SelectedIndex = 0;
-        }
+        else
+            _deviceRecoveryIds.SelectedIndex = -1;
     }
 
     private bool TryGetSelectedDeviceRecovery(

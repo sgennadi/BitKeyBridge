@@ -320,7 +320,7 @@ public sealed partial class MainForm
     /// silently choose the first; one exact ID remains actionable.
     /// The test uses synthetic metadata only and never invokes Reveal.
     /// </summary>
-    internal bool PreviewDeviceRecoveryIdSelectionForUiSelfTest()
+    internal string PreviewDeviceRecoveryIdSelectionForUiSelfTest()
     {
         if (!_layoutSelfTest)
             throw new InvalidOperationException("Offline UI self-test only.");
@@ -347,18 +347,21 @@ public sealed partial class MainForm
                 IsCloudRecord = true,
                 InventoryMetadata = device
             };
-            if (!TryReuseHomeInventoryInDevices(selected) ||
-                _deviceRecoveryIds.Items.Count != 2 ||
-                _deviceRecoveryIds.SelectedIndex != -1 ||
-                TryGetSelectedDeviceRecovery(out _, out _))
-                return false;
+            if (!TryReuseHomeInventoryInDevices(selected))
+                return "two-ids-transfer-rejected";
+            if (_deviceRecoveryIds.Items.Count != 2)
+                return "two-ids-not-populated";
+            if (_deviceRecoveryIds.SelectedIndex != -1)
+                return "two-ids-implicitly-selected";
+            if (TryGetSelectedDeviceRecovery(out _, out _))
+                return "two-ids-incorrectly-actionable";
 
             // Deliberate dropdown selection must resolve only that ID.
             _deviceRecoveryIds.SelectedIndex = 1;
             if (!TryGetSelectedDeviceRecovery(out var chosen, out var id) ||
                 !ReferenceEquals(chosen, device) ||
                 id != "UI-TEST-RECOVERY-TWO")
-                return false;
+                return "manual-id-choice-not-resolved";
 
             // Simulate an old unmasked field before the next exact
             // navigation; the same presenter must clear it immediately.
@@ -368,19 +371,22 @@ public sealed partial class MainForm
             _deviceShowKey.Text = "Hide Key";
 
             device.RecoveryIds = ["UI-TEST-RECOVERY-ONE"];
-            if (!TryReuseHomeInventoryInDevices(selected) ||
-                _deviceRecoveryIds.Items.Count != 1 ||
-                _deviceRecoveryIds.SelectedIndex != 0 ||
+            if (!TryReuseHomeInventoryInDevices(selected))
+                return "one-id-transfer-rejected";
+            if (_deviceRecoveryIds.Items.Count != 1)
+                return "one-id-not-populated";
+            if (_deviceRecoveryIds.SelectedIndex != 0 ||
                 !TryGetSelectedDeviceRecovery(out chosen, out id) ||
                 !ReferenceEquals(chosen, device) ||
-                id != "UI-TEST-RECOVERY-ONE" ||
-                _deviceCurrentKey is not null ||
+                id != "UI-TEST-RECOVERY-ONE")
+                return "one-id-selection-not-resolved";
+            if (_deviceCurrentKey is not null ||
                 _deviceRecoveryKey.Text.Length != 0 ||
                 !_deviceRecoveryKey.UseSystemPasswordChar ||
                 _deviceShowKey.Text != "Reveal Key")
-                return false;
+                return "previous-synthetic-key-not-cleared";
 
-            return true;
+            return "OK";
         }
         finally
         {
