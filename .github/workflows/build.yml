@@ -319,6 +319,39 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Verify read-only Windows 11 acceptance helper CLI (help-only)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          # Never run /preflight or /guided on GitHub-hosted Windows Server:
+          # this only tests help parsing and an exact safe command allowlist.
+          $path = (Resolve-Path -LiteralPath 'tests/windows/BitKeyBridge-Win11-Canary.cmd').Path
+          $source = [System.IO.File]::ReadAllText($path)
+          $matches = [regex]::Matches($source, '(?im)^\s*"%BKB_EXE%"\s+(?<args>--[^\r\n]+)')
+          $actual = @($matches | ForEach-Object { $_.Groups['args'].Value.Trim() })
+          $allowed = @(
+            '--version',
+            '--startup-diagnostics --no-elevation',
+            '--audit-broker-preflight --no-elevation'
+          )
+          if ($actual.Count -ne $allowed.Count) {
+            throw "Canary helper must invoke exactly three read-only application commands."
+          }
+          foreach ($command in $allowed) {
+            if ($actual -cnotcontains $command) {
+              throw "Canary helper is missing an approved read-only command."
+            }
+          }
+          if ($source -cnotmatch 'BitKeyBridgeCanary=0\.36\.0-preview\.2' -or
+              $source -cnotmatch 'Windows11Client=PASS' -or
+              $source -cnotmatch 'ProtectedAuditPreflight=NOT_READY') {
+            throw "Canary helper lacks expected status-only report fields."
+          }
+          & $env:ComSpec /d /c ('"' + $path + '" /?')
+          if ($LASTEXITCODE -ne 0) {
+            throw "Canary helper /? did not exit cleanly."
+          }
+
       - name: Self-test offline UI timing comparator (synthetic numeric data)
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -1317,6 +1350,9 @@ jobs:
           EOF
           if [[ "$GITHUB_HEAD_REF" == "feature/v0.36.0-device-health-diagnostics" ]]; then
             cp ../docs/device-360-v0.36-preview.md DEVICE-360-QA-NOTES.md
+            cp ../docs/managed-canary-0.36.0-preview.2.md WIN11-ACCEPTANCE.md
+            cp ../tests/windows/BitKeyBridge-Win11-Canary.cmd BitKeyBridge-Win11-Canary.cmd
+            sha256sum DEVICE-360-QA-NOTES.md WIN11-ACCEPTANCE.md BitKeyBridge-Win11-Canary.cmd >> SHA256SUMS.txt
             cat > README-TEST.txt <<'EOF'
           BITKEYBRIDGE 0.36 PREVIEW - UNSIGNED MANUAL QA
           ==============================================
@@ -1330,6 +1366,16 @@ jobs:
             BitKeyBridge.exe --self-test --no-elevation
             BitKeyBridge.exe --ui-self-test --no-elevation
             BitKeyBridge.exe --startup-diagnostics --no-elevation
+
+          Windows 11 local acceptance helper is included at the bundle root.
+          Run it separately for authorized and denied standard test identities.
+          It never uploads private diagnostics or reads any recovery value.
+          From normal CMD with the extracted EXE full path:
+            BitKeyBridge-Win11-Canary.cmd "C:\QA\BitKeyBridge\BitKeyBridge.exe" /preflight
+            BitKeyBridge-Win11-Canary.cmd "C:\QA\BitKeyBridge\BitKeyBridge.exe" /guided
+          Review WIN11-ACCEPTANCE.md. Only SAFE-RESULTS.txt is a
+          candidate for sharing, after manual review. Never share the
+          adjacent startup-PRIVATE.json or broker-PRIVATE.json.
 
           Test Start, Devices, Device 360, Hardware, Health, Smart Diagnostics
           and Helpdesk Report in EN/RU/HE, RTL, RDP and 100%-200% DPI.

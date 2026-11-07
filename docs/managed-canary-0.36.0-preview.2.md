@@ -37,3 +37,7 @@ Run separately under a real non-admin test account with approved delegated permi
 A passing CI run does not imply these human checks are complete. Only use the local summary alongside an authorized security review of audit/identity results. Before a production Stable release, confirm corporate Authenticode signer/publisher policy, signing-aware update and rollback, SIEM receipts, and appropriate approval. Retain Stable 0.35.0 until all gates are satisfied.
 
 The canary helper's PASS/FAIL/SKIP choices are operator-entered **observations**, not technical attestations of backend security, secret validity or SIEM delivery.
+
+## Packaging and CI limitations
+
+The Windows 11 canary CMD and this guide are included in the exact-source PR #117 unsigned QA archive, alongside their SHA-256 entries. GitHub-hosted Windows Server validates the helper's help-mode parsing and exact allowlist of three read-only BitKeyBridge commands, **not** its Windows 11, AD/Intune or protected-audit behavior. Do not treat an unrun manual canary as PASS. The `/guided` script may exit 0 with skipped observations; reviewers must examine each recorded PASS/FAIL/SKIP and the restricted preflight result before approving any broader test.

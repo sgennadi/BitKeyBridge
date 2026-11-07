@@ -5,9 +5,9 @@ rem BitKeyBridge 0.36.0-preview.2 Windows 11 manual acceptance.
 rem Read-only preflight; manual prompts record statuses ONLY.
 rem NEVER reads or prints BitLocker/LAPS values, token, identity or device name.
 rem NEVER uploads data or modifies AD, Intune, RBAC, services or GPO.
-if /I "%~1"=="/?" goto :help
-if /I "%~1"=="-h" goto :help
-if /I "%~1"=="--help" goto :help
+if /I "%~1"=="/?" goto :help_ok
+if /I "%~1"=="-h" goto :help_ok
+if /I "%~1"=="--help" goto :help_ok
 
 if "%~1"=="" goto :help_error
 for %%F in ("%~1") do set "BKB_EXE=%%~fF"
@@ -40,7 +40,16 @@ if not defined BKB_BUILD (
     echo ERROR: Unable to verify Windows 11 version.
     exit /b 2
 )
+set "BKB_BUILD_NUMBER="
 set /a "BKB_BUILD_NUMBER=%BKB_BUILD%" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Unable to parse Windows build number.
+    exit /b 2
+)
+if not defined BKB_BUILD_NUMBER (
+    echo ERROR: Windows build number is unavailable.
+    exit /b 2
+)
 if %BKB_BUILD_NUMBER% LSS 22000 (
     echo ERROR: This canary procedure is for Windows 11 build 22000 or later.
     exit /b 2
@@ -88,7 +97,7 @@ if errorlevel 1 (
     echo ERROR: --version command failed.
     exit /b 2
 )
-findstr /I /C:"0.36.0-preview.2" "%BKB_VERSION%" >nul
+findstr /X /C:"0.36.0-preview.2" "%BKB_VERSION%" >nul
 if errorlevel 1 (
     >> "%BKB_SAFE%" echo AppVersion=FAIL
     echo ERROR: Wrong app version. Use exactly 0.36.0-preview.2.
@@ -174,11 +183,18 @@ exit /b 0
 
 :help_error
 echo ERROR: Invalid arguments.
-:help
+call :help_text
+exit /b 2
+
+:help_ok
+call :help_text
+exit /b 0
+
+:help_text
 echo BitKeyBridge Windows 11 canary - SAFE local acceptance
 echo Usage:
 echo   BitKeyBridge-Win11-Canary.cmd "C:\QA\BitKeyBridge.exe" /preflight
 echo   BitKeyBridge-Win11-Canary.cmd "C:\QA\BitKeyBridge.exe" /guided
 echo   BitKeyBridge-Win11-Canary.cmd /?
 echo Only Windows 11 standard user. No AD/Graph automation or secret export.
-exit /b 2
+exit /b 0
