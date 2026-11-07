@@ -2901,6 +2901,7 @@ public sealed partial class MainForm
         {
             // Editing a previous search is not selecting that old device.
             // Revoke Reveal/Copy context immediately, before pressing Search.
+            _startTransferredDeviceItem = null;
             InvalidateDeviceCloudSecretOnSessionChange();
             _deviceRecoveryIds.Items.Clear();
             foreach (ListViewItem selected in
@@ -3443,14 +3444,8 @@ public sealed partial class MainForm
         _deviceRecoveryKey.UseSystemPasswordChar = true;
         _deviceShowKey.Text = "Reveal Key";
 
-        if (_unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo row)
-        {
-            return;
-        }
-
-        if (row.IdentityStatus == "Ambiguous device ID")
+        if (!TryGetExactSelectedUnifiedDevice(out var row) ||
+            row is null)
             return;
 
         foreach (var id in row.RecoveryIds)
@@ -3474,17 +3469,15 @@ public sealed partial class MainForm
         row = null;
         recoveryId = string.Empty;
 
-        if (_unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo selected ||
+        if (!TryGetExactSelectedUnifiedDevice(out var selected) ||
+            selected is null ||
             _deviceRecoveryIds.SelectedItem is not
                 string selectedRecoveryId)
         {
             return false;
         }
 
-        if (selected.IdentityStatus == "Ambiguous device ID" ||
-            !selected.RecoveryIds.Contains(selectedRecoveryId,
+        if (!selected.RecoveryIds.Contains(selectedRecoveryId,
                 StringComparer.OrdinalIgnoreCase))
         {
             return false;

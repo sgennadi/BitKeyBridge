@@ -7,6 +7,38 @@ namespace BitKeyBridge;
 /// </summary>
 public sealed partial class MainForm
 {
+    // Only an identity-verified Start -> Devices transfer can install this
+    // fallback. Before the inactive WinForms ListView is realized,
+    // SelectedItems may be empty despite explicitly selecting the new row.
+    // This reference is cleared by query edits and fresh Devices searches.
+    private ListViewItem? _startTransferredDeviceItem;
+
+    // Never infer selection from a single search result or a matching name.
+    // The fallback is allowed ONLY for the exact Start-transferred item while
+    // the Devices ListView is not visible. Once visible, native selection is
+    // required before any recovery read. Existing RBAC/audit/Graph gates remain.
+    private bool TryGetExactSelectedUnifiedDevice(
+        out UnifiedDeviceInfo? device)
+    {
+        device = null;
+        if (_unifiedResults.SelectedItems.Count > 1)
+            return false;
+
+        ListViewItem? item = _unifiedResults.SelectedItems.Count == 1
+            ? _unifiedResults.SelectedItems[0]
+            : !_unifiedResults.Visible &&
+              _startTransferredDeviceItem is { } pending &&
+              _unifiedResults.Items.Count == 1 &&
+              ReferenceEquals(_unifiedResults.Items[0], pending)
+                ? pending : null;
+        if (item?.Tag is not UnifiedDeviceInfo found ||
+            found.IdentityStatus == "Ambiguous device ID")
+            return false;
+
+        device = found;
+        return true;
+    }
+
     private ListViewItem AddUnifiedDeviceSearchResultRow(UnifiedDeviceInfo row)
     {
         var item = new ListViewItem(row.ComputerName);
@@ -386,10 +418,23 @@ public sealed partial class MainForm
                 _deviceShowKey.Text != "Reveal Key")
                 return "previous-synthetic-key-not-cleared";
 
+            // A lone item from an ordinary Devices search is NOT a selected
+            // Start object. Even a manually chosen dropdown entry cannot
+            // authorize Reveal if no exact source-qualified row was selected.
+            _unifiedResults.Items.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            AddUnifiedDeviceSearchResultRow(device);
+            _startTransferredDeviceItem = null;
+            _deviceRecoveryIds.Items.Add("UI-TEST-RECOVERY-ONE");
+            _deviceRecoveryIds.SelectedIndex = 0;
+            if (TryGetSelectedDeviceRecovery(out _, out _))
+                return "unselected-search-row-accepted";
+
             return "OK";
         }
         finally
         {
+            _startTransferredDeviceItem = null;
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
             _deviceRecoveryIds.Items.Clear();
@@ -459,6 +504,10 @@ public sealed partial class MainForm
         var item = AddUnifiedDeviceSearchResultRow(metadata);
         item.Selected = true;
         item.Focused = true;
+        // This item has already passed exact source-qualified identity
+        // matching above, so it may supply metadata before the hidden
+        // ListView has native SelectedItems. Never match by hostname.
+        _startTransferredDeviceItem = item;
         // Inactive WinForms pages may not fire SelectedIndexChanged until
         // shown. Populate metadata deterministically after Start navigation.
         // This does not query Graph or retrieve a recovery password.
