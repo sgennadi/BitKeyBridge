@@ -1,3 +1,15 @@
+## 0.36.0-preview.2
+
+**Unsigned development Preview — 7 November 2026; Stable 0.35.0 unchanged.** This revision packages the Device 360/Start→Devices/Recovery ID changes in PR #117 for exact-head Windows testing. It does **not** authorize production domain deployment or automatic update.
+
+- Start's ordinary **Devices** navigation reuses an already verified source-qualified device record and its existing inventory, instead of transferring only the computer name or silently invoking Graph/MFA.
+- Clear old Devices metadata, Recovery ID selection and pending search when the Start record cannot be matched by exact AD/Entra/Intune identity. Name-only or ambiguous matches remain unverified.
+- Preserve one verified Start-selected device across the inactive WinForms ListView boundary; ordinary unselected search rows are not trusted, and multiple Entra Recovery IDs require explicit operator choice.
+- Avoid double transfer and repeated Recovery ID reset while preparing an approved BitLocker Reveal/Copy from Start.
+- Reject late Graph recovery responses if the token changes, expires or no longer matches tenant/client/scope context. No authorization, ticket, JIT or protected audit gates are weakened.
+- Add native WinForms regressions, including a **shown** main window with exact Start→Devices selection, manual multiple-ID choice and name-only navigation cleanup, plus EN/RU/HE, synthetic hardware/Device 360 and fail-closed WMI tests.
+- This Preview still requires a clean x64/x86/ARM64 GitHub Actions pass, native UI/CodeQL/security regression checks, and authorized/denied managed-workstation acceptance before Stable. No live secrets, credentials or endpoint names belong in CI logs.
+
 ## 0.36.0-preview.1
 
 - Reject mismatched selected AD computer CN versus dNSHostName **before connecting** to WMI, preventing unnecessary Windows integrated authentication to a wrong same-domain host.

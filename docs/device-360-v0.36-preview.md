@@ -1,4 +1,4 @@
-# BitKeyBridge 0.36.0-preview.1 — Device 360 hardware and diagnostics
+# BitKeyBridge 0.36.0-preview.2 — Device 360 hardware and diagnostics
 
 **Development only**, based on the published Stable 0.35.0. This preview does not authorize GPO/Intune rollout, corporate signing or changes to real domain security policy.
 
@@ -47,3 +47,11 @@ Every operator-initiated WMI result is normalized before being shown in Device 3
 ## Service-level WMI consistency gate
 
 The same typed failure precedence now applies in Device Health, Smart Diagnostics and the manually exported Helpdesk Report even if those services are called without the Device 360 WinForms presenter. Any nonempty WMI failure category invalidates its accompanying hardware inventory; unknown strings become the safe `Unavailable` category and never appear verbatim. An unqueried `null` inventory with `null` failure still means **not queried**, not a failure. Offline synthetic regressions exercise direct service invocation, rejected serials/CPU/TPM observations and non-secret reporting, while native UI regressions cover the visible flow.
+
+## Start → Devices and protected recovery (preview.2)
+
+The ordinary Start → Devices navigation now reuses only exact source-qualified inventory already returned by Start, with no fresh LDAP/Graph request or Device Code/MFA. If the Start record has no verified identity, the old Devices row, Recovery IDs and pending search are discarded; the operator must explicitly search again. A verified in-memory transferred row can seed the hidden WinForms list before native selection is realized. An ordinary unselected search result never qualifies.
+
+A single unambiguous Entra Recovery ID may be preselected, but multiple IDs require an explicit choice. Reveal and Copy continue to require the active delegated Microsoft 365 session and existing recovery RBAC, ticket/JIT and protected-audit gates. A late Graph response is discarded after token/context expiry or change. The synthetic Windows UI self-test covers both a not-yet-realized ListView and a shown native WinForms window. These tests do not read or disclose any real secrets.
+
+Preview `0.36.0-preview.2` is **unsigned test software**, not a production release; the exact-head Windows matrix, CodeQL and real AD/Entra canary acceptance remain mandatory.
