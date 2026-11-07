@@ -213,6 +213,23 @@ internal static class Device360V36SelfTest
                   "ui-test-ad-01.example.com",
                   "CN=DIFFERENT,OU=Labs,DC=example,DC=com"),
             "pre-connection AD/DNS short-name gate permitted misrouting");
+        var verifiedAdHost = new Device360Snapshot
+        {
+            Computer = "UI-TEST-AD-01",
+            IdentityVerified = true, IdentityAmbiguous = false,
+            InAd = true, AdDnsHostName = "ui-test-ad-01.example.com",
+            AdDistinguishedName = adDn
+        };
+        Check(Device360HardwareService.CanQuery(verifiedAdHost) &&
+              !Device360HardwareService.CanQuery(verifiedAdHost with
+              {
+                  AdDnsHostName = "other.example.com"
+              }) &&
+              !Device360HardwareService.CanQuery(verifiedAdHost with
+              {
+                  AdDistinguishedName = "CN=OTHER,DC=example,DC=com"
+              }),
+            "WMI preflight could contact the wrong same-domain AD host");
         Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
                   "ui-test-ad-01.example.com",
                   "CN=UI\\,TEST,DC=example,DC=com",
