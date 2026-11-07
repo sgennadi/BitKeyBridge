@@ -1038,6 +1038,29 @@ public static class UiLayoutSelfTest
                     failures.Add("Device 360 failed retry preserved stale WMI " +
                         "hardware or localized diagnostics (" + language + ").");
 
+                // The synthetic UI must reject a misdirected WMI host,
+                // displaying a localized status without stale hardware.
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(false, null,
+                            "Synthetic mismatched host")
+                        {
+                            FailureCategory = "IdentityMismatch"
+                        }) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox mismatchDiagnostics ||
+                    !mismatchDiagnostics.Text.Contains("WMI.IDENTITY_MISMATCH",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label mismatchStatus ||
+                    mismatchStatus.Text != UiLanguageService.Translate(language,
+                        "Device360V36WmiIdentityMismatch") ||
+                    FindByName(dialog, "Device360V36CpuName")
+                        is not TextBox mismatchCpu ||
+                    mismatchCpu.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal))
+                    failures.Add("Device 360 identity-mismatch result retained " +
+                        "hardware or lost localized status: " + language);
+
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");
                 var entraSource = FindByName(dialog, "Device360SourceEntra");

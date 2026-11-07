@@ -118,6 +118,7 @@ internal static class UiLanguageService
             ["Device360V36WmiSuccess"] = ["Read-only WMI inventory completed", "Инвентаризация WMI завершена (только чтение)", "איסוף נתוני WMI לקריאה בלבד הושלם"],
             ["Device360V36WmiCheckedUtc"] = ["Checked UTC", "Проверено UTC", "זמן בדיקה UTC"],
             ["Device360V36WmiNoRecord"] = ["No verified computer/BIOS records from WMI", "WMI не вернул подтверждённых данных компьютера/BIOS", "לא התקבלו רשומות מחשב או BIOS מאומתות ב-WMI"],
+            ["Device360V36WmiIdentityMismatch"] = ["Remote computer differs from selected AD identity; hardware rejected", "Компьютер не совпадает с выбранным объектом AD; данные отклонены", "המחשב המרוחק אינו תואם לזהות AD שנבחרה; נתוני החומרה נדחו"],
             ["Device360V36WmiDenied"] = ["WMI access denied; check existing permissions", "Доступ WMI запрещён: проверьте существующие разрешения", "הגישה ל-WMI נדחתה; יש לבדוק הרשאות קיימות"],
             ["Device360V36WmiTimeout"] = ["WMI request timed out", "Превышено время ожидания WMI", "תם זמן ההמתנה לבקשת WMI"],
             ["Device360V36WmiRpc"] = ["WMI DCOM/RPC unavailable", "WMI DCOM/RPC недоступен", "תקשורת WMI DCOM/RPC אינה זמינה"],

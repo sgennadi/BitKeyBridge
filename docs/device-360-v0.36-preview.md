@@ -31,3 +31,7 @@ The UI discards the previous WMI sample, clears read-only hardware fields and re
 ## Native UI regression
 
 The Windows UI self-test now injects a **synthetic-only** WMI success followed by a failed retry, using the same presenter as the real user-initiated WMI result. It verifies that stale CPU/RAM fields and previous WMI error codes disappear, the new typed error appears in Diagnostics, and the Health header refreshes in EN/RU/HE. Actual AD/WMI authorization and remote provider calls remain separate manual acceptance gates.
+
+## Remote host identity consistency
+
+The selected AD DNS hostname authorizes an explicit read-only WMI probe, but DNS by itself does not prove which Windows host answered. Before collecting BIOS, TPM, CPU, storage or adapter details, the probe compares `Win32_ComputerSystem.Name`, `Domain` and `PartOfDomain` against the exact selected AD object's DNS name/domain. On mismatch the result is classified `WMI.IDENTITY_MISMATCH`, with no accepted hardware inventory. The check is an additional consistency safeguard, **not** independent cryptographic endpoint attestation. It does not modify AD, DNS, firewall rules, WMI permissions or any secrets.

@@ -380,6 +380,7 @@ internal sealed partial class Device360Dialog
                 result.FailureCategory switch
                 {
                     "NoRecord" => Tr("Device360V36WmiNoRecord"),
+                    "IdentityMismatch" => Tr("Device360V36WmiIdentityMismatch"),
                     "AccessDenied" => Tr("Device360V36WmiDenied"),
                     "Timeout" => Tr("Device360V36WmiTimeout"),
                     "DCOM/RPCUnavailable" => Tr("Device360V36WmiRpc"),

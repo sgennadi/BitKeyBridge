@@ -172,6 +172,54 @@ internal static class Device360V36SelfTest
         Check(!untrustedFailure.Any(x => x.Explanation.Contains(
                   "DO_NOT_INCLUDE", StringComparison.Ordinal)),
             "untrusted WMI failure text leaked into health checks");
+        // Cross-check the remote Win32_ComputerSystem identity against the
+        // selected AD DNS domain, without contacting any network service.
+        const string adDn = "CN=UI-TEST-AD-01,OU=Labs,DC=example,DC=com";
+        Check(Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                  "ui-test-ad-01.example.com", adDn, "UI-TEST-AD-01",
+                  "EXAMPLE.COM", true) &&
+              Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                  "ui-test-ad-01.lab.example.com", adDn, "ui-test-ad-01",
+                  "example.com", true),
+            "legitimate joined WMI host was rejected");
+        foreach (var variant in new[]
+        {
+            ("other.example.com", "OTHER", "example.com", true),
+            ("ui-test-ad-01.example.com", "UNRELATED", "example.com", true),
+            ("ui-test-ad-01.example.com", "UI-TEST-AD-01", "other.com", true),
+            ("ui-test-ad-01.example.com", "UI-TEST-AD-01", "example.com", false),
+            ("ui-test-ad-01.example.com", "", "example.com", true),
+            ("ui-test-ad-01.example.com", "UI-TEST-AD-01", "", true)
+        })
+            Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                    variant.Item1, adDn, variant.Item2, variant.Item3,
+                    variant.Item4), "remote identity accepted an invalid host");
+        Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                  "ui-test-ad-01.example.com", "CN=OTHER,DC=other,DC=com",
+                  "UI-TEST-AD-01", "example.com", true),
+            "selected AD domain was not checked");
+
+        var mismatch = Device360SmartDiagnosticsService.Evaluate(
+            unknown, empty, hardwareFailureCategory: "IdentityMismatch");
+        var mismatchHealth = Device360HealthService.Evaluate(
+            unknown, empty, hardwareFailureCategory: "IdentityMismatch");
+        var mismatchReport = Device360ReportService.Build(unknown, empty,
+            hardwareFailureCategory: "IdentityMismatch");
+        Check(mismatch.Any(x => x.Code == "WMI.IDENTITY_MISMATCH" &&
+                  x.Priority == Device360FindingPriority.Action) &&
+              mismatchHealth.Any(x => x.Area == "Remote WMI inventory" &&
+                  x.State == Device360CheckState.Attention) &&
+              !mismatchHealth.Any(x => x.Area == "Remote TPM status") &&
+              mismatchReport.Contains("WMI.IDENTITY_MISMATCH",
+                  StringComparison.Ordinal) &&
+              !mismatchReport.Contains("Remote serial number: SYNTHETIC",
+                  StringComparison.Ordinal),
+            "identity mismatch did not reject remote WMI evidence");
+        foreach (var language in new[] { "en", "ru", "he" })
+            Check(Device360SmartDiagnosticsService.Format(mismatch, language)
+                    .Contains("WMI.IDENTITY_MISMATCH", StringComparison.Ordinal),
+                "identity mismatch diagnostic code missing in " + language);
+
         var noRecord = Device360SmartDiagnosticsService.Evaluate(unknown,
             empty, hardwareFailureCategory: "NoRecord");
         var noRecordChecks = Device360HealthService.Evaluate(unknown, empty,
