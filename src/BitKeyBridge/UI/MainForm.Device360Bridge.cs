@@ -182,6 +182,107 @@ public sealed partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Native WinForms fixture for the exact Start -> Devices transfer while
+    /// a memory-only Graph session is valid, then after its identity context
+    /// is invalidated. No token request, Graph call, secret read or clipboard.
+    /// </summary>
+    internal bool PreviewStartToDevicesCloudSessionForUiSelfTest()
+    {
+        if (!_layoutSelfTest || _cloudConnecting)
+            return false;
+
+        var previousToken = _cloudToken;
+        var previousContext = _cloudTokenContext;
+        var previousRecovery = _cloudTokenHasRecovery;
+        var previousLaps = _cloudTokenHasLaps;
+        var previousQuery = _unifiedQuery.Text;
+        try
+        {
+            var token = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-NOT-A-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(30)
+            };
+            _cloudToken = token;
+            _cloudTokenHasRecovery = true;
+            _cloudTokenHasLaps = false;
+            _cloudTokenContext = BuildCloudTokenContext();
+            if (!HasCloudSearchSession())
+                return false;
+
+            var device = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-TEST-SESSION-TRANSFER",
+                IdentityKey = "INTUNE:MANAGED:ui-session-device-001",
+                IdentityStatus = "Intune object",
+                FoundInIntune = true,
+                FoundInEntra = true,
+                ManagedDeviceId = "ui-session-device-001",
+                EntraDeviceId = "e4963b97-64db-4119-a55c-1f90da27f250",
+                Manufacturer = "Synthetic Vendor",
+                Model = "Synthetic Laptop",
+                OperatingSystem = "Windows",
+                OsVersion = "11",
+                RecoveryMetadataIncomplete = true
+            };
+            var fromStart = new HomeSearchResult
+            {
+                ComputerName = device.ComputerName,
+                SourceIdentity = device.IdentityKey,
+                ComputerId = device.EntraDeviceId,
+                IsCloudRecord = true,
+                InventoryMetadata = device
+            };
+            var searchGeneration = _unifiedSearchGeneration;
+            var selectionGeneration = _deviceRecoverySelectionGeneration;
+            if (!TryReuseHomeInventoryInDevices(fromStart) ||
+                !ReferenceEquals(_cloudToken, token) ||
+                !HasCloudSearchSession() ||
+                _unifiedSearchGeneration != searchGeneration ||
+                _deviceRecoverySelectionGeneration <= selectionGeneration ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, device) ||
+                !_unifiedDetails.Text.Contains("Synthetic Laptop",
+                    StringComparison.Ordinal) ||
+                _deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar)
+                return false;
+
+            // A changed tenant/client/scope context disables recovery reuse.
+            // Navigation may still display already collected non-secret
+            // metadata, but must never create a new MFA prompt by itself.
+            _cloudTokenContext = "UI-TEST-INVALIDATED-CONTEXT";
+            if (HasCloudSearchSession() ||
+                !TryReuseHomeInventoryInDevices(fromStart) ||
+                !ReferenceEquals(_cloudToken, token) ||
+                HasCloudSearchSession() ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, device) ||
+                _deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar ||
+                _deviceRecoveryIds.Items.Count != 0)
+                return false;
+
+            return true;
+        }
+        finally
+        {
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            _unifiedQuery.Text = previousQuery;
+            _cloudToken = previousToken;
+            _cloudTokenContext = previousContext;
+            _cloudTokenHasRecovery = previousRecovery;
+            _cloudTokenHasLaps = previousLaps;
+            SetDevicesCloudWarningAction(!HasCloudSearchSession());
+        }
+    }
+
     private bool TryReuseHomeInventoryInDevices(HomeSearchResult selected)
     {
         if (selected is null || selected.IdentityAmbiguous ||

@@ -2145,6 +2145,10 @@ public static class UiLayoutSelfTest
             if (!main.PreviewDevice360SharedSearchForUiSelfTest())
                 failures.Add("Start -> Devices reused a name instead of source identity " +
                     "or attempted an additional Microsoft 365 authentication.");
+            if (!main.PreviewStartToDevicesCloudSessionForUiSelfTest())
+                failures.Add("Start -> Devices lost the same Microsoft 365 token, " +
+                    "dropped exact hardware metadata, or reused recovery " +
+                    "context after its identity changed.");
             if (!main.PreviewDevicesSearchWithoutImplicitSignInForUiTest())
                 failures.Add("Devices search triggered implicit Microsoft 365 sign-in " +
                     "instead of offering the explicit Connect action.");
