@@ -327,7 +327,7 @@ jobs:
           # this only tests help parsing and an exact safe command allowlist.
           $path = (Resolve-Path -LiteralPath 'tests/windows/BitKeyBridge-Win11-Canary.cmd').Path
           $source = [System.IO.File]::ReadAllText($path)
-          $matches = [regex]::Matches($source, '(?im)^\s*"%BKB_EXE%"\s+(?<args>--[^\r\n]+)')
+          $matches = [regex]::Matches($source, '(?im)^\s*"%BKB_EXE%"\s+(?<args>--[^>\r\n]+)')
           $actual = @($matches | ForEach-Object { $_.Groups['args'].Value.Trim() })
           $allowed = @(
             '--version',
