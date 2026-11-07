@@ -319,6 +319,39 @@ jobs:
             throw "PowerShell QA scripts contain syntax errors."
           }
 
+      - name: Verify read-only Windows 11 acceptance helper CLI (help-only)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          # Never run /preflight or /guided on GitHub-hosted Windows Server:
+          # this only tests help parsing and an exact safe command allowlist.
+          $path = (Resolve-Path -LiteralPath 'tests/windows/BitKeyBridge-Win11-Canary.cmd').Path
+          $source = [System.IO.File]::ReadAllText($path)
+          $matches = [regex]::Matches($source, '(?im)^\s*"%BKB_EXE%"\s+(?<args>--[^>\r\n]+)')
+          $actual = @($matches | ForEach-Object { $_.Groups['args'].Value.Trim() })
+          $allowed = @(
+            '--version',
+            '--startup-diagnostics --no-elevation',
+            '--audit-broker-preflight --no-elevation'
+          )
+          if ($actual.Count -ne $allowed.Count) {
+            throw "Canary helper must invoke exactly three read-only application commands."
+          }
+          foreach ($command in $allowed) {
+            if ($actual -cnotcontains $command) {
+              throw "Canary helper is missing an approved read-only command."
+            }
+          }
+          if ($source -cnotmatch 'BitKeyBridgeCanary=0\.36\.0-preview\.2' -or
+              $source -cnotmatch 'Windows11Client=PASS' -or
+              $source -cnotmatch 'ProtectedAuditPreflight=NOT_READY') {
+            throw "Canary helper lacks expected status-only report fields."
+          }
+          & $env:ComSpec /d /c ('"' + $path + '" /?')
+          if ($LASTEXITCODE -ne 0) {
+            throw "Canary helper /? did not exit cleanly."
+          }
+
       - name: Self-test offline UI timing comparator (synthetic numeric data)
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -419,7 +452,29 @@ jobs:
         run: |
           $exe = "artifacts\${{ matrix.rid }}\BitKeyBridge.exe"
           $report = "artifacts\${{ matrix.rid }}\ui-self-test.log"
-          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -Wait -PassThru
+          $progress = "artifacts\${{ matrix.rid }}\ui-self-test-progress.log"
+          # The native 100-200% DPI matrix has previously taken ~10 minutes.
+          # Keep sufficient headroom, but never block CI indefinitely.
+          $process = Start-Process -FilePath $exe -ArgumentList "--ui-self-test" -PassThru
+          $finished = $process.WaitForExit(20 * 60 * 1000)
+          if (-not $finished) {
+            if (Test-Path $progress) {
+              Write-Host "Last synthetic UI test phases:"
+              Get-Content $progress -Tail 50
+            }
+            if (Test-Path $report) {
+              Get-Content $report -Tail 50
+            }
+            try {
+              $process.Kill($true)
+            } catch {
+              Write-Warning "UI self-test process cleanup failed."
+            }
+            throw "Runtime UI layout self-test exceeded the 20-minute safety limit. Inspect the last synthetic phase above."
+          }
+          if (Test-Path $progress) {
+            Get-Content $progress -Tail 50
+          }
           if (Test-Path $report) {
             Get-Content $report
           }
@@ -435,6 +490,7 @@ jobs:
           path: |
             artifacts/win-x64/ui-start-1080p-*.png
             artifacts/win-x64/ui-device-360-*.png
+            artifacts/win-x64/ui-self-test-progress.log
           if-no-files-found: warn
           compression-level: 0
           retention-days: 30
@@ -752,7 +808,9 @@ jobs:
          (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
           github.event.pull_request.number == 114) ||
          (github.head_ref == 'release/v0.35.0-rc.1' &&
-          github.event.pull_request.number == 115))) ||
+          github.event.pull_request.number == 115) ||
+         (github.head_ref == 'feature/v0.36.0-device-health-diagnostics' &&
+          github.event.pull_request.number == 117))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.4' ||
         github.ref == 'refs/heads/release/v0.30.5' ||
@@ -807,7 +865,9 @@ jobs:
          (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
           github.event.pull_request.number == 114) ||
          (github.head_ref == 'release/v0.35.0-rc.1' &&
-          github.event.pull_request.number == 115))) ||
+          github.event.pull_request.number == 115) ||
+         (github.head_ref == 'feature/v0.36.0-device-health-diagnostics' &&
+          github.event.pull_request.number == 117))) ||
       (github.event_name == 'push' &&
        (github.ref == 'refs/heads/release/v0.30.3' ||
         github.ref == 'refs/heads/release/v0.30.4' ||
@@ -865,7 +925,9 @@ jobs:
        (github.head_ref == 'feature/v0.35.0-unified-device-card' &&
         github.event.pull_request.number == 114) ||
        (github.head_ref == 'release/v0.35.0-rc.1' &&
-        github.event.pull_request.number == 115))
+        github.event.pull_request.number == 115) ||
+         (github.head_ref == 'feature/v0.36.0-device-health-diagnostics' &&
+          github.event.pull_request.number == 117))
     needs: [build]
     runs-on: windows-2022
     timeout-minutes: 12
@@ -1150,14 +1212,16 @@ jobs:
 
   device360-qa-bundle:
     # One unsigned manual QA archive; not a GitHub Release or automatic update.
-    # Exact PR #114 feature draft or PR #115 unified 0.35 RC only.
+    # Only exact PR #114, #115 or #117; no GitHub Release or auto updater.
     # Build and all ephemeral integration gates must pass first.
     if: >-
       github.event_name == 'pull_request' &&
       ((github.head_ref == 'feature/v0.35.0-unified-device-card' &&
         github.event.pull_request.number == 114) ||
        (github.head_ref == 'release/v0.35.0-rc.1' &&
-        github.event.pull_request.number == 115))
+        github.event.pull_request.number == 115) ||
+       (github.head_ref == 'feature/v0.36.0-device-health-diagnostics' &&
+        github.event.pull_request.number == 117))
     needs: [build, laps-regression, legacy-upgrade-regression, audit-broker-integration, release-signing-positive]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -1194,7 +1258,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = "pull_request"
           case "${{ github.event.pull_request.number }}:$GITHUB_HEAD_REF" in
-            "114:feature/v0.35.0-unified-device-card"|"115:release/v0.35.0-rc.1") ;;
+            "114:feature/v0.35.0-unified-device-card"|"115:release/v0.35.0-rc.1"|"117:feature/v0.36.0-device-health-diagnostics") ;;
             *) echo "Unknown or unapproved QA PR/branch" >&2; exit 1 ;;
           esac
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -1227,6 +1291,14 @@ jobs:
               echo "Missing per-candidate release notes: docs/release-candidate-v$version.md"
               exit 1
             }
+          elif [[ "$GITHUB_HEAD_REF" == "feature/v0.36.0-device-health-diagnostics" ]]; then
+            [[ "$version" =~ ^0[.]36[.]0-preview[.][1-9][0-9]*$ ]] || {
+              echo 'Only 0.36.0-preview.N is approved for PR #117 QA.'
+              exit 1
+            }
+            test -s docs/device-360-v0.36-preview.md || {
+              echo 'Missing v0.36 preview QA notes.'; exit 1
+            }
           else
             [[ "$version" =~ ^0[.]34[.]0-preview[.][0-9]+$ ]] || {
               echo 'Device 360 draft must retain the v0.34 preview base.'
@@ -1244,7 +1316,7 @@ jobs:
           done
           cd device360-qa
           sha256sum BitKeyBridge-win-x64.zip BitKeyBridge-win-x86.zip BitKeyBridge-win-arm64.zip > SHA256SUMS.txt
-          printf 'PR: %s\nBranch: %s\nFeature: Device 360 / BitKeyBridge 0.35 candidate\nApplication version: %s\nSource HEAD: %s\nCI merge SHA: %s\nSigning: UNSIGNED manual QA\n' "${{ github.event.pull_request.number }}" "$GITHUB_HEAD_REF" "$version" "$head_sha" "$GITHUB_SHA" > BUILD-INFO.txt
+          printf 'PR: %s\nBranch: %s\nFeature: Device 360 / BitKeyBridge candidate\nApplication version: %s\nSource HEAD: %s\nCI merge SHA: %s\nSigning: UNSIGNED manual QA\n' "${{ github.event.pull_request.number }}" "$GITHUB_HEAD_REF" "$version" "$head_sha" "$GITHUB_SHA" > BUILD-INFO.txt
           cat > README-TEST.txt <<'EOF'
           BITKEYBRIDGE DEVICE 360 / UNIFIED 0.35 -- UNSIGNED DEVELOPMENT QA
           ==================================================================
@@ -1276,11 +1348,58 @@ jobs:
           See docs/device-360-source-health.md, the RC acceptance checklist,
           and PR #114 / #115.
           EOF
+          if [[ "$GITHUB_HEAD_REF" == "feature/v0.36.0-device-health-diagnostics" ]]; then
+            cp ../docs/device-360-v0.36-preview.md DEVICE-360-QA-NOTES.md
+            cp ../docs/managed-canary-0.36.0-preview.2.md WIN11-ACCEPTANCE.md
+            cp ../tests/windows/BitKeyBridge-Win11-Canary.cmd BitKeyBridge-Win11-Canary.cmd
+            sha256sum DEVICE-360-QA-NOTES.md WIN11-ACCEPTANCE.md BitKeyBridge-Win11-Canary.cmd >> SHA256SUMS.txt
+            cat > README-TEST.txt <<'EOF'
+          BITKEYBRIDGE 0.36 PREVIEW - UNSIGNED MANUAL QA
+          ==============================================
+          This is not a Stable or company-signed release. Never install on
+          domain controllers or auto-deploy using GPO, Intune or the updater.
+
+          Verify each architecture ZIP in SHA256SUMS.txt. Extract the ZIP
+          matching Windows architecture on an approved test workstation.
+          Run as a regular non-elevated user:
+            BitKeyBridge.exe --version
+            BitKeyBridge.exe --self-test --no-elevation
+            BitKeyBridge.exe --ui-self-test --no-elevation
+            BitKeyBridge.exe --startup-diagnostics --no-elevation
+
+          Windows 11 local acceptance helper is included at the bundle root.
+          Run it separately for authorized and denied standard test identities.
+          It never uploads private diagnostics or reads any recovery value.
+          From normal CMD with the extracted EXE full path:
+            BitKeyBridge-Win11-Canary.cmd "C:\QA\BitKeyBridge\BitKeyBridge.exe" /preflight
+            BitKeyBridge-Win11-Canary.cmd "C:\QA\BitKeyBridge\BitKeyBridge.exe" /guided
+          Review WIN11-ACCEPTANCE.md. Only SAFE-RESULTS.txt is a
+          candidate for sharing, after manual review. Never share the
+          adjacent startup-PRIVATE.json or broker-PRIVATE.json.
+
+          Test Start, Devices, Device 360, Hardware, Health, Smart Diagnostics
+          and Helpdesk Report in EN/RU/HE, RTL, RDP and 100%-200% DPI.
+          Trigger WMI manually only with existing delegated read rights.
+          Test partial hardware, disconnected endpoint, denied RPC/WMI,
+          wrong AD/DNS identity, and failed retry after a successful sample.
+
+          No BitLocker/LAPS secret, recovery ID, Graph token, raw WMI
+          exception or unrelated computer hardware may appear in a report.
+          Never change endpoint permissions or security policies for QA.
+
+          Required GitHub-hosted checks: 3 Windows architectures, Protected
+          Audit Broker, upgrade/rollback and temporary signing-integrity.
+          A temporary signer is not corporate code signing. Real authorized
+          and denied AD/Graph/Intune, remote WMI and DPI/RDP acceptance
+          remain mandatory before any future Stable release.
+          See DEVICE-360-QA-NOTES.md and BUILD-INFO.txt.
+          EOF
+          fi
 
       - name: Upload one unsigned source-pinned QA archive
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.event.pull_request.number == 115 && format('BitKeyBridge-v{0}-QA-UNSIGNED', steps.validate_candidate.outputs.version) || 'BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED' }}
+          name: ${{ (github.event.pull_request.number == 115 || github.event.pull_request.number == 117) && format('BitKeyBridge-v{0}-QA-UNSIGNED', steps.validate_candidate.outputs.version) || 'BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED' }}
           path: device360-qa/
           if-no-files-found: error
           retention-days: 14

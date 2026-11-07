@@ -2066,7 +2066,10 @@ public sealed partial class MainForm
                 UiStatusKind.Warning);
             return false;
         }
-        if (!TryReuseHomeInventoryInDevices(selected))
+        // Navigate and transfer exactly once. OpenHomeDeviceDetails now
+        // transfers source-qualified inventory itself, so calling both
+        // would reset the selection/recovery generation a second time.
+        if (!NavigateHomeSelectionToDevices(selected))
         {
             UiStyle.SetStatus(_homeSearchStatus,
                 "The source-qualified device could not be transferred to Devices. " +
@@ -2075,7 +2078,6 @@ public sealed partial class MainForm
             return false;
         }
 
-        OpenHomeDeviceDetails();
         PopulateDeviceRecoveryIds();
         if (!HomeCloudRecoverySelectionGuard.CanRevealOne(selected))
         {
@@ -2258,27 +2260,65 @@ public sealed partial class MainForm
 
     private void OpenHomeDeviceDetails()
     {
-        var selected =
-            GetSelectedHomeSearchResult();
+        var selected = GetSelectedHomeSearchResult();
+        if (selected is not null)
+            NavigateHomeSelectionToDevices(selected);
+    }
 
-        if (selected is null)
-            return;
-
-        _unifiedQuery.Text =
-            selected.ComputerName;
-
-        foreach (TabPage page in
-                 _mainTabs.TabPages)
+    // The ordinary Start -> Devices navigation transfers verified
+    // source-qualified metadata, not only the selected computer name.
+    // There is no implicit AD/Graph query, sign-in or secret retrieval.
+    private bool NavigateHomeSelectionToDevices(HomeSearchResult selected)
+    {
+        var reused = TryReuseHomeInventoryInDevices(selected);
+        if (!reused)
         {
-            // Displayed tab captions are translated (Russian/Hebrew).
-            // Navigate by an invariant control name, never English text.
+            // A name-only/unverified Start record cannot keep an unrelated
+            // previous Devices selection or outstanding metadata search.
+            if (_unifiedCancellation is { } pending)
+            {
+                ++_unifiedSearchGeneration;
+                _unifiedCancellation = null;
+                pending.Cancel();
+                _unifiedSearch.Enabled = true;
+                _unifiedSearch.Text = "Search AD + Cloud";
+                _unifiedCancel.Enabled = false;
+                _unifiedQuery.Enabled = true;
+                _unifiedResults.Enabled = true;
+                _unifiedProgress.Visible = false;
+            }
+
+            _startTransferredDeviceItem = null;
+            _unifiedQuery.Text = selected.ComputerName;
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            InvalidateDeviceCloudSecretOnSessionChange();
+            _unifiedSourceReport = null;
+            _unifiedSourceCloudSession = null;
+            RefreshUnifiedSourceRetryButton();
+        }
+
+        foreach (TabPage page in _mainTabs.TabPages)
+        {
+            // Invariant control name; never match translated tab text.
             if (string.Equals(page.Name, "DevicesWorkspace",
                     StringComparison.Ordinal))
             {
                 _mainTabs.SelectedTab = page;
+                QueueNavigationViewportReflow();
                 break;
             }
         }
+
+        if (!reused)
+            UiStyle.SetStatus(_unifiedStatus,
+                "No source-qualified Start inventory was available. " +
+                "Press Search to verify the exact AD/Entra/Intune object. " +
+                "No new search or Microsoft 365 sign-in was started.",
+                UiStatusKind.Warning);
+
+        return reused;
     }
 
     private void RefreshHomeSelectionSummary()
