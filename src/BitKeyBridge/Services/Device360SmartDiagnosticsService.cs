@@ -89,6 +89,7 @@ internal static class Device360SmartDiagnosticsService
         var wmiCode = hardwareFailureCategory switch
         {
             "NoRecord" => "NO_RECORD",
+            "IdentityMismatch" => "IDENTITY_MISMATCH",
             "AccessDenied" => "ACCESS_DENIED",
             "Timeout" => "TIMEOUT",
             "DCOM/RPCUnavailable" => "RPC_UNAVAILABLE",
@@ -102,6 +103,8 @@ internal static class Device360SmartDiagnosticsService
             {
                 "NO_RECORD" =>
                     "Verify the WMI namespace and core provider for this exact AD host. A missing record does not establish device health.",
+                "IDENTITY_MISMATCH" =>
+                    "Check the AD computer object, DNS mapping and joined domain. Do not use or export hardware from the mismatched endpoint.",
                 "ACCESS_DENIED" =>
                     "Verify the existing operator DCOM/WMI read permissions; do not grant new rights automatically.",
                 "TIMEOUT" =>
@@ -352,6 +355,9 @@ internal static class Device360SmartDiagnosticsService
                 "WMI.NO_RECORD" =>
                     ("Основные записи компьютера или BIOS не подтверждены через WMI.",
                      "Проверьте пространство имён и поставщик WMI выбранного компьютера; это не доказательство отсутствия устройства."),
+                "WMI.IDENTITY_MISMATCH" =>
+                    ("Имя или домен удалённого компьютера не совпадает с выбранным объектом AD.",
+                     "Проверьте запись AD, DNS и домен компьютера. Не используйте эти аппаратные данные."),
                 "WMI.ACCESS_DENIED" =>
                     ("У текущего пользователя недостаточно прав WMI.",
                      "Проверьте существующие DCOM/WMI-права на чтение без обхода безопасности."),
@@ -438,6 +444,9 @@ internal static class Device360SmartDiagnosticsService
                 "WMI.NO_RECORD" =>
                     ("רשומות מערכת או BIOS לא אומתו ב-WMI.",
                      "בדקו מרחב שמות וספק WMI של המכשיר המדויק; אין זו הוכחה שהמכשיר חסר."),
+                "WMI.IDENTITY_MISMATCH" =>
+                    ("שם המחשב או התחום המרוחק אינם תואמים לרשומת AD שנבחרה.",
+                     "בדקו את AD, מיפוי DNS והתחום שאליו המחשב משויך. אין להשתמש בנתוני החומרה."),
                 "WMI.ACCESS_DENIED" =>
                     ("לחשבון הנוכחי אין הרשאת WMI מתאימה.",
                      "בדקו הרשאות קריאה קיימות של DCOM/WMI ללא עקיפת אבטחה."),

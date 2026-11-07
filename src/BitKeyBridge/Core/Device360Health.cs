@@ -160,9 +160,9 @@ internal static class Device360HealthService
                         ? "An optional WMI provider returned a classified failure. Inspect the relevant class and existing read permissions."
                         : "At least one optional hardware class was not verified. Confirmed inventory remains available."));
         }
-        else if (hardwareFailureCategory is "NoRecord" or "AccessDenied" or
-                 "Timeout" or "DCOM/RPCUnavailable" or "WmiError" or
-                 "Unavailable")
+        else if (hardwareFailureCategory is "NoRecord" or "IdentityMismatch" or
+                 "AccessDenied" or "Timeout" or "DCOM/RPCUnavailable" or
+                 "WmiError" or "Unavailable")
         {
             // An empty provider record means unknown, not an RPC or
             // privilege failure. Only locally classified reason codes may
@@ -173,9 +173,11 @@ internal static class Device360HealthService
                     Device360CheckState.Attention,
                 hardwareFailureCategory == "NoRecord"
                     ? "The explicitly queried core WMI provider returned no verified records. Device status remains unverified."
-                    : "The explicit WMI inventory request failed (" +
-                      hardwareFailureCategory +
-                      "). Check existing connectivity and WMI read permissions."));
+                    : hardwareFailureCategory == "IdentityMismatch"
+                        ? "Remote Windows computer identity did not match the selected AD record. No hardware was accepted."
+                        : "The explicit WMI inventory request failed (" +
+                          hardwareFailureCategory +
+                          "). Check existing connectivity and WMI read permissions."));
         }
 
         return items;

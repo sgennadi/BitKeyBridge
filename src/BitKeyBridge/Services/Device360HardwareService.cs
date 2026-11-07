@@ -96,7 +96,16 @@ internal static class Device360HardwareService
     // hosts even if an attacker-controlled dnsHostName is present in LDAP.
     internal static bool HasSameAdDomainSuffix(string host, string? objectDn)
     {
-        if (string.IsNullOrWhiteSpace(objectDn)) return false;
+        var domain = AdDnsDomain(objectDn);
+        if (domain is null) return false;
+        var suffix = "." + domain;
+        return host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            host.Length > suffix.Length;
+    }
+
+    private static string? AdDnsDomain(string? objectDn)
+    {
+        if (string.IsNullOrWhiteSpace(objectDn)) return null;
         var parts = Regex.Matches(objectDn,
                 @"(?:^|,)\s*DC=([^,]+)", RegexOptions.IgnoreCase |
                     RegexOptions.CultureInvariant)
@@ -107,10 +116,29 @@ internal static class Device360HardwareService
                 !Regex.IsMatch(label,
                     @"\A[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\z",
                     RegexOptions.CultureInvariant)))
+            return null;
+        return string.Join(".", parts);
+    }
+
+    /// <summary>
+    /// Consistency check for a remote Windows computer, not independent
+    /// cryptographic host authentication. Fail closed for stale DNS/aliases.
+    /// </summary>
+    internal static bool HasMatchingRemoteWmiIdentity(
+        string? dnsHost, string? selectedAdDn, string? remoteName,
+        string? remoteDomain, bool joined)
+    {
+        if (!joined || !IsStrictDnsHost(dnsHost) ||
+            !HasSameAdDomainSuffix(dnsHost!, selectedAdDn))
             return false;
-        var suffix = "." + string.Join(".", parts);
-        return host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-            host.Length > suffix.Length;
+        var domain = AdDnsDomain(selectedAdDn);
+        if (string.IsNullOrEmpty(domain) || string.IsNullOrWhiteSpace(remoteName) ||
+            string.IsNullOrWhiteSpace(remoteDomain))
+            return false;
+        return string.Equals(dnsHost!.Split('.')[0], remoteName.Trim(),
+                   StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(domain, remoteDomain.Trim().TrimEnd('.'),
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool IsStrictDnsHost(string? host)
@@ -137,7 +165,8 @@ internal static class Device360HardwareService
                 "Read-only WMI checks require Windows."));
 
         var dns = snapshot.AdDnsHostName;
-        return Task.Run(() => QueryWindows(dns, ct), ct);
+        var adDn = snapshot.AdDistinguishedName;
+        return Task.Run(() => QueryWindows(dns, adDn, ct), ct);
     }
 
     internal static string FormatGiB(decimal size) =>
@@ -147,7 +176,7 @@ internal static class Device360HardwareService
     private static decimal GiB(decimal bytes) => bytes / 1073741824m;
 
     private static Device360HardwareOutcome QueryWindows(
-        string dnsHost, CancellationToken ct)
+        string dnsHost, string? selectedAdDn, CancellationToken ct)
     {
         try
         {
@@ -163,15 +192,23 @@ internal static class Device360HardwareService
             var biosDate = string.Empty;
             var serialNumber = string.Empty;
             decimal memoryGiB = 0m;
+            var remoteName = string.Empty;
+            var remoteDomain = string.Empty;
+            var domainJoined = false;
+            var foundComputerSystem = false;
 
             using (var searcher = NewSearcher(scope,
-                "SELECT Manufacturer,Model,TotalPhysicalMemory FROM Win32_ComputerSystem"))
+                "SELECT Name,Domain,PartOfDomain,Manufacturer,Model,TotalPhysicalMemory FROM Win32_ComputerSystem"))
             using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
                 {
                     using (row)
                     {
+                        foundComputerSystem = true;
+                        remoteName = Read(row, "Name");
+                        remoteDomain = Read(row, "Domain");
+                        domainJoined = row["PartOfDomain"] is bool joined && joined;
                         manufacturer = Read(row, "Manufacturer");
                         model = Read(row, "Model");
                         if (ulong.TryParse(Read(row, "TotalPhysicalMemory"),
@@ -185,6 +222,22 @@ internal static class Device360HardwareService
             }
             ct.ThrowIfCancellationRequested();
 
+            if (!foundComputerSystem)
+                return new Device360HardwareOutcome(false, null,
+                    "The remote WMI computer-system record was not verified.")
+                {
+                    FailureCategory = "NoRecord"
+                };
+            if (!HasMatchingRemoteWmiIdentity(dnsHost, selectedAdDn,
+                    remoteName, remoteDomain, domainJoined))
+                return new Device360HardwareOutcome(false, null,
+                    "Remote Windows identity did not match the selected AD record; inventory rejected.")
+                {
+                    FailureCategory = "IdentityMismatch"
+                };
+
+            // Never query BIOS, TPM, CPU, disks or adapters if the reported
+            // machine identity differs from the selected AD computer.
             using (var searcher = NewSearcher(scope,
                 "SELECT Manufacturer,SMBIOSBIOSVersion,ReleaseDate,SerialNumber FROM Win32_BIOS"))
             using (var objects = searcher.Get())
