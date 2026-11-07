@@ -229,6 +229,7 @@ public sealed partial class MainForm
         var previousRecovery = _cloudTokenHasRecovery;
         var previousLaps = _cloudTokenHasLaps;
         var previousQuery = _unifiedQuery.Text;
+        var previousTab = _mainTabs.SelectedTab;
         try
         {
             var token = new GraphToken
@@ -270,7 +271,8 @@ public sealed partial class MainForm
             };
             var searchGeneration = _unifiedSearchGeneration;
             var selectionGeneration = _deviceRecoverySelectionGeneration;
-            if (!TryReuseHomeInventoryInDevices(fromStart) ||
+            if (!NavigateHomeSelectionToDevices(fromStart) ||
+                _mainTabs.SelectedTab?.Name != "DevicesWorkspace" ||
                 !ReferenceEquals(_cloudToken, token) ||
                 !HasCloudSearchSession() ||
                 _unifiedSearchGeneration != searchGeneration ||
@@ -330,10 +332,25 @@ public sealed partial class MainForm
                 IsCurrentDeviceCloudRecoverySession(token))
                 return false;
 
+            // Name-only navigation must not reuse a previous exact device,
+            // expose a recovery ID, or trigger a new Graph authentication.
+            if (NavigateHomeSelectionToDevices(new HomeSearchResult
+                {
+                    ComputerName = "UI-UNVERIFIED-SOURCE"
+                }) ||
+                _unifiedResults.Items.Count != 0 ||
+                _deviceRecoveryIds.Items.Count != 0 ||
+                _unifiedQuery.Text != "UI-UNVERIFIED-SOURCE" ||
+                !ReferenceEquals(_cloudToken, refreshed) ||
+                !_deviceRecoveryKey.UseSystemPasswordChar)
+                return false;
+
             return true;
         }
         finally
         {
+            if (previousTab is not null && !previousTab.IsDisposed)
+                _mainTabs.SelectedTab = previousTab;
             _unifiedResults.Items.Clear();
             _unifiedDetails.Clear();
             _deviceRecoveryIds.Items.Clear();
