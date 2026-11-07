@@ -39,3 +39,7 @@ The selected AD DNS hostname authorizes an explicit read-only WMI probe, but DNS
 The WMI name is additionally matched to the selected AD computer object's first `CN=` RDN; this prevents a stale `dNSHostName` attribute from pointing to a different computer inside the same domain. AD computer names with unsupported escaped CN syntax are deliberately rejected and require directory/DNS review rather than a fallback to display-name matching.
 
 The AD first-RDN computer-name versus DNS-name match is performed before initiating the network request, not just after the remote WMI connection. This blocks an incorrectly pointed but in-domain AD `dNSHostName` before Windows integrated credentials are used.
+
+## Contradictory WMI outcome defense
+
+Every operator-initiated WMI result is normalized before being shown in Device 360. A failed outcome carrying inventory discards its inventory; success without an inventory becomes `WMI.NO_RECORD`. Recognized typed failures, including `WMI.IDENTITY_MISMATCH`, take precedence over contradictory success data. Unknown transport status strings become `WMI.UNAVAILABLE` without passing raw error text to the GUI or Helpdesk Report. Offline and native EN/RU/HE synthetic regressions cover these cases. This enforces consistent evidence handling; it is not cryptographic attestation.

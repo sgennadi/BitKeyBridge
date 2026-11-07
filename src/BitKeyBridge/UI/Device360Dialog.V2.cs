@@ -397,8 +397,10 @@ internal sealed partial class Device360Dialog
             return message;
         }
 
-        void ApplyHardwareOutcome(Device360HardwareOutcome result)
+        void ApplyHardwareOutcome(Device360HardwareOutcome rawResult)
         {
+            // Fail closed before updating the UI, health or report state.
+            var result = Device360HardwareService.NormalizeOutcome(rawResult);
             _device360RemoteHardware = result.Inventory;
             _device360HardwareFailureCategory = result.FailureCategory;
             // Never render untrusted remote provider messages.

@@ -83,6 +83,31 @@ internal static class Device360HardwareService
         return count > known.Count ? safe + "; Other: Unverified" : safe;
     }
 
+    // Contradictory WMI results must not reach UI, Health or export.
+    // Typed local failures take precedence over untrusted inventory data.
+    internal static Device360HardwareOutcome NormalizeOutcome(
+        Device360HardwareOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+        if (outcome.Succeeded && outcome.Inventory is not null &&
+            string.IsNullOrEmpty(outcome.FailureCategory))
+            return outcome;
+
+        var category = outcome.FailureCategory switch
+        {
+            "NoRecord" or "IdentityMismatch" or "AccessDenied" or
+                "Timeout" or "DCOM/RPCUnavailable" or "WmiError" or
+                "Unavailable" => outcome.FailureCategory,
+            _ => outcome.Succeeded && outcome.Inventory is null
+                ? "NoRecord" : "Unavailable"
+        };
+        return new Device360HardwareOutcome(false, null,
+            "Hardware inventory was not verified.")
+        {
+            FailureCategory = category
+        };
+    }
+
     // A verified AD DNS host is required: NO discovery by display name,
     // unqualified NetBIOS alias, IP, UPN, serial or Intune-only identity.
     internal static bool CanQuery(Device360Snapshot snapshot)

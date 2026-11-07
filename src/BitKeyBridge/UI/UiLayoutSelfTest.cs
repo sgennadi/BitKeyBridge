@@ -1061,6 +1061,44 @@ public static class UiLayoutSelfTest
                     failures.Add("Device 360 identity-mismatch result retained " +
                         "hardware or lost localized status: " + language);
 
+                // Test the production presenter with contradictory WMI
+                // envelopes; these are synthetic and never touch the network.
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(false,
+                            syntheticHardware.Inventory, "Synthetic conflict")
+                        {
+                            FailureCategory = "AccessDenied"
+                        }) ||
+                    FindByName(dialog, "Device360V36CpuName")
+                        is not TextBox rejectedCpu ||
+                    rejectedCpu.Text.Contains(
+                        "SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox rejectedDiagnostics ||
+                    !rejectedDiagnostics.Text.Contains("WMI.ACCESS_DENIED",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label rejectedStatus ||
+                    rejectedStatus.Text != UiLanguageService.Translate(
+                        language, "Device360V36WmiDenied"))
+                    failures.Add("Device 360 accepted contradictory failed " +
+                        "WMI inventory in " + language);
+
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(true, null,
+                            "Synthetic success without inventory")) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox missingDiagnostics ||
+                    !missingDiagnostics.Text.Contains("WMI.NO_RECORD",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label missingStatus ||
+                    missingStatus.Text != UiLanguageService.Translate(
+                        language, "Device360V36WmiNoRecord"))
+                    failures.Add("Device 360 accepted empty success in " +
+                        language);
+
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");
                 var entraSource = FindByName(dialog, "Device360SourceEntra");

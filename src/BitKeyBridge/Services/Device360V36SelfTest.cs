@@ -114,6 +114,61 @@ internal static class Device360V36SelfTest
               !safeReport.Contains("DO_NOT_INCLUDE", StringComparison.Ordinal),
             "explicit Helpdesk export contained untrusted WMI text");
 
+        // Contradictory provider envelopes must never export rejected data.
+        var rejectedInventory = partial with
+        {
+            SerialNumber = "UI-TEST-REJECTED-SERIAL"
+        };
+        var rejectedFailure = Device360HardwareService.NormalizeOutcome(
+            new Device360HardwareOutcome(false, rejectedInventory,
+                "UI-TEST-RAW-EXCEPTION")
+            {
+                FailureCategory = "AccessDenied"
+            });
+        var rejectedReport = Device360ReportService.Build(unknown, empty,
+            rejectedFailure.Inventory,
+            hardwareFailureCategory: rejectedFailure.FailureCategory);
+        Check(!rejectedFailure.Succeeded &&
+              rejectedFailure.Inventory is null &&
+              rejectedFailure.FailureCategory == "AccessDenied" &&
+              rejectedReport.Contains("WMI.ACCESS_DENIED",
+                  StringComparison.Ordinal) &&
+              !rejectedReport.Contains("UI-TEST-REJECTED-SERIAL",
+                  StringComparison.Ordinal) &&
+              !rejectedReport.Contains("UI-TEST-RAW-EXCEPTION",
+                  StringComparison.Ordinal),
+            "failed WMI envelope retained/exported contradictory data");
+
+        var missingSuccess = Device360HardwareService.NormalizeOutcome(
+            new Device360HardwareOutcome(true, null, "UI-TEST-NO-RECORD"));
+        Check(!missingSuccess.Succeeded && missingSuccess.Inventory is null &&
+              missingSuccess.FailureCategory == "NoRecord",
+            "success without inventory did not become an unverified result");
+
+        var inconsistentIdentity = Device360HardwareService.NormalizeOutcome(
+            new Device360HardwareOutcome(true, rejectedInventory,
+                "UI-TEST-IDENTITY-MISMATCH")
+            {
+                FailureCategory = "IdentityMismatch"
+            });
+        Check(!inconsistentIdentity.Succeeded &&
+              inconsistentIdentity.Inventory is null &&
+              inconsistentIdentity.FailureCategory == "IdentityMismatch",
+            "identity mismatch retained contradictory success data");
+
+        var unknownEnvelope = Device360HardwareService.NormalizeOutcome(
+            new Device360HardwareOutcome(false, rejectedInventory,
+                "UI-TEST-UNSAFE-TEXT")
+            {
+                FailureCategory = "UI-TEST-UNSAFE-TEXT"
+            });
+        Check(!unknownEnvelope.Succeeded &&
+              unknownEnvelope.Inventory is null &&
+              unknownEnvelope.FailureCategory == "Unavailable" &&
+              !unknownEnvelope.Explanation.Contains("UI-TEST-UNSAFE-TEXT",
+                  StringComparison.Ordinal),
+            "unknown provider status or raw message escaped normalization");
+
         // WMI must never affect health/coverage before an operator requests
         // it. After a successful probe, a failed retry cannot preserve the
         // previous TPM/hardware observation or mark the machine healthy.
