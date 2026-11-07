@@ -209,7 +209,8 @@ public sealed partial class MainForm
             _cloudTokenHasRecovery = true;
             _cloudTokenHasLaps = false;
             _cloudTokenContext = BuildCloudTokenContext();
-            if (!HasCloudSearchSession())
+            if (!HasCloudSearchSession() ||
+                !IsCurrentDeviceCloudRecoverySession(token))
                 return false;
 
             var device = new UnifiedDeviceInfo
@@ -256,6 +257,7 @@ public sealed partial class MainForm
             // metadata, but must never create a new MFA prompt by itself.
             _cloudTokenContext = "UI-TEST-INVALIDATED-CONTEXT";
             if (HasCloudSearchSession() ||
+                IsCurrentDeviceCloudRecoverySession(token) ||
                 !TryReuseHomeInventoryInDevices(fromStart) ||
                 !ReferenceEquals(_cloudToken, token) ||
                 HasCloudSearchSession() ||
@@ -265,6 +267,29 @@ public sealed partial class MainForm
                 _deviceRecoveryKey.Text.Length != 0 ||
                 !_deviceRecoveryKey.UseSystemPasswordChar ||
                 _deviceRecoveryIds.Items.Count != 0)
+                return false;
+
+            // A token is also invalid once its expiry crosses the required
+            // margin, even if its reference and context did not change.
+            _cloudTokenContext = BuildCloudTokenContext();
+            token.ExpiresAt = DateTime.Now.AddSeconds(20);
+            if (HasCloudSearchSession() ||
+                IsCurrentDeviceCloudRecoverySession(token))
+                return false;
+
+            token.ExpiresAt = DateTime.Now.AddMinutes(30);
+            if (!IsCurrentDeviceCloudRecoverySession(token))
+                return false;
+
+            var swapped = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-DIFFERENT-TOKEN-NOT-A-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(30)
+            };
+            _cloudToken = swapped;
+            if (IsCurrentDeviceCloudRecoverySession(token) ||
+                !IsCurrentDeviceCloudRecoverySession(swapped))
                 return false;
 
             return true;

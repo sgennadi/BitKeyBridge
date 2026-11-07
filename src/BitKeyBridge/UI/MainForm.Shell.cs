@@ -3501,6 +3501,15 @@ public sealed partial class MainForm
         ReferenceEquals(selected, row) &&
         string.Equals(selectedId, recoveryId, StringComparison.OrdinalIgnoreCase);
 
+    // A request can finish after the existing token expires or its tenant,
+    // client or scope context changes without a new token object. Check both
+    // reference identity and the current session policy before accepting
+    // any asynchronous Graph recovery response.
+    private bool IsCurrentDeviceCloudRecoverySession(GraphToken? expected) =>
+        expected is not null &&
+        ReferenceEquals(expected, _cloudToken) &&
+        HasCloudSearchSession();
+
     // Deny before ticket/JIT dialogs. A disconnected source cannot reveal
     // a secret, and requesting a recovery ticket before checking the Graph
     // session creates misleading UI and unnecessary protected audit prompts.
@@ -3634,10 +3643,10 @@ public sealed partial class MainForm
                     originalSession!.AccessToken, recoveryId);
                 if (!IsCurrentDeviceRecoverySelection(
                         row, recoveryId, selectionGeneration) ||
-                    !ReferenceEquals(originalSession, _cloudToken))
+                    !IsCurrentDeviceCloudRecoverySession(originalSession))
                 {
                     UiStyle.SetStatus(_unifiedStatus,
-                        "Selection or Microsoft 365 session changed while reading. Stale key discarded.",
+                        "Selection or Microsoft 365 session changed or expired while reading. Stale key discarded.",
                         UiStatusKind.Warning);
                     return null;
                 }
