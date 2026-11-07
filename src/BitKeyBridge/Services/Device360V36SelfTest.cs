@@ -139,6 +139,52 @@ internal static class Device360V36SelfTest
                   StringComparison.Ordinal),
             "failed WMI envelope retained/exported contradictory data");
 
+        // Exercise all three public consumers directly, bypassing the UI
+        // normalizer to prevent a future alternate call path from reintroducing
+        // stale evidence into a report or claiming TPM was observed.
+        var directReport = Device360ReportService.Build(
+            unknown, empty, rejectedInventory,
+            hardwareFailureCategory: "AccessDenied");
+        var directHealth = Device360HealthService.Evaluate(
+            unknown, empty, hardware: rejectedInventory,
+            hardwareFailureCategory: "AccessDenied");
+        var directFindings = Device360SmartDiagnosticsService.Evaluate(
+            unknown, empty, rejectedInventory, "AccessDenied");
+        Check(directReport.Contains("WMI.ACCESS_DENIED",
+                  StringComparison.Ordinal) &&
+              directReport.Contains("CPU model: Not verified",
+                  StringComparison.Ordinal) &&
+              !directReport.Contains("UI-TEST-REJECTED-SERIAL",
+                  StringComparison.Ordinal) &&
+              !directReport.Contains("Remote TPM status:",
+                  StringComparison.Ordinal) &&
+              directHealth.Any(x => x.Area == "Remote WMI inventory" &&
+                  x.State == Device360CheckState.Attention) &&
+              !directHealth.Any(x => x.Area == "Remote TPM status") &&
+              directFindings.Any(x => x.Code == "WMI.ACCESS_DENIED") &&
+              !directFindings.Any(x => x.Code == "WMI.TPM_UNVERIFIED" ||
+                  x.Code == "WMI.PARTIAL_INVENTORY"),
+            "direct report/health/diagnostics accepted failed WMI inventory");
+
+        var rawUnknownReport = Device360ReportService.Build(
+            unknown, empty, rejectedInventory,
+            hardwareFailureCategory: "UI-TEST-RAW-EXCEPTION");
+        Check(rawUnknownReport.Contains("WMI.UNAVAILABLE",
+                  StringComparison.Ordinal) &&
+              !rawUnknownReport.Contains("UI-TEST-RAW-EXCEPTION",
+                  StringComparison.Ordinal) &&
+              !rawUnknownReport.Contains("UI-TEST-REJECTED-SERIAL",
+                  StringComparison.Ordinal),
+            "direct Helpdesk export accepted unknown WMI provider text");
+
+        var untouchedEvidence = Device360HardwareService.NormalizeEvidence(
+            null, null);
+        Check(untouchedEvidence.Inventory is null &&
+              untouchedEvidence.FailureCategory is null &&
+              !Device360HealthService.Evaluate(unknown, empty)
+                  .Any(x => x.Area == "Remote WMI inventory"),
+            "unqueried WMI was converted to an artificial failed result");
+
         var missingSuccess = Device360HardwareService.NormalizeOutcome(
             new Device360HardwareOutcome(true, null, "UI-TEST-NO-RECORD"));
         Check(!missingSuccess.Succeeded && missingSuccess.Inventory is null &&

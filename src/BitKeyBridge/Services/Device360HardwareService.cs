@@ -83,24 +83,41 @@ internal static class Device360HardwareService
         return count > known.Count ? safe + "; Other: Unverified" : safe;
     }
 
+    // Every consumer of WMI evidence must use the same fail-closed rule.
+    // Empty category means no WMI failure was reported (possibly not queried).
+    // Any nonempty category invalidates the inventory, even for direct
+    // calls that bypass the WinForms presenter. Remote exception strings are
+    // never accepted as reportable classifications.
+    internal static (Device360HardwareInventory? Inventory,
+        string? FailureCategory) NormalizeEvidence(
+        Device360HardwareInventory? inventory, string? failureCategory)
+    {
+        if (string.IsNullOrEmpty(failureCategory))
+            return (inventory, null);
+        var category = failureCategory switch
+        {
+            "NoRecord" or "IdentityMismatch" or "AccessDenied" or
+                "Timeout" or "DCOM/RPCUnavailable" or "WmiError" or
+                "Unavailable" => failureCategory,
+            _ => "Unavailable"
+        };
+        return (null, category);
+    }
+
     // Contradictory WMI results must not reach UI, Health or export.
     // Typed local failures take precedence over untrusted inventory data.
     internal static Device360HardwareOutcome NormalizeOutcome(
         Device360HardwareOutcome outcome)
     {
         ArgumentNullException.ThrowIfNull(outcome);
-        if (outcome.Succeeded && outcome.Inventory is not null &&
-            string.IsNullOrEmpty(outcome.FailureCategory))
+        var (verifiedInventory, failureCategory) = NormalizeEvidence(
+            outcome.Inventory, outcome.FailureCategory);
+        if (outcome.Succeeded && verifiedInventory is not null &&
+            failureCategory is null)
             return outcome;
 
-        var category = outcome.FailureCategory switch
-        {
-            "NoRecord" or "IdentityMismatch" or "AccessDenied" or
-                "Timeout" or "DCOM/RPCUnavailable" or "WmiError" or
-                "Unavailable" => outcome.FailureCategory,
-            _ => outcome.Succeeded && outcome.Inventory is null
-                ? "NoRecord" : "Unavailable"
-        };
+        var category = failureCategory ??
+            (outcome.Succeeded ? "NoRecord" : "Unavailable");
         return new Device360HardwareOutcome(false, null,
             "Hardware inventory was not verified.")
         {

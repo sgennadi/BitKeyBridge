@@ -18,6 +18,11 @@ internal static class Device360ReportService
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(status);
+        // Do not export stale WMI data even if a future caller accidentally
+        // passes hardware along with a rejected/failed WMI outcome.
+        (hardware, hardwareFailureCategory) =
+            Device360HardwareService.NormalizeEvidence(
+                hardware, hardwareFailureCategory);
         var checks = Device360HealthService.Evaluate(snapshot, status,
             createdUtc ?? DateTime.UtcNow, hardware, hardwareFailureCategory);
         var sb = new StringBuilder(2600);

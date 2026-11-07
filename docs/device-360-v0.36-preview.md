@@ -43,3 +43,7 @@ The AD first-RDN computer-name versus DNS-name match is performed before initiat
 ## Contradictory WMI outcome defense
 
 Every operator-initiated WMI result is normalized before being shown in Device 360. A failed outcome carrying inventory discards its inventory; success without an inventory becomes `WMI.NO_RECORD`. Recognized typed failures, including `WMI.IDENTITY_MISMATCH`, take precedence over contradictory success data. Unknown transport status strings become `WMI.UNAVAILABLE` without passing raw error text to the GUI or Helpdesk Report. Offline and native EN/RU/HE synthetic regressions cover these cases. This enforces consistent evidence handling; it is not cryptographic attestation.
+
+## Service-level WMI consistency gate
+
+The same typed failure precedence now applies in Device Health, Smart Diagnostics and the manually exported Helpdesk Report even if those services are called without the Device 360 WinForms presenter. Any nonempty WMI failure category invalidates its accompanying hardware inventory; unknown strings become the safe `Unavailable` category and never appear verbatim. An unqueried `null` inventory with `null` failure still means **not queried**, not a failure. Offline synthetic regressions exercise direct service invocation, rejected serials/CPU/TPM observations and non-secret reporting, while native UI regressions cover the visible flow.

@@ -24,6 +24,11 @@ internal static class Device360HealthService
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(sources);
+        // Never use an inventory whose accompanying WMI result is a failure.
+        // This is also applied to callers outside the WinForms presenter.
+        (hardware, hardwareFailureCategory) =
+            Device360HardwareService.NormalizeEvidence(
+                hardware, hardwareFailureCategory);
         var now = (nowUtc ?? DateTime.UtcNow).ToUniversalTime();
         var items = new List<Device360Check>();
 

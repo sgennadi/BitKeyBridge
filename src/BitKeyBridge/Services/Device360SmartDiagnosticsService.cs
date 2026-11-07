@@ -24,6 +24,9 @@ internal static class Device360SmartDiagnosticsService
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(status);
+        (hardware, hardwareFailureCategory) =
+            Device360HardwareService.NormalizeEvidence(
+                hardware, hardwareFailureCategory);
         var issues = new List<Device360DiagnosticFinding>();
         var now = (nowUtc ?? DateTime.UtcNow).ToUniversalTime();
 
