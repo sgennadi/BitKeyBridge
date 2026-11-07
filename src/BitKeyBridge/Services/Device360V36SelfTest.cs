@@ -220,15 +220,23 @@ internal static class Device360V36SelfTest
             InAd = true, AdDnsHostName = "ui-test-ad-01.example.com",
             AdDistinguishedName = adDn
         };
+        var wrongDnsHost = new Device360Snapshot
+        {
+            Computer = "UI-TEST-AD-01",
+            IdentityVerified = true, IdentityAmbiguous = false,
+            InAd = true, AdDnsHostName = "other.example.com",
+            AdDistinguishedName = adDn
+        };
+        var wrongAdComputer = new Device360Snapshot
+        {
+            Computer = "UI-TEST-AD-01",
+            IdentityVerified = true, IdentityAmbiguous = false,
+            InAd = true, AdDnsHostName = "ui-test-ad-01.example.com",
+            AdDistinguishedName = "CN=OTHER,DC=example,DC=com"
+        };
         Check(Device360HardwareService.CanQuery(verifiedAdHost) &&
-              !Device360HardwareService.CanQuery(verifiedAdHost with
-              {
-                  AdDnsHostName = "other.example.com"
-              }) &&
-              !Device360HardwareService.CanQuery(verifiedAdHost with
-              {
-                  AdDistinguishedName = "CN=OTHER,DC=example,DC=com"
-              }),
+              !Device360HardwareService.CanQuery(wrongDnsHost) &&
+              !Device360HardwareService.CanQuery(wrongAdComputer),
             "WMI preflight could contact the wrong same-domain AD host");
         Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
                   "ui-test-ad-01.example.com",
