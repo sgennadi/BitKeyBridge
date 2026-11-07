@@ -238,6 +238,23 @@ internal static class Device360V36SelfTest
               !Device360HardwareService.CanQuery(wrongDnsHost) &&
               !Device360HardwareService.CanQuery(wrongAdComputer),
             "WMI preflight could contact the wrong same-domain AD host");
+        var preflightFindings = Device360SmartDiagnosticsService.Evaluate(
+            wrongDnsHost, empty);
+        var preflightHealth = Device360HealthService.Evaluate(
+            wrongDnsHost, empty);
+        Check(Device360HardwareService.HasAdDnsTargetMismatch(wrongDnsHost) &&
+              Device360HardwareService.HasAdDnsTargetMismatch(wrongAdComputer) &&
+              !Device360HardwareService.HasAdDnsTargetMismatch(verifiedAdHost) &&
+              preflightFindings.Any(x => x.Code == "AD.DNS_NAME_MISMATCH" &&
+                  x.Priority == Device360FindingPriority.Action) &&
+              preflightHealth.Any(x => x.Area == "AD DNS/WMI target" &&
+                  x.State == Device360CheckState.Attention),
+            "unverified AD/DNS identity was not explained without a WMI request");
+        foreach (var language in new[] { "en", "ru", "he" })
+            Check(Device360SmartDiagnosticsService.Format(
+                preflightFindings, language).Contains("AD.DNS_NAME_MISMATCH",
+                    StringComparison.Ordinal),
+                "preflight AD/DNS diagnostics missing in " + language);
         Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
                   "ui-test-ad-01.example.com",
                   "CN=UI\\,TEST,DC=example,DC=com",

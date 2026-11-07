@@ -37,6 +37,11 @@ internal static class Device360HealthService
                     ? "A source-qualified identifier was observed. Cross-source equivalence is not implied."
                     : "No authoritative device identity was verified. Recovery navigation remains restricted."));
 
+        if (Device360HardwareService.HasAdDnsTargetMismatch(device))
+            items.Add(new Device360Check("AD DNS/WMI target",
+                Device360CheckState.Attention,
+                "The selected AD object's computer name and DNS hostname differ. Remote WMI was blocked before connecting. Verify AD and DNS."));
+
         AddSource("Active Directory", sources.Ad, sources.AdFailureKind);
         AddSource("Entra ID", sources.Entra, sources.EntraFailureKind);
         AddSource("Intune", sources.Intune, sources.IntuneFailureKind);

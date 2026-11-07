@@ -41,6 +41,12 @@ internal static class Device360SmartDiagnosticsService
                 "A uniquely qualified source identity was not established.",
                 "Select the exact authoritative source record before opening a recovery workflow.");
 
+        if (Device360HardwareService.HasAdDnsTargetMismatch(snapshot))
+            Add("AD.DNS_NAME_MISMATCH", Device360FindingPriority.Action,
+                "Active Directory",
+                "The selected AD computer name differs from its dNSHostName. No remote hardware query was started.",
+                "Verify the selected computer account, DNS record and directory dNSHostName attribute. Do not connect by an unverified alias.");
+
         AddSource("AD", status.Ad, status.AdFailureKind);
         AddSource("ENTRA", status.Entra, status.EntraFailureKind);
         AddSource("INTUNE", status.Intune, status.IntuneFailureKind);
@@ -304,6 +310,9 @@ internal static class Device360SmartDiagnosticsService
                 "IDENTITY.UNVERIFIED" =>
                     ("Точный идентификатор компьютера не подтверждён.",
                      "Выберите запись из авторитетного источника, прежде чем открывать восстановление."),
+                "AD.DNS_NAME_MISMATCH" =>
+                    ("Имя выбранного объекта AD не совпадает с его dNSHostName. Проверка WMI не запускалась.",
+                     "Проверьте учётную запись компьютера, DNS и атрибут dNSHostName. Не подключайтесь по неподтверждённому имени."),
                 "SOURCE.UNVERIFIED" =>
                     ("Этот компьютер не подтверждён в указанном источнике.",
                      "Выполните явный поиск метаданных; отсутствие записи ещё не доказано."),
@@ -393,6 +402,9 @@ internal static class Device360SmartDiagnosticsService
                 "IDENTITY.UNVERIFIED" =>
                     ("זהות המכשיר לא אומתה באופן חד-משמעי.",
                      "בחרו רשומה מוסמכת לפני פתיחת תהליך שחזור."),
+                "AD.DNS_NAME_MISMATCH" =>
+                    ("שם מחשב AD שנבחר אינו תואם לערך dNSHostName. לא בוצעה שאילתת WMI.",
+                     "בדקו את חשבון המחשב, רשומת DNS ותכונת dNSHostName. אין להתחבר דרך כינוי לא מאומת."),
                 "SOURCE.UNVERIFIED" =>
                     ("המכשיר לא אומת במקור זה.",
                      "בצעו חיפוש נתונים מפורש. לא הוכח שהרשומה חסרה."),

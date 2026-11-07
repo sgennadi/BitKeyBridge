@@ -93,6 +93,19 @@ internal static class Device360HardwareService
            HasSameAdComputerName(snapshot.AdDnsHostName,
                snapshot.AdDistinguishedName);
 
+    /// <summary>
+    /// A selected AD computer can have a stale dNSHostName that points to a
+    /// different computer in the same domain. This is checked offline before
+    /// enabling the WMI button or sending any Windows credentials.
+    /// </summary>
+    internal static bool HasAdDnsTargetMismatch(Device360Snapshot snapshot) =>
+        snapshot.IdentityVerified && !snapshot.IdentityAmbiguous &&
+        snapshot.InAd == true && IsStrictDnsHost(snapshot.AdDnsHostName) &&
+        HasSameAdDomainSuffix(snapshot.AdDnsHostName,
+            snapshot.AdDistinguishedName) &&
+        !HasSameAdComputerName(snapshot.AdDnsHostName,
+            snapshot.AdDistinguishedName);
+
     // Restrict Windows integrated authentication to the AD DNS domain
     // proven by the exact selected object. Do not contact arbitrary foreign
     // hosts even if an attacker-controlled dnsHostName is present in LDAP.

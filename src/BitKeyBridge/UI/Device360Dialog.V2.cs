@@ -276,7 +276,9 @@ internal sealed partial class Device360Dialog
             Name = "Device360V2HardwareStatus",
             Text = probe.Enabled
                 ? Tr("Device360V2NotQueried")
-                : Tr("Device360V2NoRemote"),
+                : Device360HardwareService.HasAdDnsTargetMismatch(snapshot)
+                    ? Tr("Device360V36AdDnsMismatch")
+                    : Tr("Device360V2NoRemote"),
             AutoSize = true,
             Dock = DockStyle.Top,
             ForeColor = UiStyle.ModernMuted,
