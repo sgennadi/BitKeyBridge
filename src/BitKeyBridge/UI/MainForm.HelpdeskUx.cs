@@ -2066,7 +2066,10 @@ public sealed partial class MainForm
                 UiStatusKind.Warning);
             return false;
         }
-        if (!TryReuseHomeInventoryInDevices(selected))
+        // Navigate and transfer exactly once. OpenHomeDeviceDetails now
+        // transfers source-qualified inventory itself, so calling both
+        // would reset the selection/recovery generation a second time.
+        if (!NavigateHomeSelectionToDevices(selected))
         {
             UiStyle.SetStatus(_homeSearchStatus,
                 "The source-qualified device could not be transferred to Devices. " +
@@ -2075,7 +2078,6 @@ public sealed partial class MainForm
             return false;
         }
 
-        OpenHomeDeviceDetails();
         PopulateDeviceRecoveryIds();
         if (!HomeCloudRecoverySelectionGuard.CanRevealOne(selected))
         {

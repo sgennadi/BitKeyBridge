@@ -279,6 +279,8 @@ public sealed partial class MainForm
                 _deviceRecoverySelectionGeneration <= selectionGeneration ||
                 _unifiedResults.Items.Count != 1 ||
                 !ReferenceEquals(_unifiedResults.Items[0].Tag, device) ||
+                !TryGetExactSelectedUnifiedDevice(out var exactTransferred) ||
+                !ReferenceEquals(exactTransferred, device) ||
                 !_unifiedDetails.Text.Contains("Synthetic Laptop",
                     StringComparison.Ordinal) ||
                 _deviceCurrentKey is not null ||
@@ -339,6 +341,7 @@ public sealed partial class MainForm
                     ComputerName = "UI-UNVERIFIED-SOURCE"
                 }) ||
                 _unifiedResults.Items.Count != 0 ||
+                TryGetExactSelectedUnifiedDevice(out _) ||
                 _deviceRecoveryIds.Items.Count != 0 ||
                 _unifiedQuery.Text != "UI-UNVERIFIED-SOURCE" ||
                 !ReferenceEquals(_cloudToken, refreshed) ||
