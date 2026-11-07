@@ -283,6 +283,84 @@ public sealed partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Offline native WinForms regression for explicit Entra Recovery ID
+    /// selection after Start -> Devices navigation. Two IDs must NOT
+    /// silently choose the first; one exact ID remains actionable.
+    /// The test uses synthetic metadata only and never invokes Reveal.
+    /// </summary>
+    internal bool PreviewDeviceRecoveryIdSelectionForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI self-test only.");
+
+        var previousQuery = _unifiedQuery.Text;
+        try
+        {
+            var device = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-TEST-RECOVERY-CHOICE",
+                IdentityKey = "INTUNE:MANAGED:ui-recovery-choice-001",
+                IdentityStatus = "Intune object",
+                FoundInIntune = true,
+                FoundInEntra = true,
+                ManagedDeviceId = "ui-recovery-choice-001",
+                EntraDeviceId = "a4caf67e-538b-4e36-9763-4b7e22e8b00e",
+                RecoveryIds = ["UI-TEST-RECOVERY-ONE", "UI-TEST-RECOVERY-TWO"]
+            };
+            var selected = new HomeSearchResult
+            {
+                ComputerName = device.ComputerName,
+                SourceIdentity = device.IdentityKey,
+                ComputerId = device.EntraDeviceId,
+                IsCloudRecord = true,
+                InventoryMetadata = device
+            };
+            if (!TryReuseHomeInventoryInDevices(selected) ||
+                _deviceRecoveryIds.Items.Count != 2 ||
+                _deviceRecoveryIds.SelectedIndex != -1 ||
+                TryGetSelectedDeviceRecovery(out _, out _))
+                return false;
+
+            // Deliberate dropdown selection must resolve only that ID.
+            _deviceRecoveryIds.SelectedIndex = 1;
+            if (!TryGetSelectedDeviceRecovery(out var chosen, out var id) ||
+                !ReferenceEquals(chosen, device) ||
+                id != "UI-TEST-RECOVERY-TWO")
+                return false;
+
+            // Simulate an old unmasked field before the next exact
+            // navigation; the same presenter must clear it immediately.
+            _deviceCurrentKey = "SYNTHETIC-NONSECRET-PLACEHOLDER";
+            _deviceRecoveryKey.Text = _deviceCurrentKey;
+            _deviceRecoveryKey.UseSystemPasswordChar = false;
+            _deviceShowKey.Text = "Hide Key";
+
+            device.RecoveryIds = ["UI-TEST-RECOVERY-ONE"];
+            if (!TryReuseHomeInventoryInDevices(selected) ||
+                _deviceRecoveryIds.Items.Count != 1 ||
+                _deviceRecoveryIds.SelectedIndex != 0 ||
+                !TryGetSelectedDeviceRecovery(out chosen, out id) ||
+                !ReferenceEquals(chosen, device) ||
+                id != "UI-TEST-RECOVERY-ONE" ||
+                _deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar ||
+                _deviceShowKey.Text != "Reveal Key")
+                return false;
+
+            return true;
+        }
+        finally
+        {
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            _unifiedQuery.Text = previousQuery;
+            InvalidateDeviceCloudSecretOnSessionChange();
+        }
+    }
+
     private bool TryReuseHomeInventoryInDevices(HomeSearchResult selected)
     {
         if (selected is null || selected.IdentityAmbiguous ||
@@ -344,6 +422,10 @@ public sealed partial class MainForm
         var item = AddUnifiedDeviceSearchResultRow(metadata);
         item.Selected = true;
         item.Focused = true;
+        // Inactive WinForms pages may not fire SelectedIndexChanged until
+        // shown. Populate metadata deterministically after Start navigation.
+        // This does not query Graph or retrieve a recovery password.
+        PopulateDeviceRecoveryIds();
         _unifiedDetails.Text = Device360Formatter.Format(metadata);
         _device360LastUnifiedPartial = metadata.RecoveryMetadataIncomplete;
         _device360UnifiedLookupFailed = default;

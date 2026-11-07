@@ -2145,6 +2145,10 @@ public static class UiLayoutSelfTest
             if (!main.PreviewDevice360SharedSearchForUiSelfTest())
                 failures.Add("Start -> Devices reused a name instead of source identity " +
                     "or attempted an additional Microsoft 365 authentication.");
+            if (!main.PreviewDeviceRecoveryIdSelectionForUiSelfTest())
+                failures.Add("Start -> Devices auto-selected an ambiguous " +
+                    "Recovery ID, failed to populate one exact ID, or left " +
+                    "a prior revealed key unmasked.");
             if (!main.PreviewStartToDevicesCloudSessionForUiSelfTest())
                 failures.Add("Start -> Devices lost the same Microsoft 365 token, " +
                     "dropped exact hardware metadata, or reused recovery " +
