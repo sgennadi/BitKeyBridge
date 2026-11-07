@@ -198,6 +198,18 @@ internal static class Device360V36SelfTest
                   "ui-test-ad-01.example.com", "CN=OTHER,DC=other,DC=com",
                   "UI-TEST-AD-01", "example.com", true),
             "selected AD domain was not checked");
+        Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                  "other.example.com", adDn, "OTHER", "example.com", true) &&
+              !Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                  "ui-test-ad-01.example.com",
+                  "CN=DIFFERENT,OU=Labs,DC=example,DC=com",
+                  "UI-TEST-AD-01", "example.com", true),
+            "remote WMI identity accepted a different in-domain AD computer");
+        Check(!Device360HardwareService.HasMatchingRemoteWmiIdentity(
+                  "ui-test-ad-01.example.com",
+                  "CN=UI\\,TEST,DC=example,DC=com",
+                  "UI-TEST-AD-01", "example.com", true),
+            "ambiguous escaped AD CN must fail closed");
 
         var mismatch = Device360SmartDiagnosticsService.Evaluate(
             unknown, empty, hardwareFailureCategory: "IdentityMismatch");

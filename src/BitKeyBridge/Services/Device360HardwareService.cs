@@ -133,9 +133,20 @@ internal static class Device360HardwareService
             return false;
         var domain = AdDnsDomain(selectedAdDn);
         if (string.IsNullOrEmpty(domain) || string.IsNullOrWhiteSpace(remoteName) ||
-            string.IsNullOrWhiteSpace(remoteDomain))
+            string.IsNullOrWhiteSpace(remoteDomain) ||
+            string.IsNullOrWhiteSpace(selectedAdDn))
             return false;
-        return string.Equals(dnsHost!.Split('.')[0], remoteName.Trim(),
+        // An AD DNS attribute can be stale or point to another in-domain PC.
+        // Bind the contacted computer to the *selected AD object's* first
+        // RDN as well. Unsupported/escaped CN formats fail closed.
+        var adCn = Regex.Match(selectedAdDn,
+            @"\A\s*CN=([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\s*,",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!adCn.Success) return false;
+        var shortName = dnsHost!.Split('.')[0];
+        return string.Equals(shortName, adCn.Groups[1].Value,
+                   StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(shortName, remoteName.Trim(),
                    StringComparison.OrdinalIgnoreCase) &&
                string.Equals(domain, remoteDomain.Trim().TrimEnd('.'),
                    StringComparison.OrdinalIgnoreCase);

@@ -1,6 +1,6 @@
 ## 0.36.0-preview.1
 
-- Reject remote WMI hardware when the reported Windows computer name, domain, or domain-joined state does not match the selected AD computer DNS domain. Validate these fields from Win32_ComputerSystem before collecting BIOS, TPM, CPU, disk, or network data. New typed WMI.IDENTITY_MISMATCH is visible in Device Health, EN/RU/HE Smart Diagnostics and Helpdesk Report; offline and native UI tests cover stale DNS/identity mismatch.
+- Reject remote WMI hardware when the reported Windows computer name, domain, or domain-joined state does not match the selected AD computer DNS domain and its exact first-RDN computer name. Fail closed on stale in-domain DNS aliases or unsupported escaped AD computer names. Validate these fields from Win32_ComputerSystem before collecting BIOS, TPM, CPU, disk, or network data. New typed WMI.IDENTITY_MISMATCH is visible in Device Health, EN/RU/HE Smart Diagnostics and Helpdesk Report; offline and native UI tests cover stale DNS/identity mismatch.
 
 - Localize WMI result states in EN/RU/HE, show UTC observation time, and wrap per-provider classified errors in a multiline read-only hardware status.
 - Preserve typed `WMI.NO_RECORD` when the core computer/BIOS WMI classes return no records; show NotVerified instead of an unauthorized or healthy state, with EN/RU/HE guidance and report regression tests.

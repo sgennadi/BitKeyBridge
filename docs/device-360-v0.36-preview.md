@@ -35,3 +35,5 @@ The Windows UI self-test now injects a **synthetic-only** WMI success followed b
 ## Remote host identity consistency
 
 The selected AD DNS hostname authorizes an explicit read-only WMI probe, but DNS by itself does not prove which Windows host answered. Before collecting BIOS, TPM, CPU, storage or adapter details, the probe compares `Win32_ComputerSystem.Name`, `Domain` and `PartOfDomain` against the exact selected AD object's DNS name/domain. On mismatch the result is classified `WMI.IDENTITY_MISMATCH`, with no accepted hardware inventory. The check is an additional consistency safeguard, **not** independent cryptographic endpoint attestation. It does not modify AD, DNS, firewall rules, WMI permissions or any secrets.
+
+The WMI name is additionally matched to the selected AD computer object's first `CN=` RDN; this prevents a stale `dNSHostName` attribute from pointing to a different computer inside the same domain. AD computer names with unsupported escaped CN syntax are deliberately rejected and require directory/DNS review rather than a fallback to display-name matching.
