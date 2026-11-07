@@ -367,6 +367,91 @@ public sealed partial class MainForm
     }
 
     /// <summary>
+    /// Verify native ListView selection AFTER the main WinForms HWND is
+    /// visible. Previous tests exercised only a hidden parent, where
+    /// SelectedItems may not reflect the intended Start selection.
+    /// Synthetic metadata only; this method cannot initiate Graph or MFA.
+    /// </summary>
+    internal string PreviewVisibleStartToDevicesSelectionForUiSelfTest()
+    {
+        if (!_layoutSelfTest || !Visible)
+            return "visible-test-not-initialized";
+
+        var previousTab = _mainTabs.SelectedTab;
+        var previousQuery = _unifiedQuery.Text;
+        try
+        {
+            var device = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-NATIVE-SELECT-001",
+                IdentityKey = "INTUNE:MANAGED:ui-native-selected-001",
+                IdentityStatus = "Intune object",
+                FoundInIntune = true,
+                FoundInEntra = true,
+                ManagedDeviceId = "ui-native-selected-001",
+                EntraDeviceId = "537e61f7-9764-4217-83cc-c6ae0d35ca99",
+                Manufacturer = "Synthetic Manufacturer",
+                Model = "Synthetic Notebook",
+                RecoveryIds = ["UI-NATIVE-ID-ONE", "UI-NATIVE-ID-TWO"]
+            };
+            var home = new HomeSearchResult
+            {
+                ComputerName = device.ComputerName,
+                IsCloudRecord = true,
+                SourceIdentity = device.IdentityKey,
+                ComputerId = device.EntraDeviceId,
+                InventoryMetadata = device
+            };
+            if (!NavigateHomeSelectionToDevices(home))
+                return "source-qualified-transfer-rejected";
+
+            Application.DoEvents();
+            if (!_unifiedResults.Visible)
+                return "devices-list-not-visible";
+            if (_unifiedResults.Items.Count != 1)
+                return "devices-row-missing";
+            if (_unifiedResults.SelectedItems.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.SelectedItems[0].Tag, device))
+                return "native-listview-selection-missing";
+            if (_deviceRecoveryIds.Items.Count != 2 ||
+                _deviceRecoveryIds.SelectedIndex != -1)
+                return "native-multiple-ids-not-unselected";
+
+            _deviceRecoveryIds.SelectedIndex = 1;
+            if (!TryGetSelectedDeviceRecovery(out var exact, out var id) ||
+                !ReferenceEquals(exact, device) ||
+                id != "UI-NATIVE-ID-TWO")
+                return "native-explicit-id-selection-rejected";
+
+            // Switching to a name-only Start record must discard the exact
+            // selection and IDs, even when the ListView is truly visible.
+            if (NavigateHomeSelectionToDevices(new HomeSearchResult
+                {
+                    ComputerName = "UI-NAME-ONLY-UNVERIFIED"
+                }) ||
+                _unifiedResults.Items.Count != 0 ||
+                _unifiedResults.SelectedItems.Count != 0 ||
+                _deviceRecoveryIds.Items.Count != 0 ||
+                TryGetSelectedDeviceRecovery(out _, out _) ||
+                _startTransferredDeviceItem is not null)
+                return "native-stale-selection-not-cleared";
+
+            return "OK";
+        }
+        finally
+        {
+            _startTransferredDeviceItem = null;
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            _unifiedQuery.Text = previousQuery;
+            InvalidateDeviceCloudSecretOnSessionChange();
+            if (previousTab is not null && !previousTab.IsDisposed)
+                _mainTabs.SelectedTab = previousTab;
+        }
+    }
+
+    /// <summary>
     /// Offline native WinForms regression for explicit Entra Recovery ID
     /// selection after Start -> Devices navigation. Two IDs must NOT
     /// silently choose the first; one exact ID remains actionable.

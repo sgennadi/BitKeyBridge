@@ -142,6 +142,7 @@ public static class UiLayoutSelfTest
         VerifyIntuneSetupWizardNavigation(failures);
         VerifyDeviceCodeCancellation(failures);
         VerifyDevicesCloudShortcut(failures);
+        VerifyVisibleStartDeviceSelection(failures);
         VerifyStartupSettingsWithoutAdministrativePages(failures);
 
         VerifyDiagnosticCopyVisibility(failures);
@@ -2106,6 +2107,40 @@ public static class UiLayoutSelfTest
                 failures.Add("Startup settings; admin=" + admin + ": " +
                     DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message));
             }
+        }
+    }
+
+    // Unlike the hidden-parent tests, this exercises native selected items
+    // after the actual MainForm and Devices tab have created HWNDs.
+    private static void VerifyVisibleStartDeviceSelection(List<string> failures)
+    {
+        try
+        {
+            using var main = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+            main.Show();
+            try
+            {
+                Application.DoEvents();
+                var result = main.PreviewVisibleStartToDevicesSelectionForUiSelfTest();
+                if (result != "OK")
+                    failures.Add("Native visible Start -> Devices selection: " +
+                        result + ". Synthetic metadata only.");
+            }
+            finally
+            {
+                main.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Native visible Start -> Devices QA error: " +
+                DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message));
         }
     }
 
