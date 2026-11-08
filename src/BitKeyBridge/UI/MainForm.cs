@@ -1997,6 +1997,10 @@ public sealed partial class MainForm : DpiAwareForm
             return;
         }
 
+        // An ordinary new search is NOT the exact source-qualified Start
+        // transfer. Invalidate its pre-render selection fallback immediately.
+        _startTransferredDeviceItem = null;
+
         // Search is deliberately restartable. A second click cancels the
         // stale request and starts a new generation instead of silently
         // ignoring the operator while a slow Graph page is in progress.

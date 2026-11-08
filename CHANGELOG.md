@@ -1,3 +1,44 @@
+## 0.36.0-preview.3
+
+**Unsigned testing Preview, not Stable.**
+
+- Preserve Windows WinExe caller-provided stdout/stderr pipe and file handles when initializing the console; redirected `--version`, `--startup-diagnostics` JSON and audit preflight must not disappear into the parent CMD console.
+- Add exact-source Windows x64 CI regression for redirected SemVer and nonempty parsed startup JSON.
+- Improve Windows 11 Canary reporting: classify empty redirected version output as a capture error, not as an incorrect application version. Keep version checks exact and ensure the startup report is nonempty.
+- All BitLocker/LAPS authorization, protected audit, source-qualified device matching, Device 360 and release/update safety remain unchanged. Manual domain acceptance and corporate signing are still required.
+
+## 0.36.0-preview.2
+
+**Unsigned development Preview — 7 November 2026; Stable 0.35.0 unchanged.** This revision packages the Device 360/Start→Devices/Recovery ID changes in PR #117 for exact-head Windows testing. It does **not** authorize production domain deployment or automatic update.
+
+- Start's ordinary **Devices** navigation reuses an already verified source-qualified device record and its existing inventory, instead of transferring only the computer name or silently invoking Graph/MFA.
+- Clear old Devices metadata, Recovery ID selection and pending search when the Start record cannot be matched by exact AD/Entra/Intune identity. Name-only or ambiguous matches remain unverified.
+- Preserve one verified Start-selected device across the inactive WinForms ListView boundary; ordinary unselected search rows are not trusted, and multiple Entra Recovery IDs require explicit operator choice.
+- Avoid double transfer and repeated Recovery ID reset while preparing an approved BitLocker Reveal/Copy from Start.
+- Reject late Graph recovery responses if the token changes, expires or no longer matches tenant/client/scope context. No authorization, ticket, JIT or protected audit gates are weakened.
+- Add native WinForms regressions, including a **shown** main window with exact Start→Devices selection, manual multiple-ID choice and name-only navigation cleanup, plus EN/RU/HE, synthetic hardware/Device 360 and fail-closed WMI tests.
+- This Preview still requires a clean x64/x86/ARM64 GitHub Actions pass, native UI/CodeQL/security regression checks, and authorized/denied managed-workstation acceptance before Stable. No live secrets, credentials or endpoint names belong in CI logs.
+
+## 0.36.0-preview.1
+
+- Reject mismatched selected AD computer CN versus dNSHostName **before connecting** to WMI, preventing unnecessary Windows integrated authentication to a wrong same-domain host.
+- Reject remote WMI hardware when the reported Windows computer name, domain, or domain-joined state does not match the selected AD computer DNS domain and its exact first-RDN computer name. Fail closed on stale in-domain DNS aliases or unsupported escaped AD computer names. Validate these fields from Win32_ComputerSystem before collecting BIOS, TPM, CPU, disk, or network data. New typed WMI.IDENTITY_MISMATCH is visible in Device Health, EN/RU/HE Smart Diagnostics and Helpdesk Report; offline and native UI tests cover stale DNS/identity mismatch.
+
+- Localize WMI result states in EN/RU/HE, show UTC observation time, and wrap per-provider classified errors in a multiline read-only hardware status.
+- Preserve typed `WMI.NO_RECORD` when the core computer/BIOS WMI classes return no records; show NotVerified instead of an unauthorized or healthy state, with EN/RU/HE guidance and report regression tests.
+- Restrict the synthetic WMI presenter hook to an explicitly opted-in UI-test dialog using a synthetic device identity; add native inventory label wrapping/layout regression checks.
+- Fix Health/Smart Diagnostics severity mismatches for typed WMI provider failures, and exercise real WinForms fields under synthetic success-to-failed-retry transitions (EN/RU/HE) without network calls.
+- Add per-provider typed Smart Diagnostics for CPU, Disk, Network and Memory with strictly allowlisted WMI error text in the UI and explicit Helpdesk reports.
+- Recompute Device Health and evidence coverage from the latest explicitly requested WMI result; clear old WMI fields before each retry, classify failure without displaying stale hardware, and keep Health/Diagnostics/Helpdesk export consistent.
+
+**Development QA only — public Stable 0.35.0 remains unchanged.**
+
+- Expand explicit, read-only remote WMI inventory for exact AD-verified hosts: BIOS serial, CPU model/logical processors, physical RAM, raw disk count/capacity and physical network adapter count. Individual optional provider errors are typed; no MAC/IP addresses, disk serials, recovery data or credentials are queried or exported.
+- Add **evidence coverage** percentage and conservative Device Health 2.0 readiness. Coverage measures completeness, NOT security, health or authorization; missing metadata never makes a device safe.
+- Add Smart Diagnostics 2.0: stable reason codes and next actions for identity ambiguity, AD/Entra/Intune failures, BitLocker/LAPS metadata gaps, encryption/compliance/stale sync and read-only WMI failures. No new background work or permission escalation.
+- Update Device 360 tabs, report, EN/RU/HE labels and synthetic offline regression tests. Preserve all existing RBAC, protected audit, session, reveal and updater trust policies.
+- Exact-head native Windows CI plus real domain/tenant and RTL/DPI acceptance required before any signed/Stable release.
+
 ## 0.35.0
 
 **Stable (public UNSIGNED; manual distribution only)**
