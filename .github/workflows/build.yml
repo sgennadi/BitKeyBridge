@@ -388,6 +388,30 @@ jobs:
         run: |
           ./tests/windows/EmbeddedAppManifestRegression.ps1 -Executable "artifacts/${{ matrix.rid }}/BitKeyBridge.exe"
 
+      - name: Verify redirected WinExe stdout (version and startup JSON)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path 'artifacts/win-x64/BitKeyBridge.exe').Path
+          $out = Join-Path $env:RUNNER_TEMP 'bkb-stdout.txt'
+          $err = Join-Path $env:RUNNER_TEMP 'bkb-stderr.txt'
+          $version = Start-Process -FilePath $exe -ArgumentList '--version' -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          if ($version.ExitCode -ne 0) { throw 'Redirected version command failed.' }
+          $expected = ([xml](Get-Content 'src/BitKeyBridge/BitKeyBridge.csproj' -Raw)).Project.PropertyGroup.Version | Select-Object -First 1
+          if ((Get-Content -LiteralPath $out -Raw).Trim() -cne [string]$expected) {
+            throw 'WinExe stdout did not capture the exact project SemVer.'
+          }
+          $startup = Start-Process -FilePath $exe -ArgumentList '--startup-diagnostics','--no-elevation' -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          if ($startup.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $out) -or (Get-Item -LiteralPath $out).Length -eq 0) {
+            throw 'WinExe redirected startup diagnostics were empty or failed.'
+          }
+          $report = Get-Content -LiteralPath $out -Raw | ConvertFrom-Json
+          if (-not $report.Mode -or -not $report.Checks) {
+            throw 'WinExe redirected startup JSON has missing required fields.'
+          }
+          Write-Host 'Redirected WinExe stdout passed (secret-free check).'
+
       # Optional signing is only active if the runner certificate store contains
       # the trusted code-signing certificate AND its private key.
       # Set repository variable BITKEYBRIDGE_SIGNING_THUMBPRINT only after provisioning.
