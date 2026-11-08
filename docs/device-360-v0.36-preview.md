@@ -1,4 +1,4 @@
-# BitKeyBridge 0.36.0-preview.2 — Device 360 hardware and diagnostics
+# BitKeyBridge 0.36.0-preview.3 — Device 360 hardware and diagnostics
 
 **Development only**, based on the published Stable 0.35.0. This preview does not authorize GPO/Intune rollout, corporate signing or changes to real domain security policy.
 
@@ -54,4 +54,4 @@ The ordinary Start → Devices navigation now reuses only exact source-qualified
 
 A single unambiguous Entra Recovery ID may be preselected, but multiple IDs require an explicit choice. Reveal and Copy continue to require the active delegated Microsoft 365 session and existing recovery RBAC, ticket/JIT and protected-audit gates. A late Graph response is discarded after token/context expiry or change. The synthetic Windows UI self-test covers both a not-yet-realized ListView and a shown native WinForms window. These tests do not read or disclose any real secrets.
 
-Preview `0.36.0-preview.2` is **unsigned test software**, not a production release; the exact-head Windows matrix, CodeQL and real AD/Entra canary acceptance remain mandatory.
+Preview `0.36.0-preview.3` is **unsigned test software**, not a production release; the exact-head Windows matrix, CodeQL and real AD/Entra canary acceptance remain mandatory.

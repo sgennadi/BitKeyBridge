@@ -1,4 +1,4 @@
-# BitKeyBridge 0.36.0-preview.2 — Windows 11 managed canary acceptance
+# BitKeyBridge 0.36.0-preview.3 — Windows 11 managed canary acceptance
 
 **Status: manual enterprise acceptance, not production authorization.**
 
@@ -6,9 +6,9 @@ GitHub Actions tests Windows EXE/WinForms behavior using synthetic data. It cann
 
 ## Obtain and verify
 
-Download the exact-source **BitKeyBridge-v0.36.0-preview.2-QA-UNSIGNED** artifact from PR #117's passing GitHub Actions job. Compare the architecture ZIP SHA256 against `SHA256SUMS.txt` in that same QA bundle. Check `BUILD-INFO.txt` for the selected source SHA. The binary is unsigned test software: do not install it on a DC or production Helpdesk workstation, or deploy it through GPO, Intune or automatic updates.
+Download the exact-source **BitKeyBridge-v0.36.0-preview.3-QA-UNSIGNED** artifact from PR #117's passing GitHub Actions job. Compare the architecture ZIP SHA256 against `SHA256SUMS.txt` in that same QA bundle. Check `BUILD-INFO.txt` for the selected source SHA. The binary is unsigned test software: do not install it on a DC or production Helpdesk workstation, or deploy it through GPO, Intune or automatic updates.
 
-Extract only the ZIP matching Windows architecture into an isolated QA folder, e.g. `C:\QA\BitKeyBridge\`. Run `BitKeyBridge.exe --version` and verify the response is exactly `0.36.0-preview.2`. An alternative is to run the packaged `BitKeyBridge-Win11-Canary.cmd` with the EXE's quoted absolute path.
+Extract only the ZIP matching Windows architecture into an isolated QA folder, e.g. `C:\QA\BitKeyBridge\`. Run `BitKeyBridge.exe --version` and verify the response is exactly `0.36.0-preview.3`. An alternative is to run the packaged `BitKeyBridge-Win11-Canary.cmd` with the EXE's quoted absolute path.
 
 ## Run safely
 
@@ -41,3 +41,8 @@ The canary helper's PASS/FAIL/SKIP choices are operator-entered **observations**
 ## Packaging and CI limitations
 
 The Windows 11 canary CMD and this guide are included in the exact-source PR #117 unsigned QA archive, alongside their SHA-256 entries. GitHub-hosted Windows Server validates the helper's help-mode parsing and exact allowlist of three read-only BitKeyBridge commands, **not** its Windows 11, AD/Intune or protected-audit behavior. Do not treat an unrun manual canary as PASS. The `/guided` script may exit 0 with skipped observations; reviewers must examine each recorded PASS/FAIL/SKIP and the restricted preflight result before approving any broader test.
+
+
+## WinExe redirected-output fix
+
+Preview.2 may print the correct version into the parent CMD console while its redirection file stays empty. Preview.3 preserves inherited pipe/file handles and CI checks both redirected SemVer and startup JSON. Use the matching Preview.3 EXE and Canary CMD from one exact-source QA bundle; do not mix versions.

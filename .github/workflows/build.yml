@@ -342,7 +342,7 @@ jobs:
               throw "Canary helper is missing an approved read-only command."
             }
           }
-          if ($source -cnotmatch 'BitKeyBridgeCanary=0\.36\.0-preview\.2' -or
+          if ($source -cnotmatch 'BitKeyBridgeCanary=0\.36\.0-preview\.3' -or
               $source -cnotmatch 'Windows11Client=PASS' -or
               $source -cnotmatch 'ProtectedAuditPreflight=NOT_READY') {
             throw "Canary helper lacks expected status-only report fields."
@@ -1374,7 +1374,7 @@ jobs:
           EOF
           if [[ "$GITHUB_HEAD_REF" == "feature/v0.36.0-device-health-diagnostics" ]]; then
             cp ../docs/device-360-v0.36-preview.md DEVICE-360-QA-NOTES.md
-            cp ../docs/managed-canary-0.36.0-preview.2.md WIN11-ACCEPTANCE.md
+            cp ../docs/managed-canary-0.36.0-preview.3.md WIN11-ACCEPTANCE.md
             cp ../tests/windows/BitKeyBridge-Win11-Canary.cmd BitKeyBridge-Win11-Canary.cmd
             sha256sum DEVICE-360-QA-NOTES.md WIN11-ACCEPTANCE.md BitKeyBridge-Win11-Canary.cmd >> SHA256SUMS.txt
             cat > README-TEST.txt <<'EOF'

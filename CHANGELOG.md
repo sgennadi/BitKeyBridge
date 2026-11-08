@@ -1,3 +1,12 @@
+## 0.36.0-preview.3
+
+**Unsigned testing Preview, not Stable.**
+
+- Preserve Windows WinExe caller-provided stdout/stderr pipe and file handles when initializing the console; redirected `--version`, `--startup-diagnostics` JSON and audit preflight must not disappear into the parent CMD console.
+- Add exact-source Windows x64 CI regression for redirected SemVer and nonempty parsed startup JSON.
+- Improve Windows 11 Canary reporting: classify empty redirected version output as a capture error, not as an incorrect application version. Keep version checks exact and ensure the startup report is nonempty.
+- All BitLocker/LAPS authorization, protected audit, source-qualified device matching, Device 360 and release/update safety remain unchanged. Manual domain acceptance and corporate signing are still required.
+
 ## 0.36.0-preview.2
 
 **Unsigned development Preview — 7 November 2026; Stable 0.35.0 unchanged.** This revision packages the Device 360/Start→Devices/Recovery ID changes in PR #117 for exact-head Windows testing. It does **not** authorize production domain deployment or automatic update.

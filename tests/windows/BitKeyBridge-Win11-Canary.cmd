@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
 
-rem BitKeyBridge 0.36.0-preview.2 Windows 11 manual acceptance.
+rem BitKeyBridge 0.36.0-preview.3 Windows 11 manual acceptance.
 rem Read-only preflight; manual prompts record statuses ONLY.
 rem NEVER reads or prints BitLocker/LAPS values, token, identity or device name.
 rem NEVER uploads data or modifies AD, Intune, RBAC, services or GPO.
@@ -81,14 +81,14 @@ set "BKB_VERSION=%BKB_PRIVATE%\version-PRIVATE.txt"
 set "BKB_FAILED=0"
 
 > "%BKB_SAFE%" (
-    echo BitKeyBridgeCanary=0.36.0-preview.2
+    echo BitKeyBridgeCanary=0.36.0-preview.3
     echo Windows11Client=PASS
     echo NonElevatedToken=PASS
     echo NetworkUpload=DISABLED
     echo ActualSecretRead=MANUAL_ONLY
 )
 echo.
-echo BitKeyBridge 0.36.0-preview.2 - local Windows 11 canary
+echo BitKeyBridge 0.36.0-preview.3 - local Windows 11 canary
 echo No data is transmitted. Do not share PRIVATE diagnostic JSON.
 echo.
 "%BKB_EXE%" --version > "%BKB_VERSION%" 2>&1
@@ -97,10 +97,16 @@ if errorlevel 1 (
     echo ERROR: --version command failed.
     exit /b 2
 )
-findstr /X /C:"0.36.0-preview.2" "%BKB_VERSION%" >nul
+for %%F in ("%BKB_VERSION%") do if %%~zF EQU 0 (
+    >> "%BKB_SAFE%" echo AppVersion=FAIL
+    echo ERROR: Version stdout was empty. Use a Preview.3 EXE with the
+    echo ERROR: redirected WinExe console fix.
+    exit /b 2
+)
+findstr /X /C:"0.36.0-preview.3" "%BKB_VERSION%" >nul
 if errorlevel 1 (
     >> "%BKB_SAFE%" echo AppVersion=FAIL
-    echo ERROR: Wrong app version. Use exactly 0.36.0-preview.2.
+    echo ERROR: Executable version does not match required 0.36.0-preview.3.
     exit /b 2
 )
 >> "%BKB_SAFE%" echo AppVersion=PASS
