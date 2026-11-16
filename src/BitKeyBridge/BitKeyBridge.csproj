@@ -37,7 +37,7 @@
     <ProjectReference Include="../UniversalDiagnostics.Embedded/UniversalDiagnostics.Embedded.vbproj" />
     <EmbeddedResource Include="Assets/BitKeyBridge.ico" LogicalName="BitKeyBridge.BrandIcon" />
     <PackageReference Include="System.DirectoryServices.Protocols" Version="10.0.14" />
-    <PackageReference Include="System.Management" Version="10.0.14" />
+    <PackageReference Include="System.Management" Version="11.0.0" />
     <PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
   </ItemGroup>
 </Project>
