@@ -1426,7 +1426,7 @@ jobs:
           name: ${{ (github.event.pull_request.number == 115 || github.event.pull_request.number == 117) && format('BitKeyBridge-v{0}-QA-UNSIGNED', steps.validate_candidate.outputs.version) || 'BitKeyBridge-Device360-v0.35-DRAFT-QA-UNSIGNED' }}
           path: device360-qa/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
 
   release:
     if: >-
