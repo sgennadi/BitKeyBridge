@@ -14,6 +14,15 @@ internal sealed record Device360HardwareInventory
     internal string Source { get; init; } = "Remote WMI (Windows integrated)";
     internal string Manufacturer { get; init; } = string.Empty;
     internal string Model { get; init; } = string.Empty;
+    internal string SerialNumber { get; init; } = string.Empty;
+    internal string CpuName { get; init; } = string.Empty;
+    internal int CpuLogicalProcessors { get; init; }
+    internal decimal MemoryGiB { get; init; }
+    internal int PhysicalDiskCount { get; init; }
+    internal decimal PhysicalStorageGiB { get; init; }
+    internal int PhysicalNetworkAdapterCount { get; init; }
+    // Safe typed status only, no raw provider exceptions or addresses.
+    internal string ExtendedDiagnostic { get; init; } = string.Empty;
     internal string BiosVersion { get; init; } = string.Empty;
     internal string BiosManufacturer { get; init; } = string.Empty;
     internal string BiosReleaseDate { get; init; } = string.Empty;
@@ -27,24 +36,133 @@ internal sealed record Device360HardwareInventory
 
 internal sealed record Device360HardwareOutcome(
     bool Succeeded, Device360HardwareInventory? Inventory,
-    string Explanation);
+    string Explanation)
+{
+    internal string FailureCategory { get; init; } = string.Empty;
+}
+
+internal sealed record Device360OptionalWmiFailure(string Component, string Category);
 
 internal static class Device360HardwareService
 {
+    // Only locally classified failures are eligible for display or export.
+    // Never surface arbitrary WMI exceptions, paths, hostnames or tokens.
+    internal static IReadOnlyList<Device360OptionalWmiFailure> OptionalFailures(
+        string? status)
+    {
+        var failures = new List<Device360OptionalWmiFailure>();
+        if (string.IsNullOrWhiteSpace(status)) return failures;
+        foreach (var segment in status.Split(';',
+                     StringSplitOptions.RemoveEmptyEntries |
+                     StringSplitOptions.TrimEntries).Take(8))
+        {
+            var colon = segment.IndexOf(": ", StringComparison.Ordinal);
+            if (colon < 1) continue;
+            var component = segment[..colon];
+            var category = segment[(colon + 2)..];
+            if (component is not ("CPU" or "Disk" or "Network" or "Memory") ||
+                category is not ("NoRecord" or "AccessDenied" or "Timeout" or
+                    "DCOM/RPCUnavailable" or "WmiError" or "Unavailable") ||
+                failures.Any(x => x.Component == component))
+                continue;
+            failures.Add(new Device360OptionalWmiFailure(component, category));
+        }
+        return failures;
+    }
+
+    internal static string SafeOptionalStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return string.Empty;
+        var known = OptionalFailures(status);
+        if (known.Count == 0) return "Unknown optional WMI status";
+        var safe = string.Join("; ", known.Select(x =>
+            x.Component + ": " + x.Category));
+        var count = status.Split(';',
+            StringSplitOptions.RemoveEmptyEntries |
+            StringSplitOptions.TrimEntries).Length;
+        return count > known.Count ? safe + "; Other: Unverified" : safe;
+    }
+
+    // Every consumer of WMI evidence must use the same fail-closed rule.
+    // Empty category means no WMI failure was reported (possibly not queried).
+    // Any nonempty category invalidates the inventory, even for direct
+    // calls that bypass the WinForms presenter. Remote exception strings are
+    // never accepted as reportable classifications.
+    internal static (Device360HardwareInventory? Inventory,
+        string? FailureCategory) NormalizeEvidence(
+        Device360HardwareInventory? inventory, string? failureCategory)
+    {
+        if (string.IsNullOrEmpty(failureCategory))
+            return (inventory, null);
+        var category = failureCategory switch
+        {
+            "NoRecord" or "IdentityMismatch" or "AccessDenied" or
+                "Timeout" or "DCOM/RPCUnavailable" or "WmiError" or
+                "Unavailable" => failureCategory,
+            _ => "Unavailable"
+        };
+        return (null, category);
+    }
+
+    // Contradictory WMI results must not reach UI, Health or export.
+    // Typed local failures take precedence over untrusted inventory data.
+    internal static Device360HardwareOutcome NormalizeOutcome(
+        Device360HardwareOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+        var (verifiedInventory, failureCategory) = NormalizeEvidence(
+            outcome.Inventory, outcome.FailureCategory);
+        if (outcome.Succeeded && verifiedInventory is not null &&
+            failureCategory is null)
+            return outcome;
+
+        var category = failureCategory ??
+            (outcome.Succeeded ? "NoRecord" : "Unavailable");
+        return new Device360HardwareOutcome(false, null,
+            "Hardware inventory was not verified.")
+        {
+            FailureCategory = category
+        };
+    }
+
     // A verified AD DNS host is required: NO discovery by display name,
     // unqualified NetBIOS alias, IP, UPN, serial or Intune-only identity.
     internal static bool CanQuery(Device360Snapshot snapshot)
         => snapshot.IdentityVerified && !snapshot.IdentityAmbiguous &&
            snapshot.InAd == true && IsStrictDnsHost(snapshot.AdDnsHostName) &&
            HasSameAdDomainSuffix(snapshot.AdDnsHostName,
+               snapshot.AdDistinguishedName) &&
+           HasSameAdComputerName(snapshot.AdDnsHostName,
                snapshot.AdDistinguishedName);
+
+    /// <summary>
+    /// A selected AD computer can have a stale dNSHostName that points to a
+    /// different computer in the same domain. This is checked offline before
+    /// enabling the WMI button or sending any Windows credentials.
+    /// </summary>
+    internal static bool HasAdDnsTargetMismatch(Device360Snapshot snapshot) =>
+        snapshot.IdentityVerified && !snapshot.IdentityAmbiguous &&
+        snapshot.InAd == true && IsStrictDnsHost(snapshot.AdDnsHostName) &&
+        HasSameAdDomainSuffix(snapshot.AdDnsHostName,
+            snapshot.AdDistinguishedName) &&
+        !HasSameAdComputerName(snapshot.AdDnsHostName,
+            snapshot.AdDistinguishedName);
 
     // Restrict Windows integrated authentication to the AD DNS domain
     // proven by the exact selected object. Do not contact arbitrary foreign
     // hosts even if an attacker-controlled dnsHostName is present in LDAP.
     internal static bool HasSameAdDomainSuffix(string host, string? objectDn)
     {
-        if (string.IsNullOrWhiteSpace(objectDn)) return false;
+        var domain = AdDnsDomain(objectDn);
+        if (domain is null) return false;
+        var suffix = "." + domain;
+        return host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            host.Length > suffix.Length;
+    }
+
+    private static string? AdDnsDomain(string? objectDn)
+    {
+        if (string.IsNullOrWhiteSpace(objectDn)) return null;
         var parts = Regex.Matches(objectDn,
                 @"(?:^|,)\s*DC=([^,]+)", RegexOptions.IgnoreCase |
                     RegexOptions.CultureInvariant)
@@ -55,10 +173,49 @@ internal static class Device360HardwareService
                 !Regex.IsMatch(label,
                     @"\A[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\z",
                     RegexOptions.CultureInvariant)))
+            return null;
+        return string.Join(".", parts);
+    }
+
+    /// <summary>
+    /// Require the selected AD computer RDN and its DNS hostname to agree
+    /// *before* any WMI connection. Reject malformed/escaped computer RDNs,
+    /// stale DNS attributes and misleading aliases.
+    /// </summary>
+    internal static bool HasSameAdComputerName(
+        string? dnsHost, string? selectedAdDn)
+    {
+        if (!IsStrictDnsHost(dnsHost) ||
+            string.IsNullOrWhiteSpace(selectedAdDn))
             return false;
-        var suffix = "." + string.Join(".", parts);
-        return host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-            host.Length > suffix.Length;
+        var adCn = Regex.Match(selectedAdDn,
+            @"\A\s*CN=([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\s*,",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return adCn.Success &&
+            string.Equals(dnsHost!.Split('.')[0], adCn.Groups[1].Value,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Consistency check for a remote Windows computer, not independent
+    /// cryptographic host authentication. Fail closed for stale DNS/aliases.
+    /// </summary>
+    internal static bool HasMatchingRemoteWmiIdentity(
+        string? dnsHost, string? selectedAdDn, string? remoteName,
+        string? remoteDomain, bool joined)
+    {
+        if (!joined || !IsStrictDnsHost(dnsHost) ||
+            !HasSameAdDomainSuffix(dnsHost!, selectedAdDn))
+            return false;
+        var domain = AdDnsDomain(selectedAdDn);
+        if (string.IsNullOrEmpty(domain) || string.IsNullOrWhiteSpace(remoteName) ||
+            string.IsNullOrWhiteSpace(remoteDomain) ||
+            !HasSameAdComputerName(dnsHost, selectedAdDn))
+            return false;
+        return string.Equals(dnsHost!.Split('.')[0], remoteName.Trim(),
+                   StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(domain, remoteDomain.Trim().TrimEnd('.'),
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool IsStrictDnsHost(string? host)
@@ -85,11 +242,18 @@ internal static class Device360HardwareService
                 "Read-only WMI checks require Windows."));
 
         var dns = snapshot.AdDnsHostName;
-        return Task.Run(() => QueryWindows(dns, ct), ct);
+        var adDn = snapshot.AdDistinguishedName;
+        return Task.Run(() => QueryWindows(dns, adDn, ct), ct);
     }
 
+    internal static string FormatGiB(decimal size) =>
+        size <= 0 ? "Not verified" :
+        size.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " GiB";
+
+    private static decimal GiB(decimal bytes) => bytes / 1073741824m;
+
     private static Device360HardwareOutcome QueryWindows(
-        string dnsHost, CancellationToken ct)
+        string dnsHost, string? selectedAdDn, CancellationToken ct)
     {
         try
         {
@@ -103,25 +267,56 @@ internal static class Device360HardwareService
             var biosVersion = string.Empty;
             var biosManufacturer = string.Empty;
             var biosDate = string.Empty;
+            var serialNumber = string.Empty;
+            decimal memoryGiB = 0m;
+            var remoteName = string.Empty;
+            var remoteDomain = string.Empty;
+            var domainJoined = false;
+            var foundComputerSystem = false;
 
             using (var searcher = NewSearcher(scope,
-                "SELECT Manufacturer,Model FROM Win32_ComputerSystem"))
+                "SELECT Name,Domain,PartOfDomain,Manufacturer,Model,TotalPhysicalMemory FROM Win32_ComputerSystem"))
             using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
                 {
                     using (row)
                     {
+                        foundComputerSystem = true;
+                        remoteName = Read(row, "Name");
+                        remoteDomain = Read(row, "Domain");
+                        domainJoined = row["PartOfDomain"] is bool joined && joined;
                         manufacturer = Read(row, "Manufacturer");
                         model = Read(row, "Model");
+                        if (ulong.TryParse(Read(row, "TotalPhysicalMemory"),
+                                System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out var memoryBytes) && memoryBytes > 0)
+                            memoryGiB = GiB(memoryBytes);
                     }
                     break;
                 }
             }
             ct.ThrowIfCancellationRequested();
 
+            if (!foundComputerSystem)
+                return new Device360HardwareOutcome(false, null,
+                    "The remote WMI computer-system record was not verified.")
+                {
+                    FailureCategory = "NoRecord"
+                };
+            if (!HasMatchingRemoteWmiIdentity(dnsHost, selectedAdDn,
+                    remoteName, remoteDomain, domainJoined))
+                return new Device360HardwareOutcome(false, null,
+                    "Remote Windows identity did not match the selected AD record; inventory rejected.")
+                {
+                    FailureCategory = "IdentityMismatch"
+                };
+
+            // Never query BIOS, TPM, CPU, disks or adapters if the reported
+            // machine identity differs from the selected AD computer.
             using (var searcher = NewSearcher(scope,
-                "SELECT Manufacturer,SMBIOSBIOSVersion,ReleaseDate FROM Win32_BIOS"))
+                "SELECT Manufacturer,SMBIOSBIOSVersion,ReleaseDate,SerialNumber FROM Win32_BIOS"))
             using (var objects = searcher.Get())
             {
                 foreach (ManagementObject row in objects)
@@ -130,6 +325,7 @@ internal static class Device360HardwareService
                     {
                         biosManufacturer = Read(row, "Manufacturer");
                         biosVersion = Read(row, "SMBIOSBIOSVersion");
+                        serialNumber = Read(row, "SerialNumber");
                         var rawDate = Read(row, "ReleaseDate");
                         if (rawDate.Length >= 8 &&
                             DateTime.TryParseExact(rawDate[..8], "yyyyMMdd",
@@ -147,7 +343,10 @@ internal static class Device360HardwareService
                 string.IsNullOrWhiteSpace(model) &&
                 string.IsNullOrWhiteSpace(biosVersion))
                 return new Device360HardwareOutcome(false, null,
-                    "Remote WMI returned no computer-system or BIOS inventory. Check WMI service and read permissions.");
+                    "Remote WMI returned no verified computer-system or BIOS record.")
+                {
+                    FailureCategory = "NoRecord"
+                };
 
             var tpmSpec = string.Empty;
             var enabled = string.Empty;
@@ -185,12 +384,100 @@ internal static class Device360HardwareService
                 tpmDiagnostic = "TPM not verified: " +
                     ErrorCategory(ex) + ". BIOS/computer inventory is still available.";
             }
+            // Optional read-only providers. A provider failure must never
+            // suppress earlier BIOS/TPM evidence or trigger permission changes.
+            var partial = new List<string>();
+            var cpuName = string.Empty;
+            var logicalProcessors = 0;
+            var diskCount = 0;
+            decimal diskGiB = 0m;
+            var adapterCount = 0;
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                using var searcher = NewSearcher(scope,
+                    "SELECT Name,NumberOfLogicalProcessors FROM Win32_Processor");
+                using var rows = searcher.Get();
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        if (cpuName.Length == 0) cpuName = Read(row, "Name");
+                        if (int.TryParse(Read(row, "NumberOfLogicalProcessors"),
+                                out var count) && count > 0 &&
+                            logicalProcessors <= int.MaxValue - count)
+                            logicalProcessors += count;
+                    }
+                }
+                if (cpuName.Length == 0) partial.Add("CPU: NoRecord");
+            }
+            catch (Exception ex) when (IsExpectedWmiFailure(ex))
+            {
+                partial.Add("CPU: " + ErrorCategory(ex));
+            }
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                using var searcher = NewSearcher(scope,
+                    "SELECT Size FROM Win32_DiskDrive");
+                using var rows = searcher.Get();
+                decimal totalBytes = 0m;
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        ++diskCount;
+                        if (ulong.TryParse(Read(row, "Size"),
+                                System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out var size))
+                            totalBytes += size;
+                    }
+                }
+                diskGiB = GiB(totalBytes);
+                if (diskCount == 0) partial.Add("Disk: NoRecord");
+            }
+            catch (Exception ex) when (IsExpectedWmiFailure(ex))
+            {
+                partial.Add("Disk: " + ErrorCategory(ex));
+            }
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                using var searcher = NewSearcher(scope,
+                    "SELECT PhysicalAdapter FROM Win32_NetworkAdapter");
+                using var rows = searcher.Get();
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        if (row["PhysicalAdapter"] is bool physical && physical)
+                            ++adapterCount;
+                    }
+                }
+                if (adapterCount == 0)
+                    partial.Add("Network: NoRecord");
+            }
+            catch (Exception ex) when (IsExpectedWmiFailure(ex))
+            {
+                partial.Add("Network: " + ErrorCategory(ex));
+            }
+            if (memoryGiB <= 0) partial.Add("Memory: NoRecord");
+
             ct.ThrowIfCancellationRequested();
             return new Device360HardwareOutcome(true,
                 new Device360HardwareInventory
                 {
                     Manufacturer = manufacturer,
                     Model = model,
+                    SerialNumber = serialNumber,
+                    CpuName = cpuName,
+                    CpuLogicalProcessors = logicalProcessors,
+                    MemoryGiB = memoryGiB,
+                    PhysicalDiskCount = diskCount,
+                    PhysicalStorageGiB = diskGiB,
+                    PhysicalNetworkAdapterCount = adapterCount,
+                    ExtendedDiagnostic = string.Join("; ", partial),
                     BiosVersion = biosVersion,
                     BiosManufacturer = biosManufacturer,
                     BiosReleaseDate = biosDate,
@@ -211,7 +498,10 @@ internal static class Device360HardwareService
             var category = ErrorCategory(ex);
             return new Device360HardwareOutcome(false, null,
                 "Remote WMI not available (" + category + "). " +
-                FailureGuidance(category) + " Nothing was modified.");
+                FailureGuidance(category) + " Nothing was modified.")
+            {
+                FailureCategory = category
+            };
         }
     }
 

@@ -2901,6 +2901,7 @@ public sealed partial class MainForm
         {
             // Editing a previous search is not selecting that old device.
             // Revoke Reveal/Copy context immediately, before pressing Search.
+            _startTransferredDeviceItem = null;
             InvalidateDeviceCloudSecretOnSessionChange();
             _deviceRecoveryIds.Items.Clear();
             foreach (ListViewItem selected in
@@ -3443,26 +3444,22 @@ public sealed partial class MainForm
         _deviceRecoveryKey.UseSystemPasswordChar = true;
         _deviceShowKey.Text = "Reveal Key";
 
-        if (_unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo row)
-        {
-            return;
-        }
-
-        if (row.IdentityStatus == "Ambiguous device ID")
+        if (!TryGetExactSelectedUnifiedDevice(out var row) ||
+            row is null)
             return;
 
         foreach (var id in row.RecoveryIds)
             _deviceRecoveryIds.Items.Add(id);
 
-        // When names collide, force the operator to pick the exact Entra
-        // Recovery ID before requesting a secret. Do not auto-select it.
-        if (_deviceRecoveryIds.Items.Count > 0 &&
+        // A WinForms ComboBox can implicitly select its first entry when
+        // items are added to an initialized DropDownList. Explicitly clear
+        // selection unless there is exactly one verified Recovery ID.
+        // Neither path reads a secret, opens Graph or grants permissions.
+        if (_deviceRecoveryIds.Items.Count == 1 &&
             row.IdentityStatus != "Name collision")
-        {
             _deviceRecoveryIds.SelectedIndex = 0;
-        }
+        else
+            _deviceRecoveryIds.SelectedIndex = -1;
     }
 
     private bool TryGetSelectedDeviceRecovery(
@@ -3472,17 +3469,15 @@ public sealed partial class MainForm
         row = null;
         recoveryId = string.Empty;
 
-        if (_unifiedResults.SelectedItems.Count == 0 ||
-            _unifiedResults.SelectedItems[0].Tag is not
-                UnifiedDeviceInfo selected ||
+        if (!TryGetExactSelectedUnifiedDevice(out var selected) ||
+            selected is null ||
             _deviceRecoveryIds.SelectedItem is not
                 string selectedRecoveryId)
         {
             return false;
         }
 
-        if (selected.IdentityStatus == "Ambiguous device ID" ||
-            !selected.RecoveryIds.Contains(selectedRecoveryId,
+        if (!selected.RecoveryIds.Contains(selectedRecoveryId,
                 StringComparer.OrdinalIgnoreCase))
         {
             return false;
@@ -3499,6 +3494,15 @@ public sealed partial class MainForm
         TryGetSelectedDeviceRecovery(out var selected, out var selectedId) &&
         ReferenceEquals(selected, row) &&
         string.Equals(selectedId, recoveryId, StringComparison.OrdinalIgnoreCase);
+
+    // A request can finish after the existing token expires or its tenant,
+    // client or scope context changes without a new token object. Check both
+    // reference identity and the current session policy before accepting
+    // any asynchronous Graph recovery response.
+    private bool IsCurrentDeviceCloudRecoverySession(GraphToken? expected) =>
+        expected is not null &&
+        ReferenceEquals(expected, _cloudToken) &&
+        HasCloudSearchSession();
 
     // Deny before ticket/JIT dialogs. A disconnected source cannot reveal
     // a secret, and requesting a recovery ticket before checking the Graph
@@ -3633,10 +3637,10 @@ public sealed partial class MainForm
                     originalSession!.AccessToken, recoveryId);
                 if (!IsCurrentDeviceRecoverySelection(
                         row, recoveryId, selectionGeneration) ||
-                    !ReferenceEquals(originalSession, _cloudToken))
+                    !IsCurrentDeviceCloudRecoverySession(originalSession))
                 {
                     UiStyle.SetStatus(_unifiedStatus,
-                        "Selection or Microsoft 365 session changed while reading. Stale key discarded.",
+                        "Selection or Microsoft 365 session changed or expired while reading. Stale key discarded.",
                         UiStatusKind.Warning);
                     return null;
                 }

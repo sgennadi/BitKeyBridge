@@ -5,7 +5,20 @@ namespace BitKeyBridge;
 internal sealed partial class Device360Dialog
 {
     private Device360HardwareInventory? _device360RemoteHardware;
+    private string? _device360HardwareFailureCategory;
     private CancellationTokenSource? _device360HardwareCancellation;
+    // Synthetic UI transition hook. Set only for UI-TEST-* fixture
+    // identities; never starts WMI or overrides production authorization.
+    private Action<Device360HardwareOutcome>? _v36SyntheticHardwareRetry;
+
+    internal bool PreviewHardwareOutcomeForUiTest(Device360HardwareOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+        if (IsDisposed || Disposing || _v36SyntheticHardwareRetry is null)
+            return false;
+        _v36SyntheticHardwareRetry(outcome);
+        return true;
+    }
 
     /// <summary>
     /// Reuse the original, fully localized source, recovery and policy
@@ -21,7 +34,42 @@ internal sealed partial class Device360Dialog
     {
         string Tr(string key) => UiLanguageService.Translate(language, key);
         var rtl = UiLanguageService.IsRightToLeft(language);
-        var observations = Device360HealthService.Evaluate(snapshot, operational);
+        // Read-only evidence is recomputed after an explicit WMI action.
+        // This ensures Health, Diagnostics and Helpdesk Report agree.
+        IReadOnlyList<Device360Check> CurrentObservations() =>
+            Device360HealthService.Evaluate(snapshot, operational,
+                hardware: _device360RemoteHardware,
+                hardwareFailureCategory: _device360HardwareFailureCategory);
+
+        string HealthSummaryText()
+        {
+            var observations = CurrentObservations();
+            return Tr("Device360V2HealthTitle") + Environment.NewLine +
+                Device360HealthUiFormatter.Summary(observations, language) +
+                Environment.NewLine +
+                Device360HealthAssessmentService.Summary(
+                    Device360HealthAssessmentService.Assess(observations),
+                    language);
+        }
+
+        string DiagnosticText()
+        {
+            var observations = CurrentObservations();
+            return Device360HealthAssessmentService.Summary(
+                    Device360HealthAssessmentService.Assess(observations),
+                    language) +
+                Environment.NewLine + Environment.NewLine +
+                Device360HealthUiFormatter.Summary(observations, language) +
+                Environment.NewLine + Environment.NewLine +
+                string.Join(Environment.NewLine + Environment.NewLine,
+                    observations.Select(item =>
+                        Device360HealthUiFormatter.Format(item, language))) +
+                Environment.NewLine + Environment.NewLine +
+                Device360SmartDiagnosticsService.Format(
+                    Device360SmartDiagnosticsService.Evaluate(snapshot,
+                        operational, _device360RemoteHardware,
+                        _device360HardwareFailureCategory), language);
+        }
 
         var tabs = new TabControl
         {
@@ -90,11 +138,7 @@ internal sealed partial class Device360Dialog
             BackColor = UiStyle.ModernSurface,
             ForeColor = UiStyle.ModernForeground,
             Font = UiStyle.BodyFont,
-            Text = Device360HealthUiFormatter.Summary(observations, language) +
-                Environment.NewLine + Environment.NewLine +
-                string.Join(Environment.NewLine + Environment.NewLine,
-                    observations.Select(item =>
-                        Device360HealthUiFormatter.Format(item, language)))
+            Text = DiagnosticText()
         };
         diagnosticsPage.Container.Controls.Add(diagnostics);
         tabs.TabPages.Add(diagnosticsPage.Tab);
@@ -138,18 +182,26 @@ internal sealed partial class Device360Dialog
         var healthLabel = new Label
         {
             Name = "Device360V2HealthSummary",
-            Text = Tr("Device360V2HealthTitle") + Environment.NewLine +
-                Device360HealthUiFormatter.Summary(observations, language),
+            Text = HealthSummaryText(),
             Font = UiStyle.CreateEmphasisFont(11),
             AutoSize = true,
             Dock = DockStyle.Top,
-            ForeColor = observations.Any(x =>
+            ForeColor = CurrentObservations().Any(x =>
                     x.State == Device360CheckState.Attention)
                 ? UiStyle.ModernMuted : UiStyle.ModernForeground,
             RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No,
             Margin = new Padding(0, 0, 0, UiStyle.ControlGap)
         };
         UiStyle.ConfigureWrappingLabel(healthLabel);
+        void RefreshDiagnosticsAndHealth()
+        {
+            if (IsDisposed || Disposing) return;
+            diagnostics.Text = DiagnosticText();
+            healthLabel.Text = HealthSummaryText();
+            healthLabel.ForeColor = CurrentObservations().Any(x =>
+                x.State == Device360CheckState.Attention)
+                    ? UiStyle.ModernMuted : UiStyle.ModernForeground;
+        }
         // Dock order: last added docks first.
         summary.Controls.Add(reportStatus);
         summary.Controls.Add(reportButtons);
@@ -161,7 +213,8 @@ internal sealed partial class Device360Dialog
             try
             {
                 Clipboard.SetText(Device360ReportService.Build(
-                    snapshot, operational, _device360RemoteHardware));
+                    snapshot, operational, _device360RemoteHardware,
+                    hardwareFailureCategory: _device360HardwareFailureCategory));
                 reportStatus.Text = Tr("Device360V2ReportCopied");
             }
             catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException
@@ -194,7 +247,9 @@ internal sealed partial class Device360Dialog
             {
                 File.WriteAllText(dialog.FileName,
                     Device360ReportService.Build(snapshot, operational,
-                        _device360RemoteHardware), new UTF8Encoding(false));
+                        _device360RemoteHardware,
+                        hardwareFailureCategory: _device360HardwareFailureCategory),
+                    new UTF8Encoding(false));
                 reportStatus.Text = Tr("Device360V2ReportSaved");
             }
             catch (Exception ex) when (ex is IOException or
@@ -221,7 +276,9 @@ internal sealed partial class Device360Dialog
             Name = "Device360V2HardwareStatus",
             Text = probe.Enabled
                 ? Tr("Device360V2NotQueried")
-                : Tr("Device360V2NoRemote"),
+                : Device360HardwareService.HasAdDnsTargetMismatch(snapshot)
+                    ? Tr("Device360V36AdDnsMismatch")
+                    : Tr("Device360V2NoRemote"),
             AutoSize = true,
             Dock = DockStyle.Top,
             ForeColor = UiStyle.ModernMuted,
@@ -230,6 +287,47 @@ internal sealed partial class Device360Dialog
         UiStyle.ConfigureWrappingLabel(hardwareStatus);
         hardwareDetails.Controls.Add(hardwareStatus);
         hardwareDetails.Controls.Add(probe);
+        // Restore the original AD/Intune hardware value when an earlier WMI
+        // enrichment is superseded. Never show a stale successful result.
+        var originalPostureHardware = FindIn(posture, "Device360Hardware")
+            is TextBox originalField ? originalField.Text : null;
+        void ResetHardwareDetails()
+        {
+            foreach (var name in new[]
+            {
+                "Device360V2RemoteManufacturer", "Device360V2RemoteModel",
+                "Device360V2BiosVersion", "Device360V2BiosManufacturer",
+                "Device360V2BiosReleaseDate", "Device360V2TpmVersion",
+                "Device360V2TpmEnabled", "Device360V2TpmActivated",
+                "Device360V2TpmOwned", "Device360V2TpmDetail",
+                "Device360V36SerialNumber", "Device360V36CpuName",
+                "Device360V36CpuCores", "Device360V36Memory",
+                "Device360V36DiskCount", "Device360V36Storage",
+                "Device360V36NetworkAdapters", "Device360V36Extended"
+            })
+                SetHardware(name, null);
+            if (originalPostureHardware is not null &&
+                FindIn(posture, "Device360Hardware") is TextBox field)
+                field.Text = originalPostureHardware;
+        }
+
+        void BeginHardwareAttempt()
+        {
+            ResetHardwareDetails();
+            _device360RemoteHardware = null;
+            _device360HardwareFailureCategory = null;
+            RefreshDiagnosticsAndHealth();
+            hardwareStatus.Text = Tr("Device360V2Querying");
+        }
+
+        // No synthetic WMI probe can contact a host. This exercises the
+        // *same presenter* as the real async response but only for fixtures.
+        if (_v36SyntheticHardwareTestMode)
+            _v36SyntheticHardwareRetry = outcome =>
+            {
+                BeginHardwareAttempt();
+                ApplyHardwareOutcome(outcome);
+            };
 
         probe.Click += async (_, _) =>
         {
@@ -239,41 +337,14 @@ internal sealed partial class Device360Dialog
             using var cancellation = new CancellationTokenSource();
             _device360HardwareCancellation = cancellation;
             probe.Enabled = false;
-            hardwareStatus.Text = Tr("Device360V2Querying");
+            BeginHardwareAttempt();
             try
             {
                 var result = await Device360HardwareService.QueryAsync(
                     snapshot, cancellation.Token);
                 if (IsDisposed || Disposing || cancellation.IsCancellationRequested)
                     return;
-                _device360RemoteHardware = result.Inventory;
-                hardwareStatus.Text = result.Explanation;
-                if (result.Inventory is { } inventory)
-                {
-                    SetHardware("Device360V2RemoteManufacturer",
-                        inventory.Manufacturer);
-                    SetHardware("Device360V2RemoteModel", inventory.Model);
-                    if (FindIn(posture, "Device360Hardware") is TextBox original &&
-                        (original.Text == Tr("Device360NotVerified") ||
-                         string.IsNullOrWhiteSpace(snapshot.Hardware)))
-                    {
-                        var text = (inventory.Manufacturer + " " +
-                            inventory.Model).Trim();
-                        if (!string.IsNullOrWhiteSpace(text))
-                            original.Text = "WMI: " + text;
-                    }
-                    SetHardware("Device360V2BiosVersion", inventory.BiosVersion);
-                    SetHardware("Device360V2BiosManufacturer",
-                        inventory.BiosManufacturer);
-                    SetHardware("Device360V2BiosReleaseDate",
-                        inventory.BiosReleaseDate);
-                    SetHardware("Device360V2TpmVersion",
-                        inventory.TpmSpecification);
-                    SetHardware("Device360V2TpmEnabled", inventory.TpmEnabled);
-                    SetHardware("Device360V2TpmActivated", inventory.TpmActivated);
-                    SetHardware("Device360V2TpmOwned", inventory.TpmOwned);
-                    SetHardware("Device360V2TpmDetail", inventory.TpmDiagnostic);
-                }
+                ApplyHardwareOutcome(result);
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
@@ -286,9 +357,13 @@ internal sealed partial class Device360Dialog
                 // WinForms click handler and terminate the Helpdesk client.
                 // Never show exception messages containing remote host data.
                 UniversalDiagnosticService.TryCapture("Devices", ex);
+                _device360HardwareFailureCategory = "Unavailable";
                 if (!IsDisposed && !Disposing)
+                {
                     hardwareStatus.Text = Tr("Device360V2NoRemote") +
                         " (" + ex.GetType().Name + ")";
+                    RefreshDiagnosticsAndHealth();
+                }
             }
             finally
             {
@@ -300,6 +375,87 @@ internal sealed partial class Device360Dialog
         };
 
         FormClosing += (_, _) => _device360HardwareCancellation?.Cancel();
+
+        string HardwareStatusText(Device360HardwareOutcome result)
+        {
+            var message = result.Succeeded ? Tr("Device360V36WmiSuccess") :
+                result.FailureCategory switch
+                {
+                    "NoRecord" => Tr("Device360V36WmiNoRecord"),
+                    "IdentityMismatch" => Tr("Device360V36WmiIdentityMismatch"),
+                    "AccessDenied" => Tr("Device360V36WmiDenied"),
+                    "Timeout" => Tr("Device360V36WmiTimeout"),
+                    "DCOM/RPCUnavailable" => Tr("Device360V36WmiRpc"),
+                    "WmiError" => Tr("Device360V36WmiProvider"),
+                    _ => Tr("Device360V36WmiUnavailable")
+                };
+            if (result.Succeeded && result.Inventory is { } collected)
+                message += " · " + Tr("Device360V36WmiCheckedUtc") + ": " +
+                    collected.CollectedUtc.ToUniversalTime().ToString(
+                        "yyyy-MM-dd HH:mm 'UTC'",
+                        System.Globalization.CultureInfo.InvariantCulture);
+            return message;
+        }
+
+        void ApplyHardwareOutcome(Device360HardwareOutcome rawResult)
+        {
+            // Fail closed before updating the UI, health or report state.
+            var result = Device360HardwareService.NormalizeOutcome(rawResult);
+            _device360RemoteHardware = result.Inventory;
+            _device360HardwareFailureCategory = result.FailureCategory;
+            // Never render untrusted remote provider messages.
+            hardwareStatus.Text = HardwareStatusText(result);
+            if (result.Inventory is { } inventory)
+            {
+                SetHardware("Device360V2RemoteManufacturer",
+                    inventory.Manufacturer);
+                SetHardware("Device360V2RemoteModel", inventory.Model);
+                if (FindIn(posture, "Device360Hardware") is TextBox original &&
+                    (original.Text == Tr("Device360NotVerified") ||
+                     string.IsNullOrWhiteSpace(snapshot.Hardware)))
+                {
+                    var text = (inventory.Manufacturer + " " +
+                        inventory.Model).Trim();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        original.Text = "WMI: " + text;
+                }
+                SetHardware("Device360V2BiosVersion", inventory.BiosVersion);
+                SetHardware("Device360V2BiosManufacturer",
+                    inventory.BiosManufacturer);
+                SetHardware("Device360V2BiosReleaseDate",
+                    inventory.BiosReleaseDate);
+                SetHardware("Device360V2TpmVersion",
+                    inventory.TpmSpecification);
+                SetHardware("Device360V2TpmEnabled", inventory.TpmEnabled);
+                SetHardware("Device360V2TpmActivated", inventory.TpmActivated);
+                SetHardware("Device360V2TpmOwned", inventory.TpmOwned);
+                SetHardware("Device360V2TpmDetail", inventory.TpmDiagnostic);
+                SetHardware("Device360V36SerialNumber", inventory.SerialNumber);
+                SetHardware("Device360V36CpuName", inventory.CpuName);
+                SetHardware("Device360V36CpuCores",
+                    inventory.CpuLogicalProcessors > 0 ?
+                        inventory.CpuLogicalProcessors.ToString() : string.Empty);
+                SetHardware("Device360V36Memory",
+                    Device360HardwareService.FormatGiB(inventory.MemoryGiB));
+                SetHardware("Device360V36DiskCount",
+                    inventory.PhysicalDiskCount > 0 ?
+                        inventory.PhysicalDiskCount.ToString() : string.Empty);
+                SetHardware("Device360V36Storage",
+                    Device360HardwareService.FormatGiB(
+                        inventory.PhysicalStorageGiB));
+                SetHardware("Device360V36NetworkAdapters",
+                    inventory.PhysicalNetworkAdapterCount > 0 ?
+                        inventory.PhysicalNetworkAdapterCount.ToString() :
+                        string.Empty);
+                SetHardware("Device360V36Extended",
+                    inventory.ExtendedDiagnostic.Length > 0 ?
+                        Device360HardwareService.SafeOptionalStatus(
+                            inventory.ExtendedDiagnostic).Replace("; ",
+                                Environment.NewLine, StringComparison.Ordinal) :
+                        Tr("Device360V36NoPartialErrors"));
+            }
+            RefreshDiagnosticsAndHealth();
+        }
 
         void SetHardware(string name, string? text)
         {
@@ -512,6 +668,14 @@ internal sealed partial class Device360Dialog
             Add("Device360V2TpmActivated", Tr("Device360V2TpmActivated"));
             Add("Device360V2TpmOwned", Tr("Device360V2TpmOwned"));
             Add("Device360V2TpmDetail", Tr("Device360V2TpmStatus"));
+            Add("Device360V36SerialNumber", Tr("Device360V36SerialNumber"));
+            Add("Device360V36CpuName", Tr("Device360V36CpuName"));
+            Add("Device360V36CpuCores", Tr("Device360V36CpuCores"));
+            Add("Device360V36Memory", Tr("Device360V36Memory"));
+            Add("Device360V36DiskCount", Tr("Device360V36DiskCount"));
+            Add("Device360V36Storage", Tr("Device360V36Storage"));
+            Add("Device360V36NetworkAdapters", Tr("Device360V36NetworkAdapters"));
+            Add("Device360V36Extended", Tr("Device360V36Extended"));
             card.Controls.Add(grid);
             return card;
 
@@ -528,13 +692,18 @@ internal sealed partial class Device360Dialog
                     Dock = DockStyle.Fill,
                     Margin = new Padding(3, 5, 6, 5)
                 }, rtl ? 1 : 0, index);
+                var isStatus = name == "Device360V36Extended";
                 grid.Controls.Add(new TextBox
                 {
                     Name = name,
                     Text = Tr("Device360NotVerified"),
                     ReadOnly = true,
+                    Multiline = isStatus,
+                    WordWrap = isStatus,
+                    ScrollBars = isStatus ? ScrollBars.Vertical : ScrollBars.None,
                     Dock = DockStyle.Fill,
-                    MinimumSize = new Size(0, 26),
+                    MinimumSize = new Size(0, UiStyle.ScaleLogicalPixels(
+                        isStatus ? 64 : 26, DeviceDpi)),
                     BorderStyle = BorderStyle.FixedSingle,
                     RightToLeft = RightToLeft.No
                 }, rtl ? 0 : 1, index);

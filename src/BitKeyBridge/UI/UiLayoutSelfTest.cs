@@ -52,6 +52,29 @@ public static class UiLayoutSelfTest
             Path.Combine(
                 AppContext.BaseDirectory,
                 "ui-self-test.log");
+        var progressPath = Path.Combine(
+            AppContext.BaseDirectory, "ui-self-test-progress.log");
+
+        // Offline synthetic checkpoints only: test phase and form-factory
+        // names, never device details, exceptions, tokens or recovery IDs.
+        // This lets CI locate the last completed phase if WinForms stalls.
+        void MarkPhase(string phase)
+        {
+            try
+            {
+                File.AppendAllText(progressPath,
+                    DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    " " + phase + Environment.NewLine);
+            }
+            catch (Exception ex) when (ex is IOException or
+                                       UnauthorizedAccessException or
+                                       System.Security.SecurityException)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "UI progress log unavailable: " + ex.GetType().Name);
+            }
+        }
 
         try
         {
@@ -61,6 +84,8 @@ public static class UiLayoutSelfTest
                 File.Delete(
                     reportPath);
             }
+            if (File.Exists(progressPath))
+                File.Delete(progressPath);
         }
         catch (Exception ex)
         {
@@ -71,6 +96,7 @@ public static class UiLayoutSelfTest
 
         var failures =
             new List<string>();
+        MarkPhase("BEGIN");
 
         // Runtime check: a native Explorer icon is insufficient if WinForms
         // modal windows still use the default framework title-bar icon.
@@ -80,6 +106,7 @@ public static class UiLayoutSelfTest
                 failures.Add("BitKeyBridge branded icon is not assigned to WinForms dialogs.");
         }
 
+        MarkPhase("VISUAL_FOUNDATION");
         VerifyNipkgBrandBanner(failures);
         VerifyModernAccentAndDynamicTheme(failures);
 
@@ -111,9 +138,11 @@ public static class UiLayoutSelfTest
         VerifyHelpdeskChecklistLocalization(
             failures);
 
+        MarkPhase("CONNECTION_CONTROLS");
         VerifyIntuneSetupWizardNavigation(failures);
         VerifyDeviceCodeCancellation(failures);
         VerifyDevicesCloudShortcut(failures);
+        VerifyVisibleStartDeviceSelection(failures);
         VerifyStartupSettingsWithoutAdministrativePages(failures);
 
         VerifyDiagnosticCopyVisibility(failures);
@@ -139,10 +168,13 @@ public static class UiLayoutSelfTest
             if (!performanceReport.Contains(expected, StringComparison.Ordinal))
                 failures.Add("Missing DPI timing phase: " + expected);
 
+        MarkPhase("STARTUP_AND_MODAL_DIALOGS");
         VerifyStartupWizardTextWrapping(failures);
         VerifyModalDialogLocalization(failures);
+        MarkPhase("DEVICE360");
         VerifyDevice360CardIsolation(failures);
 
+        MarkPhase("START_SOURCE_POLICIES");
         VerifyStartSourcePolicies(failures);
 
         var factories =
@@ -161,6 +193,7 @@ public static class UiLayoutSelfTest
 
                 try
                 {
+                    MarkPhase("LAYOUT " + scenario.Name + " " + factory.Name);
                     form =
                         factory.Factory();
 
@@ -216,6 +249,7 @@ public static class UiLayoutSelfTest
             }
         }
 
+        MarkPhase("COMPLETE " + (failures.Count == 0 ? "PASS" : "FAIL"));
         var reportLines =
             failures.Count == 0
                 ? new[]
@@ -569,6 +603,13 @@ public static class UiLayoutSelfTest
             {
                 Source = "Synthetic WMI (offline test)",
                 Model = "Synthetic model",
+                SerialNumber = "SYNTHETIC-SERIAL",
+                CpuName = "Synthetic CPU",
+                CpuLogicalProcessors = 8,
+                MemoryGiB = 16m,
+                PhysicalDiskCount = 2,
+                PhysicalStorageGiB = 512m,
+                PhysicalNetworkAdapterCount = 1,
                 CollectedUtc = hardwareTime
             });
         if (!hardwareReport.Contains(
@@ -577,8 +618,26 @@ public static class UiLayoutSelfTest
             !hardwareReport.Contains("Hardware evidence source: Synthetic WMI",
                 StringComparison.Ordinal) ||
             hardwareReport.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("CPU model: Synthetic CPU",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Physical RAM: 16.0 GiB",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Raw disk capacity: 512.0 GiB",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Evidence coverage:",
+                StringComparison.Ordinal) ||
+            !hardwareReport.Contains("Smart Diagnostics",
                 StringComparison.Ordinal))
-            failures.Add("Device 360 hardware provenance or timestamp was lost.");
+            failures.Add("Device 360 hardware, health or diagnostics report regression.");
+
+        var failedWmiReport = Device360ReportService.Build(cloud,
+            reportSource, hardwareFailureCategory: "DCOM/RPCUnavailable");
+        if (!failedWmiReport.Contains("WMI.RPC_UNAVAILABLE",
+                StringComparison.Ordinal) ||
+            failedWmiReport.Contains(syntheticRecoveryId,
+                StringComparison.Ordinal))
+            failures.Add("Device 360 report lost a typed WMI error or leaked a recovery ID.");
 
         var unknown = Device360HealthService.Evaluate(new Device360Snapshot(),
             Device360OperationalStatus.Capture(new Device360Snapshot(),
@@ -849,7 +908,7 @@ public static class UiLayoutSelfTest
                     intuneLookupFailed: language == "ru",
                     entraLookupFailed: language == "he");
                 using var dialog = new Device360Dialog(snapshot, language,
-                    operational: tileStatus);
+                    operational: tileStatus, syntheticHardwareUiTest: true);
                 dialog.Show();
                 dialog.ClientSize = new Size(980, 700);
                 Application.DoEvents();
@@ -869,6 +928,50 @@ public static class UiLayoutSelfTest
                         "Device360TabAudit", "Device360TabDiagnostics"
                     }))
                     failures.Add("Device 360 v2 tab order changed: " + language);
+                // At compact sizes all localized hardware captions should
+                // wrap within their allocated grid rows. Scrollable content
+                // must not clip or overlap the read-only inventory fields.
+                if (FindByName(dialog, "Device360V2RemoteHardware")
+                    is not UiRecoveryCard hardwareCard ||
+                    hardwareCard.Controls.OfType<TableLayoutPanel>()
+                        .FirstOrDefault() is not TableLayoutPanel inventoryGrid ||
+                    inventoryGrid.RowCount < 18)
+                    failures.Add("Device 360 inventory grid missing rows: " + language);
+                else
+                {
+                    // A hidden WinForms TabPage may not be laid out until
+                    // selected. Measure *painted* controls, then restore
+                    // Overview so the remaining native checks are unchanged.
+                    var inventoryTabs = FindByName(dialog,
+                        "Device360CardTabs") as TabControl;
+                    var selectedPage = inventoryTabs?.SelectedIndex ?? 0;
+                    if (inventoryTabs is { TabCount: > 1 })
+                    {
+                        inventoryTabs.SelectedIndex = 1;
+                        Application.DoEvents();
+                        dialog.PerformLayout();
+                    }
+                    foreach (Control item in inventoryGrid.Controls)
+                    {
+                        if (item is not Label label ||
+                            string.IsNullOrWhiteSpace(label.Text))
+                            continue;
+                        var measured = TextRenderer.MeasureText(label.Text,
+                            label.Font,
+                            new Size(Math.Max(1, label.ClientSize.Width), 10000),
+                            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                        if (label.ClientSize.Width < 30 ||
+                            measured.Height > label.ClientSize.Height +
+                                UiStyle.ScaleLogicalPixels(8, dialog.DeviceDpi))
+                            failures.Add("Device 360 inventory label clipped (" +
+                                language + "): " + label.Text);
+                    }
+                    if (inventoryTabs is { TabCount: > 1 })
+                    {
+                        inventoryTabs.SelectedIndex = selectedPage;
+                        Application.DoEvents();
+                    }
+                }
                 if (FindByName(dialog, "Device360V2HealthSummary") is not Label ||
                     FindByName(dialog, "Device360V2CopyReport") is not Button ||
                     FindByName(dialog, "Device360V2SaveReport") is not Button ||
@@ -880,6 +983,155 @@ public static class UiLayoutSelfTest
                     hardwareProbe.Enabled)
                     failures.Add("Device 360 v2 missing read-only health/report/diagnostic tabs " +
                         "or enabled WMI on a device without exact AD DNS: " + language);
+
+                // All new 0.36 inventory fields are read-only, initially
+                // unverified and present in compact EN/RU/HE/RTL dialogs.
+                var extendedFields = new[]
+                {
+                    "Device360V36SerialNumber", "Device360V36CpuName",
+                    "Device360V36CpuCores", "Device360V36Memory",
+                    "Device360V36DiskCount", "Device360V36Storage",
+                    "Device360V36NetworkAdapters", "Device360V36Extended"
+                };
+                if (extendedFields.Any(name =>
+                        FindByName(dialog, name) is not TextBox { ReadOnly: true }) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox { ReadOnly: true } diagnosticText ||
+                    !diagnosticText.Text.Contains("%", StringComparison.Ordinal) ||
+                    !diagnosticText.Text.Contains("SOURCE.",
+                        StringComparison.Ordinal))
+                    failures.Add("Device 360 v0.36 extended read-only hardware or " +
+                        "evidence-aware diagnostics missing: " + language);
+
+                // Exercise the actual WinForms fields using synthetic data;
+                // never connect AD, Graph or WMI during --ui-self-test.
+                var syntheticHardware = new Device360HardwareOutcome(true,
+                    new Device360HardwareInventory
+                    {
+                        Manufacturer = "Example", Model = "Synthetic model",
+                        CpuName = "SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        MemoryGiB = 16m, PhysicalDiskCount = 1,
+                        PhysicalStorageGiB = 256m,
+                        PhysicalNetworkAdapterCount = 1,
+                        TpmEnabled = "No",
+                        ExtendedDiagnostic = "Disk: WmiError"
+                    }, "Synthetic, no network");
+                if (!dialog.PreviewHardwareOutcomeForUiTest(syntheticHardware) ||
+                    FindByName(dialog, "Device360V36CpuName") is not TextBox cpu ||
+                    cpu.Text != "SYNTHETIC-CPU-NOT-FOR-FAILURE" ||
+                    FindByName(dialog, "Device360V36Memory") is not TextBox ram ||
+                    ram.Text != "16.0 GiB" ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox successDiagnostics ||
+                    !successDiagnostics.Text.Contains("WMI.TPM_DISABLED",
+                        StringComparison.Ordinal) ||
+                    !successDiagnostics.Text.Contains("WMI.DISK.PROVIDER_ERROR",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HealthSummary")
+                        is not Label successHealth ||
+                    !successHealth.Text.Contains("%", StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label completedStatus ||
+                    !completedStatus.Text.Contains(
+                        UiLanguageService.Translate(language,
+                            "Device360V36WmiSuccess"), StringComparison.Ordinal) ||
+                    !completedStatus.Text.Contains("UTC", StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V36Extended")
+                        is not TextBox optionalStatus ||
+                    !optionalStatus.Multiline)
+                    failures.Add("Device 360 synthetic WMI result or localized " +
+                        "multiline status was not painted (" + language + ").");
+
+                // Retry failure must clear EVERY previous hardware field,
+                // and refresh both metadata coverage and recommendations.
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(false, null,
+                            "Synthetic AccessDenied (no connection)")
+                        {
+                            FailureCategory = "AccessDenied"
+                        }) ||
+                    FindByName(dialog, "Device360V36CpuName") is not TextBox failedCpu ||
+                    failedCpu.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V36Memory") is not TextBox failedRam ||
+                    failedRam.Text.Contains("16.0 GiB", StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox failedDiagnostics ||
+                    !failedDiagnostics.Text.Contains("WMI.ACCESS_DENIED",
+                        StringComparison.Ordinal) ||
+                    failedDiagnostics.Text.Contains("WMI.DISK.PROVIDER_ERROR",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HealthSummary")
+                        is not Label failedHealth ||
+                    failedHealth.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label deniedStatus ||
+                    deniedStatus.Text != UiLanguageService.Translate(language,
+                        "Device360V36WmiDenied"))
+                    failures.Add("Device 360 failed retry preserved stale WMI " +
+                        "hardware or localized diagnostics (" + language + ").");
+
+                // The synthetic UI must reject a misdirected WMI host,
+                // displaying a localized status without stale hardware.
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(false, null,
+                            "Synthetic mismatched host")
+                        {
+                            FailureCategory = "IdentityMismatch"
+                        }) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox mismatchDiagnostics ||
+                    !mismatchDiagnostics.Text.Contains("WMI.IDENTITY_MISMATCH",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label mismatchStatus ||
+                    mismatchStatus.Text != UiLanguageService.Translate(language,
+                        "Device360V36WmiIdentityMismatch") ||
+                    FindByName(dialog, "Device360V36CpuName")
+                        is not TextBox mismatchCpu ||
+                    mismatchCpu.Text.Contains("SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal))
+                    failures.Add("Device 360 identity-mismatch result retained " +
+                        "hardware or lost localized status: " + language);
+
+                // Test the production presenter with contradictory WMI
+                // envelopes; these are synthetic and never touch the network.
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(false,
+                            syntheticHardware.Inventory, "Synthetic conflict")
+                        {
+                            FailureCategory = "AccessDenied"
+                        }) ||
+                    FindByName(dialog, "Device360V36CpuName")
+                        is not TextBox rejectedCpu ||
+                    rejectedCpu.Text.Contains(
+                        "SYNTHETIC-CPU-NOT-FOR-FAILURE",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox rejectedDiagnostics ||
+                    !rejectedDiagnostics.Text.Contains("WMI.ACCESS_DENIED",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label rejectedStatus ||
+                    rejectedStatus.Text != UiLanguageService.Translate(
+                        language, "Device360V36WmiDenied"))
+                    failures.Add("Device 360 accepted contradictory failed " +
+                        "WMI inventory in " + language);
+
+                if (!dialog.PreviewHardwareOutcomeForUiTest(
+                        new Device360HardwareOutcome(true, null,
+                            "Synthetic success without inventory")) ||
+                    FindByName(dialog, "Device360V2SmartDiagnostics")
+                        is not TextBox missingDiagnostics ||
+                    !missingDiagnostics.Text.Contains("WMI.NO_RECORD",
+                        StringComparison.Ordinal) ||
+                    FindByName(dialog, "Device360V2HardwareStatus")
+                        is not Label missingStatus ||
+                    missingStatus.Text != UiLanguageService.Translate(
+                        language, "Device360V36WmiNoRecord"))
+                    failures.Add("Device 360 accepted empty success in " +
+                        language);
 
                 var recovery = FindByName(dialog, "Device360CardRecoverySection");
                 var adSource = FindByName(dialog, "Device360SourceAd");
@@ -1858,6 +2110,40 @@ public static class UiLayoutSelfTest
         }
     }
 
+    // Unlike the hidden-parent tests, this exercises native selected items
+    // after the actual MainForm and Devices tab have created HWNDs.
+    private static void VerifyVisibleStartDeviceSelection(List<string> failures)
+    {
+        try
+        {
+            using var main = new MainForm(
+                new AppConfig
+                {
+                    AutoConnectOnStart = false,
+                    HealthEndpointEnabled = false
+                },
+                layoutSelfTest: true);
+            main.Show();
+            try
+            {
+                Application.DoEvents();
+                var result = main.PreviewVisibleStartToDevicesSelectionForUiSelfTest();
+                if (result != "OK")
+                    failures.Add("Native visible Start -> Devices selection: " +
+                        result + ". Synthetic metadata only.");
+            }
+            finally
+            {
+                main.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Native visible Start -> Devices QA error: " +
+                DiagnosticRedaction.Sanitize(ex.GetType().Name + ": " + ex.Message));
+        }
+    }
+
     private static void VerifyDevicesCloudShortcut(List<string> failures)
     {
         try
@@ -1894,6 +2180,14 @@ public static class UiLayoutSelfTest
             if (!main.PreviewDevice360SharedSearchForUiSelfTest())
                 failures.Add("Start -> Devices reused a name instead of source identity " +
                     "or attempted an additional Microsoft 365 authentication.");
+            var recoveryChoice = main.PreviewDeviceRecoveryIdSelectionForUiSelfTest();
+            if (recoveryChoice != "OK")
+                failures.Add("Start -> Devices Recovery ID regression: " +
+                    recoveryChoice + ". Synthetic metadata only.");
+            if (!main.PreviewStartToDevicesCloudSessionForUiSelfTest())
+                failures.Add("Start -> Devices lost the same Microsoft 365 token, " +
+                    "dropped exact hardware metadata, or reused recovery " +
+                    "context after its identity changed.");
             if (!main.PreviewDevicesSearchWithoutImplicitSignInForUiTest())
                 failures.Add("Devices search triggered implicit Microsoft 365 sign-in " +
                     "instead of offering the explicit Connect action.");

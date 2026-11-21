@@ -18,12 +18,18 @@ internal enum Device360Route
 internal sealed partial class Device360Dialog : DpiAwareForm
 {
     internal Device360Route SelectedRoute { get; private set; }
+    private readonly bool _v36SyntheticHardwareTestMode;
 
     internal Device360Dialog(Device360Snapshot snapshot,
         string? languageCode = null, bool allowNavigation = true,
-        Device360OperationalStatus? operational = null)
+        Device360OperationalStatus? operational = null,
+        bool syntheticHardwareUiTest = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        // Never enable test-only response injection in normal user dialogs.
+        // Even the test runner must use a well-known synthetic identity.
+        _v36SyntheticHardwareTestMode = syntheticHardwareUiTest &&
+            snapshot.Computer.StartsWith("UI-TEST-", StringComparison.Ordinal);
         operational ??= Device360OperationalStatus.Capture(snapshot,
             adConnected: false, cloudSessionPresent: false,
             rbacEnabled: false, ticketRequired: false,

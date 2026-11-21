@@ -7,6 +7,38 @@ namespace BitKeyBridge;
 /// </summary>
 public sealed partial class MainForm
 {
+    // Only an identity-verified Start -> Devices transfer can install this
+    // fallback. Before the inactive WinForms ListView is realized,
+    // SelectedItems may be empty despite explicitly selecting the new row.
+    // This reference is cleared by query edits and fresh Devices searches.
+    private ListViewItem? _startTransferredDeviceItem;
+
+    // Never infer selection from a single search result or a matching name.
+    // The fallback is allowed ONLY for the exact Start-transferred item while
+    // the Devices ListView is not visible. Once visible, native selection is
+    // required before any recovery read. Existing RBAC/audit/Graph gates remain.
+    private bool TryGetExactSelectedUnifiedDevice(
+        out UnifiedDeviceInfo? device)
+    {
+        device = null;
+        if (_unifiedResults.SelectedItems.Count > 1)
+            return false;
+
+        ListViewItem? item = _unifiedResults.SelectedItems.Count == 1
+            ? _unifiedResults.SelectedItems[0]
+            : !_unifiedResults.Visible &&
+              _startTransferredDeviceItem is { } pending &&
+              _unifiedResults.Items.Count == 1 &&
+              ReferenceEquals(_unifiedResults.Items[0], pending)
+                ? pending : null;
+        if (item?.Tag is not UnifiedDeviceInfo found ||
+            found.IdentityStatus == "Ambiguous device ID")
+            return false;
+
+        device = found;
+        return true;
+    }
+
     private ListViewItem AddUnifiedDeviceSearchResultRow(UnifiedDeviceInfo row)
     {
         var item = new ListViewItem(row.ComputerName);
@@ -182,6 +214,340 @@ public sealed partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Native WinForms fixture for the exact Start -> Devices transfer while
+    /// a memory-only Graph session is valid, then after its identity context
+    /// is invalidated. No token request, Graph call, secret read or clipboard.
+    /// </summary>
+    internal bool PreviewStartToDevicesCloudSessionForUiSelfTest()
+    {
+        if (!_layoutSelfTest || _cloudConnecting)
+            return false;
+
+        var previousToken = _cloudToken;
+        var previousContext = _cloudTokenContext;
+        var previousRecovery = _cloudTokenHasRecovery;
+        var previousLaps = _cloudTokenHasLaps;
+        var previousQuery = _unifiedQuery.Text;
+        var previousTab = _mainTabs.SelectedTab;
+        try
+        {
+            var token = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-NOT-A-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(30)
+            };
+            _cloudToken = token;
+            _cloudTokenHasRecovery = true;
+            _cloudTokenHasLaps = false;
+            _cloudTokenContext = BuildCloudTokenContext();
+            if (!HasCloudSearchSession() ||
+                !IsCurrentDeviceCloudRecoverySession(token))
+                return false;
+
+            var device = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-TEST-SESSION-TRANSFER",
+                IdentityKey = "INTUNE:MANAGED:ui-session-device-001",
+                IdentityStatus = "Intune object",
+                FoundInIntune = true,
+                FoundInEntra = true,
+                ManagedDeviceId = "ui-session-device-001",
+                EntraDeviceId = "e4963b97-64db-4119-a55c-1f90da27f250",
+                Manufacturer = "Synthetic Vendor",
+                Model = "Synthetic Laptop",
+                OperatingSystem = "Windows",
+                OsVersion = "11",
+                RecoveryMetadataIncomplete = true
+            };
+            var fromStart = new HomeSearchResult
+            {
+                ComputerName = device.ComputerName,
+                SourceIdentity = device.IdentityKey,
+                ComputerId = device.EntraDeviceId,
+                IsCloudRecord = true,
+                InventoryMetadata = device
+            };
+            var searchGeneration = _unifiedSearchGeneration;
+            var selectionGeneration = _deviceRecoverySelectionGeneration;
+            if (!NavigateHomeSelectionToDevices(fromStart) ||
+                _mainTabs.SelectedTab?.Name != "DevicesWorkspace" ||
+                !ReferenceEquals(_cloudToken, token) ||
+                !HasCloudSearchSession() ||
+                _unifiedSearchGeneration != searchGeneration ||
+                _deviceRecoverySelectionGeneration <= selectionGeneration ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, device) ||
+                !TryGetExactSelectedUnifiedDevice(out var exactTransferred) ||
+                !ReferenceEquals(exactTransferred, device) ||
+                !_unifiedDetails.Text.Contains("Synthetic Laptop",
+                    StringComparison.Ordinal) ||
+                _deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar)
+                return false;
+
+            // A changed tenant/client/scope context disables recovery reuse.
+            // Navigation may still display already collected non-secret
+            // metadata, but must never create a new MFA prompt by itself.
+            _cloudTokenContext = "UI-TEST-INVALIDATED-CONTEXT";
+            if (HasCloudSearchSession() ||
+                IsCurrentDeviceCloudRecoverySession(token) ||
+                !TryReuseHomeInventoryInDevices(fromStart) ||
+                !ReferenceEquals(_cloudToken, token) ||
+                HasCloudSearchSession() ||
+                _unifiedResults.Items.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.Items[0].Tag, device) ||
+                _deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar ||
+                _deviceRecoveryIds.Items.Count != 0)
+                return false;
+
+            // GraphToken is immutable: use separate synthetic instances
+            // to exercise the time margin rather than changing ExpiresAt.
+            // A token nearing expiry is not an active RecoveryRead session.
+            _cloudTokenContext = BuildCloudTokenContext();
+            var expiring = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-EXPIRING-NOT-A-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddSeconds(20)
+            };
+            _cloudToken = expiring;
+            if (HasCloudSearchSession() ||
+                IsCurrentDeviceCloudRecoverySession(expiring))
+                return false;
+
+            // A fresh valid session is accepted, but neither the previous
+            // valid object nor the near-expired object can be reused.
+            var refreshed = new GraphToken
+            {
+                AccessToken = "SYNTHETIC-REFRESHED-NOT-A-CREDENTIAL",
+                AuthMode = "DeviceCode",
+                ExpiresAt = DateTime.Now.AddMinutes(30)
+            };
+            _cloudToken = refreshed;
+            if (!IsCurrentDeviceCloudRecoverySession(refreshed) ||
+                IsCurrentDeviceCloudRecoverySession(expiring) ||
+                IsCurrentDeviceCloudRecoverySession(token))
+                return false;
+
+            // Name-only navigation must not reuse a previous exact device,
+            // expose a recovery ID, or trigger a new Graph authentication.
+            if (NavigateHomeSelectionToDevices(new HomeSearchResult
+                {
+                    ComputerName = "UI-UNVERIFIED-SOURCE"
+                }) ||
+                _unifiedResults.Items.Count != 0 ||
+                TryGetExactSelectedUnifiedDevice(out _) ||
+                _deviceRecoveryIds.Items.Count != 0 ||
+                _unifiedQuery.Text != "UI-UNVERIFIED-SOURCE" ||
+                !ReferenceEquals(_cloudToken, refreshed) ||
+                !_deviceRecoveryKey.UseSystemPasswordChar)
+                return false;
+
+            return true;
+        }
+        finally
+        {
+            if (previousTab is not null && !previousTab.IsDisposed)
+                _mainTabs.SelectedTab = previousTab;
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            _unifiedQuery.Text = previousQuery;
+            _cloudToken = previousToken;
+            _cloudTokenContext = previousContext;
+            _cloudTokenHasRecovery = previousRecovery;
+            _cloudTokenHasLaps = previousLaps;
+            SetDevicesCloudWarningAction(!HasCloudSearchSession());
+        }
+    }
+
+    /// <summary>
+    /// Verify native ListView selection AFTER the main WinForms HWND is
+    /// visible. Previous tests exercised only a hidden parent, where
+    /// SelectedItems may not reflect the intended Start selection.
+    /// Synthetic metadata only; this method cannot initiate Graph or MFA.
+    /// </summary>
+    internal string PreviewVisibleStartToDevicesSelectionForUiSelfTest()
+    {
+        if (!_layoutSelfTest || !Visible)
+            return "visible-test-not-initialized";
+
+        var previousTab = _mainTabs.SelectedTab;
+        var previousQuery = _unifiedQuery.Text;
+        try
+        {
+            var device = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-NATIVE-SELECT-001",
+                IdentityKey = "INTUNE:MANAGED:ui-native-selected-001",
+                IdentityStatus = "Intune object",
+                FoundInIntune = true,
+                FoundInEntra = true,
+                ManagedDeviceId = "ui-native-selected-001",
+                EntraDeviceId = "537e61f7-9764-4217-83cc-c6ae0d35ca99",
+                Manufacturer = "Synthetic Manufacturer",
+                Model = "Synthetic Notebook",
+                RecoveryIds = ["UI-NATIVE-ID-ONE", "UI-NATIVE-ID-TWO"]
+            };
+            var home = new HomeSearchResult
+            {
+                ComputerName = device.ComputerName,
+                IsCloudRecord = true,
+                SourceIdentity = device.IdentityKey,
+                ComputerId = device.EntraDeviceId,
+                InventoryMetadata = device
+            };
+            if (!NavigateHomeSelectionToDevices(home))
+                return "source-qualified-transfer-rejected";
+
+            Application.DoEvents();
+            if (!_unifiedResults.Visible)
+                return "devices-list-not-visible";
+            if (_unifiedResults.Items.Count != 1)
+                return "devices-row-missing";
+            if (_unifiedResults.SelectedItems.Count != 1 ||
+                !ReferenceEquals(_unifiedResults.SelectedItems[0].Tag, device))
+                return "native-listview-selection-missing";
+            if (_deviceRecoveryIds.Items.Count != 2 ||
+                _deviceRecoveryIds.SelectedIndex != -1)
+                return "native-multiple-ids-not-unselected";
+
+            _deviceRecoveryIds.SelectedIndex = 1;
+            if (!TryGetSelectedDeviceRecovery(out var exact, out var id) ||
+                !ReferenceEquals(exact, device) ||
+                id != "UI-NATIVE-ID-TWO")
+                return "native-explicit-id-selection-rejected";
+
+            // Switching to a name-only Start record must discard the exact
+            // selection and IDs, even when the ListView is truly visible.
+            if (NavigateHomeSelectionToDevices(new HomeSearchResult
+                {
+                    ComputerName = "UI-NAME-ONLY-UNVERIFIED"
+                }) ||
+                _unifiedResults.Items.Count != 0 ||
+                _unifiedResults.SelectedItems.Count != 0 ||
+                _deviceRecoveryIds.Items.Count != 0 ||
+                TryGetSelectedDeviceRecovery(out _, out _) ||
+                _startTransferredDeviceItem is not null)
+                return "native-stale-selection-not-cleared";
+
+            return "OK";
+        }
+        finally
+        {
+            _startTransferredDeviceItem = null;
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            _unifiedQuery.Text = previousQuery;
+            InvalidateDeviceCloudSecretOnSessionChange();
+            if (previousTab is not null && !previousTab.IsDisposed)
+                _mainTabs.SelectedTab = previousTab;
+        }
+    }
+
+    /// <summary>
+    /// Offline native WinForms regression for explicit Entra Recovery ID
+    /// selection after Start -> Devices navigation. Two IDs must NOT
+    /// silently choose the first; one exact ID remains actionable.
+    /// The test uses synthetic metadata only and never invokes Reveal.
+    /// </summary>
+    internal string PreviewDeviceRecoveryIdSelectionForUiSelfTest()
+    {
+        if (!_layoutSelfTest)
+            throw new InvalidOperationException("Offline UI self-test only.");
+
+        var previousQuery = _unifiedQuery.Text;
+        try
+        {
+            var device = new UnifiedDeviceInfo
+            {
+                ComputerName = "UI-TEST-RECOVERY-CHOICE",
+                IdentityKey = "INTUNE:MANAGED:ui-recovery-choice-001",
+                IdentityStatus = "Intune object",
+                FoundInIntune = true,
+                FoundInEntra = true,
+                ManagedDeviceId = "ui-recovery-choice-001",
+                EntraDeviceId = "a4caf67e-538b-4e36-9763-4b7e22e8b00e",
+                RecoveryIds = ["UI-TEST-RECOVERY-ONE", "UI-TEST-RECOVERY-TWO"]
+            };
+            var selected = new HomeSearchResult
+            {
+                ComputerName = device.ComputerName,
+                SourceIdentity = device.IdentityKey,
+                ComputerId = device.EntraDeviceId,
+                IsCloudRecord = true,
+                InventoryMetadata = device
+            };
+            if (!TryReuseHomeInventoryInDevices(selected))
+                return "two-ids-transfer-rejected";
+            if (_deviceRecoveryIds.Items.Count != 2)
+                return "two-ids-not-populated";
+            if (_deviceRecoveryIds.SelectedIndex != -1)
+                return "two-ids-implicitly-selected";
+            if (TryGetSelectedDeviceRecovery(out _, out _))
+                return "two-ids-incorrectly-actionable";
+
+            // Deliberate dropdown selection must resolve only that ID.
+            _deviceRecoveryIds.SelectedIndex = 1;
+            if (!TryGetSelectedDeviceRecovery(out var chosen, out var id) ||
+                !ReferenceEquals(chosen, device) ||
+                id != "UI-TEST-RECOVERY-TWO")
+                return "manual-id-choice-not-resolved";
+
+            // Simulate an old unmasked field before the next exact
+            // navigation; the same presenter must clear it immediately.
+            _deviceCurrentKey = "SYNTHETIC-NONSECRET-PLACEHOLDER";
+            _deviceRecoveryKey.Text = _deviceCurrentKey;
+            _deviceRecoveryKey.UseSystemPasswordChar = false;
+            _deviceShowKey.Text = "Hide Key";
+
+            device.RecoveryIds = ["UI-TEST-RECOVERY-ONE"];
+            if (!TryReuseHomeInventoryInDevices(selected))
+                return "one-id-transfer-rejected";
+            if (_deviceRecoveryIds.Items.Count != 1)
+                return "one-id-not-populated";
+            if (_deviceRecoveryIds.SelectedIndex != 0 ||
+                !TryGetSelectedDeviceRecovery(out chosen, out id) ||
+                !ReferenceEquals(chosen, device) ||
+                id != "UI-TEST-RECOVERY-ONE")
+                return "one-id-selection-not-resolved";
+            if (_deviceCurrentKey is not null ||
+                _deviceRecoveryKey.Text.Length != 0 ||
+                !_deviceRecoveryKey.UseSystemPasswordChar ||
+                _deviceShowKey.Text != "Reveal Key")
+                return "previous-synthetic-key-not-cleared";
+
+            // A lone item from an ordinary Devices search is NOT a selected
+            // Start object. Even a manually chosen dropdown entry cannot
+            // authorize Reveal if no exact source-qualified row was selected.
+            _unifiedResults.Items.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            AddUnifiedDeviceSearchResultRow(device);
+            _startTransferredDeviceItem = null;
+            _deviceRecoveryIds.Items.Add("UI-TEST-RECOVERY-ONE");
+            _deviceRecoveryIds.SelectedIndex = 0;
+            if (TryGetSelectedDeviceRecovery(out _, out _))
+                return "unselected-search-row-accepted";
+
+            return "OK";
+        }
+        finally
+        {
+            _startTransferredDeviceItem = null;
+            _unifiedResults.Items.Clear();
+            _unifiedDetails.Clear();
+            _deviceRecoveryIds.Items.Clear();
+            _unifiedQuery.Text = previousQuery;
+            InvalidateDeviceCloudSecretOnSessionChange();
+        }
+    }
+
     private bool TryReuseHomeInventoryInDevices(HomeSearchResult selected)
     {
         if (selected is null || selected.IdentityAmbiguous ||
@@ -243,6 +609,14 @@ public sealed partial class MainForm
         var item = AddUnifiedDeviceSearchResultRow(metadata);
         item.Selected = true;
         item.Focused = true;
+        // This item has already passed exact source-qualified identity
+        // matching above, so it may supply metadata before the hidden
+        // ListView has native SelectedItems. Never match by hostname.
+        _startTransferredDeviceItem = item;
+        // Inactive WinForms pages may not fire SelectedIndexChanged until
+        // shown. Populate metadata deterministically after Start navigation.
+        // This does not query Graph or retrieve a recovery password.
+        PopulateDeviceRecoveryIds();
         _unifiedDetails.Text = Device360Formatter.Format(metadata);
         _device360LastUnifiedPartial = metadata.RecoveryMetadataIncomplete;
         _device360UnifiedLookupFailed = default;

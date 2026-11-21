@@ -1930,6 +1930,7 @@ internal static class Program
             failures.AddRange(UiWorkspacePreferenceService.RunOfflineTests(tempDirectory));
             failures.AddRange(UpdateCenterStatusService.RunOfflineTests());
             failures.AddRange(UpdateService.RunReleaseChannelOfflineTests());
+            failures.AddRange(Device360V36SelfTest.Run());
             failures.AddRange(MetadataSourceIsolation.RunRetryOfflineTests());
             failures.AddRange(CloudGraphService.RunManagedDeviceFilterOfflineTests());
             failures.AddRange(CloudGraphService.RunDelegatedScopesOfflineTests());
